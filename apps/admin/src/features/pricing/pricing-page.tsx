@@ -97,6 +97,7 @@ function Calculator() {
               }))}
               value={categoryId}
               onChange={setCategoryId}
+              read={categories}
             />
           </Field>
         )}
@@ -115,6 +116,7 @@ function Calculator() {
                 setGameId(value);
                 setProductId(null);
               }}
+              read={games}
             />
           </Field>
         )}
@@ -127,6 +129,7 @@ function Calculator() {
               items={products.map((item) => ({ value: item.id, label: item.nameAr }))}
               value={productId}
               onChange={setProductId}
+              read={gameId ? game : undefined}
             />
           </Field>
         )}

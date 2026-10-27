@@ -129,7 +129,8 @@ const registry = {
 } as unknown as SupplierRegistry;
 
 const sync = new SupplierSyncJob(pgBoss, registry, db, env);
-const health = new SupplierHealthJob(pgBoss, registry, db, env);
+// A new one per test: it remembers what it repriced (audit A05-17), which a rollback undoes.
+let health = new SupplierHealthJob(pgBoss, registry, db, env);
 const balances = new SupplierBalancesJob(pgBoss, registry, db, env);
 const schedule = new SupplierSyncScheduleJob(pgBoss, db, env);
 
@@ -199,6 +200,7 @@ async function isolated(work: (tx: Transaction) => Promise<void>): Promise<void>
   const rollback = new Error('rollback');
   await expect(
     db.transaction(async (tx) => {
+      health = new SupplierHealthJob(pgBoss, registry, db, env);
       await prepare(tx);
       await work(tx);
       throw rollback;
@@ -665,6 +667,26 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
           .limit(1);
         expect(internal).toMatchObject({ status: 'failed', errorCode: 'INTERNAL' });
 
+        // Audit A05-13: told again once the streak has lasted 6 hours, once each 6 hours.
+        current = {
+          listOffers: async () => {
+            throw new SupplierError('retryable', 'timed out', { supplierCode: 'E_TIMEOUT' });
+          },
+        };
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+          vi.setSystemTime(Date.now() + 7 * 3_600_000);
+          await sync.sync(payload(), tx);
+          await sync.sync(payload(), tx);
+        } finally {
+          vi.useRealTimers();
+        }
+        const reminded = await messages(tx, 'supplier_sync_failing');
+        expect(reminded.map((alert) => alert.dedupeKey)).toEqual([
+          `sync-failing:fake:${failed[0]?.id}`,
+          `sync-failing:fake:${failed[0]?.id}:1`,
+        ]);
+
         const runs = await tx
           .select({ message: supplierSyncRuns.errorMessage })
           .from(supplierSyncRuns)
@@ -701,13 +723,28 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
       });
       expect(await sync.sync(payload({ runId: running?.id }), tx)).toBeNull();
 
+      // Audit A05-16: a run reading for 16 minutes (WDG's longest is 15) is still running.
+      const [slow] = await tx
+        .insert(supplierSyncRuns)
+        .values({
+          id: newId(),
+          supplierId: ids.fake,
+          trigger: 'schedule',
+          startedAt: new Date(Date.now() - 16 * 60_000),
+        })
+        .returning();
+      expect(await sync.sync(payload(), tx)).toBeNull();
+      await tx
+        .update(supplierSyncRuns)
+        .set({ status: 'succeeded', finishedAt: new Date() })
+        .where(eq(supplierSyncRuns.id, slow?.id as string));
       const [lost] = await tx
         .insert(supplierSyncRuns)
         .values({
           id: newId(),
           supplierId: ids.fake,
           trigger: 'schedule',
-          startedAt: new Date(Date.now() - 11 * 60_000),
+          startedAt: new Date(Date.now() - 31 * 60_000),
         })
         .returning();
       expect(await sync.sync(payload(), tx)).toMatchObject({ status: 'succeeded' });
@@ -1005,6 +1042,36 @@ describe('suppliers.sync: audit F9 regressions', () => {
       expect(syncs().map((job) => job.data)).toEqual([
         { supplierId: ids.fake, supplierCode: 'fake', trigger: 'admin' },
       ]);
+      // No retry, as the schedule's (audit A05-62).
+      expect(syncs()[0]?.options).toMatchObject({ retryLimit: 0 });
+    }));
+
+  it('keeps a cost observed after the run began reading (audit A05-8)', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('a', 0.88));
+      await sync.sync(payload(), tx);
+      const a = await offerRow(tx, 'a');
+      await route(tx, p, a.id);
+      current = {
+        listOffers: async () => {
+          // A charge of $0.95 is recorded (S18 CH3) while the run reads the listing's $0.88.
+          await tx
+            .update(supplierOffers)
+            .set({ costUsdUnits: usd(0.95), costConfirmedAt: new Date() })
+            .where(eq(supplierOffers.id, a.id));
+          return [offer('a', 0.88)];
+        },
+      };
+      expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 0 });
+      expect(await offerRow(tx, 'a')).toMatchObject({ costUsdUnits: usd(0.95) });
+      // A later run reads after it: the listing wins again (Q25 open).
+      await tx
+        .update(supplierOffers)
+        .set({ costConfirmedAt: new Date(Date.now() - 60_000) })
+        .where(eq(supplierOffers.id, a.id));
+      current = listing(offer('a', 0.88));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 1 });
     }));
 
   it('stops a route whose offer the supplier turned into another kind (audit F9-5)', () =>
@@ -1187,6 +1254,31 @@ describe('suppliers.sync-schedule (rule SY1)', () => {
         },
       ]);
     }));
+
+  it('skips a supplier whose plan is inactive until it comes back (audit A05-14)', () =>
+    isolated(async (tx) => {
+      const plan = (active: boolean) =>
+        tx
+          .update(suppliers)
+          .set({ accountPlan: 'trial', accountActive: active, accountCheckedAt: new Date() })
+          .where(eq(suppliers.id, ids.fake));
+      await plan(false);
+      expect((await schedule.enqueue(tx)).map((job) => job.supplierCode)).not.toContain('fake');
+      await plan(true);
+      expect((await schedule.enqueue(tx)).map((job) => job.supplierCode)).toContain('fake');
+    }));
+
+  it('counts a refusal for an inactive plan as an answer, not an error (audit A05-15)', () =>
+    isolated(async (tx) => {
+      const call = await recordedCall(tx, ids.fake, 'list_offers', async () => {
+        throw new SupplierError('retryable', 'HTTP 403', {
+          supplierCode: 'subscription_inactive',
+          status: 403,
+          failure: 'http_4xx',
+        });
+      });
+      expect(call).toMatchObject({ ok: false, result: 'refused' });
+    }));
 });
 
 describe('suppliers.health (rules H1–H4, SY5)', () => {
@@ -1234,7 +1326,9 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         },
       });
       await calls(tx, 'error', 'error', 'error');
-      const checkedAt = new Date();
+      // The calls are stamped in microseconds and `checkedAt` in milliseconds: within the same
+      // millisecond they would fall after it, out of the window (seen when this file ran fast).
+      const checkedAt = new Date(Date.now() + 1);
       sent.length = 0;
       await health.check(checkedAt, tx);
       const down = await standing(tx);
@@ -1421,7 +1515,14 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       });
       expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
       sent.length = 0;
+      // Audit A05-17: the product left on its stale cost is not locked and repriced again.
+      const relocked = vi.spyOn(
+        health as unknown as { repriceStaleProducts: () => Promise<void> },
+        'repriceStaleProducts',
+      );
       await health.check(new Date(), tx);
+      expect(relocked).not.toHaveBeenCalled();
+      relocked.mockRestore();
       expect(await messages(tx, 'supplier_sync_failing')).toHaveLength(1);
       // S09 rule SF4: costs stale for long and nothing repriced: the store is not refreshed again,
       // until a cost goes stale anew.
@@ -1803,6 +1904,36 @@ describe('the daily summary (S07 lines)', () => {
         { supplierNameAr: 'مورد تجريبي', currency: 'USD', amountUnits: usd(20) },
       ]);
       expect(TELEGRAM_MESSAGE_PARAMS.daily_summary.parse(summary)).toEqual(summary);
+    }));
+
+  it('repeats a failing sync and a lapsed plan every day they last (audit A05-13)', () =>
+    isolated(async (tx) => {
+      current = {
+        listOffers: async () => {
+          throw new SupplierError('retryable', 'timed out', { supplierCode: 'E_TIMEOUT' });
+        },
+      };
+      for (let attempt = 0; attempt < 3; attempt += 1) await sync.sync(payload(), tx);
+      await tx
+        .update(suppliers)
+        .set({
+          accountPlan: 'trial',
+          accountActive: false,
+          accountCheckedAt: new Date(),
+        })
+        .where(eq(suppliers.id, ids.fake));
+      const alerts = new TelegramAlerts(
+        { source: 'test' },
+        { configured: false, call: async () => null },
+        async () => null,
+      );
+      const job = new DailySummaryJob(pgBoss, alerts, db, env);
+      const summary = await job.contents(tx, new Date(), '2030-01-01');
+      expect(summary.syncsFailing).toEqual([{ supplierNameAr: 'مورد تجريبي', failedRuns: 3 }]);
+      expect(summary.plansInactive).toEqual(['مورد تجريبي']);
+      const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
+      expect(text).toContain('مزامنة مورد تجريبي تفشل: 3 محاولات متتالية');
+      expect(text).toContain('اشتراك مورد تجريبي غير نشط');
     }));
 });
 

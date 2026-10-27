@@ -57,7 +57,8 @@ export const rulesQuery = listRulesQuery();
 export const previewQuery = (body: PricingPreviewRequest | null) =>
   queryOptions({
     queryKey: ['pricing', 'preview', body],
-    queryFn: () => call(api.POST('/api/admin/pricing/preview', { body: body as never })),
+    queryFn: () =>
+      call(api.POST('/api/admin/pricing/preview', { body: body as PricingPreviewRequest })),
     enabled: body !== null,
     placeholderData: keepPreviousData,
   });
@@ -68,9 +69,7 @@ export function useSetRule() {
   const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: (body: SetMarginRule) =>
-      withReauthentication(() =>
-        call(api.PUT('/api/admin/pricing/rules', { body: body as never })),
-      ),
+      withReauthentication(() => call(api.PUT('/api/admin/pricing/rules', { body }))),
     onSettled: () => invalidatePricing(queryClient),
   });
 }
@@ -175,9 +174,10 @@ export const priceMatrixQuery = (search: MatrixSearch) =>
             query: {
               gameId: search.gameId,
               q: search.q,
-              listIds: search.lists?.join(','),
+              // Retail is always shown; naming it lets no other list ask for retail alone (A05-33).
+              listIds: search.lists && [ROOT_PRICE_LIST_IDS.retail, ...search.lists],
               warnings: search.warnings ? 'true' : undefined,
-            } as never,
+            },
           },
         }),
       ),

@@ -29,9 +29,10 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { TagIcon, UsersRoundIcon } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
@@ -42,6 +43,9 @@ import { FixedPriceDialog, SourceBadge } from './fixed-price-dialog';
 import { ListRules } from './list-rules';
 import { KindBadge } from './price-lists-page';
 import { listRulesQuery, priceListQuery, useArchiveFixedPrice } from './pricing.queries';
+
+/** How long typing must pause before the account search reads. */
+const SEARCH_PAUSE_MS = 300;
 
 /**
  * A list's page (S20 screens): its chain, its rules (the parent's shown where it has none), its
@@ -274,7 +278,13 @@ function AssignAccountDialog({
   const [reason, setReason] = useState('');
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const search = q.trim();
+  const { ref, focusInvalid } = useFocusInvalid();
+  // One read once typing pauses, not one per keystroke (audit A05-79).
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(q.trim()), SEARCH_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [q]);
   const found = useInfiniteQuery({
     ...customerListQuery({ q: search }),
     enabled: search.length >= 2 && !chosen,
@@ -285,7 +295,10 @@ function AssignAccountDialog({
     event.preventDefault();
     setFailure(null);
     const trimmed = reason.trim();
-    if (!chosen || trimmed.length < 5 || trimmed.length > 500) return setInvalid(true);
+    if (!chosen || trimmed.length < 5 || trimmed.length > 500) {
+      setInvalid(true);
+      return focusInvalid();
+    }
     setInvalid(false);
     try {
       await assign.mutateAsync({ priceListId: listId, reason: trimmed });
@@ -302,7 +315,7 @@ function AssignAccountDialog({
         <DialogTitle>{t('pricing.list.assignTitle', { name: listName })}</DialogTitle>
         <DialogDescription>{t('pricing.list.assignHint')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         {chosen ? (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3">
             <span className="font-medium">{chosen.name}</span>
@@ -320,6 +333,18 @@ function AssignAccountDialog({
               onChange={(event) => setQ(event.target.value)}
             />
             <FieldError match={invalid && !chosen}>{t('pricing.list.customerRequired')}</FieldError>
+            {search.length >= 2 && found.isPending && <Skeleton className="h-20 w-full" />}
+            {found.isError && (
+              <div className="flex flex-col items-start gap-2">
+                <FormAlert>{errorMessage(t, found.error)}</FormAlert>
+                <Button variant="outline" size="sm" onClick={() => found.refetch()}>
+                  {t('common.retry')}
+                </Button>
+              </div>
+            )}
+            {found.isSuccess && rows.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('pricing.list.noCustomer')}</p>
+            )}
             {rows.length > 0 && (
               <ul className="flex flex-col gap-1">
                 {rows.map((row) => (

@@ -67,6 +67,8 @@ export class PriceListsMock {
   fixed: StoredFixed[] = [];
   /** AT2: assigned lists by customer id. */
   assigned = new Map<string, string>();
+  /** S21 LV6: live merchant levels holding a list, by its id (set per test). */
+  levelsOn = new Map<string, number>();
 
   constructor(
     private readonly catalog: CatalogMock,
@@ -212,8 +214,9 @@ export class PriceListsMock {
       const children = this.lists.filter(
         (row) => row.parentListId === list.id && !row.archivedAt,
       ).length;
-      if (accounts > 0 || children > 0) {
-        return error(409, 'PRICE_LIST_IN_USE', { accounts, children });
+      const levels = this.levelsOn.get(list.id) ?? 0;
+      if (accounts > 0 || children > 0 || levels > 0) {
+        return error(409, 'PRICE_LIST_IN_USE', { accounts, children, levels });
       }
       list.archivedAt = new Date().toISOString();
       this.fixed = this.fixed.filter((row) => row.priceListId !== list.id);
@@ -308,12 +311,14 @@ export class PriceListsMock {
   private matrix(url: URL): PriceMatrix {
     const gameId = url.searchParams.get('gameId');
     const q = url.searchParams.get('q');
+    // Repeated (the panel's typed client) or comma-separated, retail always first, as the API.
+    const asked = url.searchParams.getAll('listIds').flatMap((value) => value.split(','));
     const wanted = [
       ROOT_PRICE_LIST_IDS.retail,
-      ...(url.searchParams.get('listIds')?.split(',') ?? [
-        ROOT_PRICE_LIST_IDS.wholesale,
-        ROOT_PRICE_LIST_IDS.cost,
-      ]),
+      ...(asked.length > 0
+        ? asked
+        : [ROOT_PRICE_LIST_IDS.wholesale, ROOT_PRICE_LIST_IDS.cost]
+      ).filter((id) => id !== ROOT_PRICE_LIST_IDS.retail),
     ];
     const lists = wanted.flatMap((id) =>
       this.lists.filter((row) => row.id === id && !row.archivedAt),

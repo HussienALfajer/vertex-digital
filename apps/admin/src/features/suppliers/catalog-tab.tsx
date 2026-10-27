@@ -37,12 +37,13 @@ import {
   FolderTreeIcon,
   SearchIcon,
 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
 import { Thumbnail } from './category-thumbnail';
+import { CategoryChangeDialog } from './game-supplier-links';
 import { ImportCategorySheet } from './import-category-sheet';
 import { LinkCategorySheet } from './link-category-sheet';
 import type { CategorySearch } from './supplier-search';
@@ -84,6 +85,10 @@ export function CatalogTab({
   const [opened, setOpened] = useState<Opened>(null);
   const change = useCategoryChange(supplier.code);
   const [failure, setFailure] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{
+    node: SupplierCategoryNode;
+    change: 'unlink' | 'ignore';
+  } | null>(null);
 
   if (!supplier.capabilities.categories) {
     return <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.unsupported')} />;
@@ -104,7 +109,8 @@ export function CatalogTab({
     supplier,
     busy: change.isPending,
     onOpen: (node: SupplierCategoryNode, dialog: 'import' | 'link') => setOpened({ node, dialog }),
-    onChange: act,
+    onChange: (node: SupplierCategoryNode, kind: CategoryChange) =>
+      kind === 'unignore' ? act(node, kind) : setConfirming({ node, change: kind }),
   };
 
   return (
@@ -132,6 +138,13 @@ export function CatalogTab({
         )}
         {opened?.dialog === 'link' && <LinkCategorySheet supplier={supplier} node={opened.node} />}
       </Sheet>
+      {confirming && (
+        <CategoryChangeDialog
+          node={confirming.node}
+          change={confirming.change}
+          onClose={() => setConfirming(null)}
+        />
+      )}
     </div>
   );
 }
@@ -322,6 +335,18 @@ function SearchResults({
     );
   }
   if (results.data.items.length === 0) {
+    // A page past the end: back to the last one (audit A05-26).
+    if (results.data.total > 0 && page > 1) {
+      const last = Math.max(1, Math.ceil(results.data.total / CATEGORY_PAGE_SIZE));
+      return (
+        <div className="flex flex-col items-start gap-3">
+          <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.noMatch')} />
+          <Button variant="outline" onClick={() => onPage(last)}>
+            {t('suppliers.catalog.lastPage')}
+          </Button>
+        </div>
+      );
+    }
     return <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.noMatch')} />;
   }
   return (
@@ -490,6 +515,8 @@ function Filters({
 }) {
   const { t } = useTranslation();
   const [q, setQ] = useState(search.cq ?? '');
+  // The box follows the URL on back and forward (audit A05-51).
+  useEffect(() => setQ(search.cq ?? ''), [search.cq]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

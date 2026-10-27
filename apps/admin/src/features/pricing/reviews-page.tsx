@@ -13,6 +13,10 @@ import {
   Button,
   Checkbox,
   Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   EmptyState,
   Field,
   FieldLabel,
@@ -80,6 +84,8 @@ export function ReviewsPage({
   const [failure, setFailure] = useState<string | null>(null);
   const [pausing, setPausing] = useState<PriceReview | null>(null);
   const [adjusting, setAdjusting] = useState<PriceReview | null>(null);
+  // Audit A05-6, A05-31: an accept publishes store prices, so it states them and asks first.
+  const [accepting, setAccepting] = useState<PriceReview[] | null>(null);
   const open = (search.status ?? 'open') === 'open';
   const items = reviews.data?.items ?? [];
   const page = search.page ?? 1;
@@ -136,6 +142,8 @@ export function ReviewsPage({
       })),
       rows,
     );
+
+  const acceptKey = accepting?.length === 1 ? 'acceptOne' : 'acceptMany';
 
   const statusItems = PRICE_REVIEW_STATUSES.map((value) => ({
     value,
@@ -208,7 +216,7 @@ export function ReviewsPage({
           </span>
           <Button
             disabled={decide.isPending}
-            onClick={() => accept(items.filter((review) => selected.has(review.id)))}
+            onClick={() => setAccepting(items.filter((review) => selected.has(review.id)))}
           >
             {t('pricing.reviews.acceptSelected')}
           </Button>
@@ -244,7 +252,11 @@ export function ReviewsPage({
           )
         ) : (
           <>
-            <Table>
+            {/* Audit A05-37: the previous page's rows stay while the next load, dimmed. */}
+            <Table
+              className={reviews.isPlaceholderData ? 'opacity-60' : undefined}
+              aria-busy={reviews.isPlaceholderData}
+            >
               <TableHeader>
                 <TableRow>
                   {open && (
@@ -360,15 +372,25 @@ export function ReviewsPage({
                         <span className="flex flex-col items-stretch gap-1">
                           <Button
                             size="sm"
-                            disabled={decide.isPending}
-                            onClick={() => accept([review])}
+                            disabled={decide.isPending || reviews.isPlaceholderData}
+                            onClick={() => setAccepting([review])}
                           >
                             {t('pricing.reviews.accept')}
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => setAdjusting(review)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={reviews.isPlaceholderData}
+                            onClick={() => setAdjusting(review)}
+                          >
                             {t('pricing.reviews.adjust')}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setPausing(review)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={reviews.isPlaceholderData}
+                            onClick={() => setPausing(review)}
+                          >
                             {t('pricing.reviews.pause')}
                           </Button>
                         </span>
@@ -400,6 +422,26 @@ export function ReviewsPage({
           if (pausing) await run([{ reviewId: pausing.id, action: 'pause' }], [pausing]);
         }}
       />
+      <ConfirmDialog
+        open={accepting !== null}
+        onClose={() => setAccepting(null)}
+        title={t(`pricing.reviews.${acceptKey}.title`, { count: accepting?.length ?? 0 })}
+        body={t(`pricing.reviews.${acceptKey}.body`)}
+        action={t(`pricing.reviews.${acceptKey}.action`, { count: accepting?.length ?? 0 })}
+        pending={decide.isPending}
+        onConfirm={async () => {
+          if (accepting) await accept(accepting);
+        }}
+      >
+        <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto text-sm">
+          {accepting?.map((review) => (
+            <li key={review.id} className="flex flex-wrap items-baseline justify-between gap-2">
+              <bdi className="font-medium">{review.productNameAr}</bdi>
+              <Change from={review.priceBeforeUsdUnits} to={review.proposedPriceUsdUnits} />
+            </li>
+          ))}
+        </ul>
+      </ConfirmDialog>
       <Dialog open={adjusting !== null} onOpenChange={(value) => !value && setAdjusting(null)}>
         {adjusting && <AdjustMargin review={adjusting} onDone={() => setAdjusting(null)} />}
       </Dialog>
@@ -451,9 +493,28 @@ function AdjustMargin({ review, onDone }: { review: PriceReview; onDone: () => v
       costUsdUnits: review.costAfterUsdUnits,
     }),
   );
-  if (current.isPending) return null;
-  if (current.isError) {
-    return <FormAlert>{errorMessage(t, current.error)}</FormAlert>;
+  // Audit A05-7: the wait and a failed read show inside the dialog, with a retry.
+  if (current.isPending || current.isError) {
+    return (
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('pricing.reviews.adjust')}</DialogTitle>
+          <DialogDescription>
+            <bdi>{review.productNameAr}</bdi>
+          </DialogDescription>
+        </DialogHeader>
+        {current.isPending ? (
+          <Skeleton className="h-48 w-full" aria-hidden="true" />
+        ) : (
+          <div className="flex flex-col items-start gap-3">
+            <FormAlert>{errorMessage(t, current.error)}</FormAlert>
+            <Button variant="outline" onClick={() => current.refetch()}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    );
   }
   return (
     <RuleDialog

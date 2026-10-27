@@ -15,12 +15,14 @@ import {
   normalizeSearchText,
   type OptionMap,
   type ProductKind,
+  packUnit,
   parseGameAmount,
   proposeOptionMap,
   type SupplierCategoryListQuery,
   type SupplierCategoryNode,
   type SupplierCategoryPage,
   stockLevel,
+  suggestGameAmounts,
   suggestInputFields,
   suggestProductName,
   unmappedFields,
@@ -189,7 +191,7 @@ export class SupplierCatalogService {
     const gameId = offer.categoryId
       ? (view.standings.get(offer.categoryId)?.effectiveGameId ?? null)
       : null;
-    const amount = parseGameAmount(offer.name.split(' · ').at(-1) ?? offer.name);
+    const amount = parseGameAmount(packNameOf(offer.name));
     const [fromGame, found] = await Promise.all([
       gameId ? this.catalog.productsForLink({ gameId }) : Promise.resolve([]),
       query.q ? this.catalog.productsForLink({ q: query.q }) : Promise.resolve([]),
@@ -243,6 +245,23 @@ export class SupplierCatalogService {
   }
 
   // Import and link drafts (SC7, SC8, SC12–SC14) -------------------------------------------------
+
+  /** The pack units (SC13) the live routes of each product deliver, by their offers' names. */
+  private async routedUnits(productIds: readonly string[]): Promise<Map<string, Set<string>>> {
+    const units = new Map<string, Set<string>>();
+    if (productIds.length === 0) return units;
+    const rows = await this.db
+      .select({ productId: productRoutes.productId, name: supplierOffers.name })
+      .from(productRoutes)
+      .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+      .where(and(inArray(productRoutes.productId, productIds), isNull(productRoutes.archivedAt)));
+    for (const row of rows) {
+      const set = units.get(row.productId) ?? new Set<string>();
+      set.add(packUnit(packNameOf(row.name)));
+      units.set(row.productId, set);
+    }
+    return units;
+  }
 
   /**
    * The import dialog's draft, or with `gameId` the link dialog's: the node, its subtree's packs
@@ -312,16 +331,24 @@ export class SupplierCatalogService {
     const liveProducts = (linkGame?.products ?? []).filter(
       (product) => product.archivedAt === null,
     );
+    const packNames = offers.map((offer) => packNameOf(offer.name));
+    const amounts = suggestGameAmounts(packNames);
+    const units = await this.routedUnits(liveProducts.map((product) => product.id));
     const packs: ImportDraftPack[] = offers.map((offer, index) => {
       const leaf = view.byId.get(offer.categoryId as string);
-      const packName = offer.name.split(' · ').at(-1) ?? offer.name;
-      const amount = parseGameAmount(packName);
+      const amount = amounts[index] ?? null;
+      const unit = packUnit(packNames[index] as string);
       const nameAr = suggestProductName(offer.name, leaf?.name ?? '', leaves.size > 1);
+      // Audit A05-3: a pack matches by its amount only a product whose routes already deliver
+      // that unit, so "660 WOW coins" never lands on the "660 UC" pack.
       const match =
         liveProducts.find(
           (product) =>
             (offer.kind === null || product.kind === offer.kind) &&
-            ((amount !== null && product.gameAmount === amount) || product.nameAr === nameAr),
+            ((amount !== null &&
+              product.gameAmount === amount &&
+              (units.get(product.id)?.has(unit) ?? false)) ||
+              product.nameAr === nameAr),
         ) ?? null;
       return {
         offerId: offer.id,
@@ -1095,4 +1122,9 @@ function linkFieldMap(
         : [];
     }),
   );
+}
+
+/** A supplier offer's pack name: the last part of "Group · Pack". */
+function packNameOf(name: string): string {
+  return name.split(' · ').at(-1) ?? name;
 }

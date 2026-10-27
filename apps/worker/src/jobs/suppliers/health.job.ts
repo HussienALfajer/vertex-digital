@@ -37,8 +37,10 @@ import {
   suppliers,
   type Transaction,
   telegramMessages,
+  withoutQueryParameters,
 } from '@vertex-digital/db';
 import { and, asc, desc, eq, gte, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
+import { PgTransaction } from 'drizzle-orm/pg-core';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -70,6 +72,12 @@ const STALE_NEWS_MS = 2 * 60_000;
 @Injectable()
 export class SupplierHealthJob implements OnApplicationBootstrap {
   private readonly logger = new Logger(SupplierHealthJob.name);
+  /**
+   * Audit A05-17: the stale cost each product was last repriced on, by its confirmation time. A
+   * product left on the same stale cost (no other usable route) is not locked and repriced again
+   * every minute; a new confirmation, or a restart, reprices it once more.
+   */
+  private readonly repricedOnStale = new Map<string, number | null>();
 
   constructor(
     private readonly pgBoss: PgBossService,
@@ -89,11 +97,22 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
   async check(now = new Date(), db: Executor = this.db): Promise<void> {
     const policy = await currentSupplierPolicy(db);
     const states = await supplierStates(db, { fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
+    // Audit A05-59: one supplier's failure leaves the others judged and the stale costs
+    // repriced; the run then fails naming it, so pg-boss reports it.
+    const failed: string[] = [];
     for (const supplier of states) {
       if (supplier.code === 'manual' || !supplier.available) continue;
-      const verdict = await this.judge(db, supplier, policy, now);
-      if (verdict) await this.change(db, supplier, verdict, now);
-      await this.tell(db, supplier, now);
+      try {
+        const verdict = await this.judge(db, supplier, policy, now);
+        if (verdict) await this.change(db, supplier, verdict, now);
+        await this.tell(db, supplier, now);
+      } catch (error) {
+        // In a caller's transaction (the tests) the failure has spoiled it: nothing else can run.
+        if (db instanceof PgTransaction) throw error;
+        const reported = withoutQueryParameters(error) as Error;
+        this.logger.error(`Health of ${supplier.code} failed: ${reported.message}`);
+        failed.push(supplier.code);
+      }
     }
     await this.repriceStale(db, policy, now);
     for (const supplier of states) {
@@ -101,6 +120,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         await this.reportStale(db, supplier, policy, now);
       }
     }
+    if (failed.length > 0) throw new Error(`Supplier health failed for ${failed.join(', ')}`);
   }
 
   private async standing(db: Executor, supplierId: string): Promise<HealthStanding> {
@@ -304,15 +324,41 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
           or(isNull(supplierOffers.costConfirmedAt), lt(supplierOffers.costConfirmedAt, cutoff)),
         ),
       );
-    if (stale.length === 0) return;
+    const seen = (row: (typeof stale)[number]) => row.confirmedAt?.getTime() ?? null;
+    const due = stale.filter(
+      (row) =>
+        !this.repricedOnStale.has(row.productId) ||
+        this.repricedOnStale.get(row.productId) !== seen(row),
+    );
+    // Products no longer on a stale cost are forgotten, so a later staleness counts again.
+    const staleIds = new Set(stale.map((row) => row.productId));
+    for (const id of this.repricedOnStale.keys()) {
+      if (!staleIds.has(id)) this.repricedOnStale.delete(id);
+    }
+    if (due.length === 0) return;
     // A cost that went stale since the last runs changes what the store shows; one stale for longer
     // was already refreshed (S09 rule SF4), so a failing sync does not refresh the store every minute.
-    const newlyStale = stale.some(
+    const newlyStale = due.some(
       (row) => row.confirmedAt && row.confirmedAt.getTime() >= cutoff.getTime() - STALE_NEWS_MS,
     );
+    await this.repriceStaleProducts(
+      db,
+      due.map((row) => row.productId),
+      newlyStale,
+      now,
+    );
+    for (const row of due) this.repricedOnStale.set(row.productId, seen(row));
+  }
+
+  private async repriceStaleProducts(
+    db: Executor,
+    productIds: string[],
+    newlyStale: boolean,
+    now: Date,
+  ): Promise<void> {
     await db.transaction(async (tx) => {
       const repriced = await repriceProducts(tx, {
-        productIds: stale.map((row) => row.productId),
+        productIds,
         cause: 'route_change',
         context: { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED },
       });

@@ -529,11 +529,17 @@ export class WdgzoneAdapter implements SupplierAdapter {
       }
       return delivered(supplierOrderId, placed.quantity, items);
     } catch (error) {
-      if (error instanceof SupplierError && error.details.status === 410) {
+      // A 410 is a refund only with WDG's own body (its code or refund reply): a proxy's or an
+      // error page's 410 may stand in front of a delivered order (audit A05-18).
+      if (
+        error instanceof SupplierError &&
+        error.details.status === 410 &&
+        error.details.supplierCode !== undefined
+      ) {
         return {
           status: 'failed_definitive',
           supplierOrderId,
-          supplierCode: error.details.supplierCode ?? 'ORDER_FAILED',
+          supplierCode: error.details.supplierCode,
           reason: 'Failed and refunded by WDGZone',
         };
       }

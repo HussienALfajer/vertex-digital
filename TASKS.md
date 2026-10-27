@@ -1,3 +1,17 @@
+# TASKS — Audit A05 Suppliers and pricing (branch `fix/audit-a05-suppliers`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A05-suppliers.md`. Specs S06 (pricing), S07, S16, S17, S18, S19, S20 (price lists); ADR 0005, 0020, 0021, 0030–0035.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, packages/suppliers, admin, tests, observability); known leads checked
+- [x] Live browser test (admin screens of the group)
+- [x] Findings shown to the owner (decision pending: Q25, which cost wins after an overcharge; FazerCards plan to renew)
+- [x] Fixes P0 → P3, each with its regression test (53 fixed, 4 partly; the report says why for the rest)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (A05-10 raised minimum, A05-14 per-category 403, A05-62, docs; A05-81 found)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A04 Purchase, orders and fulfilment (branch `fix/audit-a04-orders`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A04-orders.md`. Specs S08, S10, S11, S16 (admin orders), S22 (order help, alerts); ADR 0004, 0013, 0022, 0023, 0024, 0025, 0030.

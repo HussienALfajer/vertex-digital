@@ -91,16 +91,21 @@ function statusFailure(status: number): FailureKind {
   return status >= 500 ? 'http_5xx' : 'http_4xx';
 }
 
+/** Below this, an `x-ratelimit-reset` is the seconds left (FazerCards), not a Unix time (WDG). */
+const RESET_EPOCH_MIN_SECONDS = 1_000_000_000;
+
 /**
- * When a rate limit lifts, from `x-ratelimit-reset` (Unix seconds) or `retry-after` (seconds),
- * as epoch milliseconds; undefined without either.
+ * When a rate limit lifts, from `retry-after` (seconds) or `x-ratelimit-reset` (a Unix time, or
+ * the seconds left when it is small: audit A05-20), as epoch milliseconds; undefined without
+ * either.
  */
 function retryAtOf(headers: Headers, now: number): number | undefined {
-  const reset = headers.get('x-ratelimit-reset');
-  if (reset !== null && /^\d{1,12}$/.test(reset)) return Number(reset) * 1000;
   const after = headers.get('retry-after');
   if (after !== null && /^\d{1,6}$/.test(after)) return now + Number(after) * 1000;
-  return undefined;
+  const reset = headers.get('x-ratelimit-reset');
+  if (reset === null || !/^\d{1,12}$/.test(reset)) return undefined;
+  const seconds = Number(reset);
+  return seconds < RESET_EPOCH_MIN_SECONDS ? now + seconds * 1000 : seconds * 1000;
 }
 
 /** JSON over HTTP for one supplier, with timeouts, parsing and error classification. */

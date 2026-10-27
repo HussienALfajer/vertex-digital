@@ -8,7 +8,12 @@ type Executor = Database | Transaction;
 export async function failedRunStreak(
   db: Executor,
   supplierId: string,
-): Promise<{ count: number; firstRunId: string | null; lastErrorCode: string | null }> {
+): Promise<{
+  count: number;
+  firstRunId: string | null;
+  firstStartedAt: Date | null;
+  lastErrorCode: string | null;
+}> {
   const [lastSuccess] = await db
     .select({ id: supplierSyncRuns.id })
     .from(supplierSyncRuns)
@@ -29,7 +34,7 @@ export async function failedRunStreak(
     () => db.select({ count: count() }).from(supplierSyncRuns).where(failed),
     () =>
       db
-        .select({ id: supplierSyncRuns.id })
+        .select({ id: supplierSyncRuns.id, startedAt: supplierSyncRuns.startedAt })
         .from(supplierSyncRuns)
         .where(failed)
         .orderBy(asc(supplierSyncRuns.startedAt), asc(supplierSyncRuns.id))
@@ -45,6 +50,7 @@ export async function failedRunStreak(
   return {
     count: total?.count ?? 0,
     firstRunId: first?.id ?? null,
+    firstStartedAt: first?.startedAt ?? null,
     lastErrorCode: last?.errorCode ?? null,
   };
 }

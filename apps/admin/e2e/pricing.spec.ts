@@ -80,6 +80,23 @@ test.describe('pricing', () => {
     await expect(preview(page)).toContainText(ar.pricing.preview.noRate);
   });
 
+  test('typing a cost reads the preview once it pauses, dimmed until then (A05-32)', async ({
+    page,
+    admin,
+  }) => {
+    seed(admin);
+    await page.goto('/pricing');
+    await expect(preview(page)).toContainText('$1.10');
+    const reads = () => admin.calls.filter((call) => call === 'POST /api/admin/pricing/preview');
+    const before = reads().length;
+    const cost = field(page, ar.pricing.calculator.cost);
+    await cost.fill('');
+    await cost.pressSequentially('12.75', { delay: 30 });
+    await expect(preview(page)).toContainText('$14.03');
+    await expect(preview(page)).toHaveAttribute('aria-busy', 'false');
+    expect(reads().length - before).toBe(1);
+  });
+
   test('sets a category and a product rule after re-authentication, then archives them (steps 7–8)', async ({
     page,
     admin,

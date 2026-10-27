@@ -354,6 +354,9 @@ function Overrides({
 }
 
 /** A game, or one of its packs, for a list's own rule. */
+/** The target picker's value for the game itself rather than one of its packs. */
+const WHOLE_GAME = 'whole-game';
+
 function TargetDialog({
   onPick,
 }: {
@@ -408,6 +411,7 @@ function TargetDialog({
               setGameId(value);
               setProductId(null);
             }}
+            read={games}
           />
         </Field>
         <Field>
@@ -415,9 +419,14 @@ function TargetDialog({
           <Picker
             label={t('pricing.overrides.productOptional')}
             placeholder={t('pricing.overrides.wholeGame')}
-            items={products.map((item) => ({ value: item.id, label: item.nameAr }))}
-            value={productId}
-            onChange={setProductId}
+            // The whole game stays a choice once a pack is picked (audit A05-77).
+            items={[
+              { value: WHOLE_GAME, label: t('pricing.overrides.wholeGame') },
+              ...products.map((item) => ({ value: item.id, label: item.nameAr })),
+            ]}
+            value={productId ?? (gameId ? WHOLE_GAME : null)}
+            onChange={(value) => setProductId(value === WHOLE_GAME ? null : value)}
+            read={gameId ? game : undefined}
           />
         </Field>
       </div>

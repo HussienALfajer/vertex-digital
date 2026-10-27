@@ -383,6 +383,32 @@ test.describe('supplier catalog', () => {
     await expect(page.getByRole('link', { name: 'Free Fire', exact: true })).toBeVisible();
   });
 
+  test('unlinking and ignoring a category ask first, from the tree and its page (A05-5, A05-23)', async ({
+    page,
+    admin,
+  }) => {
+    synced(admin);
+    const { game } = freeFire(admin);
+    admin.supplierCatalog.link('fake-ff', game.id);
+    const linked = () =>
+      admin.supplierCatalog.categories.find((row) => row.categoryId === 'fake-ff')?.gameId;
+    await page.goto('/suppliers/fake?tab=catalog');
+    await nodeAction(page, 'Free Fire', c.unlink);
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(s.gameLinks.unlinkTitle);
+    await dialog.getByRole('button', { name: ar.common.cancel }).click();
+    expect(linked()).toBe(game.id);
+    await page.goto('/suppliers/fake/categories/fake-ff');
+    await page.getByRole('button', { name: c.unlink }).click();
+    await dialog.getByRole('button', { name: c.unlink }).click();
+    await expect(dialog).toBeHidden();
+    expect(linked()).toBe(null);
+    await page.getByRole('button', { name: c.ignore, exact: true }).click();
+    await expect(dialog).toContainText(c.ignoreTitle);
+    await dialog.getByRole('button', { name: c.ignore, exact: true }).click();
+    await expect(page.getByRole('button', { name: c.unignore })).toBeVisible();
+  });
+
   test('S18: links an offer to a suggested pack in a few clicks', async ({ page, admin }) => {
     synced(admin);
     const { game, product } = freeFire(admin);

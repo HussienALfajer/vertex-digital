@@ -67,8 +67,12 @@ type Executor = Database | Transaction;
 type SyncRunRow = typeof supplierSyncRuns.$inferSelect;
 type OfferRow = typeof supplierOffers.$inferSelect;
 
-/** A run left `running` this long was lost in a crash: the next run closes it (rule SY1). */
-export const ABANDONED_RUN_MINUTES = 10;
+/**
+ * A run left `running` this long was lost in a crash: the next run closes it (rule SY1). Above the
+ * longest read seen, WDGZone's paced pages at 15 minutes 18 seconds (audit A05-16: at 10 minutes
+ * the next run closed a run still reading, 7 times in production).
+ */
+export const ABANDONED_RUN_MINUTES = 30;
 
 const FIELD_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -260,6 +264,9 @@ const platformColumns = (platform: SupplierPlatformStatus | null) => ({
   catalogUpdatedAt: platform?.catalogUpdatedAt ?? null,
 });
 
+/** A failing sync is told again this often while its streak lasts (audit A05-13). */
+const SYNC_FAILING_REMIND_HOURS = 6;
+
 /** Rows per statement when the sync writes offers and cost changes. */
 const BATCH_SIZE = 500;
 
@@ -271,7 +278,8 @@ function* batches<T>(items: readonly T[]): Generator<T[]> {
 
 /**
  * Rule SY3 for listed offers already stored, in one statement: each row takes the listing's
- * values, is seen at the run's start and no longer missing; a usable cost is confirmed then.
+ * values, is seen at the run's start and no longer missing; a usable cost is confirmed then, or
+ * keeps a later confirmation (a cost observed after the read began, audit A05-8).
  */
 async function updateOffers(
   tx: Transaction,
@@ -315,7 +323,7 @@ async function updateOffers(
       max_quantity = v.max_quantity,
       last_seen_at = ${seenAt}::timestamptz,
       cost_confirmed_at = case when v.cost_usd_units is null then o.cost_confirmed_at
-        else ${seenAt}::timestamptz end,
+        else greatest(o.cost_confirmed_at, ${seenAt}::timestamptz) end,
       missing_since = null,
       updated_at = now()
     from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as v(
@@ -607,12 +615,13 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       trigger: 'admin',
     };
     await db.transaction((tx) =>
-      bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload),
+      // No retry, as the schedule's (S07; audit A05-62).
+      bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload, { retryLimit: 0 }),
     );
     this.logger.log(`Credentials of ${supplier.code} replaced during a run: testing them`);
   }
 
-  /** Runs left `running` over 10 minutes by a crash, but the payload's own (rule SY1). */
+  /** Runs left `running` over `ABANDONED_RUN_MINUTES` by a crash, but the payload's own (SY1). */
   private async closeAbandoned(db: Executor, supplierId: string, keep?: string): Promise<void> {
     await db
       .update(supplierSyncRuns)
@@ -653,7 +662,10 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     return run ?? null;
   }
 
-  /** Closes the run as failed, and tells the admin at the third failure in a row. */
+  /**
+   * Closes the run as failed, and tells the admin at the third failure in a row, then again every
+   * `SYNC_FAILING_REMIND_HOURS` while the streak lasts (audit A05-13).
+   */
   private async fail(
     db: Executor,
     supplier: SupplierState,
@@ -673,7 +685,10 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         .where(and(eq(supplierSyncRuns.id, run.id), eq(supplierSyncRuns.status, 'running')))
         .returning();
       const streak = await failedRunStreak(tx, supplier.id);
-      if (streak.count >= FAILING_SYNC_RUNS && streak.firstRunId) {
+      if (streak.count >= FAILING_SYNC_RUNS && streak.firstRunId && streak.firstStartedAt) {
+        const reminder = Math.floor(
+          (Date.now() - streak.firstStartedAt.getTime()) / (SYNC_FAILING_REMIND_HOURS * 3_600_000),
+        );
         await queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
           kind: 'supplier_sync_failing',
           params: {
@@ -683,7 +698,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             failedRuns: streak.count,
             errorCode: streak.lastErrorCode,
           },
-          dedupeKey: `sync-failing:${supplier.code}:${streak.firstRunId}`,
+          dedupeKey: `sync-failing:${supplier.code}:${streak.firstRunId}${reminder > 0 ? `:${reminder}` : ''}`,
         });
       }
       return closed ?? run;
@@ -857,9 +872,15 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       const missing: OfferRow[] = [];
       const now = new Date();
       const byOfferId = new Map(existing.map((row) => [row.offerId, row]));
-      for (const offer of listed) {
-        const row = byOfferId.get(offer.offerId);
+      for (const listedOffer of listed) {
+        const row = byOfferId.get(listedOffer.offerId);
         if (!row) continue;
+        // Audit A05-8: a cost observed after this run's read began (a quote or a charge, S18
+        // PQ3) is newer than the listing, so it stays.
+        const observedLater = row.costConfirmedAt !== null && row.costConfirmedAt >= run.startedAt;
+        const offer = observedLater
+          ? { ...listedOffer, costUsdUnits: row.costUsdUnits, costRaw: row.costRaw }
+          : listedOffer;
         updates.push({ row, offer });
         const moved =
           row.costUsdUnits !== offer.costUsdUnits ||

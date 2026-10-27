@@ -7,6 +7,22 @@ export function fzrErrorCode(body: unknown): string | undefined {
   return parsed.success ? parsed.data.code : undefined;
 }
 
+/** A FazerCards refusal reply (`{ ok: false, error }`) that names no `code` of its own. */
+export const FZR_REFUSED = 'refused';
+
+/**
+ * A category read's code: FazerCards' own, or `refused` for its refusal reply without one, so a
+ * 404 in FazerCards' own words (a category it no longer knows) tells apart from a gateway's 404
+ * (audit A05-19).
+ */
+export function fzrCategoryErrorCode(body: unknown): string | undefined {
+  const parsed = errorReplySchema.safeParse(body);
+  if (!parsed.success) return undefined;
+  return (
+    parsed.data.code ?? (parsed.data.ok === false && parsed.data.error ? FZR_REFUSED : undefined)
+  );
+}
+
 /** FC5, FC9: an order on an inactive plan is refused before anything is charged. */
 export const FZR_SUBSCRIPTION_INACTIVE = SUBSCRIPTION_INACTIVE_CODE;
 

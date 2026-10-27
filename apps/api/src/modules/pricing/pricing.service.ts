@@ -45,6 +45,7 @@ import {
   recordAudit,
   repriceListsAfterRetail,
   repriceProducts,
+  retailRowInForce,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
@@ -453,8 +454,8 @@ export class PricingService {
 
   /**
    * Applies the price the basis gives now (rule P1) and closes the review. With an expected price,
-   * a different one is refused with `REVIEW_STALE` and the new figure; a target equal to the price
-   * on the same route writes no price row (edge case 3).
+   * a different one is refused with `REVIEW_STALE` and the new figure; the row in force at the
+   * same cost writes no price row (edge case 3).
    */
   private async accept(
     tx: Transaction,
@@ -480,7 +481,9 @@ export class PricingService {
       });
     }
     const { current } = state;
-    const unchanged = current?.priceUsdUnits === target && current.routeId === state.basis.id;
+    // The decision accepts the basis's cost and the governing rule (Q21): the row in force stays
+    // only when it already holds both (audit A05-1).
+    const unchanged = retailRowInForce(state) && current?.costUsdUnits === state.basis.costUsdUnits;
     const retailRow =
       unchanged && current
         ? current

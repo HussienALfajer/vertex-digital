@@ -32,6 +32,7 @@ import type { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
+import { CodedException } from '../../core/errors/index.js';
 import { type Actor, CatalogItemsService, CatalogService } from '../catalog/index.js';
 import { auditSuppliers, refusals, routeTakenRefusal } from './supplier-records.js';
 
@@ -216,6 +217,7 @@ export class RoutesService {
     return this.change(productId, async (tx, product) => {
       const [manual] = await tx.select().from(suppliers).where(eq(suppliers.code, 'manual'));
       const supplierId = (manual as { id: string }).id;
+      await this.checkNoManual(tx, product.id, supplierId);
       const offerId = newId();
       const now = new Date();
       await tx.insert(supplierOffers).values({
@@ -327,10 +329,21 @@ export class RoutesService {
     });
   }
 
-  /** Rule RT1 again: refused while another route holds the offer. */
+  /**
+   * Rule RT1 again: refused while another route holds the offer; S16 SC6: refused for an ignored
+   * offer; RT7: a manual route refused beside another live one (audit A05-12, A05-71).
+   */
   async restore(actor: Actor, routeId: string): Promise<ProductRouting> {
     return this.changeRoute(routeId, async (tx, product, route, supplierCode) => {
       if (!route.archivedAt) return;
+      const [offer] = await tx
+        .select({ ignoredAt: supplierOffers.ignoredAt })
+        .from(supplierOffers)
+        .where(eq(supplierOffers.id, route.offerId))
+        // The lock an ignore waits on (S16 SC6), as a new route takes it.
+        .for('key share');
+      if (offer?.ignoredAt) throw refusals.offerIgnored();
+      if (supplierCode === 'manual') await this.checkNoManual(tx, product.id, route.supplierId);
       await this.checkFree(tx, product.id, route.offerId);
       await tx.update(productRoutes).set({ archivedAt: null }).where(eq(productRoutes.id, routeId));
       await auditSuppliers(tx, actor, 'product_route.restored', routeEntity(routeId), {
@@ -466,6 +479,27 @@ export class RoutesService {
   }
 
   /** Rule RT1, S17 WR1: no other unarchived route to the offer. */
+  /** Rule RT7: one live manual route a product, checked under the product's lock. */
+  private async checkNoManual(
+    tx: Transaction,
+    productId: string,
+    manualSupplierId: string,
+  ): Promise<void> {
+    const [live] = await tx
+      .select({ id: productRoutes.id })
+      .from(productRoutes)
+      .where(
+        and(
+          eq(productRoutes.productId, productId),
+          eq(productRoutes.supplierId, manualSupplierId),
+          isNull(productRoutes.archivedAt),
+        ),
+      );
+    if (live) {
+      throw new CodedException(409, 'MANUAL_ROUTE_EXISTS', 'The product has a manual route');
+    }
+  }
+
   private async checkFree(tx: Transaction, productId: string, offerId: string): Promise<void> {
     const [holder] = await tx
       .select({ productId: productRoutes.productId })

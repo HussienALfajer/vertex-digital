@@ -5,7 +5,7 @@ import { PRICE_MATRIX_MAX_LISTS } from '@vertex-digital/contracts';
 export interface MatrixSearch {
   gameId?: string;
   q?: string;
-  /** The columns besides retail; absent for the default (wholesale, cost). */
+  /** The columns besides retail; absent for the default (wholesale, cost), empty for retail only. */
   lists?: string[];
   /** "التحذيرات فقط". */
   warnings?: true;
@@ -25,11 +25,13 @@ export function parseMatrixSearch(search: Record<string, unknown>): MatrixSearch
     ? search.lists
     : typeof search.lists === 'string'
       ? search.lists.split(',')
-      : [];
-  const valid = [
-    ...new Set(lists.filter((id): id is string => typeof id === 'string' && UUID.test(id))),
-  ];
-  if (valid.length > 0) parsed.lists = valid.slice(0, PRICE_MATRIX_MAX_LISTS - 1);
+      : null;
+  if (lists) {
+    // An empty list is retail alone, the last box unticked (audit A05-33).
+    parsed.lists = [
+      ...new Set(lists.filter((id): id is string => typeof id === 'string' && UUID.test(id))),
+    ].slice(0, PRICE_MATRIX_MAX_LISTS - 1);
+  }
   if (search.warnings === true || search.warnings === 'true') parsed.warnings = true;
   return parsed;
 }

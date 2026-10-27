@@ -127,6 +127,20 @@ describe('SupplierHttp', () => {
     });
   });
 
+  it('reads a small x-ratelimit-reset as the seconds left, and prefers retry-after (A05-20)', async () => {
+    server.reply(
+      { status: 429, body: {}, headers: { 'x-ratelimit-reset': '20' } },
+      { status: 429, body: {}, headers: { 'x-ratelimit-reset': '1792430640', 'retry-after': '3' } },
+    );
+    const read = () => failure(http.request({ method: 'GET', path: 'x', schema: balanceSchema }));
+    const before = Date.now();
+    const seconds = (await read()) as SupplierError;
+    expect(seconds.details.retryAt).toBeGreaterThanOrEqual(before + 20_000);
+    expect(seconds.details.retryAt).toBeLessThan(before + 60_000);
+    const both = (await read()) as SupplierError;
+    expect(both.details.retryAt).toBeLessThan(before + 60_000);
+  });
+
   it('keeps the status, the failure and when a rate limit lifts (S18 FK1)', async () => {
     server.reply(
       { status: 429, body: {}, headers: { 'x-ratelimit-reset': '1792430640' } },

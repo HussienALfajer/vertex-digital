@@ -242,6 +242,9 @@ export function listTarget(
   };
 }
 
+/** List rows per insert statement, well under PostgreSQL's 65,535 parameters. */
+const LIST_ROWS_PER_INSERT = 1_000;
+
 /** Q21 per list: the row the basis gives is the current one. */
 function sameListRow(current: PriceRow, row: ListTargetRow): boolean {
   return (
@@ -311,8 +314,33 @@ export async function repriceListsAfterRetail(
       });
     }
   }
-  if (rows.length > 0) await tx.insert(productPrices).values(rows);
+  // In chunks: one statement holds at most 65,535 parameters, 14 a row (audit A05-11).
+  for (let start = 0; start < rows.length; start += LIST_ROWS_PER_INSERT) {
+    await tx.insert(productPrices).values(rows.slice(start, start + LIST_ROWS_PER_INSERT));
+  }
   return rows.length;
+}
+
+/**
+ * Q21: the stored retail row is the one the basis gives now: the target price on the same basis
+ * route under the same governing rule, rule values, source and fixed price. The row names the rule
+ * and its values, which a purchase copies (its minimum margin decides the profitable fallback
+ * routes), so a rule change writes a row even when the price stays.
+ */
+export function retailRowInForce(state: ProductRoutingState): boolean {
+  const { current, basis, rule } = state;
+  return (
+    current !== null &&
+    basis !== null &&
+    current.routeId === basis.id &&
+    current.priceUsdUnits === state.targetPriceUsdUnits &&
+    current.ruleId === rule.id &&
+    current.percentBp === rule.values.percentBp &&
+    current.fixedUsdUnits === rule.values.fixedUsdUnits &&
+    current.minMarginUsdUnits === rule.values.minMarginUsdUnits &&
+    current.source === state.targetSource &&
+    current.fixedPriceId === state.targetFixedPriceId
+  );
 }
 
 /**
@@ -369,17 +397,7 @@ export async function repriceProducts(
     const sameRoute = current?.routeId === basis.id;
     const fromManual =
       state.routes.find((route) => route.id === current?.routeId)?.supplierCode === 'manual';
-    // Q21: the stored row names the governing rule and its values, which a purchase copies (its
-    // minimum margin decides the profitable fallback routes), so a rule change writes a row even
-    // when the price stays.
-    const sameRule =
-      current?.ruleId === state.rule.id &&
-      current.percentBp === state.rule.values.percentBp &&
-      current.fixedUsdUnits === state.rule.values.fixedUsdUnits &&
-      current.minMarginUsdUnits === state.rule.values.minMarginUsdUnits &&
-      current.source === state.targetSource &&
-      current.fixedPriceId === state.targetFixedPriceId;
-    if (current && sameRoute && sameRule && current.priceUsdUnits === target) {
+    if (current && retailRowInForce(state)) {
       settled.push({ state, retailRow: current });
       continue;
     }

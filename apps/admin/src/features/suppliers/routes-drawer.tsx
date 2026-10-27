@@ -50,10 +50,12 @@ import {
 import { HistoryIcon, PlusIcon, RouteIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime, formatSince } from '../../lib/format';
+import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { AvailabilityBadge } from '../catalog/catalog-parts';
 import { AddRouteDialog } from './add-route-dialog';
 import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
@@ -158,7 +160,12 @@ function Routing({ game, product }: { game: GameDetail; product: Product }) {
         ) : (
           <ul className="flex flex-col gap-3">
             {data.routes.map((route) => (
-              <RouteItem key={route.id} route={route} game={game} />
+              <RouteItem
+                key={route.id}
+                route={route}
+                game={game}
+                priceUsdUnits={data.currentPrice?.priceUsdUnits ?? null}
+              />
             ))}
           </ul>
         )}
@@ -231,7 +238,7 @@ function PriceSummary({ routing, product }: { routing: ProductRouting; product: 
       {routing.openReview && (
         <p className="text-sm text-status-warning-foreground">
           {t('suppliers.routes.review', {
-            proposed: formatUsd(routing.openReview.proposedPriceUsdUnits),
+            proposed: ltr(formatUsd(routing.openReview.proposedPriceUsdUnits)),
           })}{' '}
           <Link to="/pricing/reviews" className="font-medium underline">
             {t('suppliers.routes.openReviews')}
@@ -244,12 +251,22 @@ function PriceSummary({ routing, product }: { routing: ProductRouting; product: 
 
 const TIER_TONES = { healthy: 'success', degraded: 'warning', manual: 'neutral' } as const;
 
-function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
+function RouteItem({
+  route,
+  game,
+  priceUsdUnits,
+}: {
+  route: Route;
+  game: GameDetail;
+  priceUsdUnits: number | null;
+}) {
   const { t } = useTranslation();
   const update = useUpdateRoute();
   const archive = useArchiveRoute();
   const [failure, setFailure] = useState<string | null>(null);
   const [editing, setEditing] = useState<'fields' | 'cost' | 'settings' | null>(null);
+  // Audit A05-4: archiving or switching off a route reprices the pack at once, so it asks first.
+  const [stopping, setStopping] = useState<'archive' | 'disable' | null>(null);
   const archived = route.archivedAt !== null;
   const manual = route.supplierCode === 'manual';
   const busy = update.isPending || archive.isPending;
@@ -373,7 +390,9 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
                 checked={route.enabled}
                 disabled={busy}
                 onCheckedChange={(enabled) =>
-                  run(() => update.mutateAsync({ id: route.id, body: { enabled } }))
+                  enabled
+                    ? run(() => update.mutateAsync({ id: route.id, body: { enabled } }))
+                    : setStopping('disable')
                 }
               />
               <label htmlFor={`enabled-${route.id}`}>{t('suppliers.routes.enabled')}</label>
@@ -383,6 +402,7 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
               <Select
                 items={priorities}
                 value={String(route.priority)}
+                disabled={busy}
                 onValueChange={(value) =>
                   run(() => update.mutateAsync({ id: route.id, body: { priority: Number(value) } }))
                 }
@@ -415,13 +435,37 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
               variant="ghost"
               size="sm"
               disabled={busy}
-              onClick={() => run(() => archive.mutateAsync({ id: route.id, archive: true }))}
+              onClick={() => setStopping('archive')}
             >
               {t('catalog.actions.archive')}
             </Button>
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={stopping !== null}
+        onClose={() => setStopping(null)}
+        title={t(`suppliers.routes.stop.${stopping ?? 'archive'}Title`, {
+          name: route.supplierNameAr,
+        })}
+        body={
+          route.basis
+            ? t('suppliers.routes.stop.basis', {
+                price: priceUsdUnits === null ? '' : ltr(formatUsd(priceUsdUnits)),
+              })
+            : t('suppliers.routes.stop.other')
+        }
+        action={t(`suppliers.routes.stop.${stopping ?? 'archive'}`)}
+        destructive
+        pending={busy}
+        onConfirm={async () => {
+          if (stopping === 'archive') {
+            await archive.mutateAsync({ id: route.id, archive: true });
+          } else {
+            await update.mutateAsync({ id: route.id, body: { enabled: false } });
+          }
+        }}
+      />
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         {editing === 'fields' && (
           <FieldsDialog route={route} game={game} onDone={() => setEditing(null)} />
@@ -662,7 +706,7 @@ function PriceHistory({ productId }: { productId: string }) {
         {t('suppliers.prices.title')}
       </h3>
       {prices.isPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-      {prices.isError && <FormAlert>{errorMessage(t, prices.error)}</FormAlert>}
+      {prices.isError && <ReadFailure error={prices.error} onRetry={() => prices.refetch()} />}
       {prices.isSuccess &&
         (prices.data.items.length === 0 ? (
           <EmptyState icon={<HistoryIcon />} title={t('suppliers.prices.empty')} />

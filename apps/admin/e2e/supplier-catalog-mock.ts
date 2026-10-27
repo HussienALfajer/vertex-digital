@@ -19,6 +19,7 @@ import {
   type SupplierConnectionTest,
   type SupplierOrder,
   type SupplierTransaction,
+  suggestGameAmounts,
   suggestInputFields,
   suggestProductName,
   unmappedOptions,
@@ -29,7 +30,7 @@ import type { CategoryReader, StoredOffer, SuppliersMock } from './suppliers-moc
 /*
  * The supplier catalog panel of S16 (SC4–SC14, IM1–IM3, SF3–SF5) as the panel sees it: the fake's
  * category tree with our links and ignore states on the contracts' `categoryStandings`, the import
- * and link drafts on `suggestInputFields`, `suggestProductName` and `parseGameAmount`, all-or-
+ * and link drafts on `suggestInputFields`, `suggestProductName` and `suggestGameAmounts`, all-or-
  * nothing imports and links with per-row refusals, "تفعيل الكل", the statement and the platform
  * status. A test scripts the statement (`statementOrders`, `transactions`), the nearby orders
  * (`nearby`), a pack added to a category (`addOffer`, as `--add-offer`) and a failing image
@@ -523,10 +524,13 @@ export class SupplierCatalogMock implements CategoryReader {
       ? this.catalog.products.filter((item) => item.gameId === game.id && !item.archivedAt)
       : [];
     const global = this.catalog.ruleFor(ROOT_PRICE_LIST_IDS.retail, {});
-    const packs: ImportDraftPack[] = offers.map((offer) => {
+    const amounts = suggestGameAmounts(offers.map((offer) => offer.name));
+    const packs: ImportDraftPack[] = offers.map((offer, index) => {
       const leaf = this.find(row.supplierCode, offer.categoryId as string) as StoredCategory;
       const view = this.suppliers.offer(offer);
-      const amount = parseGameAmount(offer.name);
+      const amount = amounts[index] ?? null;
+      // The API also asks that the product's routes deliver the pack's unit (A05-3); the mock
+      // matches by amount alone.
       const match = products.find(
         (product) =>
           (amount !== null && product.gameAmount === amount) || product.nameAr === offer.name,

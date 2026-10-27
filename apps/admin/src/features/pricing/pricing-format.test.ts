@@ -68,10 +68,14 @@ describe('parseCostUsd', () => {
 
 describe('ruleTexts', () => {
   it('shows a rule as the form edits it', () => {
+    // Through the contracts' exact formatter, as every other amount field (audit A05-76).
     expect(ruleTexts({ percentBp: 1200, fixedUsdUnits: 0, minMarginUsdUnits: 150_000 })).toEqual({
       percent: '12',
-      fixed: '0.00',
+      fixed: '0',
       minimum: '0.15',
     });
+    expect(
+      ruleTexts({ percentBp: 0, fixedUsdUnits: 1_100_000, minMarginUsdUnits: 10_000 }),
+    ).toEqual({ percent: '0', fixed: '1.10', minimum: '0.01' });
   });
 });

@@ -769,7 +769,8 @@ export class SuppliersService {
       trigger: 'admin',
       runId: created.id,
     };
-    await this.jobs.send(tx, QUEUES.suppliersSync, payload);
+    // No retry: a retried run finds its run closed (S07 jobs; audit A05-62).
+    await this.jobs.send(tx, QUEUES.suppliersSync, payload, { retryLimit: 0 });
     await auditSuppliers(tx, actor, 'supplier.sync_requested', supplierEntity(state.id), {
       supplier: state.code,
       runId: created.id,

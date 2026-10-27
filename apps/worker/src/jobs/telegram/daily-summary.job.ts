@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
   type DepositMethod,
+  FAILING_SYNC_RUNS,
   QUEUES,
   REVIEW_TIME_ZONE,
   reviewWaitStart,
@@ -17,6 +18,7 @@ import {
   type Database,
   depositSettings,
   deposits,
+  failedRunStreak,
   fixedPriceFallbacks,
   fulfilmentAttempts,
   ledgerSummary,
@@ -467,6 +469,10 @@ export class DailySummaryJob implements OnApplicationBootstrap {
           .from(merchantApplications)
           .where(eq(merchantApplications.status, 'under_review')),
     ]);
+    const streaks = await readAll(
+      db,
+      inUse.map((state) => () => failedRunStreak(db, state.id)),
+    );
     const stockLow = { low: 0, out: 0 };
     for (const count of stock.values()) {
       stockLow.low += count.low;
@@ -486,6 +492,17 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       marginGuarded: [...routing.values()].filter(
         (state) => state.availability === 'paused_by_margin_guard',
       ).length,
+      // Audit A05-13: a failing sync and a lapsed plan are told once when they start; the summary
+      // repeats them every day they last.
+      syncsFailing: inUse.flatMap((state, index) => {
+        const failedRuns = streaks[index]?.count ?? 0;
+        return failedRuns >= FAILING_SYNC_RUNS
+          ? [{ supplierNameAr: state.nameAr, failedRuns }]
+          : [];
+      }),
+      plansInactive: inUse
+        .filter((state) => state.subscriptionInactive)
+        .map((state) => state.nameAr),
       suppliersNotHealthy: inUse
         .filter((state) => state.health !== 'healthy')
         .map((state) => ({ supplierNameAr: state.nameAr, state: state.health })),

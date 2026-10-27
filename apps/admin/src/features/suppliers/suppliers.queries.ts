@@ -17,6 +17,7 @@ import type {
   SupplierDetail,
   SupplierPolicy,
   SupplierSummary,
+  SyncRunPage,
   UpdateRoute,
   UpdateSupplier,
   ValidationQuota,
@@ -83,16 +84,24 @@ export const supplierQuery = (code: SupplierCode) =>
     refetchInterval: (query) => (running(query.state.data) ? RUNNING_REFRESH_MS : false),
   });
 
+const runsRunning = (page: SyncRunPage | undefined) =>
+  page?.items.some((run) => run.status === 'running') ?? false;
+
 export const runsQuery = (code: SupplierCode, page: number) =>
   queryOptions({
     queryKey: ['suppliers', 'runs', code, page],
-    queryFn: () =>
+    queryFn: ({ client, queryKey }) =>
       call(
         api.GET('/api/admin/suppliers/{code}/runs', {
           params: { path: { code }, query: { page, pageSize: LIST_PAGE_SIZE } },
+          headers: runsRunning(client.getQueryData<SyncRunPage>(queryKey))
+            ? BACKGROUND_REQUEST
+            : undefined,
         }),
       ),
     placeholderData: keepPreviousData,
+    // A running run is read again in the background until it ends (audit A05-45).
+    refetchInterval: (query) => (runsRunning(query.state.data) ? RUNNING_REFRESH_MS : false),
   });
 
 export const offersQuery = (code: SupplierCode, search: OfferSearch) =>
