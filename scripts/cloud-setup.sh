@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Provisions the VM of a Claude Code cloud environment for Vertex Digital. Paste this file into the
-# environment's "Setup script" field (docs/workflow.md, "Cloud sessions"). It runs as root on
+# Provisions the VM of a Claude Code cloud environment for Vertex Digital. It is the repository's own
+# reference: the shared `vertex` environment's setup script is a superset of it and is what runs
+# (docs/workflow.md, "Cloud sessions"). It runs as root on
 # Ubuntu 24.04 before Claude Code starts, and its result is cached as a filesystem snapshot when it
 # finishes within about five minutes, so later sessions skip it.
 #

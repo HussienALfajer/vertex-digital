@@ -109,19 +109,23 @@ Sessions can run on the owner's machine (**Local**) or in a Claude Code cloud en
 
 | Script | Runs | Does |
 |---|---|---|
-| `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24, pulls the `postgres:17` image and installs Chromium's system libraries |
-| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), builds the packages `packages/db` depends on, migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
+| `scripts/cloud-setup.sh` | Not run directly: the repository's own reference for what its VM needs. The shared `vertex` environment's setup script is a superset of it | Installs Node 24, pulls the `postgres:17` image and installs Chromium's system libraries |
+| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17 (or reuses a server that already answers on `127.0.0.1:5432`, password `postgres`), `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), builds the packages `packages/db` depends on, migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
 
 The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
 
-### One-time setup (the owner, at claude.ai/code)
-1. Create a cloud environment named `vertex-digital`.
-2. **Network access:** Custom, with the default (Trusted) domains included, plus Playwright's browser downloads: `cdn.playwright.dev`, `playwright.download.prss.microsoft.com`, `playwright.azureedge.net`.
-3. **Setup script:** paste the whole of `scripts/cloud-setup.sh`. Paste it again whenever that file changes.
-4. **Environment variables:** none.
-5. The Claude GitHub App is installed on the repository (needed to clone and push).
+### The shared `vertex` environment
+
+All five Vertex repositories use one cloud environment named `vertex`, kept by the owner at claude.ai/code. Its setup script covers `scripts/cloud-setup.sh`: Node 24 at `/opt/node24` (default on `PATH`) with Corepack and pnpm, Docker with `postgres:17` and `axllent/mailpit`, Playwright's Chromium with its system libraries in `/opt/ms-playwright`, `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright` and `NODE_OPTIONS=--max-old-space-size=6144`. **Network access** is Full, which this repository accepts. When `scripts/cloud-setup.sh` changes, the owner carries the change into the shared script.
+
+The shared script also installs `vertex-session [repo-dir]`: it starts one PostgreSQL 17 container, `vertex-postgres`, on `127.0.0.1:5432` (`postgres`/`postgres`) and prepares every Vertex repository it finds. In a session with several repositories, repository hooks do not run, so run `vertex-session` first. In a single-repository session the hook runs `scripts/cloud-session.sh`, which reuses that server when it is already up.
 
 If the hook reports "Cloud session problems", fix the environment before running checks: a check that fails for environment reasons says nothing about the code. In a cloud session `/clear` does not exist (start a new session instead), the model and effort are set with `/model` and `/effort` before the first message, and the cleanup line after a merge is for the local checkout.
+
+Cloud limits:
+- `gh pr create` is refused in a cloud session: push the branch and open the PR with the **Create PR** button, then turn on auto-merge as in "Finishing a task".
+- `pnpm db:seed-local` does not work in the cloud: it needs the production catalog snapshot, copied over SSH (`scripts/pull-catalog-snapshot.sh`).
+- The Claude GitHub App must be installed on the repository (needed to clone and push).
 
 What always stays local:
 - **Production deploys** (`ssh`): the server's SSH key never goes into a cloud environment.
