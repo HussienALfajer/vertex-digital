@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A06-merchants.md`. Specs S20 (
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (verify passed, the reviewer found nothing blocking)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed` (`60f46b0`)
 
 # TASKS — Audit A05 Suppliers and pricing (branch `fix/audit-a05-suppliers`)
 
