@@ -5,7 +5,7 @@ import {
 } from '@vertex-digital/contracts';
 import { auditEntries, customerNotifications, emailOutbox, newId } from '@vertex-digital/db';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NotificationStreamService } from '../src/modules/notifications/notification-stream.service.js';
 import { NotificationsService } from '../src/modules/notifications/notifications.service.js';
 import { api, body, openEventStream, removeAccounts, seedCustomer } from './helpers.js';
@@ -366,5 +366,30 @@ describe('the live stream (rule NT6)', () => {
     await notify(customer.id, 'deposit_credited', credited());
     expect((await stream.event(3)).event).toBe('notification');
     await stream.close();
+  });
+});
+
+describe('the stream service', () => {
+  it('reads no notification for a customer with no open stream here (A07-31)', async () => {
+    const find = vi.spyOn(test.app.get(NotificationsService), 'find');
+    const streams = test.app.get(NotificationStreamService) as unknown as {
+      deliver(payload: string): Promise<void>;
+    };
+    await streams.deliver(`${newId()}:${newId()}`);
+    expect(find).not.toHaveBeenCalled();
+  });
+
+  it('forgets the connect times of customers quiet for a minute (A07-30)', () => {
+    const streams = test.app.get(NotificationStreamService) as unknown as {
+      connects: Map<string, number[]>;
+      countConnect(key: string): void;
+    };
+    const quiet = newId();
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    streams.countConnect(quiet);
+    clock.mockReturnValue(now + 61_000);
+    streams.countConnect(newId());
+    expect(streams.connects.has(quiet)).toBe(false);
   });
 });

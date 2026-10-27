@@ -78,10 +78,80 @@ test.describe('Telegram page', () => {
     admin.reauthenticationRequired = true;
     await page.getByRole('button', { name: ar.telegram.linked.unlink }).click();
     const dialog = page.getByRole('alertdialog');
-    await expect(dialog.getByText(ar.telegram.unlink.body)).toBeVisible();
+    // A07-45: the confirmation names the linked account.
+    await expect(
+      dialog.getByText(
+        ar.telegram.unlink.bodyNamed.replace('{{account}}', '\u2066@vertex_owner\u2069'),
+      ),
+    ).toBeVisible();
     await dialog.getByRole('button', { name: ar.telegram.unlink.action }).click();
     await reauthenticate(page, admin);
     await expect(page.getByText(ar.telegram.notLinked.title)).toBeVisible();
+  });
+
+  test('reads the test message’s status in the background until it is sent (A07-43)', async ({
+    page,
+    admin,
+  }) => {
+    admin.telegram = { configured: true, link: LINK, lastMessage: null };
+    await open(page, admin);
+    await page.getByRole('button', { name: ar.telegram.linked.test }).click();
+    await expect(page.getByText(ar.telegram.messageStatus.pending)).toBeVisible();
+    const queued = admin.telegram.lastMessage;
+    if (!queued) throw new Error('No test message');
+    admin.telegram = {
+      ...admin.telegram,
+      lastMessage: { ...queued, status: 'sent', sentAt: new Date().toISOString() },
+    };
+    await expect(page.getByText(ar.telegram.messageStatus.sent)).toBeVisible({ timeout: 10_000 });
+    const reads = () =>
+      admin.requests.filter((request) => request.key === 'GET /api/admin/telegram');
+    expect(reads().at(-1)?.headers['x-background-request']).toBe('1');
+    // Sent: the page stops reading.
+    const count = reads().length;
+    await page.waitForTimeout(4_000);
+    expect(reads()).toHaveLength(count);
+  });
+
+  test('shows a test message that failed, and a refused test (A07-18)', async ({ page, admin }) => {
+    admin.telegram = { configured: true, link: LINK, lastMessage: null };
+    await open(page, admin);
+    await page.getByRole('button', { name: ar.telegram.linked.test }).click();
+    await expect(page.getByText(ar.telegram.messageStatus.pending)).toBeVisible();
+    const queued = admin.telegram.lastMessage;
+    if (!queued) throw new Error('No test message');
+    admin.telegram = {
+      ...admin.telegram,
+      lastMessage: {
+        ...queued,
+        status: 'failed',
+        error: 'TelegramApiError: HTTP 403: Forbidden: bot was blocked by the user',
+      },
+    };
+    await expect(page.getByText(ar.telegram.messageStatus.failed)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText(/bot was blocked by the user/)).toBeVisible();
+
+    await page.route('**/api/admin/telegram/test', (route) =>
+      route.fulfill({
+        status: 500,
+        json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+      }),
+    );
+    await page.getByRole('button', { name: ar.telegram.linked.test }).click();
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+  });
+
+  test('a link left unopened expires, with a new one offered (A07-18)', async ({ page, admin }) => {
+    await page.clock.install();
+    await open(page, admin);
+    await page.getByRole('button', { name: ar.telegram.notLinked.link }).click();
+    await expect(page.getByRole('img', { name: ar.telegram.notLinked.qrLabel })).toBeVisible();
+    await page.clock.fastForward(10 * 60_000 + 1_000);
+    await expect(page.getByText(ar.telegram.notLinked.expired)).toBeVisible();
+    await expect(page.getByRole('img', { name: ar.telegram.notLinked.qrLabel })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: ar.telegram.notLinked.renew })).toBeVisible();
   });
 });
 

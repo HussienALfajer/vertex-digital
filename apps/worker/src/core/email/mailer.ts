@@ -16,6 +16,17 @@ export interface OutgoingEmail {
 }
 
 /**
+ * Nodemailer waits up to 2 minutes to connect and 10 for the socket by default, while `email.send`
+ * holds the outbox row's transaction and the one-at-a-time queue: a hung server fails in seconds
+ * instead (audit A07-29).
+ */
+export const SMTP_TIMEOUTS = {
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
+  socketTimeout: 30_000,
+} as const;
+
+/**
  * Sends emails over SMTP (Nodemailer), or, in log mode (development and tests, rule E5), builds
  * the same message and writes it as an `.eml` file under `EMAIL_LOG_DIR` instead of sending it.
  */
@@ -31,6 +42,7 @@ export class Mailer {
         port: env.SMTP_PORT,
         secure: env.SMTP_SECURE,
         auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
+        ...SMTP_TIMEOUTS,
       });
       this.logDir = null;
     } else {

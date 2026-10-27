@@ -25,18 +25,20 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
+import { sendAttempt } from '@/features/purchase/attempt';
 import { useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
-import { useIdempotentRequest } from '@/lib/idempotency';
 import {
   attemptSignature,
   BODY_MAX,
   bodyLength,
   type DraftProblem,
   draftProblems,
+  freesSupportKey,
   messageBody,
+  TICKET_SLOT,
   type TicketDraft,
 } from './form';
 import { ImagePicker } from './image-picker';
@@ -82,11 +84,19 @@ function draftFromUrl(): TicketDraft {
   };
 }
 
+/** Sign-in, then back to this form with its type and link (audit A07-38). */
+function signInHref(): string {
+  const next = `${window.location.pathname}${window.location.search}`;
+  return `/sign-in?next=${encodeURIComponent(next)}`;
+}
+
 /**
  * `/support/new` (S12 TK1): the type as four large choices; for an order or a deposit, a picker of
  * the customer's last 30; the subject; the message with its counter; up to 3 images; "إرسال" as
- * multipart with an `Idempotency-Key` per attempt and the ALTCHA proof. Every value stays after a
- * refusal; the limit and an already open ticket link to where the customer can go on.
+ * multipart with an `Idempotency-Key` per attempt (kept in this tab's session storage, so a retry
+ * after a lost answer and a reload returns the first ticket, audit A07-39) and the ALTCHA proof.
+ * Every value stays after a refusal; the limit and an already open ticket link to where the
+ * customer can go on.
  */
 export function NewTicketPage() {
   const router = useRouter();
@@ -101,7 +111,6 @@ export function NewTicketPage() {
   const [showErrors, setShowErrors] = useState(false);
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const sendOnce = useIdempotentRequest();
   const { ref, focusInvalid } = useFocusInvalid();
 
   useEffect(() => {
@@ -113,8 +122,7 @@ export function NewTicketPage() {
 
   useEffect(() => {
     if (customer.status !== 'signedOut') return;
-    const next = `${window.location.pathname}${window.location.search}`;
-    router.replace(`/sign-in?next=${encodeURIComponent(next)}`);
+    router.replace(signInHref());
   }, [customer.status, router]);
 
   const problems = new Set<DraftProblem>(showErrors ? draftProblems(draft, files.length) : []);
@@ -134,8 +142,11 @@ export function NewTicketPage() {
       body: messageBody(draft.body, files.length, t('support.images.attached')),
     };
     setSending(true);
-    const result = await sendOnce(attemptSignature(fields, files), (key) =>
-      openTicket(fields, files, key),
+    const result = await sendAttempt(
+      TICKET_SLOT,
+      attemptSignature(fields, files),
+      (key) => openTicket(fields, files, key),
+      freesSupportKey,
     );
     if (result.ok) {
       router.push(`/support/${result.data.id}`);
@@ -143,7 +154,7 @@ export function NewTicketPage() {
     }
     setSending(false);
     if (result.reason === 'UNAUTHORIZED') {
-      router.push(`/sign-in?next=${encodeURIComponent('/support/new')}`);
+      router.push(signInHref());
       return;
     }
     const ticketId = (result.details as { ticketId?: unknown } | undefined)?.ticketId;
@@ -195,34 +206,26 @@ export function NewTicketPage() {
       </Field>
 
       {draft.category === 'order' && (
-        <div className="flex flex-col gap-2">
-          <LinkPicker
-            kind="order"
-            value={draft.orderId}
-            prefill={prefill.order}
-            invalid={problems.has('order')}
-            disabled={sending}
-            onChange={(orderId) => change({ orderId })}
-          />
-          {problems.has('order') && (
-            <p className="text-sm text-destructive-text">{t('support.validation.order')}</p>
-          )}
-        </div>
+        <LinkPicker
+          kind="order"
+          value={draft.orderId}
+          prefill={prefill.order}
+          invalid={problems.has('order')}
+          error={t('support.validation.order')}
+          disabled={sending}
+          onChange={(orderId) => change({ orderId })}
+        />
       )}
       {draft.category === 'deposit' && (
-        <div className="flex flex-col gap-2">
-          <LinkPicker
-            kind="deposit"
-            value={draft.depositId}
-            prefill={prefill.deposit}
-            invalid={problems.has('deposit')}
-            disabled={sending}
-            onChange={(depositId) => change({ depositId })}
-          />
-          {problems.has('deposit') && (
-            <p className="text-sm text-destructive-text">{t('support.validation.deposit')}</p>
-          )}
-        </div>
+        <LinkPicker
+          kind="deposit"
+          value={draft.depositId}
+          prefill={prefill.deposit}
+          invalid={problems.has('deposit')}
+          error={t('support.validation.deposit')}
+          disabled={sending}
+          onChange={(depositId) => change({ depositId })}
+        />
       )}
 
       <Field invalid={problems.has('subject')}>

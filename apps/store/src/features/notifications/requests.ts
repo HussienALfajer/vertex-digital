@@ -25,6 +25,15 @@ export async function getUnreadCount(fetcher: Fetcher = fetch) {
   return page.ok ? page.data.unreadCount : null;
 }
 
+/**
+ * Whether the session ended (audit A07-2): asked when the stream was refused, since
+ * `EventSource` does not say with what status. Any other answer, or none, is a passing fault.
+ */
+export async function sessionEnded(fetcher: Fetcher = fetch) {
+  const page = await apiRequest<NotificationPage>('/api/notifications?limit=1', { fetcher });
+  return !page.ok && page.reason === 'UNAUTHORIZED';
+}
+
 /** Marks everything up to `upToId`, included, as read; answers the new count. */
 export function markNotificationsRead(upToId: string, fetcher: Fetcher = fetch) {
   return apiRequest<UnreadCount>('/api/notifications/read', {

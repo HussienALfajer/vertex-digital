@@ -28,9 +28,10 @@ export function useBalance(enabled: boolean): { balance: Balance; refresh: () =>
   const [balance, setBalance] = useState<Balance>({ status: 'loading' });
   const [reads, setReads] = useState(0);
   const refresh = useCallback(() => setReads((count) => count + 1), []);
+  // Signed out, no stream: it would answer 401 (audit A07-2).
   useNotificationEvents((event) => {
-    if (enabled && isMoneyEvent(event)) refresh();
-  });
+    if (isMoneyEvent(event)) refresh();
+  }, enabled);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `reads` is the trigger.
   useEffect(() => {
     if (!enabled) return;

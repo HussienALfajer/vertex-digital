@@ -15,6 +15,7 @@ import {
   customerMarks,
   type Database,
   findCustomer,
+  lockTicketCustomer,
   recordAudit,
   supportMessages,
   supportSettings,
@@ -43,6 +44,7 @@ import {
   ticketHoldsFile,
   ticketMessages,
   ticketRefusals,
+  ticketSummaries,
   ticketSummary,
   updateTicket,
 } from './support-records.js';
@@ -111,21 +113,24 @@ export class SupportAdminService {
     const people = await this.customers.depositCustomers([
       ...new Set(page.items.map((row) => row.ticket.customerId)),
     ]);
-    const items = await Promise.all(
-      page.items.map(async ({ ticket }) => {
-        const customer = people.get(ticket.customerId);
-        if (!customer) throw new Error(`Ticket ${ticket.id} has no customer`);
-        return {
-          ...(await ticketSummary(this.db, ticket)),
-          customer: {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            status: statusOf(customer),
-          },
-        };
-      }),
+    const summaries = await ticketSummaries(
+      this.db,
+      page.items.map(({ ticket }) => ticket),
     );
+    const items = summaries.map((summary, index) => {
+      const ticket = page.items[index]?.ticket;
+      const customer = ticket && people.get(ticket.customerId);
+      if (!customer) throw new Error(`Ticket ${summary.id} has no customer`);
+      return {
+        ...summary,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          status: statusOf(customer),
+        },
+      };
+    });
     return { items, nextCursor: page.nextCursor, openCount: await this.openCount() };
   }
 
@@ -163,23 +168,26 @@ export class SupportAdminService {
     uploads: readonly Buffer[],
     meta: RequestMeta,
   ): Promise<{ ticket: AdminTicket; created: boolean }> {
-    const replayed = await this.replay(this.db, idempotencyKey, input.body, null);
+    const replayed = await this.replay(this.db, idempotencyKey, input.body, input);
     if (replayed) return { ticket: await this.ticket(replayed), created: false };
-    const customer = await findCustomer(this.db, input.customerId);
-    if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
+    const found = await findCustomer(this.db, input.customerId);
+    if (!found) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
+    // Audit A07-1: a request sure to be refused stores no image; the transaction checks again.
+    if (uploads.length > 0) {
+      if (customerStatus(found) === 'archived') throw ticketRefusals.customerArchived();
+      await checkLink(this.db, found.id, input);
+    }
     const prepared = await Promise.all(
       uploads.map((upload) => this.files.prepare('ticket_attachment', upload)),
     );
     const outcome = await this.db.transaction(async (tx) => {
       await this.lock(tx, idempotencyKey);
-      const again = await this.replay(tx, idempotencyKey, input.body, null);
+      const again = await this.replay(tx, idempotencyKey, input.body, input);
       if (again) return { id: again, created: false };
-      const status = customerStatus(customer);
-      if (status === 'archived') {
-        throw new CodedException(409, 'CUSTOMER_STATE_INVALID', 'The customer is archived', {
-          status,
-        });
-      }
+      // Audit A07-19: the status read under the customer's lock, not before the transaction.
+      const customer = await lockTicketCustomer(tx, found.id);
+      if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
+      if (customer.archived) throw ticketRefusals.customerArchived();
       const link = await checkLink(tx, customer.id, input);
       const ticket = await insertTicket(tx, {
         customerId: customer.id,
@@ -219,16 +227,28 @@ export class SupportAdminService {
     uploads: readonly Buffer[],
     meta: RequestMeta,
   ): Promise<{ ticket: AdminTicket; created: boolean }> {
-    await this.ticket(id);
+    // A light read, not the whole view with its signals: the answer builds that once (A07-21).
+    if (!isUuid(id)) throw ticketRefusals.notFound();
+    const [row] = await this.db
+      .select({ customerId: supportTickets.customerId })
+      .from(supportTickets)
+      .where(eq(supportTickets.id, id));
+    if (!row) throw ticketRefusals.notFound();
     if (await this.replay(this.db, idempotencyKey, body, id)) {
       return { ticket: await this.ticket(id), created: false };
     }
+    // Q28 (audit A07-20): no reply reopens an archived customer's ticket or notifies them; checked
+    // before the images are stored (A07-1) and again under the customer's lock (A07-19).
+    const owner = await findCustomer(this.db, row.customerId);
+    if (owner && customerStatus(owner) === 'archived') throw ticketRefusals.customerArchived();
     const prepared = await Promise.all(
       uploads.map((upload) => this.files.prepare('ticket_attachment', upload)),
     );
     const created = await this.db.transaction(async (tx) => {
       await this.lock(tx, idempotencyKey);
       if (await this.replay(tx, idempotencyKey, body, id)) return false;
+      const customer = await lockTicketCustomer(tx, row.customerId);
+      if (customer?.archived) throw ticketRefusals.customerArchived();
       const ticket = await lockTicket(tx, id);
       if (!ticket) throw ticketRefusals.notFound();
       // TK9: the email at most once per ticket per 10 minutes; the center always.
@@ -421,14 +441,23 @@ export class SupportAdminService {
     db: Database | Transaction,
     idempotencyKey: string,
     body: string,
-    ticketId: string | null,
+    target:
+      | string
+      | (AdminCreateTicket & { orderId?: string | undefined; depositId?: string | undefined }),
   ): Promise<string | null> {
     const written = await messageByKey(db, idempotencyKey);
     if (!written) return null;
     if (
       written.author !== 'admin' ||
       written.body !== body ||
-      (ticketId !== null && written.ticketId !== ticketId)
+      (typeof target === 'string'
+        ? written.ticketId !== target
+        : // Audit A07-23: an opening's key replays only the same customer, type, link and subject.
+          written.customerId !== target.customerId ||
+          written.category !== target.category ||
+          written.orderId !== (target.orderId ?? null) ||
+          written.depositId !== (target.depositId ?? null) ||
+          written.subject !== target.subject)
     ) {
       throw ticketRefusals.keyReused();
     }

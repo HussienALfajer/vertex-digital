@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { dashboardQuery } from '../features/dashboard/dashboard.queries';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
 import { orderCountsQuery } from '../features/orders/orders.queries';
 import { openReviewCountQuery } from '../features/pricing/pricing.queries';
@@ -209,6 +210,7 @@ const navBadges: Partial<Record<string, () => ReactNode>> = {
   '/suppliers': SuppliersBadge,
   '/support': SupportBadge,
   '/reconciliation': ReconciliationBadge,
+  '/merchants/applications': MerchantApplicationsBadge,
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -445,6 +447,30 @@ function SupportBadge() {
       aria-label={t('nav.supportBadge', { open })}
     >
       {open}
+    </Badge>
+  );
+}
+
+/**
+ * S20 MA8 (audit A07-12): the merchant applications under review, from the dashboard's attention
+ * list (its only count), read every minute in the background; shared with the home page's read.
+ */
+function MerchantApplicationsBadge() {
+  const { t } = useTranslation();
+  const count = useQuery({
+    ...dashboardQuery,
+    select: (dashboard) =>
+      dashboard.attention.find((item) => item.kind === 'merchant_applications_waiting')?.count ?? 0,
+  });
+  const waiting = count.data ?? 0;
+  if (waiting === 0) return null;
+  return (
+    <Badge
+      tone="gold"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.merchantApplicationsBadge', { waiting })}
+    >
+      {waiting}
     </Badge>
   );
 }

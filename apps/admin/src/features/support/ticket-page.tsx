@@ -25,13 +25,23 @@ import {
   Textarea,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, CircleAlertIcon, LockIcon, RotateCcwIcon, SendIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  ArrowRightIcon,
+  CircleAlertIcon,
+  LockIcon,
+  RotateCcwIcon,
+  SearchXIcon,
+  SendIcon,
+} from 'lucide-react';
 import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { useVisibleAgain } from '../../lib/admin-stream';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
 import { actorLabel } from '../audit/audit-labels';
 import { CustomerMarks } from '../customers/customer-marks';
@@ -40,6 +50,7 @@ import { STATUS_TONES as ORDER_TONES } from '../orders/order-labels';
 import { ImagePicker } from './image-picker';
 import {
   attachmentUrl,
+  THREAD_REFRESH_MS,
   ticketHistoryQuery,
   ticketQuery,
   useCloseTicket,
@@ -51,11 +62,14 @@ import { TICKET_STATUS_TONES } from './ticket-labels';
  * One ticket (S12 TK3–TK12): the thread oldest first (the customer at the start side, the store
  * at the end side), images opening full size, the reply box (Ctrl+Enter sends; a reply reopens a
  * closed ticket), "إغلاق", and the side panel: the customer, the linked order or deposit, the
- * ticket's history. Customer text is plain: URLs are never made clickable (phishing).
+ * ticket's history. Customer text is plain: URLs are never made clickable (phishing). The admin
+ * stream carries no tickets, so the thread is read again in the background every minute and when
+ * the tab is seen again (audit A07-10); a typed reply stays.
  */
 export function TicketPage({ id }: { id: string }) {
   const { t } = useTranslation();
-  const ticket = useQuery(ticketQuery(id));
+  const ticket = useQuery({ ...ticketQuery(id), refetchInterval: THREAD_REFRESH_MS });
+  useVisibleAgain(() => void ticket.refetch());
   const close = useCloseTicket(id);
   const [closing, setClosing] = useState(false);
 
@@ -77,17 +91,25 @@ export function TicketPage({ id }: { id: string }) {
       </>
     );
   }
-  if (ticket.isError) {
+  if (!ticket.data) {
+    // Audit A07-47: a ticket that does not exist offers the way back, not a retry.
+    const missing = ticket.error instanceof ApiError && ticket.error.status === 404;
     return (
       <>
         <PageHeader title={t('support.title')} actions={back} />
         <EmptyState
-          icon={<CircleAlertIcon />}
-          title={errorMessage(t, ticket.error)}
+          icon={missing ? <SearchXIcon /> : <CircleAlertIcon />}
+          title={missing ? t('support.thread.notFound') : errorMessage(t, ticket.error)}
           action={
-            <Button variant="outline" onClick={() => ticket.refetch()}>
-              {t('common.retry')}
-            </Button>
+            missing ? (
+              <Button variant="outline" render={<Link to="/support" />}>
+                {t('support.thread.back')}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => ticket.refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
           }
         />
       </>
@@ -95,6 +117,8 @@ export function TicketPage({ id }: { id: string }) {
   }
 
   const data = ticket.data;
+  // Q28 (audit A07-20): the API refuses a reply on an archived customer's ticket.
+  const archived = data.customer.status === 'archived';
   return (
     <>
       <PageHeader
@@ -112,6 +136,19 @@ export function TicketPage({ id }: { id: string }) {
           </>
         }
       />
+      {/* A failed background read keeps the thread and the typed reply (audit A07-10). */}
+      {ticket.isError && (
+        <Callout
+          tone="warning"
+          icon={<CircleAlertIcon />}
+          title={t('support.thread.stale')}
+          action={
+            <Button variant="outline" onClick={() => ticket.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={TICKET_STATUS_TONES[data.status]}>
           {t(`support.statuses.${data.status}`)}
@@ -130,7 +167,16 @@ export function TicketPage({ id }: { id: string }) {
               })}
             </p>
           )}
-          <ReplyBox ticket={data} />
+          {archived ? (
+            <Callout
+              tone="neutral"
+              icon={<ArchiveIcon />}
+              title={t('support.reply.archivedTitle')}
+              description={t('support.reply.archivedBody')}
+            />
+          ) : (
+            <ReplyBox ticket={data} />
+          )}
         </div>
         <SidePanel ticket={data} />
       </div>
@@ -138,7 +184,7 @@ export function TicketPage({ id }: { id: string }) {
         open={closing}
         onClose={() => setClosing(false)}
         title={t('support.thread.closeTitle')}
-        body={t('support.thread.closeBody')}
+        body={t('support.thread.closeBody', { number: ltr(data.number) })}
         action={t('support.thread.closeConfirm')}
         pending={close.isPending}
         onConfirm={async () => {
@@ -168,8 +214,9 @@ function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: Tick
       <article
         className={cn(
           'flex max-w-[85%] min-w-0 flex-col gap-2 rounded-lg px-4 py-3',
+          // Authorship, not a status (audit A07-50): the team on the secondary surface.
           fromAdmin
-            ? 'bg-status-success text-status-success-foreground'
+            ? 'border border-border bg-secondary text-secondary-foreground'
             : 'border border-border bg-surface text-surface-foreground',
         )}
       >
@@ -391,7 +438,7 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
         {history.isError && (
           <div className="flex flex-col items-start gap-2">
             <FormAlert>{errorMessage(t, history.error)}</FormAlert>
-            <Button variant="outline" size="sm" onClick={() => history.refetch()}>
+            <Button variant="outline" size="sm" className="h-11" onClick={() => history.refetch()}>
               {t('common.retry')}
             </Button>
           </div>

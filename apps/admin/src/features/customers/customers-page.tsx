@@ -95,7 +95,7 @@ export function CustomersPage({
           </Button>
         </div>
       )}
-      {list.isSuccess && customers.length === 0 && (
+      {list.isSuccess && customers.length === 0 && !list.isPlaceholderData && (
         <EmptyState
           icon={<SearchXIcon />}
           title={t('customers.empty')}
@@ -109,7 +109,9 @@ export function CustomersPage({
           }
         />
       )}
-      {customers.length > 0 && <CustomerTable customers={customers} />}
+      {customers.length > 0 && (
+        <CustomerTable customers={customers} loading={list.isPlaceholderData} />
+      )}
       {list.hasNextPage && (
         <Button
           variant="outline"
@@ -165,11 +167,18 @@ function SearchForm({
 }
 
 /** Rule CS2: name and email, phone, created, chips, balance, delivered orders, last order. */
-function CustomerTable({ customers }: { customers: AdminCustomerRow[] }) {
+function CustomerTable({
+  customers,
+  loading,
+}: {
+  customers: AdminCustomerRow[];
+  loading: boolean;
+}) {
   const { t } = useTranslation();
   const now = new Date();
   return (
-    <Table>
+    // Audit A07-15: another search's or tab's rows stay while the next load, dimmed.
+    <Table className={loading ? 'opacity-60' : undefined} aria-busy={loading}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('customers.columns.customer')}</TableHead>

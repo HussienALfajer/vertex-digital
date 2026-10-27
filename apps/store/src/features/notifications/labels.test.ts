@@ -77,7 +77,7 @@ describe('notification labels', () => {
       },
     };
     expect(notificationText(finished)).toBe(
-      `اكتملت سلتك: سُلّم 3، سُلّم جزئياً 1، استُرد 1 (${ltr('$2.50')} أُعيدت إلى رصيدك).`,
+      `اكتملت سلتك: سُلّم 3، سُلّم جزئيًا 1، استُرد 1 (${ltr('$2.50')} أُعيدت إلى رصيدك).`,
     );
     expect(
       notificationText({

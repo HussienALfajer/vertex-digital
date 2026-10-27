@@ -353,7 +353,7 @@ export class AdminApi {
         this.auditEntries = [entry, ...this.auditEntries];
       },
     ),
-    { priceLists: this.priceLists, merchants: this.merchants },
+    { priceLists: this.priceLists, merchants: this.merchants, deposits: () => this.deposits },
   );
   /** S13: the books, the treasury and the reports; no run yet by default. */
   readonly reconciliation = new ReconciliationMock(() => this.reauthenticationRequired);

@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { DEPOSIT_SETTINGS_DEFAULTS } from '@vertex-digital/contracts';
-import { supportMessages, supportTickets, telegramMessages } from '@vertex-digital/db';
+import { customers, supportMessages, supportTickets, telegramMessages } from '@vertex-digital/db';
 import { and, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { FilesService } from '../src/modules/files/index.js';
 import {
   api,
   auditOf,
@@ -436,6 +437,147 @@ describe('the admin side (TK2, TK5, TK9, TK12, TK13)', () => {
       .from(supportTickets)
       .where(and(eq(supportTickets.id, ticket.id)));
     expect(row?.closedAt).toBeNull();
+  });
+
+  it('stores no image for a request the limits or the ticket refuse (A07-1)', async () => {
+    const owner = await customer();
+    const prepare = vi.spyOn(test.app.get(FilesService), 'prepare');
+    for (let index = 0; index < 3; index += 1) await json(await openTicket(owner), 201);
+    expect(
+      (await json<{ code: string }>(await openTicket(owner, {}, { images: 1 }), 409)).code,
+    ).toBe('TICKETS_LIMIT_REACHED');
+    const [first] = await test.db
+      .select({ id: supportTickets.id })
+      .from(supportTickets)
+      .where(eq(supportTickets.customerId, owner.id));
+    await test.db
+      .update(supportTickets)
+      .set({ status: 'closed', closedAt: sql`now() - interval '8 days'`, closedBy: 'customer' })
+      .where(eq(supportTickets.id, first?.id ?? ''));
+    const late = await client.post(`/api/support/tickets/${first?.id}/messages`, {
+      cookie: owner.cookie,
+      form: await multipart({ body: 'صورة' }, 1),
+      headers: { 'idempotency-key': randomUUID() },
+    });
+    expect((await json<{ code: string }>(late, 409)).code).toBe('TICKET_CLOSED');
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it('answers a malformed ticket id with 404, not a server fault (A07-4)', async () => {
+    const owner = await customer();
+    for (const path of [
+      '/api/support/tickets/not-a-ticket/close',
+      '/api/support/tickets/not-a-ticket/messages',
+    ]) {
+      const response = await client.post(path, {
+        cookie: owner.cookie,
+        form: await multipart({ body: 'مرحباً' }),
+        headers: { 'idempotency-key': randomUUID() },
+      });
+      expect((await json<{ code: string }>(response, 404)).code).toBe('NOT_FOUND');
+    }
+  });
+
+  it('refuses a reply on an archived customer’s ticket and tells no one (A07-20, Q28)', async () => {
+    const owner = await customer();
+    const ticket = await json<TicketView>(await openTicket(owner), 201);
+    await json(
+      await client.post(`/api/admin/support/tickets/${ticket.id}/close`, { cookie: admin.cookie }),
+      200,
+    );
+    await test.db
+      .update(customers)
+      .set({ archivedAt: new Date() })
+      .where(eq(customers.id, owner.id));
+    const refused = await json<{ code: string; details: { status: string } }>(
+      await adminReply(ticket.id, 'ردّ متأخر', 1),
+      409,
+    );
+    expect(refused).toMatchObject({
+      code: 'CUSTOMER_STATE_INVALID',
+      details: { status: 'archived' },
+    });
+    const [row] = await test.db
+      .select({ status: supportTickets.status })
+      .from(supportTickets)
+      .where(eq(supportTickets.id, ticket.id));
+    expect(row?.status).toBe('closed');
+    expect(
+      (await notificationsOf(test.db, owner.id)).some(
+        (notice) => notice.event === 'ticket_replied',
+      ),
+    ).toBe(false);
+  });
+
+  it('replays an opening’s key only for the same type, link, subject and customer (A07-23)', async () => {
+    const owner = await customer();
+    const key = randomUUID();
+    const first = await json<TicketView>(await openTicket(owner, {}, { key }), 201);
+    expect((await json<TicketView>(await openTicket(owner, {}, { key }), 200)).id).toBe(first.id);
+    for (const fields of [{ subject: 'موضوع آخر' }, { category: 'other' }] as Record<
+      string,
+      string
+    >[]) {
+      expect(
+        (await json<{ code: string }>(await openTicket(owner, fields, { key }), 409)).code,
+      ).toBe('IDEMPOTENCY_KEY_REUSED');
+    }
+    const other = await customer();
+    const adminKey = randomUUID();
+    const openFor = async (customerId: string) =>
+      client.post('/api/admin/support/tickets', {
+        cookie: admin.cookie,
+        form: await multipart({
+          customerId,
+          category: 'account',
+          subject: 'بخصوص حسابك',
+          body: 'نحتاج تأكيداً',
+        }),
+        headers: { 'idempotency-key': adminKey },
+      });
+    await json(await openFor(owner.id), 201);
+    expect((await json<{ code: string }>(await openFor(other.id), 409)).code).toBe(
+      'IDEMPOTENCY_KEY_REUSED',
+    );
+  });
+
+  it('refuses the sixth ticket of a day and a reopen past 3 open tickets (TK1, TK4; A07-16)', async () => {
+    const owner = await customer();
+    const close = (id: string) =>
+      client.post(`/api/support/tickets/${id}/close`, { cookie: owner.cookie });
+    const closed: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const ticket = await json<TicketView>(await openTicket(owner), 201);
+      await json(await close(ticket.id), 200);
+      closed.push(ticket.id);
+    }
+    for (let index = 0; index < 3; index += 1) await json(await openTicket(owner), 201);
+    const reopen = await json<{ code: string; details: { limit: string } }>(
+      await reply(owner, closed[0] as string),
+      409,
+    );
+    expect(reopen).toMatchObject({ code: 'TICKETS_LIMIT_REACHED', details: { limit: 'open' } });
+    await test.db
+      .update(supportTickets)
+      .set({ status: 'closed', closedAt: sql`now()`, closedBy: 'customer' })
+      .where(and(eq(supportTickets.customerId, owner.id), eq(supportTickets.status, 'open')));
+    const daily = await json<{ code: string; details: { limit: string } }>(
+      await openTicket(owner),
+      409,
+    );
+    expect(daily).toMatchObject({ code: 'TICKETS_LIMIT_REACHED', details: { limit: 'daily' } });
+  });
+
+  it('refuses a file that is not an image (TK11; A07-16)', async () => {
+    const owner = await customer();
+    const form = await multipart({ category: 'account', subject: 'ملف', body: 'مرفق' });
+    form.append('files', new Blob([new TextEncoder().encode('not an image')]), 'note.png');
+    const response = await client.post('/api/support/tickets', {
+      cookie: owner.cookie,
+      form,
+      headers: { 'idempotency-key': randomUUID(), ...(await client.altcha()) },
+    });
+    expect((await json<{ code: string }>(response, 400)).code).toBe('IMAGE_INVALID');
   });
 });
 

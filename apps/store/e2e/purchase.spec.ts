@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { formatSyp, formatUsd, type Order, type StoreProduct } from '@vertex-digital/contracts';
 import qb from '../src/features/quick-buy/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
-import { PUBG, pack } from './catalog';
+import { PUBG, pack, searchIndex } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
 
 /*
@@ -160,6 +160,23 @@ test.describe('buy box', () => {
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
     await expect(idField(page)).toHaveValue('51234567');
     expect(page.url()).not.toContain('51234567');
+  });
+
+  test('signed out, a chosen pack and the cart open no notification stream (A07-2)', async ({
+    page,
+    api,
+  }) => {
+    await page.goto('/games/pubg-mobile');
+    await choose(page, '60 UC');
+    await expect(buyBox(page).getByRole('button', { name: p.signIn })).toBeVisible();
+    // A stream would have been asked for by now: it answers 401 and loops.
+    await page.waitForTimeout(500);
+    expect(api.count('GET /api/notifications/stream')).toBe(0);
+    api.on('GET /api/catalog/search-index', 200, searchIndex());
+    await page.goto('/cart');
+    await expect(page.getByRole('heading', { level: 1, name: ar.cart.title })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(api.count('GET /api/notifications/stream')).toBe(0);
   });
 
   test('checks the id after a pause, shows the in-game name, then pays with the slider (steps 4, 5)', async ({

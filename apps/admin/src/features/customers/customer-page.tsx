@@ -27,6 +27,7 @@ import {
   CircleAlertIcon,
   LifeBuoyIcon,
   LogOutIcon,
+  SearchXIcon,
   ShoppingCartIcon,
   SlidersHorizontalIcon,
   SnowflakeIcon,
@@ -36,6 +37,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, formatDateTime } from '../../lib/format';
 import { GrantMerchantDialog, RevokeMerchantDialog } from '../merchants/merchant-dialogs';
@@ -94,16 +96,24 @@ export function CustomerPage({
     );
   }
   if (customer.isError) {
+    // Audit A07-47: a customer that does not exist offers the way back, not a retry.
+    const missing = customer.error instanceof ApiError && customer.error.status === 404;
     return (
       <>
         <PageHeader title={t('customers.title')} actions={back} />
         <EmptyState
-          icon={<CircleAlertIcon />}
-          title={errorMessage(t, customer.error)}
+          icon={missing ? <SearchXIcon /> : <CircleAlertIcon />}
+          title={missing ? t('customers.notFound') : errorMessage(t, customer.error)}
           action={
-            <Button variant="outline" onClick={() => customer.refetch()}>
-              {t('common.retry')}
-            </Button>
+            missing ? (
+              <Button variant="outline" render={<Link to="/customers" />}>
+                {t('customers.back')}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => customer.refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
           }
         />
       </>
@@ -155,7 +165,7 @@ export function CustomerPage({
       {tab === 'deposits' && <DepositsSection customerId={data.id} />}
       {tab === 'tickets' && <TicketsSection customerId={data.id} />}
       {tab === 'devices' && <DevicesSection customerId={data.id} />}
-      {tab === 'notes' && <NotesSection customerId={data.id} />}
+      {tab === 'notes' && <NotesSection customerId={data.id} pinnedNote={data.pinnedNote} />}
       {tab === 'history' && <HistorySection customerId={data.id} />}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         {dialog === 'limits' && <LimitsDialog customer={data} onDone={() => setDialog(null)} />}

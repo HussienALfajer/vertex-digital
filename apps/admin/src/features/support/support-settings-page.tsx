@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { telegramSupportUrlSchema } from '@vertex-digital/contracts';
 import {
   Button,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -34,10 +35,23 @@ export function SupportSettingsPage() {
         description={t('support.settings.subtitle')}
       />
       {settings.isPending && <Skeleton className="h-64 w-full max-w-2xl" aria-hidden="true" />}
-      {settings.isError && (
+      {settings.isError && !settings.data && (
         <EmptyState
           icon={<CircleAlertIcon />}
           title={errorMessage(t, settings.error)}
+          action={
+            <Button variant="outline" onClick={() => settings.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {/* Audit A07-47: a failed read after a good one keeps the form with a notice. */}
+      {settings.isError && settings.data && (
+        <Callout
+          tone="warning"
+          icon={<CircleAlertIcon />}
+          title={t('support.settings.stale')}
           action={
             <Button variant="outline" onClick={() => settings.refetch()}>
               {t('common.retry')}

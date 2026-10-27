@@ -176,7 +176,9 @@ const EFFECTIVE_OF = {
 /**
  * Rule LM5: the three optional overrides typed in dollars (an empty field returns to the default)
  * and a reason, with re-authentication. Amounts go through the contracts' money helpers: whole
- * cents, USD units, never floats. The values stay on an error.
+ * cents, USD units, never floats. The values stay on an error. A per-deposit override above the
+ * daily limit that stays in force is allowed, with a warning: deposits above the daily limit are
+ * still refused (LM2, audit A07-22).
  */
 export function LimitsDialog({
   customer,
@@ -193,6 +195,20 @@ export function LimitsDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const { ref: limitsRef, focusInvalid: focusLimits } = useFocusInvalid();
   const { limits } = customer;
+  const [typed, setTyped] = useState(() => ({
+    perDepositUsdUnits: limitInput(limits.perDepositUsdUnits),
+    dailyDepositUsdUnits: limitInput(limits.dailyDepositUsdUnits),
+  }));
+  const perDeposit = parseLimitInput(typed.perDepositUsdUnits);
+  // A typed daily override below the per-deposit one is refused ("dailyBelow"); with the daily
+  // field empty, the default the profile shows stays in force (an emptied override returns to a
+  // default the profile does not show, so nothing is said then).
+  const dailyInForce =
+    parseLimitInput(typed.dailyDepositUsdUnits) === null && limits.dailyDepositUsdUnits === null
+      ? limits.effective.dailyDeposit.units
+      : null;
+  const aboveDaily =
+    typeof perDeposit === 'number' && dailyInForce !== null && perDeposit > dailyInForce;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -248,6 +264,12 @@ export function LimitsDialog({
                 autoComplete="off"
                 placeholder={t('customers.limits.placeholder')}
                 defaultValue={limitInput(limits[field])}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (field !== 'dailyPurchaseUsdUnits') {
+                    setTyped((current) => ({ ...current, [field]: value }));
+                  }
+                }}
               />
               <FieldDescription>
                 {t('customers.limits.current', {
@@ -266,6 +288,16 @@ export function LimitsDialog({
             </Field>
           );
         })}
+        {aboveDaily && dailyInForce !== null && (
+          <Callout
+            tone="warning"
+            icon={<TriangleAlertIcon />}
+            title={t('customers.limits.aboveDaily')}
+            description={t('customers.limits.aboveDailyBody', {
+              daily: ltr(formatUsd(dailyInForce)),
+            })}
+          />
+        )}
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('customers.dialogs.reason')}</FieldLabel>
           <Textarea name="reason" rows={3} maxLength={500} />
@@ -290,6 +322,8 @@ const DEFAULT_LIST = 'default';
 /**
  * S20 AT2, AT3: "تغيير قائمة الأسعار": an unarchived, priced list or the type's default, with a
  * reason; the account's reservations are cancelled and the customer told (re-authentication).
+ * The lists' read shows in the picker with a retry, and saving waits for it (audit A07-11); an
+ * empty reason is focused (A07-46).
  */
 export function PriceListDialog({
   customer,
@@ -304,6 +338,7 @@ export function PriceListDialog({
   const [value, setValue] = useState<string>(customer.pricing.assignedListId ?? DEFAULT_LIST);
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -313,7 +348,7 @@ export function PriceListDialog({
       reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await change.mutateAsync(parsed.data);
       onDone();
@@ -334,7 +369,7 @@ export function PriceListDialog({
         <DialogTitle>{t('customers.pricing.dialogTitle', { name: customer.name })}</DialogTitle>
         <DialogDescription>{t('customers.pricing.dialogDescription')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>
           <FieldLabel render={<span />}>{t('customers.pricing.list')}</FieldLabel>
           <Picker
@@ -342,6 +377,7 @@ export function PriceListDialog({
             items={items}
             value={value}
             onChange={setValue}
+            read={lists}
           />
         </Field>
         <Field invalid={invalid}>
@@ -351,7 +387,8 @@ export function PriceListDialog({
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
-          <Button type="submit" disabled={change.isPending}>
+          {/* The lists must have loaded, so the select shows the assigned list before a change. */}
+          <Button type="submit" disabled={change.isPending || !lists.isSuccess}>
             {t('customers.pricing.save')}
           </Button>
         </DialogFooter>

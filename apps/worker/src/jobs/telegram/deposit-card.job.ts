@@ -18,6 +18,7 @@ import {
   deposits,
   readAll,
   storedFiles,
+  TELEGRAM_DEPOSIT_CARD_OPTIONS,
   type Transaction,
   telegramDepositCards,
   telegramLinks,
@@ -37,7 +38,7 @@ import {
   renderDepositCard,
 } from '../../telegram/messages.js';
 
-export type DepositCardOutcome = 'sent' | 'edited' | 'skipped' | 'failed' | 'none';
+export type DepositCardOutcome = 'sent' | 'edited' | 'skipped' | 'failed' | 'deferred' | 'none';
 
 type DepositRow = typeof deposits.$inferSelect;
 
@@ -147,6 +148,20 @@ export class DepositCardJob implements OnApplicationBootstrap {
       if (error instanceof TelegramApiError && FINAL_STATUSES.has(error.status)) {
         this.logger.warn(`Telegram refused the card of deposit ${deposit.id}: ${error.message}`);
         return 'failed';
+      }
+      if (error instanceof TelegramApiError && error.retryAfter !== undefined) {
+        // Audit A07-26: a 429 waits its `retry_after`, as `telegram.send` does, instead of
+        // spending the job's retries on pg-boss's shorter backoff.
+        await this.pgBoss.boss.send(
+          QUEUES.telegramDepositCard,
+          { depositId: deposit.id },
+          {
+            ...TELEGRAM_DEPOSIT_CARD_OPTIONS,
+            singletonKey: deposit.id,
+            startAfter: error.retryAfter,
+          },
+        );
+        return 'deferred';
       }
       throw error;
     }

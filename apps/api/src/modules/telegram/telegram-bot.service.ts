@@ -62,6 +62,9 @@ type DepositPrompt = Prompt & { depositId: string };
 /** `/start <code>`, `/status`, `/stop`, `/help`, with an optional `@botname` (rule AL4). */
 const COMMAND = /^\/(start|status|stop|help)(?:@\w+)?(?:\s+(\S+))?\s*$/;
 
+/** A chat is told an unknown link code at most once per window (audit A07-27). */
+const INVALID_CODE_WINDOW_MS = 10 * 60 * 1000;
+
 /** Inline answers: short, Arabic, shown as a toast on the admin's phone. */
 const ANSWERS = {
   stopped: 'تم الإيقاف. إعادة الفتح من اللوحة فقط.',
@@ -310,7 +313,8 @@ export class TelegramBotService {
   private async link(tx: Transaction, message: Message, code: string): Promise<void> {
     const from = message.from as NonNullable<Message['from']>;
     const chatId = message.chat.id;
-    await this.telegram.lockLinks(tx);
+    // The code row's lock serializes its use; the links' lock is taken only for a code that links,
+    // so codes sent by anyone who finds the bot never hold up the admin's updates (audit A07-27).
     const [row] = telegramLinkCodeValueSchema.safeParse(code).success
       ? await tx
           .select()
@@ -325,9 +329,16 @@ export class TelegramBotService {
           .for('update')
       : [];
     if (!row) {
-      await this.reply(tx, chatId, { reply: 'invalid_code' });
+      // One refusal per chat per 10 minutes: a flood of codes spends no more of the bot's quota.
+      await queueTelegramMessage(tx, this.jobs, {
+        kind: 'bot_reply',
+        params: { reply: 'invalid_code' },
+        chatId,
+        dedupeKey: `invalid_code:${chatId}:${Math.floor(Date.now() / INVALID_CODE_WINDOW_MS)}`,
+      });
       return;
     }
+    await this.telegram.lockLinks(tx);
     const now = new Date();
     await tx.update(telegramLinkCodes).set({ usedAt: now }).where(eq(telegramLinkCodes.id, row.id));
     const previous = await this.telegram.liveLink(tx);

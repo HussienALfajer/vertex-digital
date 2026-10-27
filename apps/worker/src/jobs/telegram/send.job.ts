@@ -86,6 +86,9 @@ export class SendTelegramJob implements OnApplicationBootstrap {
         const sent = (await this.bot.call('sendMessage', {
           chat_id: chatId,
           text: message.text,
+          ...(message.codeSpans && {
+            entities: message.codeSpans.map((span) => ({ type: 'code', ...span })),
+          }),
           ...(message.buttons && {
             reply_markup: {
               inline_keyboard: message.buttons.map((buttonRow) =>

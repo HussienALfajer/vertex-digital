@@ -4,6 +4,7 @@ import {
   ticketBodySchema,
   ticketSubjectSchema,
 } from '@vertex-digital/contracts';
+import type { Failure } from '@/lib/api';
 
 /*
  * The checks a ticket or a message passes before it is sent (S12 TK1, TK7, TK11), with the
@@ -71,4 +72,22 @@ export function attemptSignature(
   files: { name: string; size: number; lastModified: number }[],
 ): string {
   return JSON.stringify([fields, files.map((file) => [file.name, file.size, file.lastModified])]);
+}
+
+/** The session-storage slot of a new ticket's attempt (`purchase/attempt.ts`, audit A07-39). */
+export const TICKET_SLOT = 'support-ticket';
+
+/** The slot of a reply's attempt: one per ticket. */
+export function replySlot(ticketId: string): string {
+  return `support-reply:${ticketId}`;
+}
+
+/**
+ * Whether a refusal frees the attempt's key. Only `IDEMPOTENCY_KEY_REUSED`: the key's first
+ * ticket or message was written and the customer is told to look at their tickets, so what is
+ * sent next is a new one. Any other refusal keeps the key: the same body sends it again, and
+ * after a lost answer or a server fault an edited body does too (the shared rule, F6-14).
+ */
+export function freesSupportKey(reason: Failure): boolean {
+  return reason === 'IDEMPOTENCY_KEY_REUSED';
 }

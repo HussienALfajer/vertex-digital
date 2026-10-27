@@ -68,10 +68,11 @@ type Answer =
 
 /**
  * Server-sent events as the API writes them (S05 rule NT6). The body ends after the events, so
- * `retry` keeps `EventSource` from reconnecting during the test.
+ * `retry` keeps `EventSource` from reconnecting during the test, unless a test shortens it to see
+ * whether the page reconnects (audit A07-3).
  */
-const eventStream = (events: { event: string; data: unknown }[]) =>
-  `retry: 600000\n\n${events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('')}`;
+const eventStream = (events: { event: string; data: unknown }[], retryMs = 600_000) =>
+  `retry: ${retryMs}\n\n${events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('')}`;
 
 /** A 1×1 PNG: what the QR route answers in tests. */
 const PNG = Buffer.from(
@@ -168,6 +169,11 @@ export class MockApi {
     return this.requests.findLast((request) => request.key === key);
   }
 
+  /** How many requests went to `key`: for a request that must not be sent, or not again (A07-2). */
+  count(key: string) {
+    return this.requests.filter((request) => request.key === key).length;
+  }
+
   /** Answers `key`, after `delayMs` when a test acts while the request is in flight (A04-1). */
   on(key: string, status: number, body: unknown = {}, delayMs = 0): this {
     this.answers.set(key, { status, body, delayMs });
@@ -176,10 +182,16 @@ export class MockApi {
 
   /**
    * Answers `key` with server-sent events (the notification stream), after `delayMs`: a test can
-   * change what the page reads next before the events arrive (S09 rule LT2).
+   * change what the page reads next before the events arrive (S09 rule LT2). `retryMs` is how
+   * long the browser waits before it reconnects once the body ends.
    */
-  stream(key: string, events: { event: string; data: unknown }[], delayMs = 0): this {
-    this.answers.set(key, { status: 200, events: eventStream(events), delayMs });
+  stream(
+    key: string,
+    events: { event: string; data: unknown }[],
+    delayMs = 0,
+    retryMs?: number,
+  ): this {
+    this.answers.set(key, { status: 200, events: eventStream(events, retryMs), delayMs });
     return this;
   }
 

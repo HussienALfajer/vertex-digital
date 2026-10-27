@@ -32,6 +32,7 @@ export function DeviceSwitch({
   const labelId = useId();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<'on' | 'off' | null>(null);
+  const [saved, setSaved] = useState<'on' | 'off' | null>(null);
   const install = useInstall();
 
   if (!switchShown(device)) return null;
@@ -51,12 +52,15 @@ export function DeviceSwitch({
   const change = async (on: boolean) => {
     setBusy(true);
     setFailure(null);
+    setSaved(null);
     if (on) {
       const result = await enablePush(publicKey);
       if (result.outcome === 'failed') setFailure('on');
+      else if (result.outcome === 'enabled') setSaved('on');
     } else {
       const result = await disablePush();
-      if (!result.ok) setFailure('off');
+      setFailure(result.ok ? null : 'off');
+      setSaved(result.ok ? 'off' : null);
     }
     await reload();
     setBusy(false);
@@ -82,6 +86,11 @@ export function DeviceSwitch({
         !device.subscribed && (
           <p className="text-sm text-muted-foreground">{t('push.device.off')}</p>
         )
+      )}
+      {saved && (
+        <FormAlert tone="success">
+          {saved === 'on' ? t('push.device.onSaved') : t('push.device.offSaved')}
+        </FormAlert>
       )}
       {failure && (
         <FormAlert>

@@ -2,10 +2,10 @@ export {
   type CustomerPageRow,
   type CustomerProfileFacts,
   customerActiveSessions,
+  customerHistoryScope,
   customerPage,
   customerPasskeyRows,
   customerProfileFacts,
-  customerRecordIds,
   customerSignInRows,
   type KeysetPosition,
 } from './admin-reads.js';

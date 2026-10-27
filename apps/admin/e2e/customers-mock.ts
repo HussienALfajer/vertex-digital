@@ -35,6 +35,7 @@ import type { Answer } from './catalog-mock';
 import type { MerchantsMock } from './merchants-mock';
 import { ORDER_CUSTOMER_ID } from './orders-mock';
 import type { PriceListsMock } from './price-lists-mock';
+import type { MockDeposit } from './test';
 
 /*
  * The customers and support API of S12 as the panel sees it: five customers (two sharing a phone
@@ -367,6 +368,10 @@ export class CustomersMock {
   /** S20: the merchant state of an account (the merchants mock). */
   merchants: Pick<MerchantsMock, 'isMerchant' | 'profileOf' | 'settings'> | null = null;
   priceLists: Pick<PriceListsMock, 'pricing' | 'assign'> | null = null;
+  /** The deposits a ticket links to (TK2): the deposits mock's. */
+  deposits: (() => MockDeposit[]) | null = null;
+  /** The customers list's page size; null answers every row on one page ("عرض المزيد"). */
+  listPageSize: number | null = null;
 
   constructor(
     private readonly reauthenticationRequired: () => boolean,
@@ -592,18 +597,23 @@ export class CustomersMock {
     }
   }
 
+  private deposit(depositId: string | null): MockDeposit | undefined {
+    return depositId ? this.deposits?.().find((item) => item.id === depositId) : undefined;
+  }
+
   private summary(ticket: MockTicket): AdminTicketSummary {
     const owner = this.find(ticket.customerId) as MockCustomer;
     const order = ticket.orderId
       ? this.orders().find((item) => item.id === ticket.orderId)
       : undefined;
+    const deposit = this.deposit(ticket.depositId);
     const last = ticket.messages.at(-1) as TicketMessage;
     return {
       id: ticket.id,
       number: ticket.number,
       category: ticket.category,
       order: order ? { id: order.id, number: order.number } : null,
-      deposit: null,
+      deposit: deposit ? { id: deposit.id, referenceCode: String(deposit.referenceCode) } : null,
       subject: ticket.subject,
       orderProblem: ticket.orderProblem,
       status: ticket.status,
@@ -622,6 +632,7 @@ export class CustomersMock {
     const order = ticket.orderId
       ? this.orders().find((item) => item.id === ticket.orderId)
       : undefined;
+    const deposit = this.deposit(ticket.depositId);
     return {
       ...this.summary(ticket),
       messages: ticket.messages,
@@ -645,7 +656,16 @@ export class CustomersMock {
             createdAt: order.createdAt,
           }
         : null,
-      depositSummary: null,
+      depositSummary: deposit
+        ? {
+            id: deposit.id,
+            referenceCode: String(deposit.referenceCode),
+            method: deposit.method as 'sham_cash',
+            status: deposit.status as 'submitted',
+            declaredUsdUnits: Number(deposit.declaredUsdUnits),
+            createdAt: String(deposit.createdAt),
+          }
+        : null,
     };
   }
 
@@ -667,7 +687,13 @@ export class CustomersMock {
           status === 'all' ? true : status === 'test' ? row.isTest : this.status(row) === status,
         )
         .map((row) => this.row(row));
-      return ok({ items, nextCursor: null });
+      if (this.listPageSize === null) return ok({ items, nextCursor: null });
+      const start = Number(url.searchParams.get('cursor') ?? 0);
+      const end = start + this.listPageSize;
+      return ok({
+        items: items.slice(start, end),
+        nextCursor: end < items.length ? String(end) : null,
+      });
     }
 
     const one = path.match(/^\/api\/admin\/customers\/([^/]+)(\/.*)?$/);
@@ -757,6 +783,11 @@ export class CustomersMock {
     if (!parsed.success || files > 3) return error(400, 'VALIDATION_FAILED');
     const replayed = this.replay(request, JSON.stringify({ ticket: ticket.id, ...fields, files }));
     if (replayed !== 'new') return replayed;
+    // Q28 (audit A07-20): an archived customer's ticket takes no reply.
+    const owner = this.find(ticket.customerId) as MockCustomer;
+    if (this.status(owner) === 'archived') {
+      return error(409, 'CUSTOMER_STATE_INVALID', { status: 'archived' });
+    }
     const reopening = ticket.status === 'closed';
     if (
       reopening &&
@@ -803,7 +834,14 @@ export class CustomersMock {
     const ownOrder = this.orders().some(
       (order) => order.id === input.orderId && order.customer?.id === owner.id,
     );
-    if (!ticketLinkValid(input) || (input.orderId && !ownOrder) || input.depositId) {
+    const ownDeposit =
+      (this.deposit(input.depositId ?? null)?.customer as { id?: string } | undefined)?.id ===
+      owner.id;
+    if (
+      !ticketLinkValid(input) ||
+      (input.orderId && !ownOrder) ||
+      (input.depositId && !ownDeposit)
+    ) {
       return error(400, 'TICKET_LINK_INVALID');
     }
     const open = this.tickets.find(
@@ -817,7 +855,7 @@ export class CustomersMock {
       customerId: owner.id,
       category: input.category,
       orderId: input.orderId ?? null,
-      depositId: null,
+      depositId: input.depositId ?? null,
       subject: input.subject,
       orderProblem: null,
       status: 'answered',

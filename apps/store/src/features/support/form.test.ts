@@ -4,8 +4,11 @@ import {
   bodyLength,
   bodyValid,
   draftProblems,
+  freesSupportKey,
   imageProblem,
   messageBody,
+  replySlot,
+  TICKET_SLOT,
   type TicketDraft,
 } from './form';
 
@@ -90,5 +93,19 @@ describe('attemptSignature', () => {
     const first = attemptSignature({ body: 'x' }, [file]);
     expect(attemptSignature({ body: 'y' }, [file])).not.toBe(first);
     expect(attemptSignature({ body: 'x' }, [])).not.toBe(first);
+  });
+});
+
+describe('the support attempts in session storage (A07-39)', () => {
+  it('keep a slot for the new ticket and one per ticket for replies', () => {
+    expect(replySlot('t-1')).not.toBe(replySlot('t-2'));
+    expect(replySlot('t-1')).not.toBe(TICKET_SLOT);
+  });
+
+  it('free the key only once the API says its first request was written', () => {
+    expect(freesSupportKey('IDEMPOTENCY_KEY_REUSED')).toBe(true);
+    for (const reason of ['NETWORK', 'INTERNAL_ERROR', 'RATE_LIMITED', 'TICKET_CLOSED'] as const) {
+      expect(freesSupportKey(reason)).toBe(false);
+    }
   });
 });
