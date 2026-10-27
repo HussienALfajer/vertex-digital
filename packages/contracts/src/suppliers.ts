@@ -1191,6 +1191,34 @@ export function parseGameAmount(name: string): number | null {
 }
 
 /**
+ * Rule SC13: the unit of a pack name, its words without the numbers, lower-cased: "60 UC" and
+ * "1,800 + 300 UC" are `uc`, "Prime 1 Month" is `prime month`.
+ */
+export function packUnit(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}]+/gu, ' ')
+    .trim();
+}
+
+/**
+ * Rule SC13 (audit A05-2): the game amount each pack of a draft suggests: its first whole number,
+ * only when its unit is the one most of the numbered packs share, the game's main currency. A pack
+ * in another unit (a subscription, a pass, an offer, a second currency) suggests none (A03-1), and
+ * so does every pack when two units tie.
+ */
+export function suggestGameAmounts(names: readonly string[]): (number | null)[] {
+  const packs = names.map((name) => ({ amount: parseGameAmount(name), unit: packUnit(name) }));
+  const counts = new Map<string, number>();
+  for (const { amount, unit } of packs) {
+    if (amount !== null) counts.set(unit, (counts.get(unit) ?? 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const main = ranked[0] && ranked[0][1] !== ranked[1]?.[1] ? ranked[0][0] : null;
+  return packs.map(({ amount, unit }) => (unit === main ? amount : null));
+}
+
+/**
  * Rule SF1: `⌊(original − cost) × 100 / original⌋` %, only when the original is known and above
  * the cost (and the discount is at least 1%); else null.
  */

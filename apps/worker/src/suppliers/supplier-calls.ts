@@ -6,7 +6,7 @@ import type {
   SupplierCallResult,
 } from '@vertex-digital/contracts';
 import { type Database, newId, supplierCalls, type Transaction } from '@vertex-digital/db';
-import { SupplierError } from '@vertex-digital/suppliers';
+import { SUBSCRIPTION_INACTIVE_CODE, SupplierError } from '@vertex-digital/suppliers';
 
 /*
  * Every adapter call is recorded in `supplier_calls` (S07 rule H1), with its latency and the
@@ -28,9 +28,16 @@ export type RecordedCall<T> =
   | { ok: true; value: T }
   | { ok: false; result: Exclude<SupplierCallResult, 'ok'>; error: unknown };
 
-/** `refused`: the supplier answered with a definitive refusal; anything else is an `error`. */
+/**
+ * `refused`: the supplier answered with a definitive refusal, or refused for an inactive plan (S19
+ * FC9: an answer, so the supplier is not down while its plan lapses, audit A05-15); anything else
+ * is an `error`.
+ */
 const resultOf = (error: unknown): Exclude<SupplierCallResult, 'ok'> =>
-  error instanceof SupplierError && error.kind === 'definitive' ? 'refused' : 'error';
+  error instanceof SupplierError &&
+  (error.kind === 'definitive' || error.details.supplierCode === SUBSCRIPTION_INACTIVE_CODE)
+    ? 'refused'
+    : 'error';
 
 /** What a thrown error says of the call (S18 FK1): a non-`SupplierError` is `other`. */
 function verdictOf(error: unknown): CallVerdict {

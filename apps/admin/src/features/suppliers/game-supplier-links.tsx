@@ -82,25 +82,42 @@ export function GameSupplierLinks({ game }: { game: GameDetail }) {
             ))}
           </ul>
         ))}
-      {unlinking && <UnlinkDialog node={unlinking} onClose={() => setUnlinking(null)} />}
+      {unlinking && (
+        <CategoryChangeDialog node={unlinking} change="unlink" onClose={() => setUnlinking(null)} />
+      )}
     </Card>
   );
 }
 
-function UnlinkDialog({ node, onClose }: { node: SupplierCategoryNode; onClose: () => void }) {
+/**
+ * Asks before a category's unlink or ignore, wherever it is offered (the game page, the tree, the
+ * category page; audit A05-5, A05-23): an unlink stops tracking new packs, an ignore hides the
+ * subtree.
+ */
+export function CategoryChangeDialog({
+  node,
+  change: kind,
+  onClose,
+}: {
+  node: Pick<SupplierCategoryNode, 'supplierCode' | 'categoryId' | 'name'>;
+  change: 'unlink' | 'ignore';
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const change = useCategoryChange(node.supplierCode);
   return (
     <ConfirmDialog
       open
       onClose={onClose}
-      title={t('suppliers.gameLinks.unlinkTitle')}
-      body={t('suppliers.gameLinks.unlinkBody', { name: node.name })}
-      action={t('suppliers.catalog.unlink')}
-      destructive
+      title={t(kind === 'unlink' ? 'suppliers.gameLinks.unlinkTitle' : 'suppliers.catalog.ignoreTitle')}
+      body={t(kind === 'unlink' ? 'suppliers.gameLinks.unlinkBody' : 'suppliers.catalog.ignoreBody', {
+        name: node.name,
+      })}
+      action={t(`suppliers.catalog.${kind}`)}
+      destructive={kind === 'unlink'}
       pending={change.isPending}
       onConfirm={async () => {
-        await change.mutateAsync({ categoryId: node.categoryId, change: 'unlink' });
+        await change.mutateAsync({ categoryId: node.categoryId, change: kind });
       }}
     />
   );

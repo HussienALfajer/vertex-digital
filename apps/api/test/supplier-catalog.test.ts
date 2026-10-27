@@ -110,6 +110,7 @@ async function offer(
     unsupported?: boolean;
     stock?: number | null;
     fields?: FieldSpec[];
+    name?: string;
   } = {},
 ) {
   const fields = values.fields ?? [{ key: 'player_id', label: 'Player ID', type: 'text' as const }];
@@ -119,7 +120,7 @@ async function offer(
     .values({
       supplierId: ids.fake,
       offerId: `${key}-${run}`,
-      name: `${key} ${run}`,
+      name: values.name ?? `${key} ${run}`,
       groupName: `Group ${run}`,
       kind: values.kind ?? 'direct',
       requiredFields: fields.map((field) => field.key),
@@ -527,6 +528,25 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
     expect((await nodeOf('ff')).state).toBe('linked');
   });
 
+  it('matches a pack by its amount only in the unit the product delivers (A05-3)', async () => {
+    // The game's "UC 60" pack is routed to the offer named `uc60 <run>`.
+    await category('wow');
+    await category('ucx');
+    await offer('wow60', 'wow', { name: `wow60 ${run}` });
+    await offer('uc60x', 'ucx', { name: `uc60 ${run}` });
+    const draftOf = async (name: string) =>
+      (
+        await json<ImportDraft>(
+          await get(
+            `/api/admin/suppliers/fake/categories/${node(name)}/import-draft?gameId=${ids.game}`,
+          ),
+          200,
+        )
+      ).packs[0];
+    expect(await draftOf('wow')).toMatchObject({ suggestedGameAmount: 60, match: null });
+    expect((await draftOf('ucx'))?.match).toMatchObject({ productId: ids.product });
+  });
+
   it('unlinks a node, keeping the game and its routes (rule SC9)', async () => {
     const unlinked = await json<SupplierCategoryNode>(
       await post(`/api/admin/suppliers/fake/categories/${node('ff')}/unlink`),
@@ -579,6 +599,16 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
     );
     expect(unignored.ignoredAt).toBeNull();
     expect((await post(`/api/admin/suppliers/offers/${newId()}/ignore`)).status).toBe(404);
+  });
+
+  it('refuses restoring a route whose offer was ignored meanwhile (SC6, A05-72)', async () => {
+    await json(await post(`/api/admin/routes/${ids.route}/archive`), 200);
+    await json(await post(`/api/admin/suppliers/offers/${offers.uc60}/ignore`), 200);
+    expect(
+      await json<{ code: string }>(await post(`/api/admin/routes/${ids.route}/restore`), 409),
+    ).toMatchObject({ code: 'OFFER_IGNORED' });
+    await json(await post(`/api/admin/suppliers/offers/${offers.uc60}/unignore`), 200);
+    await json(await post(`/api/admin/routes/${ids.route}/restore`), 200);
   });
 
   it('links with existing packs only, or with none (rule SC8)', async () => {

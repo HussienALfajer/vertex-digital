@@ -138,7 +138,10 @@ export interface ProductRoutingState {
   /** S20: the list read (`priceListId`, retail by default) and its newest price row there. */
   priceListId: string;
   current: PriceRow | null;
-  /** The minimum margin guarding `current` (P6): retail's rule, or a list row's own (S20 PO1). */
+  /**
+   * The minimum margin guarding `current` (P6, S20 PO1): the row's own, which a purchase copies,
+   * the rule's before a first row (audit A05-10).
+   */
   currentMinMarginUsdUnits: number;
   /** The newest retail row; `current` when the list read is retail. */
   retailCurrent: PriceRow | null;
@@ -519,9 +522,10 @@ export async function productRoutingStates(
           null,
         )
       : null;
-    const currentMinMarginUsdUnits = retail
-      ? rule.values.minMarginUsdUnits
-      : (current?.minMarginUsdUnits ?? rule.values.minMarginUsdUnits);
+    // The stored row's minimum, which a purchase copies and routing then guards with; the rule's
+    // only before a first row (audit A05-10: a minimum lowered during a review hold is not the
+    // held price's).
+    const currentMinMarginUsdUnits = current?.minMarginUsdUnits ?? rule.values.minMarginUsdUnits;
     states.set(product.id, {
       productId: product.id,
       nameAr: product.nameAr,

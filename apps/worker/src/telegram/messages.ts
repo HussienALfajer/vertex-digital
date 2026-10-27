@@ -541,6 +541,11 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...summary.suppliersNotHealthy.map(
       (supplier) => `⚠️ المورد ${supplier.supplierNameAr}: ${HEALTH[supplier.state]}`,
     ),
+    ...summary.syncsFailing.map(
+      (supplier) =>
+        `🔁 مزامنة ${supplier.supplierNameAr} تفشل: ${supplier.failedRuns} محاولات متتالية`,
+    ),
+    ...summary.plansInactive.map((name) => `⛔ اشتراك ${name} غير نشط: مساراته متوقفة`),
     ...summary.balancesLow.map(
       (supplier) =>
         `💰 رصيد ${supplier.supplierNameAr} تحت الحد: ${balanceText(supplier.currency, supplier.amountUnits)}`,

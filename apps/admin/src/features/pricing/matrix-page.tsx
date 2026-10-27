@@ -10,6 +10,9 @@ import {
   Button,
   Checkbox,
   Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   EmptyState,
   Field,
   FieldLabel,
@@ -213,6 +216,7 @@ export function MatrixPage({
 
 type MatrixRow = {
   productId: string;
+  productNameAr: string;
   gameId: string;
   cells: PriceMatrixCell[];
 };
@@ -229,10 +233,36 @@ function CellDialog({
   chain: string[];
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const reads = useQueries({ queries: chain.map((id) => listRulesQuery(id)) });
   const cell = row.cells.find((candidate) => candidate.priceListId === listId);
+  // Audit A05-9: the wait and a failed read show inside the dialog, with a retry.
   if (reads.some((read) => !read.isSuccess)) {
-    return <Skeleton className="h-64 w-full" aria-hidden="true" />;
+    const failed = reads.find((read) => read.isError);
+    return (
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            <bdi>{row.productNameAr}</bdi>
+          </DialogTitle>
+        </DialogHeader>
+        {failed ? (
+          <div className="flex flex-col items-start gap-3">
+            <FormAlert>{errorMessage(t, failed.error)}</FormAlert>
+            <Button
+              variant="outline"
+              onClick={() => {
+                for (const read of reads) if (read.isError) read.refetch();
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          </div>
+        ) : (
+          <Skeleton className="h-64 w-full" aria-hidden="true" />
+        )}
+      </DialogContent>
+    );
   }
   return (
     <FixedPriceDialog

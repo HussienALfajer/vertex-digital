@@ -12,6 +12,7 @@ export {
   type RetailFigures,
   repriceListsAfterRetail,
   repriceProducts,
+  retailRowInForce,
   routedProducts,
   type SettledRetail,
 } from './reprice.js';

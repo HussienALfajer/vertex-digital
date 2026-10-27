@@ -43,6 +43,7 @@ import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
 import { Thumbnail } from './category-thumbnail';
+import { CategoryChangeDialog } from './game-supplier-links';
 import { ImportCategorySheet } from './import-category-sheet';
 import { LinkCategorySheet } from './link-category-sheet';
 import type { CategorySearch } from './supplier-search';
@@ -84,6 +85,10 @@ export function CatalogTab({
   const [opened, setOpened] = useState<Opened>(null);
   const change = useCategoryChange(supplier.code);
   const [failure, setFailure] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{
+    node: SupplierCategoryNode;
+    change: 'unlink' | 'ignore';
+  } | null>(null);
 
   if (!supplier.capabilities.categories) {
     return <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.unsupported')} />;
@@ -104,7 +109,8 @@ export function CatalogTab({
     supplier,
     busy: change.isPending,
     onOpen: (node: SupplierCategoryNode, dialog: 'import' | 'link') => setOpened({ node, dialog }),
-    onChange: act,
+    onChange: (node: SupplierCategoryNode, kind: CategoryChange) =>
+      kind === 'unignore' ? act(node, kind) : setConfirming({ node, change: kind }),
   };
 
   return (
@@ -132,6 +138,13 @@ export function CatalogTab({
         )}
         {opened?.dialog === 'link' && <LinkCategorySheet supplier={supplier} node={opened.node} />}
       </Sheet>
+      {confirming && (
+        <CategoryChangeDialog
+          node={confirming.node}
+          change={confirming.change}
+          onClose={() => setConfirming(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import {
   marginBasisPoints,
   matrixCellWarnings,
+  PRICE_MATRIX_MAX_LISTS,
   PRICE_MATRIX_MAX_PRODUCTS,
   type PriceMatrix,
   type PriceMatrixCell,
@@ -27,9 +28,12 @@ export async function priceMatrix(
   query: { gameId?: string; q?: string; listIds?: readonly string[]; warnings?: boolean },
   context: RoutingContext,
 ): Promise<PriceMatrix> {
+  // Retail first, then at most the other columns the contract allows (audit A05-70).
   const wanted = [
     ROOT_PRICE_LIST_IDS.retail,
-    ...(query.listIds ?? DEFAULT_COLUMNS).filter((id) => id !== ROOT_PRICE_LIST_IDS.retail),
+    ...(query.listIds ?? DEFAULT_COLUMNS)
+      .filter((id) => id !== ROOT_PRICE_LIST_IDS.retail)
+      .slice(0, PRICE_MATRIX_MAX_LISTS - 1),
   ];
   const [listRows, products] = await readAll(db, [
     () =>

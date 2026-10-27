@@ -6,15 +6,38 @@ import {
   type PricingPreviewRequest,
   savingsWarning,
 } from '@vertex-digital/contracts';
-import { Skeleton } from '@vertex-digital/ui';
+import { Button, Skeleton } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { previewQuery } from './pricing.queries';
 import { formatPercentBp } from './pricing-format';
+
+/** How long typing must pause before the preview is read. */
+const PREVIEW_PAUSE_MS = 300;
+
+/**
+ * The request once it has held still for `PREVIEW_PAUSE_MS`, the same object while it has not
+ * changed: an edit back to the read values keeps them. A request becoming invalid is at once.
+ */
+function useSettled(request: PricingPreviewRequest | null): PricingPreviewRequest | null {
+  const [settled, setSettled] = useState(request);
+  const key = JSON.stringify(request);
+  const settledKey = JSON.stringify(settled);
+  useEffect(() => {
+    if (key === settledKey) return;
+    if (request === null) {
+      setSettled(null);
+      return;
+    }
+    const timer = setTimeout(() => setSettled(request), PREVIEW_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [key, settledKey, request]);
+  return key === settledKey ? request : settled;
+}
 
 /**
  * The price, margin and SYP price for a cost under a rule (rule PR10, PR3–PR8), with the savings
@@ -23,16 +46,34 @@ import { formatPercentBp } from './pricing-format';
  */
 export function PricePreview({ request }: { request: PricingPreviewRequest | null }) {
   const { t } = useTranslation();
-  const preview = useQuery(previewQuery(request));
+  // Audit A05-32: one read once typing pauses, and the figures dimmed until they are the
+  // request's own.
+  const settled = useSettled(request);
+  const preview = useQuery(previewQuery(settled));
   if (!request) {
     return <p className="text-sm text-muted-foreground">{t('pricing.preview.invalid')}</p>;
   }
   if (preview.isPending) return <Skeleton className="h-28 w-full" aria-hidden="true" />;
-  if (preview.isError) return <FormAlert>{errorMessage(t, preview.error)}</FormAlert>;
+  if (preview.isError) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <FormAlert>{errorMessage(t, preview.error)}</FormAlert>
+        <Button variant="outline" size="sm" onClick={() => preview.refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    );
+  }
   const data = preview.data;
   const warning = savingsWarning(data.priceUsdUnits, data.officialPriceUsdUnits);
+  const stale = preview.isPlaceholderData || settled !== request;
   return (
-    <div className="flex flex-col gap-3" aria-live="polite" data-testid="price-preview">
+    <div
+      className={stale ? 'flex flex-col gap-3 opacity-60' : 'flex flex-col gap-3'}
+      aria-live="polite"
+      aria-busy={stale}
+      data-testid="price-preview"
+    >
       <dl className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm sm:grid-cols-4">
         <Fact label={t('pricing.preview.cost')}>
           <bdi dir="ltr">{formatUsd(data.costUsdUnits)}</bdi>

@@ -79,7 +79,13 @@ test.describe('price lists', () => {
     const result = dialog.getByRole('region', { name: ar.pricing.fixed.result });
     await expect(result).toContainText('$0.91');
     await expect(result).toContainText(ar.pricing.priceSources.fixed_fallback);
-    await dialog.getByRole('button', { name: ar.pricing.fixed.save }).click();
+    // Audit A05-34: said in words before saving, and the button says so too.
+    await expect(result).toContainText(
+      ar.pricing.fixed.warnings.fixed_fallback
+        .replace('{{fixed}}', '⁦$0.89⁩')
+        .replace('{{price}}', '⁦$0.91⁩'),
+    );
+    await dialog.getByRole('button', { name: ar.pricing.fixed.saveAnyway }).click();
     const row = page.getByRole('row', { name: /60 UC/ });
     await expect(row).toContainText('$0.89');
     await expect(row).toContainText('$0.91');
@@ -93,6 +99,75 @@ test.describe('price lists', () => {
     await expect(row).toContainText('$0.98');
     await expect(row).toContainText('$0.93');
     await expect(row).toContainText('$0.89');
+  });
+
+  test('unticking every list shows retail alone (A05-33)', async ({ page, admin }) => {
+    const { game } = seed(admin);
+    await page.goto(`/pricing/matrix?gameId=${game.id}`);
+    const row = page.getByRole('row', { name: /60 UC/ });
+    await expect(row).toContainText('$0.93');
+    await page.getByRole('checkbox', { name: 'الجملة' }).click();
+    await page.getByRole('checkbox', { name: 'سعر التكلفة' }).click();
+    await expect(page.getByRole('checkbox', { name: 'سعر التكلفة' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'الجملة' })).not.toBeChecked();
+    await expect(row).toContainText('$0.98');
+    await expect(row).not.toContainText('$0.93');
+    await expect(row).not.toContainText('$0.89');
+  });
+
+  test("a matrix cell whose rules fail to load says so in its dialog, with a retry (A05-9)", async ({
+    page,
+    admin,
+  }) => {
+    const { game } = seed(admin);
+    let fail = true;
+    await page.route('**/api/admin/pricing/rules?**', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto(`/pricing/matrix?gameId=${game.id}`);
+    await page
+      .getByRole('button', {
+        name: ar.pricing.matrix.openCell.replace('{{list}}', 'الجملة').replace('{{product}}', '60 UC'),
+      })
+      .click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await dialog.getByRole('button', { name: ar.common.retry }).click();
+    await expect(dialog.getByRole('heading', { name: ar.pricing.fixed.title })).toBeVisible();
+  });
+
+  test('a failed read in the fixed price dialog offers a retry, never "no cost" (A05-35)', async ({
+    page,
+    admin,
+  }) => {
+    seed(admin);
+    const vip = admin.priceLists.addList('VIP', ROOT_PRICE_LIST_IDS.wholesale, 300);
+    let fail = true;
+    await page.route('**/api/admin/pricing/matrix?**', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto(`/pricing/lists/${vip.id}`);
+    await page.getByRole('button', { name: ar.pricing.list.addFixed }).click();
+    await choose(page, ar.pricing.scopes.game, 'ببجي موبايل');
+    await choose(page, ar.pricing.scopes.product, '60 UC');
+    const result = page.getByRole('dialog').getByRole('region', { name: ar.pricing.fixed.result });
+    await expect(result).toContainText(ar.errors.generic);
+    await expect(result).not.toContainText(ar.pricing.fixed.noCost);
+    fail = false;
+    await result.getByRole('button', { name: ar.common.retry }).click();
+    await page.getByRole('dialog').getByLabel(ar.pricing.fixed.price, { exact: true }).fill('1.5');
+    await expect(result).toContainText('$1.50');
   });
 
   test('assigns the cost list from the profile (AT2)', async ({ page, admin }) => {

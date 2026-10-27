@@ -25,6 +25,15 @@ async function reauthenticate(page: Page) {
   await page.getByRole('button', { name: ar.reauth.submit }).click();
 }
 
+/** Accepts a review from its row, through the confirmation that states its price (A05-31). */
+async function acceptReview(page: Page, row: Locator) {
+  await row.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: ar.pricing.reviews.acceptOne.action })
+    .click();
+}
+
 async function choose(page: Page, scope: Locator | Page, label: string, option: string) {
   await scope.getByRole('combobox', { name: label }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
@@ -300,6 +309,7 @@ test.describe('suppliers', () => {
       .first()
       .getByRole('switch', { name: s.routes.enabled })
       .click();
+    await page.getByRole('alertdialog').getByRole('button', { name: s.routes.stop.disable }).click();
     await expect(drawer.getByText(s.routes.priceHeld)).toBeVisible();
     await expect(drawer.getByText('$0.98').first()).toBeVisible();
 
@@ -346,10 +356,10 @@ test.describe('suppliers', () => {
     // The cost moves again before the admin accepts: the accept is refused with the new figure.
     admin.suppliers.script('fake-uc-60', { costUsdUnits: 1_200_000 });
     admin.suppliers.runSync('fake');
-    await row.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await acceptReview(page, row);
     await expect(row).toContainText(fill(ar.pricing.reviews.stale, { price: '⁦$1.32⁩' }));
     await expect(row).toContainText('$1.02 → $1.32');
-    await row.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await acceptReview(page, row);
     await expect(page.getByText(ar.pricing.reviews.empty)).toBeVisible();
     await page.goto(`/catalog/games/${game.id}?tab=products`);
     const product = page.getByRole('row').filter({ hasText: '60 UC' });
@@ -369,7 +379,7 @@ test.describe('suppliers', () => {
     await expect(row).toBeVisible();
     // Accepted in another tab meanwhile.
     (admin.suppliers.reviews[0] as { status: string }).status = 'accepted';
-    await row.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await acceptReview(page, row);
     await expect(row).toBeHidden();
     await expect(page.getByRole('listitem').filter({ hasText: '60 UC' })).toContainText(
       ar.errors.api.REVIEW_CLOSED,
@@ -393,7 +403,7 @@ test.describe('suppliers', () => {
     await page.goto('/pricing/reviews?page=2');
     const rows = page.getByRole('row').filter({ hasText: '60 UC' });
     await expect(rows).toHaveCount(1);
-    await rows.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await acceptReview(page, rows);
     await expect(page).not.toHaveURL(/page=2/);
     await expect(rows).toHaveCount(50);
     await expect(page.getByText(ar.pricing.reviews.empty)).toBeHidden();
@@ -475,6 +485,94 @@ test.describe('suppliers', () => {
     await page.getByRole('button', { name: ar.rates.form.submit }).click();
     await expect(page.getByRole('row').filter({ hasText: '119' })).toBeVisible();
     expect(admin.rates[0]?.displayStepSypUnits).toBe(200);
+  });
+});
+
+test.describe('suppliers and reviews: audit A05', () => {
+  test('archiving or switching off the basis route asks first and states the price (A05-4)', async ({
+    page,
+    admin,
+  }) => {
+    const { game } = mapped(admin);
+    const drawer = await openRoutes(page, game.id, '60 UC');
+    const route = drawer.getByRole('listitem').first();
+    await route.getByRole('button', { name: ar.catalog.actions.archive }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(fill(s.routes.stop.basis, { price: '⁦$0.98⁩' }));
+    await dialog.getByRole('button', { name: ar.common.cancel }).click();
+    await expect(route.getByRole('button', { name: ar.catalog.actions.restore })).toBeHidden();
+    await route.getByRole('switch', { name: s.routes.enabled }).click();
+    await expect(dialog).toContainText(s.routes.stop.disableTitle.split('{{')[0] as string);
+    await dialog.getByRole('button', { name: s.routes.stop.disable }).click();
+    await expect(route.getByRole('switch', { name: s.routes.enabled })).not.toBeChecked();
+    await route.getByRole('button', { name: ar.catalog.actions.archive }).click();
+    await dialog.getByRole('button', { name: s.routes.stop.archive }).click();
+    await expect(route.getByRole('button', { name: ar.catalog.actions.restore })).toBeVisible();
+  });
+
+  test('saves the low-balance threshold and says so (A05-24)', async ({ page, admin }) => {
+    seed(admin);
+    await page.goto('/suppliers/fake?tab=connection');
+    await expect(page.getByText(fill(s.threshold.current, { amount: '⁦$50.00⁩' }))).toBeVisible();
+    await page.getByLabel(s.threshold.label).fill('60');
+    await page.getByRole('button', { name: s.threshold.save }).click();
+    await expect(page.getByText(fill(s.threshold.current, { amount: '⁦$60.00⁩' }))).toBeVisible();
+    await expect(page.getByText(s.threshold.saved)).toBeVisible();
+    await expect(page.getByLabel(s.threshold.label)).toHaveValue('60');
+  });
+
+  test('a bulk accept states each price and accepts only on confirm (A05-6)', async ({
+    page,
+    admin,
+  }) => {
+    const { game } = mapped(admin);
+    const other = admin.catalog.addProduct(game.id, { nameAr: '325 UC', gameAmount: 325 });
+    admin.suppliers.map(other.id, 'fake', 'fake-uc-325', { playerId: 'player_id' });
+    admin.suppliers.script('fake-uc-60', { costUsdUnits: 1_100_000 });
+    admin.suppliers.script('fake-uc-325', { costUsdUnits: 5_500_000 });
+    admin.suppliers.runSync('fake');
+    await page.goto('/pricing/reviews');
+    await page.getByRole('checkbox', { name: ar.pricing.reviews.selectAll }).click();
+    await page.getByRole('button', { name: ar.pricing.reviews.acceptSelected }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(fill(ar.pricing.reviews.acceptMany.title, { count: 2 }));
+    await expect(dialog).toContainText('$0.98 → $1.21');
+    await dialog.getByRole('button', { name: ar.common.cancel }).click();
+    await expect(page.getByRole('row').filter({ hasText: '60 UC' })).toBeVisible();
+    await page.getByRole('button', { name: ar.pricing.reviews.acceptSelected }).click();
+    await dialog
+      .getByRole('button', { name: fill(ar.pricing.reviews.acceptMany.action, { count: 2 }) })
+      .click();
+    await expect(page.getByText(ar.pricing.reviews.empty)).toBeVisible();
+  });
+
+  test('a failed margin preview shows inside the dialog with a retry (A05-7)', async ({
+    page,
+    admin,
+  }) => {
+    mapped(admin);
+    admin.suppliers.script('fake-uc-60', { costUsdUnits: 1_100_000 });
+    admin.suppliers.runSync('fake');
+    let fail = true;
+    await page.route('**/api/admin/pricing/preview', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto('/pricing/reviews');
+    await page
+      .getByRole('row')
+      .filter({ hasText: '60 UC' })
+      .getByRole('button', { name: ar.pricing.reviews.adjust })
+      .click();
+    const dialog = page.getByRole('dialog', { name: ar.pricing.reviews.adjust });
+    await expect(dialog.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await dialog.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByLabel(ar.pricing.form.percent, { exact: true })).toBeVisible();
   });
 });
 
@@ -616,11 +714,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/pricing/reviews');
       await expect(page.getByRole('row').filter({ hasText: '60 UC' })).toBeVisible();
       await screenshot(page, testInfo, `price-reviews-${colorScheme}`, { fullPage: true });
-      await page
-        .getByRole('row')
-        .filter({ hasText: '60 UC' })
-        .getByRole('button', { name: ar.pricing.reviews.accept, exact: true })
-        .click();
+      await acceptReview(page, page.getByRole('row').filter({ hasText: '60 UC' }));
       await expect(page.getByText(ar.pricing.reviews.empty)).toBeVisible();
       await screenshot(page, testInfo, `price-reviews-empty-${colorScheme}`);
 

@@ -13,6 +13,7 @@ import {
 import {
   Badge,
   Button,
+  Callout,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -164,6 +165,14 @@ export function FixedPriceDialog({
             </h3>
             {matrix.isPending ? (
               <Skeleton className="h-10 w-full" />
+            ) : matrix.isError ? (
+              // Audit A05-35: a failed read is not "no cost".
+              <div className="flex flex-col items-start gap-2">
+                <FormAlert>{errorMessage(t, matrix.error)}</FormAlert>
+                <Button variant="outline" size="sm" onClick={() => matrix.refetch()}>
+                  {t('common.retry')}
+                </Button>
+              </div>
             ) : !row?.costUsdUnits ? (
               <p className="text-muted-foreground">{t('pricing.fixed.noCost')}</p>
             ) : result ? (
@@ -185,12 +194,26 @@ export function FixedPriceDialog({
             ) : (
               <p className="text-muted-foreground">{t('pricing.fixed.enterPrice')}</p>
             )}
+            {/* Audit A05-34: the price the list will not take is said before saving. */}
+            {result && price !== null && result.source !== 'fixed' && result.source !== 'rule' && (
+              <Callout
+                tone="warning"
+                title={t(`pricing.fixed.warnings.${result.source}`, {
+                  fixed: ltr(formatUsd(price)),
+                  price: ltr(formatUsd(result.priceUsdUnits)),
+                })}
+              />
+            )}
           </section>
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
           <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? t('pricing.form.saving') : t('pricing.fixed.save')}
+            {save.isPending
+              ? t('pricing.form.saving')
+              : result && result.source !== 'fixed' && result.source !== 'rule'
+                ? t('pricing.fixed.saveAnyway')
+                : t('pricing.fixed.save')}
           </Button>
         </DialogFooter>
       </form>

@@ -35,7 +35,15 @@ export class SupplierSyncScheduleJob implements OnApplicationBootstrap {
   async enqueue(db: Database | Transaction = this.db): Promise<SuppliersSyncPayload[]> {
     const states = await supplierStates(db, { fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
     const due = states
-      .filter((state) => state.configured && state.available && supplierHasCatalog(state.code))
+      // S19 FC9: a lapsed plan refuses every read; the balances job reads the plan every 5
+      // minutes and the syncs come back with it (audit A05-14). "Sync now" still runs.
+      .filter(
+        (state) =>
+          state.configured &&
+          state.available &&
+          !state.subscriptionInactive &&
+          supplierHasCatalog(state.code),
+      )
       .map(
         (state): SuppliersSyncPayload => ({
           supplierId: state.id,

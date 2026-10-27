@@ -10,11 +10,13 @@ import {
   linkCategorySchema,
   optionMapSchema,
   PANEL_READ_OPERATIONS,
+  packUnit,
   parseGameAmount,
   proposeOptionMap,
   SUPPLIER_POLICY_DEFAULTS,
   stockAlertChange,
   stockLevel,
+  suggestGameAmounts,
   suggestInputFields,
   suggestProductName,
   supplierCategoryListQuerySchema,
@@ -297,6 +299,31 @@ describe('pack names and amounts (rule SC13)', () => {
     expect(parseGameAmount('Weekly pass')).toBeNull();
     expect(parseGameAmount('0 coins')).toBeNull();
     expect(parseGameAmount('99999999999 gems')).toBeNull();
+  });
+
+  it('names a pack unit without its numbers', () => {
+    expect(packUnit('60 UC')).toBe('uc');
+    expect(packUnit('1,800 + 300 UC')).toBe('uc');
+    expect(packUnit('Prime 1 Month')).toBe('prime month');
+    expect(packUnit('660 WOW coins')).toBe('wow coins');
+  });
+
+  it('suggests amounts only in the unit most packs share (A05-2)', () => {
+    expect(
+      suggestGameAmounts([
+        '60 UC',
+        '325 UC',
+        '660 UC',
+        'Prime 1 Month',
+        'Prime 3 Months',
+        '660 WOW coins',
+        'Royal Pass',
+      ]),
+    ).toEqual([60, 325, 660, null, null, null, null]);
+    expect(suggestGameAmounts(['100 Diamonds', '310 Diamonds'])).toEqual([100, 310]);
+    expect(suggestGameAmounts(['60 UC', '660 WOW coins'])).toEqual([null, null]);
+    expect(suggestGameAmounts(['Weekly pass'])).toEqual([null]);
+    expect(suggestGameAmounts([])).toEqual([]);
   });
 });
 

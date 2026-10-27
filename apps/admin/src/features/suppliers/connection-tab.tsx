@@ -63,10 +63,7 @@ export function ConnectionTab({ supplier }: { supplier: SupplierDetail }) {
       <CredentialsCard supplier={supplier} />
       <div className="flex flex-col gap-6">
         <PauseCard supplier={supplier} />
-        {supplier.code !== 'manual' && (
-          // A new key resets the form to the saved threshold once it changes.
-          <ThresholdCard key={supplier.lowBalanceUsdUnits} supplier={supplier} />
-        )}
+        {supplier.code !== 'manual' && <ThresholdCard supplier={supplier} />}
         {supplier.capabilities.account && <SubscriptionCard supplier={supplier} />}
         {supplier.capabilities.account && supplier.credentials && (
           <WebhookCard supplier={supplier} />
@@ -485,6 +482,13 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
   const { t } = useTranslation();
   const update = useUpdateSupplier(supplier.code);
   const [text, setText] = useState(() => formatAmountInput('USD', supplier.lowBalanceUsdUnits));
+  // The field follows the saved threshold when it changes, and the card stays mounted so its
+  // "saved" notice shows (audit A05-24: a remount on the new value dropped it).
+  const [shown, setShown] = useState(supplier.lowBalanceUsdUnits);
+  if (shown !== supplier.lowBalanceUsdUnits) {
+    setShown(supplier.lowBalanceUsdUnits);
+    setText(formatAmountInput('USD', supplier.lowBalanceUsdUnits));
+  }
   const [invalid, setInvalid] = useState(false);
   const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
@@ -510,7 +514,9 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
       <div className="flex flex-col gap-1">
         <CardTitle>{t('suppliers.threshold.title')}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          {t('suppliers.threshold.current', { amount: formatUsd(supplier.lowBalanceUsdUnits) })}
+          {t('suppliers.threshold.current', {
+            amount: ltr(formatUsd(supplier.lowBalanceUsdUnits)),
+          })}
         </p>
       </div>
       <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>

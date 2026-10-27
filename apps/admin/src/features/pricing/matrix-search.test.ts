@@ -15,6 +15,11 @@ describe('parseMatrixSearch', () => {
     });
   });
 
+  it('keeps an empty list as retail alone (A05-33)', () => {
+    expect(parseMatrixSearch({ lists: [] })).toEqual({ lists: [] });
+    expect(parseMatrixSearch({ lists: ['x'] })).toEqual({ lists: [] });
+  });
+
   it('drops what is not valid', () => {
     expect(parseMatrixSearch({ gameId: 'x', q: '   ', lists: 7, warnings: 'no' })).toEqual({});
     expect(

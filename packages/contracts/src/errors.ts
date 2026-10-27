@@ -233,6 +233,8 @@ export const ERROR_CODES = [
   'FIELD_OPTIONS_DIFFER',
   /** The offer is ignored: unignore it first (S16 SC6). */
   'OFFER_IGNORED',
+  /** The product has a live manual route already: change its cost instead (S07 RT7, audit A05-12). */
+  'MANUAL_ROUTE_EXISTS',
   /** The category, an ancestor or a descendant is linked to another game; `details.gameId` (S16 SC7). */
   'CATEGORY_LINKED',
   /** The supplier no longer lists the category (S16 SC7). */

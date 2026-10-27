@@ -979,12 +979,24 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
     const newManual = second.routes.find(
       (route) => route.supplierCode === 'manual' && !route.archivedAt,
     )?.id as string;
+    // RT7: one live manual route a product, by add and by restore (audit A05-12).
+    expect(
+      await body(
+        await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
+          costUsdUnits: usd(3),
+        }),
+      ),
+    ).toMatchObject({ status: 409, code: 'MANUAL_ROUTE_EXISTS' });
+    expect(await body(await post(`/api/admin/routes/${manualRouteId}/restore`))).toMatchObject({
+      status: 409,
+      code: 'MANUAL_ROUTE_EXISTS',
+    });
+    await json(await post(`/api/admin/routes/${newManual}/archive`), 200);
     const restored = await json<Routing>(
       await post(`/api/admin/routes/${manualRouteId}/restore`),
       200,
     );
     expect(restored.routes.find((route) => route.id === manualRouteId)?.archivedAt).toBeNull();
-    await json(await post(`/api/admin/routes/${newManual}/archive`), 200);
   });
 
   it('shows the price, SYP price, basis supplier and availability on the game', async () => {
@@ -1362,6 +1374,82 @@ describe('reviews (rules P3, P4, P5)', () => {
       ).every((row) => row.status !== 'open'),
     ).toBe(true);
   });
+
+  it("guards a held price with its own row's minimum, not a lowered rule's (A05-10)", async () => {
+    const held = await product(`حد محجوز ${run}`);
+    const values = { percentBp: 0, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.3) };
+    await json(
+      await put('/api/admin/pricing/rules', { scope: 'product', targetId: held, ...values }),
+      200,
+    );
+    await fakeOffer('held-guard', { cost: 1 });
+    await json(
+      await post(`/api/admin/catalog/products/${held}/routes`, {
+        offerId: offers['held-guard'],
+        fieldMap: { playerId: 'player_id' },
+      }),
+      201,
+    );
+    // $1.30 held at a cost of $1.12: $0.18 of margin, under the row's $0.30.
+    await syncCost('held-guard', 1.12, [held]);
+    expect(await routing(held)).toMatchObject({
+      currentPrice: { priceUsdUnits: usd(1.3) },
+      availability: 'paused_by_margin_guard',
+    });
+    // A purchase would copy the row's $0.30: a $0.05 rule must not show the pack available.
+    await json(
+      await put('/api/admin/pricing/rules', {
+        scope: 'product',
+        targetId: held,
+        ...values,
+        minMarginUsdUnits: usd(0.05),
+      }),
+      200,
+    );
+    expect(await routing(held)).toMatchObject({
+      currentPrice: { priceUsdUnits: usd(1.3) },
+      availability: 'paused_by_margin_guard',
+    });
+  });
+
+  it('adjusting the margin to the held price writes the new rule and cost (A05-1)', async () => {
+    const held = await product(`هامش ثابت ${run}`);
+    await fakeOffer('held-margin', { cost: 1 });
+    await json(
+      await post(`/api/admin/catalog/products/${held}/routes`, {
+        offerId: offers['held-margin'],
+        fieldMap: { playerId: 'player_id' },
+      }),
+      201,
+    );
+    await syncCost('held-margin', 0.8, [held]);
+    const review = (await routing(held)).openReview?.id as string;
+    // $0.80 + $0.30 keeps the held $1.10.
+    const values = { percentBp: 0, fixedUsdUnits: usd(0.3), minMarginUsdUnits: usd(0.01) };
+    expect(priceFromCost(usd(0.8), values)).toBe(price(1));
+    await json(await post(`/api/admin/pricing/reviews/${review}/adjust-margin`, values), 200);
+    const [newest] = await test.db
+      .select()
+      .from(productPrices)
+      .where(
+        and(
+          eq(productPrices.productId, held),
+          eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        ),
+      )
+      .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
+      .limit(1);
+    expect(newest).toMatchObject({
+      priceUsdUnits: price(1),
+      costUsdUnits: usd(0.8),
+      minMarginUsdUnits: usd(0.01),
+      cause: 'margin_adjusted',
+      reviewId: review,
+    });
+    // The same cost again opens no review: the row in force holds it.
+    expect(await syncCost('held-margin', 0.8, [held])).toMatchObject({ reviewsOpened: 0 });
+    expect((await routing(held)).openReview).toBeNull();
+  });
 });
 
 describe('the supplier policy', () => {
@@ -1480,25 +1568,25 @@ describe('catalog changes that move a price (audit A2)', () => {
 
   it("a pack's maximum quantity edit reprices it on the routes it may use now (audit A03-2)", async () => {
     await reauthenticate();
+    // Its manual route at $1 is the last resort behind a fake one at $0.50 (RT5; one live
+    // manual route a product, A05-12).
     const { productId } = await pricedGame('bounded');
+    await fakeOffer('bounded', { cost: 0.5, kind: 'code', required: [] });
     await json(
-      await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
-        costUsdUnits: usd(2),
-      }),
+      await post(`/api/admin/catalog/products/${productId}/routes`, { offerId: offers.bounded }),
       201,
     );
-    const cheap = (await routing(productId)).routes.find((route) => route.basis);
-    expect(await priceOf(productId)).toBe(price(1));
-    // The cheaper offer takes at most 5 units per order (S19), recorded without a repricing.
+    expect(await priceOf(productId)).toBe(price(0.5));
+    // The fake offer takes at most 5 units per order (S19), recorded without a repricing.
     await test.db
       .update(supplierOffers)
       .set({ maxQuantity: 5 })
-      .where(eq(supplierOffers.id, (cheap as Routing['routes'][number]).offer.id));
+      .where(eq(supplierOffers.id, offers.bounded as string));
 
     await json(await patch(`/api/admin/catalog/products/${productId}`, { maxQuantity: 8 }), 200);
-    expect(await priceOf(productId)).toBe(price(2));
-    await json(await patch(`/api/admin/catalog/products/${productId}`, { maxQuantity: 5 }), 200);
     expect(await priceOf(productId)).toBe(price(1));
+    await json(await patch(`/api/admin/catalog/products/${productId}`, { maxQuantity: 5 }), 200);
+    expect(await priceOf(productId)).toBe(price(0.5));
   });
 
   it('a rule change waiting on a repricing that holds its pack does not deadlock (F8-3)', async () => {

@@ -267,6 +267,12 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     suppliersNotHealthy: z
       .array(z.object({ supplierNameAr: z.string(), state: supplierHealthStateSchema }))
       .default([]),
+    /** S07 (audit A05-13): suppliers in use whose recent syncs failed, with the streak's length. */
+    syncsFailing: z
+      .array(z.object({ supplierNameAr: z.string(), failedRuns: z.int().positive() }))
+      .default([]),
+    /** S19 FC9 (audit A05-13): suppliers in use whose plan is inactive now. */
+    plansInactive: z.array(z.string()).default([]),
     /** S07: suppliers whose newest balance is below their threshold (rule H5). */
     balancesLow: z
       .array(
