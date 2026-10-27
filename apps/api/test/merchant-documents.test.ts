@@ -18,6 +18,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { renderPriceListImage } from '../src/modules/merchant-tools/price-list-image.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import { api, PASSWORD, removeAccounts, seedCustomer, setSwitches, totp } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -463,5 +464,92 @@ describe('the statement (S21 ST1–ST3)', () => {
     expect(await json(await client.get(path, { cookie: shop.cookie }), 429)).toMatchObject({
       code: 'RATE_LIMITED',
     });
+  });
+});
+
+describe('the documents after audit A06', () => {
+  it('A06-34: refuses a revoked merchant on the document routes', async () => {
+    const shop = await merchant(usd(1));
+    expect((await client.get('/api/merchant/statements', { cookie: shop.cookie })).status).toBe(
+      200,
+    );
+    await test.db
+      .update(customers)
+      .set({ accountType: 'customer' })
+      .where(eq(customers.id, shop.id));
+    await test.db
+      .update(merchantProfiles)
+      .set({ revokedAt: new Date() })
+      .where(eq(merchantProfiles.customerId, shop.id));
+    for (const path of [
+      `/api/merchant/price-list?gameIds=${ids.gameId}`,
+      `/api/merchant/price-list.png?gameIds=${ids.gameId}`,
+      '/api/merchant/statements',
+      `/api/merchant/statements/${month()}`,
+      `/api/merchant/statements/${month()}/export`,
+    ]) {
+      expect(await json(await client.get(path, { cookie: shop.cookie }), 403), path).toMatchObject({
+        code: 'NOT_MERCHANT',
+      });
+    }
+  });
+
+  it('A06-34: answers NOT_FOUND for a price-list image past its last page', async () => {
+    const shop = await merchant(0);
+    const path = `/api/merchant/price-list.png?gameIds=${ids.gameId}`;
+    const list = await json<{ imagePages: number }>(
+      await client.get(`/api/merchant/price-list?gameIds=${ids.gameId}`, { cookie: shop.cookie }),
+      200,
+    );
+    expect(
+      (await client.get(`${path}&page=${list.imagePages}`, { cookie: shop.cookie })).status,
+    ).toBe(200);
+    expect(
+      await json(
+        await client.get(`${path}&page=${list.imagePages + 1}`, { cookie: shop.cookie }),
+        404,
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('A06-40: reads a month’s statement 60 times an hour', async () => {
+    const shop = await merchant(usd(1));
+    const path = `/api/merchant/statements/${month()}`;
+    expect((await client.get(path, { cookie: shop.cookie })).status).toBe(200);
+    await test.db
+      .update(customerRateLimits)
+      .set({ count: 60 })
+      .where(eq(customerRateLimits.key, `statement-read:customer:${shop.id}`));
+    expect(await json(await client.get(path, { cookie: shop.cookie }), 429)).toMatchObject({
+      code: 'RATE_LIMITED',
+    });
+    // The export keeps its own limit.
+    expect((await client.get(`${path}/export`, { cookie: shop.cookie })).status).toBe(200);
+  });
+
+  it('A06-38: stops the whole price-list render at its time budget, text blocks included', async () => {
+    const list = {
+      tradeName: 'محل النور',
+      generatedAt: new Date().toISOString(),
+      currency: 'usd' as const,
+      games: [
+        {
+          gameId: randomUUID(),
+          nameAr: 'ببجي',
+          rows: Array.from({ length: 60 }, (_, index) => ({
+            productId: randomUUID(),
+            nameAr: `باقة ${index}`,
+            available: true,
+            usdUnits: usd(1),
+            sypUnits: null,
+          })),
+        },
+      ],
+    };
+    await expect(renderPriceListImage(list, { page: 1, pages: 1 }, null, 1)).rejects.toThrow(
+      /price list image/,
+    );
+    const image = await renderPriceListImage(list, { page: 1, pages: 1 }, null);
+    expect((await sharp(image).metadata()).width).toBe(1080);
   });
 });

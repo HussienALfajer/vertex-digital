@@ -103,6 +103,20 @@ export function applicationView(
   };
 }
 
+/**
+ * An application as its customer reads it: the admin's message only while it is the question to
+ * answer or the reason of a rejection, never a request a resubmission already answered (A06-30).
+ */
+export function customerApplicationView(
+  row: MerchantApplicationRow,
+  events: MerchantApplicationEvent[],
+  infoExpiryDays: number,
+): MerchantApplication {
+  const view = applicationView(row, events, infoExpiryDays);
+  const current = row.status === 'info_requested' || row.status === 'rejected';
+  return current ? view : { ...view, adminMessage: null };
+}
+
 /** The settings in force with the deposit minimum both limits must reach. */
 export function settingsView(
   row: MerchantSettingsRow,

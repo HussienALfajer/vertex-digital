@@ -80,6 +80,19 @@ test.describe('merchant accounts', () => {
     await expect(card.getByRole('link')).toHaveCount(0);
   });
 
+  test('the account card says a failed read and reads again on retry (A06-19)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/merchant/application', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/account');
+    const card = page.getByTestId('merchant-card');
+    await expect(card).toContainText(m.loadFailed);
+    api.on('GET /api/merchant/application', 200, open());
+    await card.getByRole('button', { name: ar.account.retry }).click();
+    await expect(card.getByRole('link', { name: m.card.applyAction })).toBeVisible();
+  });
+
   test('applies in four steps with a photo, then shows the application under review', async ({
     page,
     api,

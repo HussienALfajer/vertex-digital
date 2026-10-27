@@ -52,12 +52,12 @@ interface AlertsData {
  */
 export function AlertsPage() {
   const read = useCallback(async () => {
-    const [watches, games, settings, alerts] = [
-      await getWatches(),
-      await getMerchantGames(),
-      await getAlertSettings(),
-      await getAlerts(null),
-    ];
+    const [watches, games, settings, alerts] = await Promise.all([
+      getWatches(),
+      getMerchantGames(),
+      getAlertSettings(),
+      getAlerts(null),
+    ]);
     if (!watches.ok) return watches;
     if (!games.ok) return games;
     if (!settings.ok) return settings;
@@ -157,8 +157,15 @@ function FollowsCard({
             const followed = gameIds.includes(game.id);
             return (
               <li key={game.id} className="flex min-h-12 items-center justify-between gap-3">
-                <span id={`follow-${game.id}`}>{game.nameAr}</span>
+                <label
+                  id={`follow-${game.id}`}
+                  htmlFor={`follow-switch-${game.id}`}
+                  className="flex min-h-12 flex-1 cursor-pointer items-center"
+                >
+                  {game.nameAr}
+                </label>
                 <Switch
+                  id={`follow-switch-${game.id}`}
                   aria-labelledby={`follow-${game.id}`}
                   checked={followed}
                   disabled={
@@ -301,11 +308,12 @@ function SettingsCard({
           <FieldError match={invalid}>{tm('alerts.lowBalanceInvalid')}</FieldError>
         </Field>
         <div className="flex min-h-12 items-center justify-between gap-3">
-          <span className="flex flex-col">
+          <label htmlFor="daily-email-switch" className="flex cursor-pointer flex-col">
             <span id="daily-email">{tm('alerts.dailyEmail')}</span>
             <span className="text-sm text-muted-foreground">{tm('alerts.dailyEmailHint')}</span>
-          </span>
+          </label>
           <Switch
+            id="daily-email-switch"
             aria-labelledby="daily-email"
             checked={dailyEmail}
             onCheckedChange={setDailyEmail}

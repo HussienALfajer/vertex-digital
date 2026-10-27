@@ -25,12 +25,12 @@ import { DownloadIcon, GiftIcon, LinkIcon, Share2Icon } from 'lucide-react';
 import { useId, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CopyButton } from '@/features/deposits/copy-button';
-import { tm } from '@/features/merchant-tools/i18n';
 import { useCustomer } from '@/features/purchase/session';
 import { ShareCard } from '@/features/shares/share-card';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { to } from './i18n';
 import { createGiftLink, revokeShareLink, saveReceiptLink } from './requests';
 
 /** Rule RC1: what a share may show; never a reservation waiting for balance or a cancel. */
@@ -320,8 +320,8 @@ export function ReceiptSheet({
         {merchant && (
           <label htmlFor={brandedId} className="flex min-h-11 items-center justify-between gap-3">
             <span className="flex flex-col">
-              <span className="text-base">{tm('share.branded')}</span>
-              <span className="text-xs text-muted-foreground">{tm('share.brandedHint')}</span>
+              <span className="text-base">{to('share.branded')}</span>
+              <span className="text-xs text-muted-foreground">{to('share.brandedHint')}</span>
             </span>
             <Switch id={brandedId} checked={branded} onCheckedChange={setBranded} />
           </label>
@@ -359,7 +359,7 @@ export function ReceiptSheet({
               priceOffered && showPrice,
               playerDisplay,
               brandedNow
-                ? { tradeName: tm('share.branded'), whatsapp: null, hasLogo: false }
+                ? { tradeName: to('share.branded'), whatsapp: null, hasLogo: false }
                 : null,
             )}
           />

@@ -16,7 +16,8 @@ import {
   suppliers,
 } from '@vertex-digital/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { RatesService } from '../src/modules/rates/index.js';
 import {
   api,
   auditOf,
@@ -658,5 +659,56 @@ describe('volume levels in the panel (S21 LV1, LV5, LV6)', () => {
       level: { id: level.id, nameAr: level.nameAr },
       watchCount: 0,
     });
+  });
+});
+
+describe('the merchant area after audit A06', () => {
+  it('A06-34: refuses a revoked merchant on the tools routes', async () => {
+    const shop = await merchant(0);
+    expect(
+      (await client.get('/api/merchant/dashboard?period=month', { cookie: shop.cookie })).status,
+    ).toBe(200);
+    await test.db
+      .update(customers)
+      .set({ accountType: 'customer' })
+      .where(eq(customers.id, shop.id));
+    await test.db
+      .update(merchantProfiles)
+      .set({ revokedAt: new Date() })
+      .where(eq(merchantProfiles.customerId, shop.id));
+    for (const path of [
+      '/api/merchant/dashboard?period=month',
+      `/api/merchant/selling-prices?gameId=${ids.gameId}`,
+      '/api/merchant/watches',
+    ]) {
+      expect(await json(await client.get(path, { cookie: shop.cookie }), 403), path).toMatchObject({
+        code: 'NOT_MERCHANT',
+      });
+    }
+    expect(
+      await json(
+        await send('PUT', `/api/merchant/selling-prices/${item.id}`, shop.cookie, {
+          currency: 'usd',
+          amountUnits: usd(2),
+        }),
+        403,
+      ),
+    ).toMatchObject({ code: 'NOT_MERCHANT' });
+  });
+
+  it('A06-41: refuses a SYP selling price without a rate as such, not as above $10,000', async () => {
+    const shop = await merchant(0);
+    const rate = vi.spyOn(RatesService.prototype, 'current').mockResolvedValue(null);
+    const refused = await json<{ details: { path: string[]; message: string }[] }>(
+      await send('PUT', `/api/merchant/selling-prices/${item.id}`, shop.cookie, {
+        currency: 'syp',
+        amountUnits: 20_000_00,
+      }),
+      400,
+    );
+    rate.mockRestore();
+    expect(refused.details).toEqual([
+      { path: ['currency'], message: 'No exchange rate in force to convert a SYP price at' },
+    ]);
   });
 });

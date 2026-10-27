@@ -15,7 +15,7 @@ import { Switch } from '@vertex-digital/ui/components/switch';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
 import { ImageDownIcon, ListIcon, PrinterIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -28,6 +28,7 @@ import {
   getPriceList,
   type PriceListOptions,
   priceListImage,
+  priceListOptionsFrom,
   priceListQuery,
 } from './requests';
 
@@ -45,14 +46,26 @@ const DEFAULTS: PriceListOptions = {
  * one PNG per 60 packs, for WhatsApp. Read live, never cached.
  */
 export function PriceListPage() {
-  const [options, setOptions] = useState<PriceListOptions>(DEFAULTS);
+  // The options an address carries (back from the print page), else the defaults (Q27).
+  const [options, setOptions] = useState<PriceListOptions>(() =>
+    typeof window === 'undefined' || window.location.search === ''
+      ? DEFAULTS
+      : priceListOptionsFrom(new URLSearchParams(window.location.search)),
+  );
+  // The games are read once for the page, beside the first list; an option change reads the list
+  // alone (A06-9). A failed read is forgotten, so a retry reads it again.
+  const games = useRef<ReturnType<typeof getMerchantGames> | null>(null);
   const read = useCallback(async () => {
-    const [games, list] = [await getMerchantGames(), await getPriceList(options)];
-    if (!games.ok) return games;
+    games.current ??= getMerchantGames();
+    const [gameList, list] = await Promise.all([games.current, getPriceList(options)]);
+    if (!gameList.ok) {
+      games.current = null;
+      return gameList;
+    }
     if (!list.ok) return list;
-    return { ok: true as const, data: { games: games.data.items, list: list.data } };
+    return { ok: true as const, data: { games: gameList.data.items, list: list.data } };
   }, [options]);
-  const { state, reload } = useMerchantRead(read);
+  const { state, reload, refreshing } = useMerchantRead(read);
 
   if (state.status !== 'ready') {
     return (
@@ -65,6 +78,7 @@ export function PriceListPage() {
   }
   return (
     <PriceListView
+      refreshing={refreshing}
       games={state.data.games}
       list={state.data.list}
       options={options}
@@ -74,11 +88,13 @@ export function PriceListPage() {
 }
 
 function PriceListView({
+  refreshing,
   games,
   list,
   options,
   onOptions,
 }: {
+  refreshing: boolean;
   games: MerchantGame[];
   list: MerchantPriceList;
   options: PriceListOptions;
@@ -110,7 +126,7 @@ function PriceListView({
             onValueChange={(gameIds) => onOptions({ ...options, gameIds })}
           >
             {games.map((game) => (
-              <ToggleGroupItem key={game.id} value={game.id} className="h-10 px-4 text-md">
+              <ToggleGroupItem key={game.id} value={game.id} className="h-11 px-4 text-md">
                 {game.nameAr}
               </ToggleGroupItem>
             ))}
@@ -128,7 +144,7 @@ function PriceListView({
               onValueChange={(value) => value[0] && onOptions({ ...options, mode: value[0] })}
             >
               {PRICE_LIST_MODES.map((mode) => (
-                <ToggleGroupItem key={mode} value={mode} className="h-10 px-4 text-md">
+                <ToggleGroupItem key={mode} value={mode} className="h-11 px-4 text-md">
                   {tm(`priceList.modes.${mode}`)}
                 </ToggleGroupItem>
               ))}
@@ -142,7 +158,7 @@ function PriceListView({
               onValueChange={(value) => value[0] && onOptions({ ...options, currency: value[0] })}
             >
               {PRICE_LIST_CURRENCIES.map((currency) => (
-                <ToggleGroupItem key={currency} value={currency} className="h-10 px-4 text-md">
+                <ToggleGroupItem key={currency} value={currency} className="h-11 px-4 text-md">
                   {tm(`priceList.currencies.${currency}`)}
                 </ToggleGroupItem>
               ))}
@@ -151,11 +167,18 @@ function PriceListView({
         </div>
         <div className="flex min-h-11 items-center gap-3 text-md">
           <Switch
+            id="price-list-unavailable-switch"
             aria-labelledby="price-list-unavailable"
             checked={options.unavailable}
             onCheckedChange={(unavailable) => onOptions({ ...options, unavailable })}
           />
-          <span id="price-list-unavailable">{tm('priceList.unavailable')}</span>
+          <label
+            id="price-list-unavailable"
+            htmlFor="price-list-unavailable-switch"
+            className="flex min-h-11 flex-1 cursor-pointer items-center"
+          >
+            {tm('priceList.unavailable')}
+          </label>
         </div>
       </Card>
 
@@ -199,7 +222,11 @@ function PriceListView({
       </div>
       {failure && <FormAlert>{errorText(failure)}</FormAlert>}
 
-      <section aria-label={tm('priceList.preview')} className="flex flex-col gap-2">
+      <section
+        aria-label={tm('priceList.preview')}
+        aria-busy={refreshing}
+        className={`flex flex-col gap-2 ${refreshing ? 'opacity-60' : ''}`}
+      >
         <h2 className="text-lg font-bold">{tm('priceList.preview')}</h2>
         {empty ? (
           <EmptyState

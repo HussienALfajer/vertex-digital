@@ -79,7 +79,7 @@ export class MerchantDocumentsController {
   @SerializeOptions({ schema: statementSchema })
   @ApiOkResponse({ description: 'The month’s statement (ST2)', standardSchema: statementSchema })
   statement(@CurrentCustomer() customer: CustomerIdentity, @Param('month') month: string) {
-    return this.documents.statement(customer.id, month);
+    return this.documents.statementPage(customer.id, month);
   }
 
   /** ST3: the statement as an `.xlsx`, 20 an hour. */

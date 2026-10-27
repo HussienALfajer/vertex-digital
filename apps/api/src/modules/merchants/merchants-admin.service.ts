@@ -132,7 +132,9 @@ export class MerchantsAdminService {
             ne(merchantApplications.id, row.id),
           ),
         )
-        .orderBy(desc(merchantApplications.submittedAt)),
+        .orderBy(desc(merchantApplications.submittedAt))
+        // The newest 20 are the history a decision needs; a bounded read (audit A06-31).
+        .limit(20),
       approvedListOf(this.db, row.approvedPriceListId),
     ]);
     return {

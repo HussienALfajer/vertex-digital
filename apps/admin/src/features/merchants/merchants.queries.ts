@@ -30,7 +30,7 @@ export const applicationsQuery = (search: ApplicationsSearch) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/merchant-applications', {
-          params: { query: { status: statusOf(tabOf(search)), cursor: pageParam } as never },
+          params: { query: { status: statusOf(tabOf(search)), cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -60,7 +60,7 @@ export const merchantsQuery = (search: MerchantsSearch) =>
               listId: search.listId,
               levelId: search.levelId,
               cursor: pageParam,
-            } as never,
+            },
           },
         }),
       ),

@@ -38,8 +38,8 @@ import { JobsService } from '../../core/jobs/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import {
   applicationEvents,
-  applicationView,
   coded,
+  customerApplicationView,
   merchantRefusals as refusals,
 } from './merchant-records.js';
 
@@ -73,7 +73,7 @@ export class MerchantsService {
     const refusal = this.refusal(person, terms !== null, latest, settings.reapplyWaitDays);
     return {
       application: latest
-        ? applicationView(
+        ? customerApplicationView(
             latest,
             await applicationEvents(this.db, latest.id),
             settings.infoExpiryDays,
@@ -219,6 +219,16 @@ export class MerchantsService {
     if (person.accountType === 'merchant') {
       throw new CodedException(409, 'ALREADY_MERCHANT', 'The account is a merchant already');
     }
+    // A photo only for an application the customer may send now, or the one waiting for their
+    // information: no uploads kept for good while an application is reviewed or the wait runs
+    // (audit A06-28).
+    const [latest, settings, terms] = await Promise.all([
+      latestApplication(this.db, customerId),
+      currentMerchantSettings(this.db),
+      merchantTermsInForce(this.db),
+    ]);
+    const refusal = this.refusal(person, terms !== null, latest, settings.reapplyWaitDays);
+    if (refusal && latest?.status !== 'info_requested') throw this.refused(refusal);
     const prepared = await this.files.prepare('merchant_shop_photo', upload);
     const fileId = await this.db.transaction(async (tx) => {
       const id = await this.files.record(tx, prepared);
@@ -244,12 +254,14 @@ export class MerchantsService {
   /** `POST /api/merchant/terms` (MT2): a merchant accepts the version in force. */
   async acceptTerms(customerId: string, versionId: string, meta: RequestMeta): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // The customer first, then the profile: the order of a grant, a revocation and the level
+      // job, so an acceptance beside one of them waits instead of deadlocking (audit A06-22).
+      const person = await lockApplicant(tx, customerId);
       const [profile] = await tx
         .select()
         .from(merchantProfiles)
         .where(eq(merchantProfiles.customerId, customerId))
         .for('update');
-      const person = await lockApplicant(tx, customerId);
       if (!profile || profile.revokedAt !== null || person?.accountType !== 'merchant') {
         throw new CodedException(409, 'NOT_MERCHANT', 'The account is not a merchant');
       }
@@ -372,7 +384,11 @@ export class MerchantsService {
 
   private async view(row: MerchantApplicationRow): Promise<MerchantApplication> {
     const settings = await currentMerchantSettings(this.db);
-    return applicationView(row, await applicationEvents(this.db, row.id), settings.infoExpiryDays);
+    return customerApplicationView(
+      row,
+      await applicationEvents(this.db, row.id),
+      settings.infoExpiryDays,
+    );
   }
 
   /** The admin's notice: no personal data, the application and how many wait. */

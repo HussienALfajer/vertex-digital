@@ -130,7 +130,9 @@ export function notificationText(notification: CustomerNotification): string {
         message: notification.params.message,
       });
     case 'merchant_approved':
-      return t('notifications.events.merchant_approved');
+      return t('notifications.events.merchant_approved', {
+        kind: t(`merchant.priceKinds.${notification.params.priceKind}`),
+      });
     case 'merchant_rejected':
       return t('notifications.events.merchant_rejected', {
         reason: notification.params.reason,

@@ -28,12 +28,16 @@ import { Picker } from '../pricing/picker';
 import { priceListsQuery } from '../pricing/pricing.queries';
 import { useGrantMerchant, useRevokeMerchant } from './merchants.queries';
 
-/** The lists a merchant may pay: unarchived and priced; wholesale is the default. */
+/**
+ * The lists a merchant may pay: unarchived and priced; wholesale is the default. With the read, for
+ * the picker's `read` (audit A06-44): a failed read shows with a retry, never an empty select.
+ */
 export function useListItems() {
   const lists = useQuery(priceListsQuery);
-  return (lists.data ?? [])
+  const items = (lists.data ?? [])
     .filter((list) => list.archivedAt === null && list.ready)
     .map((list) => ({ value: list.id, label: list.name }));
+  return { items, lists };
 }
 
 type GrantField = 'tradeName' | 'governorate' | 'city' | 'reason';
@@ -52,7 +56,7 @@ export function GrantMerchantDialog({
 }) {
   const { t } = useTranslation();
   const grant = useGrantMerchant(customer.id);
-  const items = useListItems();
+  const { items, lists } = useListItems();
   const [governorate, setGovernorate] = useState<Governorate | null>(null);
   const [listId, setListId] = useState<string>(ROOT_PRICE_LIST_IDS.wholesale);
   const [invalid, setInvalid] = useState<Set<GrantField>>(new Set());
@@ -126,6 +130,7 @@ export function GrantMerchantDialog({
             items={items}
             value={listId}
             onChange={setListId}
+            read={lists}
           />
         </Field>
         <Field invalid={invalid.has('reason')}>
@@ -136,7 +141,8 @@ export function GrantMerchantDialog({
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
           <InvalidAlert show={invalid.size > 0} />
-          <Button type="submit" disabled={grant.isPending}>
+          {/* The list must have loaded, so a failed read never grants on wholesale unseen. */}
+          <Button type="submit" disabled={grant.isPending || !lists.isSuccess}>
             {t('merchants.grant.submit')}
           </Button>
         </DialogFooter>
@@ -160,6 +166,7 @@ export function RevokeMerchantDialog({
   const revoke = useRevokeMerchant(customer.id);
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +175,7 @@ export function RevokeMerchantDialog({
       reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await revoke.mutateAsync(parsed.data);
       onDone();
@@ -183,7 +190,7 @@ export function RevokeMerchantDialog({
         <DialogTitle>{t('merchants.revoke.title', { name: customer.name })}</DialogTitle>
         <DialogDescription>{t('merchants.revoke.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('merchants.fields.reason')}</FieldLabel>
           <Textarea name="reason" rows={3} maxLength={500} />

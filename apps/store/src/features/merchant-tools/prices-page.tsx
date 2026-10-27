@@ -63,7 +63,7 @@ const STORE_STEP = 'store';
  */
 export function PricesPage() {
   const read = useCallback(async () => {
-    const [settings, games] = [await getSellingSettings(), await getMerchantGames()];
+    const [settings, games] = await Promise.all([getSellingSettings(), getMerchantGames()]);
     if (!settings.ok) return settings;
     if (!games.ok) return games;
     return { ok: true as const, data: { settings: settings.data, games: games.data.items } };
@@ -360,10 +360,10 @@ function PriceDialog({
             value={[currency]}
             onValueChange={(value) => value[0] && setCurrency(value[0])}
           >
-            <ToggleGroupItem value="syp" className="h-10 px-4 text-md">
+            <ToggleGroupItem value="syp" className="h-11 px-4 text-md">
               {tm('prices.syp')}
             </ToggleGroupItem>
-            <ToggleGroupItem value="usd" className="h-10 px-4 text-md">
+            <ToggleGroupItem value="usd" className="h-11 px-4 text-md">
               {tm('prices.usd')}
             </ToggleGroupItem>
           </ToggleGroup>

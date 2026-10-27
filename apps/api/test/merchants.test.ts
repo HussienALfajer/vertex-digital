@@ -219,6 +219,25 @@ describe('the application (MA1–MA5, MA8)', () => {
       code: 'MERCHANT_APPLICATION_OPEN',
       details: { applicationId: created.id },
     });
+    // No photo is kept while the application is reviewed (A06-28).
+    const data = new FormData();
+    data.set(
+      'file',
+      new Blob([
+        new Uint8Array(
+          await sharp({ create: { width: 8, height: 8, channels: 3, background: '#000' } })
+            .png()
+            .toBuffer(),
+        ),
+      ]),
+      'shop.png',
+    );
+    expect(
+      await json(
+        await client.post('/api/merchant/application/photo', { cookie: shop.cookie, form: data }),
+        409,
+      ),
+    ).toMatchObject({ code: 'MERCHANT_APPLICATION_OPEN' });
     // Another customer reaches neither the photo nor the key.
     const other = await customer();
     expect(
@@ -271,14 +290,21 @@ describe('the application (MA1–MA5, MA8)', () => {
         409,
       ),
     ).toMatchObject({ code: 'APPLICATION_STATE_INVALID', details: { status: 'info_requested' } });
+    // The application waiting for the customer's information takes a new photo (A06-28).
+    const { fileId: newPhoto } = await uploadPhoto(shop);
     const resubmitted = await json<{ status: string; tradeName: string }>(
       await client.put('/api/merchant/application', {
         cookie: shop.cookie,
-        body: form({ tradeName: 'محل النور للاتصالات', shopPhotoFileId: fileId }),
+        body: form({ tradeName: 'محل النور للاتصالات', shopPhotoFileId: newPhoto }),
       }),
       200,
     );
-    expect(resubmitted).toMatchObject({ status: 'under_review', tradeName: 'محل النور للاتصالات' });
+    expect(resubmitted).toMatchObject({
+      status: 'under_review',
+      tradeName: 'محل النور للاتصالات',
+      // The request it answered is no longer shown as the customer's question (A06-30).
+      adminMessage: null,
+    });
 
     // Approval on wholesale (MA5).
     const approved = await json<{ status: string; approvedPriceList: { id: string } }>(
@@ -361,6 +387,30 @@ describe('the application (MA1–MA5, MA8)', () => {
       await adminSend('PUT', '/api/admin/merchant-settings', MERCHANT_SETTINGS_DEFAULTS),
       200,
     );
+  });
+
+  it('keeps one open application when two are sent at once (A06-25)', async () => {
+    const shop = await customer();
+    const answers = await Promise.all([submit(shop), submit(shop)]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 409]);
+    const refused = answers.find((answer) => answer.status === 409) as Response;
+    expect(await refused.json()).toMatchObject({ code: 'MERCHANT_APPLICATION_OPEN' });
+  });
+
+  it('keeps a customer with an open application from being archived (A06-26)', async () => {
+    const shop = await customer();
+    await json(await submit(shop), 201);
+    await reauthenticate();
+    const refused = await json<{ code: string; details: { blockers: string[] } }>(
+      await adminSend('POST', `/api/admin/customers/${shop.id}/archive`, {
+        reason: 'حساب مكرر لدينا',
+      }),
+      409,
+    );
+    expect(refused).toMatchObject({
+      code: 'CUSTOMER_NOT_ARCHIVABLE',
+      details: { blockers: ['open_merchant_application'] },
+    });
   });
 
   it('lets the customer withdraw, then apply again at once (MA4)', async () => {
@@ -500,6 +550,23 @@ describe('the direct grant, the terms and the revocation (MA6, MA7, MT2)', () =>
       },
     });
     expect(await json(purchase, 409)).toMatchObject({ code: 'MERCHANT_TERMS_REQUIRED' });
+    // A checkout (the cart and the bulk payment) is refused the same way (A06-25).
+    const checkout = await client.post('/api/checkouts', {
+      cookie: shop.cookie,
+      headers: { 'idempotency-key': randomUUID() },
+      body: {
+        source: 'bulk',
+        lines: [
+          {
+            productId: randomUUID(),
+            quantity: 1,
+            fields: {},
+            expectedUnitPriceUsdUnits: usd(1),
+          },
+        ],
+      },
+    });
+    expect(await json(checkout, 409)).toMatchObject({ code: 'MERCHANT_TERMS_REQUIRED' });
     const accept = (versionId: string, who = shop) =>
       client.post('/api/merchant/terms', { cookie: who.cookie, body: { versionId } });
     expect(await json(await accept(randomUUID()), 400)).toMatchObject({
@@ -536,6 +603,36 @@ describe('the direct grant, the terms and the revocation (MA6, MA7, MT2)', () =>
     );
     // A revocation is not a rejection: the customer may apply again at once.
     expect((await stateOf(shop)).canApply).toBe(true);
+  });
+
+  it('accepts the terms in the lock order of a revocation and the level job (A06-22)', async () => {
+    const shop = await customer();
+    await json(
+      await adminSend('POST', `/api/admin/customers/${shop.id}/merchant`, {
+        tradeName: 'متجر الشام',
+        governorate: 'damascus',
+        city: 'دمشق',
+        reason: 'تاجر معروف لدينا',
+      }),
+      200,
+    );
+    // A revocation or the level job holds the customer, then reaches for the profile: an
+    // acceptance started meanwhile waits on the customer and leaves the profile free.
+    const { accepting } = await test.db.transaction(async (tx) => {
+      await tx.execute(sql`select id from customers where id = ${shop.id} for no key update`);
+      const accepting = client.post('/api/merchant/terms', {
+        cookie: shop.cookie,
+        body: { versionId: termsVersionId },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await tx.execute(sql`set local lock_timeout = '2s'`);
+      await tx.execute(
+        sql`select customer_id from merchant_profiles where customer_id = ${shop.id} for update`,
+      );
+      // Handed out unawaited: the request finishes once this transaction lets the customer go.
+      return { accepting };
+    });
+    expect((await accepting).status).toBe(204);
   });
 
   it('gives a merchant the merchant order rate (PO5)', async () => {

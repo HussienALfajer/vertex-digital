@@ -1,3 +1,17 @@
+# TASKS — Audit A06 Merchants (branch `fix/audit-a06-merchants`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A06-merchants.md`. Specs S20 (merchants), S21; ADR 0035, 0036.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store and admin screens of the group)
+- [x] Findings shown to the owner (Q26, Q27 answered and built)
+- [x] Fixes P0 → P3, each with its regression test (47 fixed, 4 partly, 1 deferred, 3 moved to A10; Q26 and Q27 built)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (verify passed, the reviewer found nothing blocking)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A05 Suppliers and pricing (branch `fix/audit-a05-suppliers`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A05-suppliers.md`. Specs S06 (pricing), S07, S16, S17, S18, S19, S20 (price lists); ADR 0005, 0020, 0021, 0030–0035.

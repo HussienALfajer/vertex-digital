@@ -6,7 +6,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { CircleAlertIcon, StoreIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Result } from '@/lib/api';
 import { tm } from './i18n';
 
@@ -18,18 +18,29 @@ export type PageState<Data> =
 
 /**
  * A merchant page's read (S21 MA1), in the browser with the session cookie: without a session the
- * customer signs in and comes back; a customer who is not a merchant sees why. `reload` reads again.
+ * customer signs in and comes back to the same address, options included; a customer who is not a
+ * merchant sees why. `reload` reads again. Only the newest read lands, so a quick change of period
+ * or currency never leaves an earlier answer under the new choice; `refreshing` is true while a
+ * read replaces data already shown, and a retry from the failed view shows the skeleton (A06-9).
  */
 export function useMerchantRead<Data>(read: () => Promise<Result<Data>>) {
   const router = useRouter();
   const pathname = usePathname();
   const [state, setState] = useState<PageState<Data>>({ status: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
+  const latest = useRef(0);
 
   const reload = useCallback(async () => {
+    const reading = ++latest.current;
+    setRefreshing(true);
+    setState((current) => (current.status === 'ready' ? current : { status: 'loading' }));
     const result = await read();
+    if (reading !== latest.current) return;
+    setRefreshing(false);
     if (result.ok) return setState({ status: 'ready', data: result.data });
     if (result.reason === 'UNAUTHORIZED') {
-      router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
+      const back = `${pathname}${window.location.search}`;
+      router.replace(`/sign-in?next=${encodeURIComponent(back)}`);
       return;
     }
     setState({ status: result.reason === 'NOT_MERCHANT' ? 'not_merchant' : 'failed' });
@@ -39,7 +50,7 @@ export function useMerchantRead<Data>(read: () => Promise<Result<Data>>) {
     void reload();
   }, [reload]);
 
-  return { state, setState, reload };
+  return { state, setState, reload, refreshing };
 }
 
 /** What a merchant page shows before it is ready. */

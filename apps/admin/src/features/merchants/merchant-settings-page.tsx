@@ -7,6 +7,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   Button,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -57,10 +58,23 @@ export function MerchantSettingsPage() {
         description={t('merchants.settings.subtitle')}
       />
       {settings.isPending && <Skeleton className="h-96 w-full max-w-2xl" aria-hidden="true" />}
-      {settings.isError && (
+      {settings.isError && !settings.data && (
         <EmptyState
           icon={<CircleAlertIcon />}
           title={errorMessage(t, settings.error)}
+          action={
+            <Button variant="outline" onClick={() => settings.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {/* Audit A06-52: a failed read after a good one keeps the form with a notice. */}
+      {settings.isError && settings.data && (
+        <Callout
+          tone="warning"
+          icon={<CircleAlertIcon />}
+          title={t('merchants.settings.stale')}
           action={
             <Button variant="outline" onClick={() => settings.refetch()}>
               {t('common.retry')}

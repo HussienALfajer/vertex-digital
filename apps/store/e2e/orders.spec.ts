@@ -201,6 +201,7 @@ const summary = (item: Order): OrderSummary => ({
   number: item.number,
   stage: item.stage,
   productNameAr: item.product.nameAr,
+  productKind: item.product.kind,
   game: item.game,
   quantity: item.quantity,
   totalUsdUnits: item.totalUsdUnits,

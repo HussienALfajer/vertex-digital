@@ -12,8 +12,15 @@ import { escapeMarkup, loadFonts, ltr, named, textBlock } from '../../core/image
  * The price list image for WhatsApp (S21 PL2, PL3): 1080 px wide, the brand's dark surface, the
  * shop's name and logo, "قائمة الأسعار" with the Damascus date and time and "الأسعار قابلة
  * للتغيير", then each game's packs with their prices, at most 60 packs per image. Drawn by sharp
- * with Pango like the share image; every value is escaped; the render stops after 10 seconds.
+ * with Pango like the share image; every value is escaped; the whole render (text blocks, logo and
+ * composite) stops after 10 seconds (audit A06-38).
  */
+
+/** PL3: the time one image may take to render, every step included. */
+export const PRICE_LIST_RENDER_BUDGET_MS = 10_000;
+
+/** A render that passed its budget: an unhandled error, never a partial image. */
+class RenderTimeout extends Error {}
 
 const WIDTH = 1080;
 const MARGIN = 60;
@@ -58,16 +65,48 @@ function priceText(row: MerchantPriceListRow, currency: MerchantPriceList['curre
   return currency === 'both' ? `${pounds} · ${dollars}` : pounds;
 }
 
+type ListOfImage = Pick<MerchantPriceList, 'tradeName' | 'generatedAt' | 'currency' | 'games'>;
+
 /**
  * Renders one image of the list: `list.games` holds this page's packs only. `logo` is the stored
- * logo (any format sharp reads), or null.
+ * logo (any format sharp reads), or null. Refused once `budgetMs` has passed, whichever step is
+ * running; no step starts after it.
  */
 export async function renderPriceListImage(
-  list: Pick<MerchantPriceList, 'tradeName' | 'generatedAt' | 'currency' | 'games'>,
+  list: ListOfImage,
   pages: { page: number; pages: number },
   logo: Buffer | null,
+  budgetMs = PRICE_LIST_RENDER_BUDGET_MS,
 ): Promise<Buffer> {
+  const deadline = Date.now() + budgetMs;
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      draw(list, pages, logo, deadline),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(timedOut(budgetMs)), budgetMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const timedOut = (budgetMs: number) =>
+  new RenderTimeout(`The price list image took longer than ${budgetMs} ms`);
+
+async function draw(
+  list: ListOfImage,
+  pages: { page: number; pages: number },
+  logo: Buffer | null,
+  deadline: number,
+): Promise<Buffer> {
+  /** Before each step: a render past its deadline starts nothing more. */
+  const step = () => {
+    if (Date.now() >= deadline) throw new RenderTimeout('The price list image passed its budget');
+  };
   await loadFonts();
+  step();
   const inner = WIDTH - MARGIN * 2;
   const text = { color: COLORS.text };
   const muted = { color: COLORS.muted };
@@ -86,6 +125,7 @@ export async function renderPriceListImage(
     price?: Awaited<ReturnType<typeof textBlock>>;
   }[] = [];
   for (const game of list.games) {
+    step();
     blocks.push({
       kind: 'game',
       name: await textBlock(named(escapeMarkup(game.nameAr)), 34, inner, {
@@ -105,6 +145,7 @@ export async function renderPriceListImage(
     );
     blocks.push(...rows);
   }
+  step();
   const footer =
     pages.pages > 1
       ? await textBlock(`${ltr(`${pages.page} / ${pages.pages}`)}`, 22, inner, muted)
@@ -119,6 +160,7 @@ export async function renderPriceListImage(
     top += block.height + 10;
   }
   if (logo) {
+    step();
     layers.push({
       input: await sharp(logo)
         .resize(LOGO_SIZE, LOGO_SIZE, { fit: 'contain', background: COLORS.surface })
@@ -155,5 +197,8 @@ export async function renderPriceListImage(
       ${lines.join('')}
     </svg>`,
   );
-  return sharp(background).composite(layers).png().timeout({ seconds: 10 }).toBuffer();
+  step();
+  // libvips stops the composite itself at the time left, whole seconds, one at least.
+  const seconds = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
+  return sharp(background).composite(layers).png().timeout({ seconds }).toBuffer();
 }

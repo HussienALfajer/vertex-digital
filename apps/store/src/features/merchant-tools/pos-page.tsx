@@ -36,19 +36,28 @@ import {
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
-import { CircleAlertIcon, KeyboardIcon, PrinterIcon, UserRoundCheckIcon } from 'lucide-react';
+import {
+  CircleAlertIcon,
+  KeyboardIcon,
+  PrinterIcon,
+  TicketIcon,
+  UserRoundCheckIcon,
+} from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { useNotificationEvents } from '@/features/notifications/live';
 import { listOrders } from '@/features/orders/requests';
 import { STAGE_TONES, stageText } from '@/features/orders/stages';
+import { sendAttempt } from '@/features/purchase/attempt';
 import { checkFields, type FieldValues } from '@/features/purchase/fields';
+import { freesKey } from '@/features/purchase/order-key';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
+import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { apiRequest, type Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
-import { useIdempotentRequest } from '@/lib/idempotency';
 import { parseSellingPrice } from './form';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
@@ -62,13 +71,19 @@ import {
 } from './requests';
 import { SellingPriceField } from './selling-price-field';
 
-/** PS1: followed games first, then the store's order. */
+// S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
+const TermsSheet = dynamic(() =>
+  import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
+);
+
+/** PS1: followed games first, then by the merchant's 30-day units, then the store's order. */
 async function posGames() {
-  const [games, watches] = [await getMerchantGames(), await getWatches()];
+  const [games, watches] = await Promise.all([getMerchantGames(), getWatches()]);
   if (!games.ok) return games;
   const followed = new Set(watches.ok ? watches.data.games.map((game) => game.gameId) : []);
   const items = [...games.data.items].sort(
-    (a, b) => Number(followed.has(b.id)) - Number(followed.has(a.id)),
+    (a, b) =>
+      Number(followed.has(b.id)) - Number(followed.has(a.id)) || b.recentUnits - a.recentUnits,
   );
   return { ok: true as const, data: items };
 }
@@ -90,6 +105,8 @@ export function PosPage() {
   const [gameId, setGameId] = useState<string | null>(null);
   const strip = useOrderStrip();
   const [help, setHelp] = useState(false);
+  // S21 MA1: a frozen merchant reads only; the packs stay shown but open nothing.
+  const frozen = isFrozenCustomer(useCustomer());
 
   useEffect(() => {
     if (state.status === 'ready' && gameId === null) setGameId(state.data[0]?.id ?? null);
@@ -143,8 +160,9 @@ export function PosPage() {
           {tm('pos.shortcutsOpen')}
         </Button>
       </div>
+      {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
       {game ? (
-        <GamePanel key={game.id} game={game} onPlaced={strip.reload} />
+        <GamePanel key={game.id} game={game} frozen={frozen} onPlaced={strip.reload} />
       ) : (
         <EmptyState icon={<CircleAlertIcon />} title={tm('pos.chooseGame')} />
       )}
@@ -192,12 +210,12 @@ type GameData = {
 type GameState = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; data: GameData };
 
 async function readGame(game: MerchantGame): Promise<GameState> {
-  const [store, prices, recent, saved] = [
-    await apiRequest<StoreGame>(`/api/catalog/games/${encodeURIComponent(game.slug)}`),
-    await getSellingPrices(game.id),
-    await getRecentPlayers(game.id),
-    await getSavedPlayers(game.id),
-  ];
+  const [store, prices, recent, saved] = await Promise.all([
+    apiRequest<StoreGame>(`/api/catalog/games/${encodeURIComponent(game.slug)}`),
+    getSellingPrices(game.id),
+    getRecentPlayers(game.id),
+    getSavedPlayers(game.id),
+  ]);
   if (!store.ok || !prices.ok) return { status: 'failed' };
   return {
     status: 'ready',
@@ -218,12 +236,20 @@ function priceLine(row: SellingPriceRow): string {
 }
 
 /** PS1–PS3: one game's packs, the player fields and the confirmation. */
-function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => void }) {
+function GamePanel({
+  game,
+  frozen,
+  onPlaced,
+}: {
+  game: MerchantGame;
+  frozen: boolean;
+  onPlaced: () => void;
+}) {
   const [state, setState] = useState<GameState>({ status: 'loading' });
   const [values, setValues] = useState<FieldValues>({});
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<SellingPriceRow | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [needPlayer, setNeedPlayer] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -245,10 +271,19 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
       ),
     [ready, query],
   );
+  // One object while the typed values stay the same: the sheet checks the player again only
+  // when they change, never on a re-render (audit A06-6, BK4's quota).
+  const fields = useMemo(
+    () =>
+      ready && ready.store.fields.length > 0
+        ? (checkFields(ready.store.fields, values) as { values: FieldValues }).values
+        : {},
+    [ready, values],
+  );
 
   const open = useCallback(
     (row: SellingPriceRow) => {
-      if (!ready || !row.available) return;
+      if (frozen || !ready || !row.available) return;
       const product = kinds.get(row.productId);
       if (product?.kind === 'direct' && !checkFields(ready.store.fields, values).ok) {
         setNeedPlayer(true);
@@ -258,7 +293,7 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
       setNeedPlayer(false);
       setChosen(row);
     },
-    [ready, kinds, values],
+    [frozen, ready, kinds, values],
   );
 
   useEffect(() => {
@@ -390,11 +425,25 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
             {tm('pos.searchHint')}
           </span>
         </div>
-        {notice && (
-          <p className="text-sm text-status-success-foreground" role="status">
-            {notice}
-          </p>
-        )}
+        {notice &&
+          (notice.saleSaved ? (
+            <p className="text-sm text-status-success-foreground" role="status">
+              {tm('pos.placed', { number: notice.number })}
+            </p>
+          ) : (
+            <div className="flex flex-col items-start gap-1">
+              <FormAlert tone="warning">
+                {tm('pos.saleNotSaved', { number: notice.number })}
+              </FormAlert>
+              <Link
+                href={`/orders/${notice.id}`}
+                prefetch={false}
+                className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
+              >
+                {tm('pos.saleSetOnOrder')}
+              </Link>
+            </div>
+          ))}
         {packs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{tm('pos.noPacks')}</p>
         ) : (
@@ -403,7 +452,7 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
               <li key={row.productId}>
                 <button
                   type="button"
-                  disabled={!row.available}
+                  disabled={frozen || !row.available}
                   onClick={() => open(row)}
                   className="flex h-full min-h-28 w-full flex-col items-start gap-1 rounded-lg border border-border bg-surface p-3 text-start transition-colors hover:border-primary disabled:opacity-50"
                 >
@@ -446,14 +495,10 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
             key={chosen.productId}
             row={chosen}
             store={data.store}
-            fields={
-              direct
-                ? (checkFields(data.store.fields, values) as { values: FieldValues }).values
-                : {}
-            }
-            onPlaced={(number) => {
+            fields={fields}
+            onPlaced={(placed) => {
               setChosen(null);
-              setNotice(tm('pos.placed', { number }));
+              setNotice(placed);
               onPlaced();
               void load();
             }}
@@ -467,6 +512,9 @@ function GamePanel({ game, onPlaced }: { game: MerchantGame; onPlaced: () => voi
 
 type Check = { status: 'idle' } | { status: 'checking' } | { status: 'done'; check: PlayerCheck };
 
+/** A placed sale, and whether the selling price typed in the sheet was written (A06-7). */
+type Notice = { id: string; number: string; saleSaved: boolean };
+
 /** PS3: the pack, quantity, id with its check, the price paid, the editable selling price. */
 function ConfirmSale({
   row,
@@ -478,7 +526,7 @@ function ConfirmSale({
   row: SellingPriceRow;
   store: StoreGame;
   fields: FieldValues;
-  onPlaced: (number: string) => void;
+  onPlaced: (placed: Notice) => void;
   onPriceChanged: () => void;
 }) {
   const product = store.products.find((item) => item.id === row.productId);
@@ -503,7 +551,11 @@ function ConfirmSale({
   const [invalid, setInvalid] = useState<'quantity' | 'price' | 'player' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
-  const send = useIdempotentRequest();
+  // The price paid per unit, updated in place by a `PRICE_CHANGED` refusal (A06-2).
+  const [purchase, setPurchase] = useState(row.purchaseUsdUnits ?? 0);
+  // S20 MT2: the terms sheet, and that they were accepted after a refused confirmation.
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const { ref, focusInvalid } = useFocusInvalid();
 
   useEffect(() => {
@@ -526,11 +578,11 @@ function ConfirmSale({
     check.check.result !== 'valid' &&
     check.check.result !== 'not_supported';
   const units = Number(quantity);
-  const purchase = row.purchaseUsdUnits ?? 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
+    setTermsAccepted(false);
     if (!/^\d{1,2}$/.test(quantity) || units < 1 || units > max) {
       setInvalid('quantity');
       return focusInvalid();
@@ -554,17 +606,30 @@ function ConfirmSale({
       expectedUnitPriceUsdUnits: purchase,
       confirmPlayer: needsConfirm && confirmed,
     };
-    const result = await send(JSON.stringify(body), (key) => createOrder(body, key));
+    // The buy box's key rule, kept in session storage per pack: closing the sheet after a lost
+    // answer and confirming again replays the first order instead of paying twice (A06-1).
+    const result = await sendAttempt(
+      row.productId,
+      JSON.stringify(body),
+      (key) => createOrder(body, key),
+      freesKey,
+    );
     if (!result.ok) {
       setPending(false);
-      if (result.reason === 'PRICE_CHANGED') onPriceChanged();
+      if (result.reason === 'PRICE_CHANGED') {
+        const price = (result.details as { unitPriceUsdUnits?: unknown } | undefined)
+          ?.unitPriceUsdUnits;
+        if (typeof price === 'number') setPurchase(price);
+        onPriceChanged();
+      }
+      if (result.reason === 'MERCHANT_TERMS_REQUIRED') setTermsOpen(true);
       return setFailure(result.reason);
     }
     // PS3: a price typed here is this sale's own (`manual`); the pack's stays as it was.
     const typed = sale && (sale.currency !== startCurrency || amount !== initialAmount);
-    if (sale && typed) await setOrderSale(result.data.id, sale);
+    const saleSaved = sale && typed ? (await setOrderSale(result.data.id, sale)).ok : true;
     setPending(false);
-    onPlaced(result.data.number);
+    onPlaced({ id: result.data.id, number: result.data.number, saleSaved });
   }
 
   return (
@@ -651,7 +716,18 @@ function ConfirmSale({
           onAmount={setAmount}
         />
         <p className="text-xs text-muted-foreground">{tm('pos.sellingHint')}</p>
-        {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+        {termsAccepted ? (
+          <FormAlert tone="success">{tm('pos.termsAccepted')}</FormAlert>
+        ) : (
+          failure && <FormAlert>{errorText(failure)}</FormAlert>
+        )}
+        {termsOpen && (
+          <TermsSheet
+            open={termsOpen}
+            onOpenChange={setTermsOpen}
+            onAccepted={() => setTermsAccepted(true)}
+          />
+        )}
         <DialogFooter>
           <Button type="submit" size="xl" disabled={pending || check.status === 'checking'}>
             {tm('pos.confirm')}
@@ -664,6 +740,8 @@ function ConfirmSale({
 
 type Strip = {
   orders: OrderSummary[] | null;
+  /** The first read failed: the strip offers a retry instead of a lasting skeleton (A06-8). */
+  failed: boolean;
   lastDelivered: string | null;
   reload: () => void;
 };
@@ -671,9 +749,12 @@ type Strip = {
 /** PS1, PS5: the last 10 orders, read again on each order event (S09 LT2). */
 function useOrderStrip(): Strip {
   const [orders, setOrders] = useState<OrderSummary[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const reload = useCallback(() => {
+    setFailed(false);
     void listOrders().then((result) => {
       if (result.ok) setOrders(result.data.items.slice(0, 10));
+      else setFailed(true);
     });
   }, []);
   useEffect(() => reload(), [reload]);
@@ -681,14 +762,21 @@ function useOrderStrip(): Strip {
     if (event.type === 'order' || event.type === 'resync') reload();
   });
   const lastDelivered = orders?.find((order) => order.stage === 'delivered')?.id ?? null;
-  return { orders, lastDelivered, reload };
+  return { orders, failed, lastDelivered, reload };
 }
 
 function OrderStrip({ strip }: { strip: Strip }) {
   return (
     <Card className="gap-3">
       <h2 className="font-bold">{tm('pos.strip')}</h2>
-      {strip.orders === null ? (
+      {strip.orders === null && strip.failed ? (
+        <div className="flex flex-col items-start gap-2" role="alert">
+          <p className="text-sm">{tm('pos.stripFailed')}</p>
+          <Button variant="outline" size="xl" onClick={strip.reload}>
+            {tm('common.retry')}
+          </Button>
+        </div>
+      ) : strip.orders === null ? (
         <Skeleton className="h-16 w-full" />
       ) : strip.orders.length === 0 ? (
         <p className="text-sm text-muted-foreground">{tm('pos.stripEmpty')}</p>
@@ -720,6 +808,23 @@ function OrderStrip({ strip }: { strip: Strip }) {
                   >
                     <PrinterIcon aria-hidden="true" />
                     {tm('pos.printReceipt')}
+                  </Button>
+                )}
+                {/* PS5: a delivered code pack prints its codes too (Q27). */}
+                {order.stage === 'delivered' && order.productKind === 'code' && (
+                  <Button
+                    variant="ghost"
+                    size="xl"
+                    render={
+                      <Link
+                        href={`/orders/${order.id}/print?paper=58&content=codes`}
+                        prefetch={false}
+                        target="_blank"
+                      />
+                    }
+                  >
+                    <TicketIcon aria-hidden="true" />
+                    {tm('pos.printCodes')}
                   </Button>
                 )}
               </span>

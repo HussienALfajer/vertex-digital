@@ -198,6 +198,7 @@ async function summaries(
       number: order.number,
       stage: orderCustomerStage(order.status),
       productNameAr,
+      productKind: order.kind,
       game: {
         id: game.id,
         slug: game.slug,

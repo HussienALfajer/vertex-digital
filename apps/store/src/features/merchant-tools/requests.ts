@@ -2,7 +2,6 @@ import {
   type AlertSettings,
   type BulkCheckRequest,
   type BulkCheckResult,
-  type CustomerPrices,
   ERROR_CODES,
   type ErrorCode,
   type MerchantAlertPage,
@@ -11,6 +10,8 @@ import {
   type MerchantPriceList,
   type OrderPrint,
   type OrderSale,
+  PRICE_LIST_CURRENCIES,
+  PRICE_LIST_MODES,
   type ReceiptSettings,
   type RecentPlayers,
   type ReleasedCodes,
@@ -116,12 +117,6 @@ export function getRecentPlayers(gameId: string, fetcher: Fetcher = fetch) {
 
 export function getSavedPlayers(gameId: string, fetcher: Fetcher = fetch) {
   return apiRequest<SavedPlayerList>(`/api/saved-players?gameId=${encodeURIComponent(gameId)}`, {
-    fetcher,
-  });
-}
-
-export function getGamePrices(slug: string, fetcher: Fetcher = fetch) {
-  return apiRequest<CustomerPrices>(`/api/catalog/games/${encodeURIComponent(slug)}/prices`, {
     fetcher,
   });
 }
@@ -236,6 +231,26 @@ export function priceListQuery(options: PriceListOptions, page?: number): string
   query.set('unavailable', String(options.unavailable));
   if (page !== undefined) query.set('page', String(page));
   return query.toString();
+}
+
+const oneOf = <Value extends string>(
+  values: readonly Value[],
+  value: string | null,
+  fallback: Value,
+) => (values.includes(value as Value) ? (value as Value) : fallback);
+
+/** The options `priceListQuery` wrote, read back from an address (the print page and its back). */
+export function priceListOptionsFrom(search: URLSearchParams): PriceListOptions {
+  return {
+    gameIds: (search.get('gameIds') ?? '').split(',').filter((id) => id.length > 0),
+    mode: oneOf<MerchantPriceList['mode']>(PRICE_LIST_MODES, search.get('mode'), 'selling'),
+    currency: oneOf<MerchantPriceList['currency']>(
+      PRICE_LIST_CURRENCIES,
+      search.get('currency'),
+      'syp',
+    ),
+    unavailable: search.get('unavailable') === 'true',
+  };
 }
 
 export function getPriceList(options: PriceListOptions, fetcher: Fetcher = fetch) {

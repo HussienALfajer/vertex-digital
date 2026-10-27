@@ -24,6 +24,9 @@ import ExcelJS from 'exceljs';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
+import { FilesService } from '../src/modules/files/index.js';
+import { MerchantCounterService } from '../src/modules/merchant-tools/merchant-counter.service.js';
+import { RatesService } from '../src/modules/rates/index.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
   api,
@@ -891,5 +894,233 @@ describe('the verification page and the logo upload (S21 VF3, BR3)', () => {
     await test.db.update(customers).set({ frozenAt: new Date() }).where(eq(customers.id, shop.id));
     const frozen = await client.post('/api/merchant/logo', { cookie: shop.cookie, form: form() });
     expect(await json(frozen, 403)).toMatchObject({ code: 'ACCOUNT_FROZEN' });
+  });
+});
+
+describe('the counter tools after audit A06', () => {
+  /** A player id no earlier run has cached. */
+  const freshId = () => String(7_200_000_000 + Math.floor(Math.random() * 700_000_000));
+  const bulk = (cookie: string, text: string) =>
+    send('POST', '/api/merchant/bulk/check', cookie, { gameId: ids.gameId, text });
+
+  it('A06-32: checks a bulk list’s distinct ids five at a time, never one after another', async () => {
+    const shop = await merchant(usd(10));
+    let running = 0;
+    let most = 0;
+    const spy = vi
+      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
+      .mockImplementation(async () => {
+        running += 1;
+        most = Math.max(most, running);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        running -= 1;
+        return { valid: true, playerName: 'Nour' };
+      });
+    const text = Array.from({ length: 10 }, () => `${freshId()},${item.nameAr}`).join('\n');
+    const result = await json<{ lines: { check: { result: string } | null }[] }>(
+      await bulk(shop.cookie, text),
+      200,
+    );
+    const calls = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(calls).toBe(10);
+    expect(result.lines.map((line) => line.check?.result)).toEqual(Array(10).fill('valid'));
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(5);
+  });
+
+  it('A06-32: answers the ids not started within the time budget as not checked, spending no quota', async () => {
+    const shop = await merchant(usd(10));
+    const budget = vi
+      .spyOn(MerchantCounterService.prototype, 'bulkCheckBudgetMs')
+      .mockReturnValue(100);
+    const spy = vi
+      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
+      .mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return { valid: true, playerName: 'Nour' };
+      });
+    const text = Array.from({ length: 10 }, () => `${freshId()},${item.nameAr}`).join('\n');
+    const result = await json<{
+      lines: { check: { result: string; reason?: string } | null; needsConfirmation: boolean }[];
+    }>(await bulk(shop.cookie, text), 200);
+    const calls = spy.mock.calls.length;
+    spy.mockRestore();
+    budget.mockRestore();
+    // The first five started at once; the others came after the budget.
+    expect(calls).toBe(5);
+    expect(result.lines.filter((line) => line.check?.result === 'valid')).toHaveLength(5);
+    expect(
+      result.lines.filter(
+        (line) =>
+          line.check?.result === 'unavailable' &&
+          line.check.reason === 'supplier' &&
+          line.needsConfirmation,
+      ),
+    ).toHaveLength(5);
+    const [hits] = await test.db
+      .select({ count: customerRateLimits.count })
+      .from(customerRateLimits)
+      .where(eq(customerRateLimits.key, `player-check:customer:${shop.id}`));
+    expect(hits?.count).toBe(5);
+  });
+
+  it('A06-34: refuses the bulk check of a frozen merchant, before the terms, and past 30 an hour', async () => {
+    const frozen = await merchant(0);
+    await test.db
+      .update(customers)
+      .set({ frozenAt: new Date() })
+      .where(eq(customers.id, frozen.id));
+    expect(await json(await bulk(frozen.cookie, `51234567,${item.nameAr}`), 403)).toMatchObject({
+      code: 'ACCOUNT_FROZEN',
+    });
+
+    const unsigned = await seedCustomer(test.db);
+    seeded.push(unsigned.id);
+    await test.db
+      .update(customers)
+      .set({ accountType: 'merchant' })
+      .where(eq(customers.id, unsigned.id));
+    await test.db.insert(merchantProfiles).values({
+      customerId: unsigned.id,
+      tradeName: 'محل النور',
+      governorate: 'aleppo',
+      city: 'اعزاز',
+      grantedAt: new Date(Date.now() - 60_000),
+    });
+    const unsignedCookie = await client.signInCustomer(unsigned.email);
+    expect(await json(await bulk(unsignedCookie, `51234567,${item.nameAr}`), 409)).toMatchObject({
+      code: 'MERCHANT_TERMS_REQUIRED',
+    });
+
+    const busy = await merchant(0);
+    await test.db.insert(customerRateLimits).values({
+      id: newId(),
+      key: `bulk-check:customer:${busy.id}`,
+      count: 30,
+      lastRequest: Date.now(),
+    });
+    expect(await json(await bulk(busy.cookie, `51234567,${item.nameAr}`), 429)).toMatchObject({
+      code: 'RATE_LIMITED',
+    });
+  });
+
+  it('A06-34: refuses a sale price from a frozen merchant and from a revoked one', async () => {
+    const sale = { currency: 'usd', amountUnits: usd(2) };
+    const frozen = await merchant();
+    const frozenOrder = await buy(frozen.cookie);
+    await test.db
+      .update(customers)
+      .set({ frozenAt: new Date() })
+      .where(eq(customers.id, frozen.id));
+    expect(
+      await json(await send('PUT', `/api/orders/${frozenOrder.id}/sale`, frozen.cookie, sale), 403),
+    ).toMatchObject({ code: 'ACCOUNT_FROZEN' });
+
+    const revoked = await merchant();
+    const revokedOrder = await buy(revoked.cookie);
+    await test.db
+      .update(customers)
+      .set({ accountType: 'customer' })
+      .where(eq(customers.id, revoked.id));
+    await test.db
+      .update(merchantProfiles)
+      .set({ revokedAt: new Date() })
+      .where(eq(merchantProfiles.customerId, revoked.id));
+    expect(
+      await json(
+        await send('PUT', `/api/orders/${revokedOrder.id}/sale`, revoked.cookie, sale),
+        403,
+      ),
+    ).toMatchObject({ code: 'NOT_MERCHANT' });
+  });
+
+  it('A06-36: sets no sale price on an order placed before the grant', async () => {
+    const shop = await merchant();
+    const before = await buy(shop.cookie);
+    await test.db
+      .update(merchantProfiles)
+      .set({ grantedAt: new Date() })
+      .where(eq(merchantProfiles.customerId, shop.id));
+    const sale = { currency: 'usd', amountUnits: usd(2) };
+    expect(
+      await json(await send('PUT', `/api/orders/${before.id}/sale`, shop.cookie, sale), 404),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    const after = await buy(shop.cookie);
+    expect((await send('PUT', `/api/orders/${after.id}/sale`, shop.cookie, sale)).status).toBe(200);
+  });
+
+  it('A06-35, A06-41: checks a SYP sale price against $10,000 at the order’s rate, not today’s', async () => {
+    const shop = await merchant();
+    const order = await buy(shop.cookie);
+    // Today's rate twice the order's (13,000): a check at today's rate let 200,000,000 pass.
+    const current = RatesService.prototype.current;
+    const rate = vi.spyOn(RatesService.prototype, 'current').mockImplementation(async function (
+      this: RatesService,
+      ...args
+    ) {
+      const found = await current.apply(this, args);
+      return found && { ...found, sypPerUsd: '26000' };
+    });
+    const refused = await json<{ details: { path: string[]; message: string }[] }>(
+      await send('PUT', `/api/orders/${order.id}/sale`, shop.cookie, {
+        currency: 'syp',
+        amountUnits: 20_000_000_000,
+      }),
+      400,
+    );
+    expect(refused.details).toEqual([
+      { path: ['amountUnits'], message: "Above $10,000 at the order's rate" },
+    ]);
+    expect(
+      await json(
+        await send('PUT', `/api/orders/${order.id}/sale`, shop.cookie, {
+          currency: 'syp',
+          amountUnits: 13_000_000_000,
+        }),
+        200,
+      ),
+    ).toMatchObject({ currency: 'syp', unitUsdUnits: usd(10_000) });
+    rate.mockRestore();
+  });
+
+  it('A06-39: keeps a WhatsApp saved while a logo uploads', async () => {
+    const shop = await merchant(0);
+    const prepare = FilesService.prototype.prepare;
+    const spy = vi.spyOn(FilesService.prototype, 'prepare').mockImplementationOnce(async function (
+      this: FilesService,
+      ...args
+    ) {
+      // The settings saved between the upload's start and its transaction.
+      await json(
+        await send('PUT', '/api/merchant/receipt-settings', shop.cookie, {
+          showWhatsapp: true,
+          whatsapp: '0933 123 456',
+          logoFileId: null,
+        }),
+        200,
+      );
+      return prepare.apply(this, args);
+    });
+    const png = await sharp({
+      create: { width: 300, height: 300, channels: 3, background: '#000000' },
+    })
+      .png()
+      .toBuffer();
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'logo.png');
+    const uploaded = await json<{ fileId: string }>(
+      await client.post('/api/merchant/logo', { cookie: shop.cookie, form }),
+      201,
+    );
+    spy.mockRestore();
+    expect(
+      await json(await client.get('/api/merchant/receipt-settings', { cookie: shop.cookie }), 200),
+    ).toEqual({
+      tradeName: 'محل النور',
+      showWhatsapp: true,
+      whatsapp: '+963933123456',
+      logoFileId: uploaded.fileId,
+    });
   });
 });

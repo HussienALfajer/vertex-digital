@@ -1,13 +1,15 @@
 import type { Page } from '@playwright/test';
+import { MERCHANT_LEVELS_MAX, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
+import { nextId } from './catalog-mock';
 import { CUSTOMER_IDS } from './customers-mock';
 import { expect, PASSWORD, screenshot, TOTP_CODE, test } from './test';
 
 /*
  * Volume levels in the panel (S21 PR 1, F39) against the mocked API: create a level with
  * re-authentication, the refusal of a second level at the same threshold, edit and archive, the
- * merchants list's level column and filter, and the level on the customer profile, with RTL
- * screenshots in both themes.
+ * merchants list's level column and filter, the level on the customer profile and its list's
+ * source there, "إضافة مستوى" disabled at the limit, with RTL screenshots in both themes.
  */
 
 const m = ar.merchants;
@@ -92,6 +94,35 @@ test.describe('merchant levels', () => {
     await page.goto(`/customers/${CUSTOMER_IDS.sara}`);
     await expect(page.getByText(m.profile.thisMonth)).toBeVisible();
     await expect(page.getByRole('link', { name: 'فضي' })).toBeVisible();
+    // LV5: with no assigned list, the price comes from the level (audit A06-50).
+    await expect(
+      page.getByText(ar.customers.pricing.fromLevel.replace('{{name}}', 'فضي')),
+    ).toBeVisible();
+  });
+
+  test('"إضافة مستوى" is disabled at 10 live levels, with the reason (LV1, A06-51)', async ({
+    page,
+    admin,
+  }) => {
+    admin.signedIn = true;
+    admin.merchants.levels = Array.from({ length: MERCHANT_LEVELS_MAX }, (_, index) => ({
+      id: nextId(),
+      nameAr: `مستوى ${index + 1}`,
+      monthlyThresholdUsdUnits: (index + 1) * 100 * 1_000_000,
+      priceList: { id: ROOT_PRICE_LIST_IDS.wholesale, name: 'الجملة', priceKind: 'wholesale' },
+      createdAt: '2026-10-20T09:00:00.000Z',
+      archivedAt: null,
+    }));
+    await page.goto('/merchants/levels');
+    await expect(page.getByRole('cell', { name: 'مستوى 10' })).toBeVisible();
+    await expect(page.getByRole('button', { name: l.add })).toBeDisabled();
+    await expect(
+      page.getByText(l.full.replace('{{max}}', String(MERCHANT_LEVELS_MAX))),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: l.archive }).first().click();
+    await page.getByRole('alertdialog').getByRole('button', { name: l.archive }).click();
+    await expect(page.getByRole('button', { name: l.add })).toBeEnabled();
   });
 });
 

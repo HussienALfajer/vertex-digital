@@ -1,15 +1,27 @@
 import {
   ALERT_EVENTS_KEEP_DAYS,
   type AlertKind,
-  orderTotal,
   type ProductAvailability,
   RECENT_PLAYERS_DAYS,
   RECENT_PLAYERS_PER_GAME,
-  saleProfit,
   WATCH_SUGGESTION_DAYS,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
-import type { Executor } from '../client.js';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { type Executor, readAll } from '../client.js';
 import { accountPriceList } from '../customers/price-lists.js';
 import { productRoutingStates, type RoutingContext } from '../pricing/index.js';
 import {
@@ -18,6 +30,7 @@ import {
   catalogProducts,
   merchantAlertEvents,
   merchantOrderSales,
+  merchantProfiles,
   merchantWatches,
   orders,
 } from '../schema/index.js';
@@ -79,6 +92,31 @@ export function shownGames(db: Executor) {
     );
 }
 
+/**
+ * PS1 (Q27): the merchant's units bought in the last 30 days per game, net of refunded units
+ * (orders of the account by `orders_customer_id_created_at_idx`; reservations not yet paid left out).
+ */
+export async function recentGameUnits(
+  db: Executor,
+  customerId: string,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      gameId: orders.gameId,
+      units: sql<number>`sum(${orders.quantity} - ${orders.refundedQuantity})::int`,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.customerId, customerId),
+        gte(orders.createdAt, sql`now() - interval '30 days'`),
+        isNotNull(orders.paidAt),
+      ),
+    )
+    .groupBy(orders.gameId);
+  return new Map(rows.map((row) => [row.gameId, Math.max(0, row.units)]));
+}
+
 /** A game's unarchived packs in the store's order (paused ones included). */
 export function gameProducts(db: Executor, gameIds: readonly string[]) {
   if (gameIds.length === 0) return Promise.resolve([]);
@@ -108,9 +146,23 @@ export interface DashboardFacts {
 }
 
 /**
+ * DB2, SP5 (audit A06-36): an order the merchant paid (not owner-funded) while the account was a
+ * granted merchant, as `merchantBranding` reads the grant; with `merchant_profiles` joined on the
+ * order's customer.
+ */
+export function paidAsMerchant() {
+  return and(
+    eq(orders.payer, 'customer'),
+    lte(merchantProfiles.grantedAt, orders.createdAt),
+    or(isNull(merchantProfiles.revokedAt), gt(merchantProfiles.revokedAt, orders.createdAt)),
+  );
+}
+
+/**
  * DB2, DB4, DB5: the merchant's orders that finished delivering in `[from, to)` (at least one unit
- * delivered), with their sale rows: sales and profit (SP6) of the orders with a sale, the count of
- * those without, and the products sold most.
+ * delivered) and that `paidAsMerchant`, with their sale rows: sales and profit (SP6) of the orders
+ * with a sale, the count of those without, and the products sold most. Summed in SQL (audit
+ * A06-40): only the totals and the top rows are read.
  */
 export async function dashboardFacts(
   db: Executor,
@@ -119,56 +171,68 @@ export async function dashboardFacts(
   to: Date,
   topCount: number,
 ): Promise<DashboardFacts> {
-  const rows = await db
-    .select({
-      productId: orders.productId,
-      deliveredQuantity: orders.deliveredQuantity,
-      unitPriceUsdUnits: orders.unitPriceUsdUnits,
-      unitUsdUnits: merchantOrderSales.unitUsdUnits,
-      nameAr: catalogProducts.nameAr,
-      gameNameAr: catalogGames.nameAr,
-    })
-    .from(orders)
-    .leftJoin(merchantOrderSales, eq(merchantOrderSales.orderId, orders.id))
-    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
-    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
-    .where(
-      and(
-        eq(orders.customerId, customerId),
-        isNotNull(orders.finishedAt),
-        gte(orders.finishedAt, from),
-        lt(orders.finishedAt, to),
-        sql`${orders.deliveredQuantity} > 0`,
-      ),
-    );
-  let salesUsdUnits = 0;
-  let profitUsdUnits = 0;
-  let ordersWithoutSale = 0;
-  const byProduct = new Map<string, DashboardFacts['topProducts'][number]>();
-  for (const row of rows) {
-    const sale = row.unitUsdUnits === null ? null : { unitUsdUnits: row.unitUsdUnits };
-    const profit = saleProfit(row, sale);
-    const sales = sale === null ? 0 : orderTotal(sale.unitUsdUnits, row.deliveredQuantity);
-    if (profit === null) ordersWithoutSale += 1;
-    else {
-      salesUsdUnits += sales;
-      profitUsdUnits += profit;
-    }
-    const top = byProduct.get(row.productId) ?? {
+  const delivered = and(
+    eq(orders.customerId, customerId),
+    isNotNull(orders.finishedAt),
+    gte(orders.finishedAt, from),
+    lt(orders.finishedAt, to),
+    sql`${orders.deliveredQuantity} > 0`,
+    paidAsMerchant(),
+  );
+  // SP6: refunded units count neither as a sale nor as a cost; no sale row, no sale.
+  const sales = sql`case when ${merchantOrderSales.orderId} is null then 0
+    else ${orders.deliveredQuantity}::numeric * ${merchantOrderSales.unitUsdUnits} end`;
+  const units = sql`sum(${orders.deliveredQuantity})`;
+  const [totals, top] = await readAll(db, [
+    () =>
+      db
+        .select({
+          salesUsdUnits: sql<string>`coalesce(sum(${sales}), 0)::text`,
+          profitUsdUnits: sql<string>`coalesce(sum(${orders.deliveredQuantity}::numeric *
+            (${merchantOrderSales.unitUsdUnits} - ${orders.unitPriceUsdUnits})), 0)::text`,
+          ordersWithoutSale: sql<string>`count(*) filter (where ${merchantOrderSales.orderId} is null)::text`,
+        })
+        .from(orders)
+        .leftJoin(merchantOrderSales, eq(merchantOrderSales.orderId, orders.id))
+        .innerJoin(merchantProfiles, eq(merchantProfiles.customerId, orders.customerId))
+        .where(delivered),
+    () =>
+      db
+        .select({
+          productId: orders.productId,
+          gameNameAr: sql<string>`min(${catalogGames.nameAr})`,
+          nameAr: catalogProducts.nameAr,
+          units: sql<string>`${units}::text`,
+          salesUsdUnits: sql<string>`coalesce(sum(${sales}), 0)::text`,
+        })
+        .from(orders)
+        .leftJoin(merchantOrderSales, eq(merchantOrderSales.orderId, orders.id))
+        .innerJoin(merchantProfiles, eq(merchantProfiles.customerId, orders.customerId))
+        .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+        .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+        .where(delivered)
+        .groupBy(orders.productId, catalogProducts.id)
+        .orderBy(desc(units), desc(sql`sum(${sales})`), asc(orders.productId))
+        .limit(topCount),
+  ]);
+  const amount = (value: string | undefined) => {
+    const number = Number(value ?? 0);
+    if (!Number.isSafeInteger(number)) throw new RangeError('Sales exceed the safe range');
+    return number;
+  };
+  const [sum] = totals;
+  return {
+    salesUsdUnits: amount(sum?.salesUsdUnits),
+    profitUsdUnits: amount(sum?.profitUsdUnits),
+    ordersWithoutSale: amount(sum?.ordersWithoutSale),
+    topProducts: top.map((row) => ({
       productId: row.productId,
       gameNameAr: row.gameNameAr,
       nameAr: row.nameAr,
-      units: 0,
-      salesUsdUnits: 0,
-    };
-    top.units += row.deliveredQuantity;
-    top.salesUsdUnits += sales;
-    byProduct.set(row.productId, top);
-  }
-  const topProducts = [...byProduct.values()]
-    .sort((a, b) => b.units - a.units || b.salesUsdUnits - a.salesUsdUnits)
-    .slice(0, topCount);
-  return { salesUsdUnits, profitUsdUnits, ordersWithoutSale, topProducts };
+      units: amount(row.units),
+      salesUsdUnits: amount(row.salesUsdUnits),
+    })),
+  };
 }
 
 export interface WatchedRows {

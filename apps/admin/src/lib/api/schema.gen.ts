@@ -6970,6 +6970,7 @@ export interface components {
             id: string;
             slug: string;
             nameAr: string;
+            recentUnits: number;
         };
         SellingSettings: {
             markupBp: number | null;
@@ -7497,6 +7498,7 @@ export interface components {
             number: string;
             stage: components["schemas"]["OrderStage"];
             productNameAr: string;
+            productKind: components["schemas"]["ProductKind"];
             game: {
                 /** Format: uuid */
                 id: string;

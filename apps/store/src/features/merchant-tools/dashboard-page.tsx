@@ -24,7 +24,7 @@ type Period = MerchantDashboard['period'];
 export function DashboardPage() {
   const [period, setPeriod] = useState<Period>('today');
   const read = useCallback(() => getDashboard(period), [period]);
-  const { state, reload } = useMerchantRead(read);
+  const { state, reload, refreshing } = useMerchantRead(read);
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,13 +34,16 @@ export function DashboardPage() {
         onValueChange={(value) => value[0] && setPeriod(value[0])}
       >
         {(['today', 'month'] as const).map((value) => (
-          <ToggleGroupItem key={value} value={value} className="h-10 px-4 text-md">
+          <ToggleGroupItem key={value} value={value} className="h-11 px-4 text-md">
             {tm(`dashboard.periods.${value}`)}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
       {state.status === 'ready' ? (
-        <Dashboard data={state.data} />
+        // The other period's figures are dimmed until its own answer lands (A06-9).
+        <div aria-busy={refreshing} className={refreshing ? 'opacity-60' : undefined}>
+          <Dashboard data={state.data} />
+        </div>
       ) : (
         <MerchantPageStatus
           state={state}

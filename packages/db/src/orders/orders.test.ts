@@ -36,6 +36,7 @@ import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '.
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
 import { dashboardFacts, recentPlayers } from '../merchant-tools/reads.js';
+import { setOrderSale } from '../merchant-tools/sales.js';
 import {
   sendStatementReady,
   statementEmailMerchants,
@@ -4170,6 +4171,101 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     expect(await netPurchases(db, shop, from, new Date(Date.now() + 60_000))).toBe(price * 2);
   });
 
+  it('A06-36: leaves owner-funded orders and orders from before the grant off the dashboard', async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(20));
+    const early = (await buy(request(shop, { id: item.id, price }))).order;
+    await pool.query('update merchant_profiles set granted_at = now() where customer_id = $1', [
+      shop,
+    ]);
+    const counted = (await buy(request(shop, { id: item.id, price }))).order;
+    const gift = (
+      await db.transaction((tx) =>
+        adminPurchaseOrder(tx, context(), {
+          adminId: newId(),
+          purpose: 'gift',
+          customerId: shop,
+          productId: item.id,
+          quantity: 1,
+          fields: { player_id: '5123456789' },
+          expectedUnitPriceUsdUnits: item.price,
+          confirmPlayer: false,
+          reason: 'A gift from the owner',
+          customerNote: null,
+          idempotencyKey: newId(),
+          requestHash: hash({ gift: newId() }),
+          fakeEnabled: true,
+          purchasesStopped: false,
+          playerCheck: async () => null,
+        }),
+      )
+    ).order;
+    expect(gift.payer).toBe('owner');
+    for (const order of [early, counted, gift]) {
+      await apply(await send(order, item), {
+        status: 'delivered',
+        quantity: 1,
+        supplierOrderId: `f-${newId()}`,
+      });
+    }
+    const facts = await dashboardFacts(
+      db,
+      shop,
+      new Date(Date.now() - 60_000),
+      new Date(Date.now() + 60_000),
+      5,
+    );
+    expect(facts).toEqual({
+      salesUsdUnits: 0,
+      profitUsdUnits: 0,
+      ordersWithoutSale: 1,
+      topProducts: [expect.objectContaining({ productId: item.id, units: 1, salesUsdUnits: 0 })],
+    });
+  });
+
+  it('A06-41: refuses a SYP sale price of an order without a rate, writing nothing', async () => {
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(20));
+    const { order } = await buy(
+      request(shop, { id: item.id, price: await wholesalePrice(item.id) }),
+    );
+    const result = await db.transaction((tx) =>
+      setOrderSale(
+        tx,
+        { id: order.id, customerId: shop, displayRateId: null },
+        { currency: 'syp', amountUnits: 15_000_00 },
+      ),
+    );
+    expect(result).toEqual({ ok: false, reason: 'no_rate' });
+    expect(await saleOf(order.id)).toBeUndefined();
+  });
+
+  it('nets a refund against the month of the purchase it repays (Q26, audit A06-23)', async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(20));
+    const from = new Date(Date.now() - 60_000);
+    const kept = (await buy(request(shop, { id: item.id, price }))).order;
+    const failing = (await buy(request(shop, { id: item.id, price }))).order;
+    // A month's end between the purchases and the refund: the refund posts in the next month.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const midnight = new Date();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const result = await apply(await send(failing, item), {
+      status: 'failed',
+      reason: 'Player not found',
+      inputRejected: true,
+      supplierErrorCode: 'PLAYER_NOT_FOUND',
+    });
+    expect(result.order.status).toBe('refunded');
+    const end = new Date(Date.now() + 60_000);
+    // The month that paid keeps only what stayed spent; the next month is not lowered by it.
+    expect(await netPurchases(db, shop, from, midnight)).toBe(price);
+    expect(await netPurchases(db, shop, midnight, end)).toBe(0);
+    expect(kept.status).toBe('paid');
+  });
+
   it('moves a merchant to the level their month reached, below an assigned list (LV3–LV5)', async () => {
     await archiveLevels();
     const item = await product({ cost: usd(1) });
@@ -4449,6 +4545,50 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     await expect(
       pool.query('delete from merchant_alert_events where id = $1', [rows[0]?.id]),
     ).rejects.toThrow(/kept 90 days/);
+  });
+
+  it('A06-37: sends at most one watch digest an hour, still writing the events', async () => {
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(1));
+    await pool.query(
+      'insert into merchant_watches (id, customer_id, game_id) values ($1, $2, $3)',
+      [newId(), shop, item.game],
+    );
+    const compare = () =>
+      db.transaction((tx) =>
+        compareMerchantWatches(
+          tx,
+          { jobs: context().jobs, now: new Date(), fakeEnabled: true },
+          shop,
+        ),
+      );
+    const stock = async (inStock: boolean) => {
+      await pool.query('update supplier_offers set in_stock = $2 where id = $1', [
+        item.offer,
+        inStock,
+      ]);
+      await db.transaction((tx) =>
+        repriceProducts(tx, {
+          productIds: [item.id],
+          cause: 'cost_sync',
+          context: { now: new Date(), fakeEnabled: true },
+        }),
+      );
+    };
+    expect(await compare()).toEqual({ events: 0 });
+    await stock(false);
+    expect(await compare()).toEqual({ events: 1 });
+    // A manual run in the same hour: the change is recorded, no second digest is sent.
+    await stock(true);
+    expect(await compare()).toEqual({ events: 1 });
+    expect(await notifications(shop, 'merchant_watch_digest')).toEqual([
+      expect.objectContaining({ outOfStock: 1, backInStock: 0 }),
+    ]);
+    const { rows } = await pool.query(
+      'select kind from merchant_alert_events where customer_id = $1 order by created_at',
+      [shop],
+    );
+    expect(rows.map((row) => row.kind)).toEqual(['out_of_stock', 'back_in_stock']);
   });
 
   it('lets a merchant buy 50 codes and 50 checkout lines; customers keep their limits (QT1, BK3)', async () => {

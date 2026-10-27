@@ -44,7 +44,8 @@ export function MerchantsPage({
 }) {
   const { t } = useTranslation();
   const list = useInfiniteQuery(merchantsQuery(search));
-  const lists = [{ value: ALL, label: t('merchants.list.allLists') }, ...useListItems()];
+  const { items: listItems, lists: listsRead } = useListItems();
+  const lists = [{ value: ALL, label: t('merchants.list.allLists') }, ...listItems];
   // S21: the live levels, and the merchants without one.
   const levels = useQuery(merchantLevelsQuery);
   const levelItems = [
@@ -78,6 +79,7 @@ export function MerchantsPage({
             items={lists}
             value={search.listId ?? ALL}
             onChange={(value) => onSearch({ ...search, listId: value === ALL ? undefined : value })}
+            read={listsRead}
           />
         </Field>
         <Field className="w-52">
@@ -89,6 +91,7 @@ export function MerchantsPage({
             onChange={(value) =>
               onSearch({ ...search, levelId: value === ALL ? undefined : value })
             }
+            read={levels}
           />
         </Field>
       </div>
@@ -107,7 +110,7 @@ export function MerchantsPage({
           </Button>
         </div>
       )}
-      {list.isSuccess && rows.length === 0 && (
+      {list.isSuccess && rows.length === 0 && !list.isPlaceholderData && (
         <EmptyState
           icon={<InboxIcon />}
           title={
@@ -118,7 +121,11 @@ export function MerchantsPage({
         />
       )}
       {rows.length > 0 && (
-        <Table>
+        <Table
+          // Audit A06-47: another search's or filter's rows stay while the next load, dimmed.
+          className={list.isPlaceholderData ? 'opacity-60' : undefined}
+          aria-busy={list.isPlaceholderData}
+        >
           <TableHeader>
             <TableRow>
               <TableHead>{t('merchants.columns.tradeName')}</TableHead>

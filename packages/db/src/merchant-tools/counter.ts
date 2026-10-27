@@ -9,6 +9,7 @@ import {
   merchantReceiptSettings,
   orders,
 } from '../schema/index.js';
+import { paidAsMerchant } from './reads.js';
 
 /*
  * The counter tools' rows (S21 F32–F35): what a bulk list is parsed against, the receipt settings
@@ -117,7 +118,34 @@ export async function removeMerchantLogo(
   return row.logoFileId;
 }
 
-/** SP5: the customer's own order, as `setOrderSale` reads it; null when it is not theirs. */
+/**
+ * BR3: the uploaded logo made the merchant's logo in the caller's transaction, changing nothing
+ * else (audit A06-39): a WhatsApp saved at the same time is kept. Without a saved row, the
+ * defaults are written with it. False without a merchant profile.
+ */
+export async function setMerchantLogo(
+  tx: Transaction,
+  customerId: string,
+  logoFileId: string,
+): Promise<boolean> {
+  const current = await receiptSettingsOf(tx, customerId);
+  if (!current) return false;
+  await tx
+    .insert(merchantReceiptSettings)
+    .values({
+      customerId,
+      showWhatsapp: current.showWhatsapp,
+      whatsapp: current.whatsapp,
+      logoFileId,
+    })
+    .onConflictDoUpdate({ target: merchantReceiptSettings.customerId, set: { logoFileId } });
+  return true;
+}
+
+/**
+ * SP5: the customer's own order, as `setOrderSale` reads it; null when it is not theirs, or not a
+ * sale of the shop (audit A06-36: an owner-funded order, or one placed outside the grant).
+ */
 export async function ownOrderForSale(
   db: Executor,
   customerId: string,
@@ -126,6 +154,7 @@ export async function ownOrderForSale(
   const [row] = await db
     .select({ id: orders.id, displayRateId: orders.displayRateId })
     .from(orders)
-    .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+    .innerJoin(merchantProfiles, eq(merchantProfiles.customerId, orders.customerId))
+    .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId), paidAsMerchant()));
   return row ? { ...row, customerId } : null;
 }

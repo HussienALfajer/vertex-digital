@@ -14,6 +14,7 @@ import type { RoutingContext } from '../pricing/index.js';
 import {
   catalogGames,
   catalogProducts,
+  customerNotifications,
   customers,
   emailOutbox,
   merchantAlertEvents,
@@ -23,6 +24,8 @@ import {
 } from '../schema/index.js';
 import { clearLowBalanceIfAbove } from './alerts.js';
 import { alertEvents, merchantListPrices, watchedProductIds } from './reads.js';
+
+const HOUR = 60 * 60 * 1000;
 
 /*
  * The hourly follow alerts (S21 AL2, AL3, AL6) and the daily email (AL4). One merchant per
@@ -53,8 +56,8 @@ export async function merchantsToCompare(db: Executor): Promise<string[]> {
  * AL2, AL3, AL6 for one merchant in the caller's transaction: follows of archived products
  * dropped (edge case 18), each followed product compared with what was last told (hidden products
  * ignored, a first sight only recorded), the events written, one digest notification when there
- * are any, and a sent low-balance alert cleared once the balance is back. Null when another run
- * holds the merchant.
+ * are any and none was written this hour, and a sent low-balance alert cleared once the balance is
+ * back. Null when another run holds the merchant.
  */
 export async function compareMerchantWatches(
   tx: Transaction,
@@ -144,7 +147,7 @@ export async function compareMerchantWatches(
         set: state,
       });
   }
-  if (kinds.length > 0) {
+  if (kinds.length > 0 && !(await digestSentThisHour(tx, customerId, context.now))) {
     const counts = alertCounts(kinds);
     await notifyCustomer(tx, context.jobs, {
       customerId,
@@ -160,6 +163,27 @@ export async function compareMerchantWatches(
   }
   await clearLowBalanceIfAbove(tx, customerId);
   return { events: kinds.length };
+}
+
+/**
+ * AL3's dedupe `watch-digest:<customer>:<hour>` (audit A06-37): a digest already written this hour,
+ * read under the merchant's advisory lock, so a manual run after the cron sends no second one. The
+ * events are still written and shown on the alerts page.
+ */
+async function digestSentThisHour(tx: Transaction, customerId: string, now: Date) {
+  const hour = new Date(Math.floor(now.getTime() / HOUR) * HOUR);
+  const [sent] = await tx
+    .select({ id: customerNotifications.id })
+    .from(customerNotifications)
+    .where(
+      and(
+        eq(customerNotifications.customerId, customerId),
+        eq(customerNotifications.event, 'merchant_watch_digest'),
+        gte(customerNotifications.createdAt, hour),
+      ),
+    )
+    .limit(1);
+  return sent !== undefined;
 }
 
 async function productNames(db: Executor, productIds: readonly string[]) {

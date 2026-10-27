@@ -43,17 +43,28 @@ type ButtonProps = ButtonPrimitive.Props & VariantProps<typeof buttonVariants>;
 /**
  * A button, or with `render` the rendered element (a router link) styled as one. A rendered link
  * keeps its own semantics: it is announced as a link, and Base UI's button behaviour, which
- * expects a native `<button>`, applies only when `nativeButton` is passed.
+ * expects a native `<button>`, applies only when `nativeButton` is passed. A disabled link is
+ * announced as disabled, leaves the tab order and ignores a press (audit A06-13): a link has no
+ * `disabled` of its own.
  */
 function Button({ className, variant, size, ...props }: ButtonProps) {
   const classes = cn(buttonVariants({ variant, size }), className);
   if (props.render && props.nativeButton === undefined) {
-    const { render, disabled: _disabled, focusableWhenDisabled: _focusable, ...rest } = props;
+    const { render, disabled, focusableWhenDisabled: _focusable, ...rest } = props;
+    const off = disabled
+      ? {
+          'aria-disabled': true,
+          'data-disabled': '',
+          tabIndex: -1,
+          onClick: (event: { preventDefault: () => void }) => event.preventDefault(),
+        }
+      : {};
     return (
       <StyledElement
         render={render as useRender.ComponentProps<'a'>['render']}
         className={classes}
         {...(rest as ComponentProps<'a'>)}
+        {...off}
       />
     );
   }

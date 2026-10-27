@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 import type {
   BulkCheckResult,
   Order,
@@ -8,6 +10,7 @@ import type {
   SellingPrices,
 } from '@vertex-digital/contracts';
 import tools from '../src/features/merchant-tools/messages.ar.json' with { type: 'json' };
+import orderTexts from '../src/features/orders/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { PUBG } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
@@ -72,6 +75,7 @@ const summary = (changes: Partial<OrderSummary> = {}): OrderSummary => ({
   number: 'VO-SHOP23',
   stage: 'delivered',
   productNameAr: '60 UC',
+  productKind: 'direct',
   game: { id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
   quantity: 1,
   totalUsdUnits: 1_050_000,
@@ -266,6 +270,189 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
     await page.keyboard.press('?');
     await expect(page.getByRole('dialog').getByText(tools.pos.keys.print)).toBeVisible();
   });
+
+  /** Fills the recent id, opens 325 UC by its number and confirms in the sheet. */
+  async function sell(page: Page) {
+    await page.keyboard.press('2');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(tools.pos.checkedName.replace('{name}', 'Nour'))).toBeVisible();
+    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
+    return dialog;
+  }
+
+  const orderKeys = (api: MockApi) =>
+    api.requests
+      .filter((request) => request.key === 'POST /api/orders')
+      .map((request) => request.headers['idempotency-key']);
+
+  test('a sale whose answer was lost keeps its key when the sheet is opened again (A06-1)', async ({
+    page,
+    api,
+  }) => {
+    pos(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
+      .on('POST /api/orders', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/merchant/pos');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    const dialog = await sell(page);
+    await expect(dialog.getByText(ar.errors.UNKNOWN)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    api.on('POST /api/orders', 201, { ...order(), stage: 'processing' });
+    await sell(page);
+    await expect(page.getByText(tools.pos.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
+    const keys = orderKeys(api);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  test('a changed price shows the new total and is confirmed with it (A06-2)', async ({
+    page,
+    api,
+  }) => {
+    pos(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
+      .on('POST /api/orders', 409, {
+        code: 'PRICE_CHANGED',
+        message: 'Price changed',
+        details: { unitPriceUsdUnits: 5_400_000 },
+      });
+    await page.goto('/merchant/pos');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    const dialog = await sell(page);
+    await expect(dialog.getByText(ar.errors.PRICE_CHANGED)).toBeVisible();
+    await expect(dialog.getByText('$5.40')).toBeVisible();
+
+    api.on('POST /api/orders', 201, { ...order(), stage: 'processing' });
+    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
+    await expect(page.getByText(tools.pos.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
+    expect(api.last('POST /api/orders')?.body).toMatchObject({
+      expectedUnitPriceUsdUnits: 5_400_000,
+    });
+  });
+
+  test('a sale refused for the merchant terms opens the terms sheet (A06-3, MT2)', async ({
+    page,
+    api,
+  }) => {
+    pos(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
+      .on('POST /api/orders', 409, { code: 'MERCHANT_TERMS_REQUIRED' })
+      .on('GET /api/merchant/application', 200, {
+        application: null,
+        canApply: false,
+        availableAt: null,
+        termsVersionId: '0199e200-0000-7000-8000-0000000000f1',
+      })
+      .on('POST /api/merchant/terms', 204, null);
+    await page.goto('/merchant/pos');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    const dialog = await sell(page);
+    const sheet = page.getByTestId('terms-sheet');
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole('checkbox', { name: ar.merchant.terms.check }).check();
+    await sheet.getByRole('button', { name: ar.merchant.terms.accept }).click();
+    await expect(dialog.getByText(tools.pos.termsAccepted)).toBeVisible();
+    expect(api.last('POST /api/merchant/terms')?.body).toEqual({
+      versionId: '0199e200-0000-7000-8000-0000000000f1',
+    });
+  });
+
+  test('a frozen merchant sees the notice and no pack opens a sale (A06-4)', async ({
+    page,
+    api,
+  }) => {
+    pos(api).on('GET /api/auth/get-session', 200, {
+      user: {
+        name: 'سارة الأحمد',
+        email: 'sara@example.com',
+        emailVerified: true,
+        accountType: 'merchant',
+        frozenAt: '2026-10-10T08:00:00.000Z',
+      },
+      session: { token: 'this-device' },
+    });
+    await page.goto('/merchant/pos');
+    await expect(page.getByText(tools.common.frozen)).toBeVisible();
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    await expect(page.getByRole('button', { name: /325 UC/ })).toBeDisabled();
+    await page.locator('body').click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press('2');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(api.last('POST /api/player-checks')).toBeUndefined();
+  });
+
+  test('a typed price that was not saved is said, with the order to set it on (A06-7)', async ({
+    page,
+    api,
+  }) => {
+    pos(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
+      .on('POST /api/orders', 201, { ...order(), stage: 'processing' })
+      .on(`PUT /api/orders/${ORDER_ID}/sale`, 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/merchant/pos');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    await page.keyboard.press('2');
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('textbox', { name: tools.pos.sellingPrice }).fill('16000');
+    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
+    await expect(
+      page.getByText(tools.pos.saleNotSaved.replace('{number}', 'VO-SHOP23')),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: tools.pos.saleSetOnOrder })).toHaveAttribute(
+      'href',
+      `/orders/${ORDER_ID}`,
+    );
+  });
+
+  test('a failed read of the last orders offers a retry (A06-8)', async ({ page, api }) => {
+    pos(api).on('GET /api/orders', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/merchant/pos');
+    await expect(page.getByText(tools.pos.stripFailed)).toBeVisible();
+    api.on('GET /api/orders', 200, { items: [summary()], nextCursor: null, checkout: null });
+    await page.getByRole('button', { name: tools.common.retry }).click();
+    await expect(page.getByText('VO-SHOP23')).toBeVisible();
+  });
+
+  test('orders the game bar followed first, then by the 30-day units (PS1, Q27)', async ({
+    page,
+    api,
+  }) => {
+    const id = (last: string) => PUBG.game.id.replace(/.$/, last);
+    pos(api).on('GET /api/merchant/games', 200, {
+      items: [
+        { id: id('a'), slug: 'free-fire', nameAr: 'فري فاير', recentUnits: 0 },
+        { id: id('b'), slug: 'yalla-ludo', nameAr: 'يلا لودو', recentUnits: 12 },
+        { id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', recentUnits: 0 },
+      ],
+    });
+    await page.goto('/merchant/pos');
+    const bar = page.getByRole('navigation', { name: tools.pos.games });
+    await expect(bar.getByRole('button')).toHaveText(['ببجي موبايل', 'يلا لودو', 'فري فاير']);
+  });
+
+  test('a delivered code pack prints its codes from the strip (PS5, Q27)', async ({
+    page,
+    api,
+  }) => {
+    pos(api).on('GET /api/orders', 200, {
+      items: [
+        summary(),
+        summary({ id: CODE_ORDER_ID, number: 'VO-CODE30', productKind: 'code', quantity: 30 }),
+      ],
+      nextCursor: null,
+      checkout: null,
+    });
+    await page.goto('/merchant/pos');
+    const codes = page.getByRole('link', { name: tools.pos.printCodes });
+    await expect(codes).toHaveCount(1);
+    await expect(codes).toHaveAttribute(
+      'href',
+      `/orders/${CODE_ORDER_ID}/print?paper=58&content=codes`,
+    );
+    await expect(page.getByRole('link', { name: tools.pos.printReceipt })).toHaveCount(2);
+  });
 });
 
 const checked: BulkCheckResult = {
@@ -370,6 +557,98 @@ test.describe('bulk orders (F33, BK1–BK5)', () => {
       ],
     });
   });
+
+  /** The first line of `checked` alone, valid and ready to pay. */
+  const payableLines: BulkCheckResult = {
+    ...checked,
+    lines: checked.lines.slice(0, 1),
+    totalUsdUnits: 1_050_000,
+  };
+
+  function bulk(api: MockApi, result: BulkCheckResult = payableLines): MockApi {
+    return signedIn(api)
+      .on('GET /api/merchant/games', 200, {
+        items: [{ id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل' }],
+      })
+      .on('POST /api/merchant/bulk/check', 200, result);
+  }
+
+  async function checkLines(page: Page) {
+    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
+    await page.getByRole('button', { name: tools.bulk.check }).click();
+  }
+
+  test('a payment whose answer was lost keeps its key after a reload (A06-5)', async ({
+    page,
+    api,
+  }) => {
+    bulk(api).on('POST /api/checkouts', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/merchant/bulk');
+    await checkLines(page);
+    await page.getByRole('button', { name: tools.bulk.pay }).click();
+    await expect(page.getByText(ar.errors.UNKNOWN)).toBeVisible();
+
+    await page.reload();
+    await checkLines(page);
+    await page.getByRole('button', { name: tools.bulk.pay }).click();
+    await expect(page.getByText(ar.errors.UNKNOWN)).toBeVisible();
+    const keys = api.requests
+      .filter((request) => request.key === 'POST /api/checkouts')
+      .map((request) => request.headers['idempotency-key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  test('pay all names its total and waits for a top-up while the balance is short (A06-10)', async ({
+    page,
+    api,
+  }) => {
+    bulk(api, { ...payableLines, balanceUsdUnits: 500_000 });
+    await page.goto('/merchant/bulk');
+    await checkLines(page);
+    // The amount is kept whole in the Arabic sentence by direction marks (`ltr()`).
+    await expect(page.getByText(tools.bulk.shortfall.split('{amount}')[0] as string)).toContainText(
+      '$0.55',
+    );
+    const pay = page.getByRole('button', { name: tools.bulk.pay });
+    await expect(pay).toContainText('$1.05');
+    await expect(pay).toBeDisabled();
+  });
+
+  test('each line names its unit price, and the template lists every pack (BK1, Q27)', async ({
+    page,
+    api,
+  }) => {
+    bulk(api).on('GET /api/catalog/games/pubg-mobile', 200, PUBG);
+    await page.goto('/merchant/bulk');
+    await checkLines(page);
+    await expect(page.getByText(tools.bulk.unitPrice.split('{amount}')[0] as string)).toContainText(
+      '$1.05',
+    );
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: tools.bulk.template }).click();
+    const file = await (await download).path();
+    const lines = (await readFile(file, 'utf8')).trim().split('\n');
+    // The header, then one example per pack of the game.
+    expect(lines).toHaveLength(PUBG.products.length + 1);
+  });
+
+  test('a frozen merchant cannot check or pay (A06-4)', async ({ page, api }) => {
+    bulk(api).on('GET /api/auth/get-session', 200, {
+      user: {
+        name: 'سارة الأحمد',
+        email: 'sara@example.com',
+        emailVerified: true,
+        accountType: 'merchant',
+        frozenAt: '2026-10-10T08:00:00.000Z',
+      },
+      session: { token: 'this-device' },
+    });
+    await page.goto('/merchant/bulk');
+    await expect(page.getByText(tools.common.frozen)).toBeVisible();
+    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
+    await expect(page.getByRole('button', { name: tools.bulk.check })).toBeDisabled();
+  });
 });
 
 test.describe('the order page, printing and verification (F34, F35)', () => {
@@ -389,7 +668,7 @@ test.describe('the order page, printing and verification (F34, F35)', () => {
           .replace('{positions}', '1، 2، 3'),
       ),
     ).toBeVisible();
-    await expect(page.getByText(tools.qr.title).first()).toBeVisible();
+    await expect(page.getByText(orderTexts.qr.title).first()).toBeVisible();
     await screenshot(page, testInfo, 'merchant-order-tools');
 
     api.on(`PUT /api/orders/${CODE_ORDER_ID}/sale`, 200, {
@@ -542,6 +821,28 @@ test.describe('receipt settings (BR3)', () => {
       whatsapp: '+963933123456',
       logoFileId: null,
     });
+  });
+
+  test('keeps a typed WhatsApp number when a logo is uploaded (A06-11)', async ({ page, api }) => {
+    const logo = '0199e200-0000-7000-8000-0000000000e1';
+    signedIn(api)
+      .on('GET /api/merchant/receipt-settings', 200, saved)
+      .on('POST /api/merchant/logo', 201, { fileId: logo })
+      .image(`GET /api/merchant/logo/${logo}`);
+    await page.goto('/merchant/receipt');
+    const whatsapp = page.getByRole('textbox', { name: tools.receipt.whatsapp });
+    await whatsapp.fill('+963944555666');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'logo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('logo'),
+    });
+    await expect(page.getByRole('button', { name: tools.receipt.logoReplace })).toBeVisible();
+    await expect(whatsapp).toHaveValue('+963944555666');
+    // The logo joined the settings in place: no read again, no form remounted.
+    expect(api.requests.filter((r) => r.key === 'GET /api/merchant/receipt-settings')).toHaveLength(
+      1,
+    );
   });
 
   test('shows the receipt settings in the light theme', async ({ page, api }, testInfo) => {

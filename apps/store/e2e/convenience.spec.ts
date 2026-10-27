@@ -149,6 +149,7 @@ function summary(product: StoreProduct, changes: Partial<OrderSummary> = {}): Or
     placedByStore: null,
     customerNote: null,
     productNameAr: product.nameAr,
+    productKind: 'direct',
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
     quantity: 1,
     totalUsdUnits: product.priceUsdUnits as number,

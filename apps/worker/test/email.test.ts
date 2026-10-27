@@ -98,6 +98,23 @@ describe('the wallet adjustment email (S02)', () => {
   });
 });
 
+describe('the merchant approval email (S20 MA5)', () => {
+  it('names the kind of price the approval set, not always merchant prices (A06-27)', () => {
+    const special = renderEmail(
+      'customer_merchant_approved',
+      { priceKind: 'special' },
+      'https://digital.example',
+    );
+    expect(special.text).toContain('وتظهر لك أسعار خاصة في صفحات الألعاب.');
+    const retail = renderEmail(
+      'customer_merchant_approved',
+      { priceKind: 'retail' },
+      'https://digital.example',
+    );
+    expect(retail.text).toContain('وتظهر لك أسعار التجزئة في صفحات الألعاب.');
+  });
+});
+
 describe('the deposit emails (S03)', () => {
   const depositId = '01890000-0000-7000-8000-0000000000d1';
   const store = 'https://digital.example';

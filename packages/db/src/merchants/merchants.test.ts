@@ -265,6 +265,41 @@ describe('merchant applications (MA1–MA4)', () => {
     expect(rows).toEqual([{ actor_kind: 'system', channel: 'worker' }]);
   });
 
+  it('expire the others when one fails, then name it (A06-29)', async () => {
+    const stuckCustomer = await customer();
+    const stuck = await application(stuckCustomer);
+    const next = await application(await customer());
+    // The oldest due request of all fails; the one after it still expires in the same run.
+    await pool.query(
+      `update merchant_applications set status = 'info_requested',
+         info_requested_at = now() - interval '4000 days' where id = $1`,
+      [stuck],
+    );
+    await pool.query(
+      `update merchant_applications set status = 'info_requested',
+         info_requested_at = now() - interval '9 days' where id = $1`,
+      [next],
+    );
+    // Its customer is held, so its notice waits past a short lock timeout and the move fails.
+    const url = new URL(process.env.DATABASE_URL as string);
+    url.searchParams.set('options', '-c lock_timeout=1000');
+    const impatient = createDatabase(url.toString());
+    const holder = await pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query('select id from customers where id = $1 for update', [stuckCustomer]);
+      await expect(expireMerchantApplications(impatient.db, { jobs })).rejects.toThrow(stuck);
+      expect(await statusOf(stuck)).toBe('info_requested');
+      expect(await statusOf(next)).toBe('expired');
+    } finally {
+      await holder.query('rollback');
+      holder.release();
+      await impatient.close();
+    }
+    expect(await expireMerchantApplications(db, { jobs })).toBeGreaterThanOrEqual(1);
+    expect(await statusOf(stuck)).toBe('expired');
+  });
+
   it('list the queue oldest first under review, with the applicant’s flags (MA8)', async () => {
     const phone = `+9639${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
     await customer(phone);

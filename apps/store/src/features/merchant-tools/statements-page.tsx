@@ -126,7 +126,8 @@ export function StatementPage() {
   );
 }
 
-function InvalidMonth() {
+/** A month outside the account (`STATEMENT_MONTH_INVALID`), the month page and its print. */
+export function InvalidMonth() {
   return (
     <EmptyState
       icon={<CalendarX2Icon />}
