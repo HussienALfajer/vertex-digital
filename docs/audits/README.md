@@ -15,7 +15,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | A01 | Identity and access | deployed | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | `097b869` (2026-10-27) |
 | A02 | Wallet, ledger and deposits | deployed | [A02-wallet.md](A02-wallet.md) | [#178](https://github.com/HussienALfajer/vertex-digital/pull/178) | `610a388` (2026-10-27) |
 | A03 | Catalog and storefront | deployed | [A03-catalog.md](A03-catalog.md) | [#180](https://github.com/HussienALfajer/vertex-digital/pull/180) | `788f309` (2026-10-27) |
-| A04 | Purchase, orders and fulfilment | in progress | [A04-orders.md](A04-orders.md) | | |
+| A04 | Purchase, orders and fulfilment | merged | [A04-orders.md](A04-orders.md) | [#182](https://github.com/HussienALfajer/vertex-digital/pull/182) | |
 | A05 | Suppliers and pricing | not started | | | |
 | A06 | Merchants | not started | | | |
 | A07 | Customers, support and notifications | not started | | | |

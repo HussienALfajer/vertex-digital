@@ -1,6 +1,6 @@
 # A04 Purchase, orders and fulfilment
 
-Status: in progress
+Status: merged (PR [#182](https://github.com/HussienALfajer/vertex-digital/pull/182))
 Branch: fix/audit-a04-orders · Started: 2026-10-27 · Specs: S08, S10, S11, S16 (admin orders), S22 (order help, alerts) · ADRs: 0004, 0013, 0022, 0023, 0024, 0025, 0030
 
 ## Scope
