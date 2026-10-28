@@ -36,10 +36,7 @@ export function FailureLine({ failure }: { failure: string }) {
   const { t } = useTranslation();
   return (
     <p className="text-sm text-muted-foreground">
-      {t('reconciliation.status.failure')}{' '}
-      <bdi dir="ltr" className="font-mono">
-        {failure}
-      </bdi>
+      {t('reconciliation.status.failure')} <bdi dir="ltr">{failure}</bdi>
     </p>
   );
 }

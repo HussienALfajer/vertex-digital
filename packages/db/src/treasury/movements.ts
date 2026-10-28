@@ -1,6 +1,7 @@
 import {
   type ErrorCode,
   impliedRate,
+  normalizeTxid,
   type OutsideCategory,
   type PaymentMethod,
   TREASURY_ACCOUNTS,
@@ -109,6 +110,17 @@ async function placeHasOpening(tx: Transaction, accountId: string): Promise<bool
   return row !== undefined;
 }
 
+/**
+ * An unclaimed USDT receipt keeps its TXID as the claims and the scanner do (64 lower-case hex,
+ * from a hash or an explorer link), so a claim of the same transfer finds it (audit A09-3).
+ */
+function storedReference(input: MovementInput): string | null {
+  const reference = input.externalReference;
+  if (reference === null || input.outsideCategory !== 'unclaimed_receipt') return reference;
+  if (input.to !== 'usdt_trc20' && input.to !== 'usdt_bep20') return reference;
+  return normalizeTxid(reference) ?? reference;
+}
+
 /** The deposit method whose money reaches a receipts place, or null for any other place. */
 function receiptMethod(endpoint: TreasuryEndpoint): PaymentMethod | null {
   if (endpoint === 'usdt_trc20' || endpoint === 'usdt_bep20') return endpoint;
@@ -175,9 +187,10 @@ function auditEntry(actor: AdminActor, movementId: string, reason: string) {
  */
 export async function recordMovement(
   tx: Transaction,
-  input: MovementInput,
+  request: MovementInput,
   actor: AdminActor,
 ): Promise<MovementResult> {
+  const input = { ...request, externalReference: storedReference(request) };
   const fromAccountId = await ensureEndpoint(tx, input.from);
   const toAccountId = await ensureEndpoint(tx, input.to);
   const existing = await existingForKey(tx, input.idempotencyKey);

@@ -23,6 +23,8 @@ import {
   ledgerJournals,
   ledgerPostings,
   newId,
+  recordMovement,
+  reverseMovement,
   telegramMessages,
   usdtCandidateMatch,
   usdtDeposits,
@@ -733,6 +735,49 @@ describe('review (rule U11)', () => {
 });
 
 describe('the scanner (rules U12–U14)', () => {
+  it('leaves a TXID booked as an unclaimed receipt unmatched and scans on (audit A09-3)', async () => {
+    const deposit = await usdtDeposit();
+    const hash = txid();
+    const actor = { adminId: newId(), ipAddress: null, userAgent: null };
+    // Booked from an explorer link while the reader was behind: stored as the bare TXID.
+    const { movement } = await db.transaction((tx) =>
+      recordMovement(
+        tx,
+        {
+          idempotencyKey: newId(),
+          kind: 'transfer',
+          from: 'outside_usd',
+          to: 'usdt_trc20',
+          sentUnits: deposit.pay,
+          receivedUnits: deposit.pay,
+          outsideCategory: 'unclaimed_receipt',
+          openingBalance: false,
+          orderId: null,
+          externalReference: `https://tronscan.org/#/transaction/${hash.toUpperCase()}`,
+          reason: 'A transfer nobody claimed',
+        },
+        actor,
+      ),
+    );
+    try {
+      expect(movement.externalReference).toBe(hash);
+      await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', deposit.pay) }]);
+      const result = await scan.scan('usdt_trc20');
+      expect(result).toMatchObject({ scanned: true });
+      const { deposit: row } = await state(deposit.id);
+      expect(row?.status).not.toBe('credited');
+    } finally {
+      // A movement and its reversal leave the place as other tests found it.
+      await db.transaction((tx) =>
+        reverseMovement(
+          tx,
+          { movementId: movement.id, idempotencyKey: newId(), reason: 'Test cleanup' },
+          actor,
+        ),
+      );
+    }
+  });
+
   it('credits the one pending deposit of the exact amount without a TXID, and reads twice harmlessly', async () => {
     const deposit = await usdtDeposit();
     const hash = txid();
