@@ -1,10 +1,11 @@
-# TASKS — Professional catalog build-out (docs/ROADMAP.md, Pilot)
+# TASKS — Close V1 (owner, 2026-10-29)
 
-- [x] Read both suppliers' mirrored catalogs (read-only) and match them region by region
-- [x] Six store categories; 352 games, 4,400 packs, 3,777 with both suppliers' routes; names, search terms, fields, regions and redemption steps; games ordered by demand
-- [x] Games with no payable pack paused until the suppliers are funded
-- [x] Upload the 23 covers neither supplier offers (Claude in Chrome), then import those games
+- [x] Field bounds and help texts on production (227 of 239 fields; Telegram's username field; chat apps' labels)
+- [x] Names, covers, region notes and search terms reviewed for every active game (113 games' terms, 28 generic pack names in Arabic)
+- [x] LOTR Rise to War left out: shut down at the end of 2025
+- [x] FazerCards player check on PUBG Mobile, Free Fire (both), Mobile Legends (both) and Magic Chess
+- [x] Official prices and accent colors dropped (owner); Phase 4 removed from the docs (owner: no V2 plan)
+- [x] Launch checklist, pilot limits and V1 closed in `docs/ROADMAP.md`
+- [ ] Deferred audit findings A10-51, A10-54, A10-45, A06-21: their own PR (`fix/audit-deferred-followups`), then a production deploy
 - [ ] After the owner funds WDGZone and FazerCards: run "activate all" on every game once
-- [ ] LOTR Rise to War: verify the game still runs before adding it
-- [ ] Field bounds on production (safe floors and caps, 184 fields; Telegram Stars field type to confirm)
-- [ ] Official prices, accent colors; the owner's review on a phone and a PC (ID guide images dropped by the owner, 2026-10-29)
+- [ ] Steam top-up (paused): confirm with WDGZone what its `player_id` expects before activating
