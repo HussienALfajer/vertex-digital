@@ -375,6 +375,8 @@ export const usdtDeposits = pgTable(
       .on(table.method, table.payAmountUnits)
       .where(sql`${table.depositOpen}`),
     index('usdt_deposits_amount_idx').on(table.method, table.payAmountUnits),
+    // The panel's TXID lookup (audit A10-42).
+    index('usdt_deposits_txid_idx').on(table.txid).where(sql`${table.txid} is not null`),
     index('usdt_deposits_check_status_idx').on(table.checkStatus),
     check('usdt_deposits_method_check', isUsdtMethod(table.method)),
     check(

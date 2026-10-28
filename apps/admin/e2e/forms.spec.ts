@@ -92,6 +92,34 @@ test('a dialog form: the re-authentication refuses empty fields, then a wrong co
   expect(admin.calls).toContain('POST /api/admin/me/reauthenticate');
 });
 
+test('a dialog with something typed ignores Escape and a click outside (audit A10-20)', async ({
+  page,
+  admin,
+}) => {
+  admin.reauthenticationRequired = true;
+  await open(page, admin, '/settings/deposits');
+  await field(page, ar.depositSettings.account.name).fill('متجر تجريبي');
+  await field(page, ar.depositSettings.account.number).fill('0990000000');
+  const save = page.getByRole('button', { name: ar.depositSettings.save });
+  await save.click();
+  const dialog = page.getByRole('dialog');
+  // Nothing typed yet: Escape closes it as before.
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  // Typed: neither Escape nor a click beside it loses the password.
+  await save.click();
+  await field(page, ar.reauth.password).fill(PASSWORD);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeVisible();
+  await expect(field(page, ar.reauth.password)).toHaveValue(PASSWORD);
+  // Its own button still closes it.
+  await dialog.getByRole('button', { name: ar.common.close }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test('a tabbed form: on a phone, a refused title switches back from the preview tab', async ({
   page,
   admin,

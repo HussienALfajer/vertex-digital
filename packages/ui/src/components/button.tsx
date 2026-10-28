@@ -24,14 +24,16 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive-hover',
         link: 'text-foreground underline-offset-4 hover:underline',
       },
+      // On a touch screen every size is at least 44 px (§4, WCAG 2.5.8; audit A10-23): the
+      // panel's compact rows keep their density under a mouse only.
       size: {
-        sm: "h-8 px-3 text-sm [&_svg:not([class*='size-'])]:size-4",
-        md: 'h-9 px-4 text-base',
-        lg: 'h-10 px-5 text-base',
+        sm: "h-8 px-3 text-sm pointer-coarse:h-11 [&_svg:not([class*='size-'])]:size-4",
+        md: 'h-9 px-4 text-base pointer-coarse:h-11',
+        lg: 'h-10 px-5 text-base pointer-coarse:h-11',
         /** The store's touch size: at least 44 px (§4). */
         xl: 'h-11 px-6 text-md',
-        icon: 'size-9',
-        'icon-sm': "size-8 [&_svg:not([class*='size-'])]:size-4",
+        icon: 'size-9 pointer-coarse:size-11',
+        'icon-sm': "size-8 pointer-coarse:size-11 [&_svg:not([class*='size-'])]:size-4",
       },
     },
     defaultVariants: { variant: 'primary', size: 'md' },

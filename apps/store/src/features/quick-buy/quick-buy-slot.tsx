@@ -19,15 +19,25 @@ export function RowSkeleton() {
   );
 }
 
+/** The row's place while it loads, kept only where the last read had cards (audit A10-15). */
+export function RowPlaceholder() {
+  return (
+    <div className="hidden [[data-quick-buy-hint]_&]:block">
+      <RowSkeleton />
+    </div>
+  );
+}
+
 // The cards, the menu and the sheet load only for a signed-in customer (QB6).
 const QuickBuyRow = dynamic(() => import('./quick-buy-row').then((module) => module.QuickBuyRow), {
-  loading: () => <RowSkeleton />,
+  loading: () => <RowPlaceholder />,
 });
 
 /**
  * The home page's slot for "اشحن مجدداً" (S22 QB6): never in the cached page; a browser whose
- * customer was signed in last time (`data-signed-in-hint`) reserves the row's height before paint,
- * so it appears without moving the page; signed out it stays empty.
+ * customer was signed in last time (`data-signed-in-hint`) and saw cards (`data-quick-buy-hint`)
+ * reserves the row's height before paint, so it appears without moving the page; signed out, or
+ * with no cards last time, it stays empty.
  */
 export function QuickBuySlot() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -43,7 +53,7 @@ export function QuickBuySlot() {
   if (signedIn === null) {
     return (
       <div className="hidden [[data-signed-in-hint]_&]:block">
-        <RowSkeleton />
+        <RowPlaceholder />
       </div>
     );
   }

@@ -66,10 +66,10 @@ The hook is `.claude/hooks/test-guard.mjs` (PreToolUse on Bash and PowerShell). 
 
 | Job | Runs |
 |---|---|
-| Lint, typecheck, build | Audit, Biome, typecheck, build, migration drift, OpenAPI drift, the built API and worker start |
+| Lint, typecheck, build | Audit, Biome, typecheck, build, migration drift, OpenAPI drift, the built API and worker start, `nginx -t` on `deploy/nginx` in nginx 1.24 (`deploy/test/nginx-check.sh`, audit A10-2) |
 | Tests | Every package's tests (db, api and worker on 4 Vitest workers each, the runner's size) |
 | E2E shard 1–4 | The whole E2E suite of both front ends, split by file (`--shard`) |
-| Typecheck, lint, test, build · E2E | Gate jobs: the checks the `main` ruleset requires |
+| Typecheck, lint, test, build · E2E | Gate jobs: the checks the `main` branch protection requires, with Secret scan |
 | Secret scan | gitleaks |
 
 Turborepo's cache is kept between runs with `actions/cache`, per job. A pull request reads its own runs' cache and `main`'s; `main` cannot read a pull request's (GitHub keeps caches per branch), so after a merge `main` runs what the pull request changed once more.

@@ -1,8 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router';
 import { AscentBar, Button } from '@vertex-digital/ui';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { reportClientError } from '../lib/report-error';
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -29,8 +30,10 @@ function Message({ title, body, action }: { title: string; body?: string; action
   );
 }
 
-function RootError() {
+/** An error before the shell (the session read, the root itself): a full page, and Sentry. */
+function RootError({ error }: { error: unknown }) {
   const { t } = useTranslation();
+  useEffect(() => reportClientError(error), [error]);
   return (
     <Message
       title={t('common.errorTitle')}

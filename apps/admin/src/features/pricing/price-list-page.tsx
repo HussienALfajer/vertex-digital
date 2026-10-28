@@ -154,7 +154,10 @@ export function PriceListPage({ id }: { id: string }) {
                     </TableCell>
                     <TableCell>
                       {live && (
-                        <span className="flex justify-end gap-2">
+                        <fieldset
+                          aria-label={fixed.productNameAr}
+                          className="m-0 min-w-0 border-0 p-0 flex justify-end gap-2"
+                        >
                           <Button
                             variant="outline"
                             size="sm"
@@ -166,7 +169,7 @@ export function PriceListPage({ id }: { id: string }) {
                           <Button variant="ghost" size="sm" onClick={() => setArchiving(fixed)}>
                             {t('pricing.list.removeFixed')}
                           </Button>
-                        </span>
+                        </fieldset>
                       )}
                     </TableCell>
                   </TableRow>

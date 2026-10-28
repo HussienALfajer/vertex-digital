@@ -687,6 +687,20 @@
       "when": 1793156302289,
       "tag": "0097_stormy_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1793163951769,
+      "tag": "0098_productive_firebird",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1793163959272,
+      "tag": "0099_a10_platform_guards",
+      "breakpoints": true
     }
   ]
 }

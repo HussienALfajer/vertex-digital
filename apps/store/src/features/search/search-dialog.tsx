@@ -198,6 +198,7 @@ export function SearchDialog({
   return (
     <Dialog
       open={open}
+      guardTyped={false}
       onOpenChange={(next) => {
         onOpenChange(next);
         if (!next) {

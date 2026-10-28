@@ -290,6 +290,65 @@ describe('margin rules', () => {
       );
       expect(await insert(client, 'product', newId(), [0, 0, 10_000])).toBeNull();
     }));
+
+  it('are never deleted and keep what they apply to (audit A10-44)', () =>
+    rolledBack(async (client) => {
+      const target = newId();
+      expect(await insert(client, 'game', target)).toBeNull();
+      expect(
+        await violation(client, 'update margin_rules set percent_bp = 500 where target_id = $1', [
+          target,
+        ]),
+      ).toBeNull();
+      expect(
+        await violation(client, 'update margin_rules set target_id = $2 where target_id = $1', [
+          target,
+          newId(),
+        ]),
+      ).toMatch(/keeps what it applies to/);
+      expect(
+        await violation(client, 'delete from margin_rules where target_id = $1', [target]),
+      ).toMatch(/permission denied/);
+    }));
+});
+
+describe('the catalog is archived, never deleted (audit A10-44)', () => {
+  it('keeps a game’s and a category’s slug for good', () =>
+    rolledBack(async (client) => {
+      const categoryId = await category(client);
+      const gameId = await game(client, categoryId);
+      expect(
+        await violation(client, 'update catalog_games set slug = $2 where id = $1', [
+          gameId,
+          `g-${unique()}`,
+        ]),
+      ).toMatch(/the slug never changes/);
+      expect(
+        await violation(client, 'update catalog_categories set slug = $2 where id = $1', [
+          categoryId,
+          `c-${unique()}`,
+        ]),
+      ).toMatch(/the slug never changes/);
+      expect(
+        await violation(client, 'update catalog_games set archived_at = now() where id = $1', [
+          gameId,
+        ]),
+      ).toBeNull();
+    }));
+
+  it.each([
+    'catalog_categories',
+    'catalog_games',
+    'catalog_input_fields',
+    'catalog_products',
+    'product_routes',
+  ])('gives the app role no DELETE on %s', (table) =>
+    rolledBack(async (client) => {
+      expect(await violation(client, `delete from ${table} where false`)).toMatch(
+        /permission denied/,
+      );
+    }),
+  );
 });
 
 describe('search terms and validation quotas (S09)', () => {

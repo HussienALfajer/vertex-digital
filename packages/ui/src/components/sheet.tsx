@@ -1,12 +1,13 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { cn } from '../lib/cn';
-import { DialogOverlay } from './dialog';
+import { Dialog, DialogOverlay, useMarkTyped } from './dialog';
 
 /**
  * A panel sliding in from the inline-start edge (the right in RTL), e.g. navigation on phones, or
- * with `side="bottom"` up from the bottom edge: the store's buy box on phones (§6).
+ * with `side="bottom"` up from the bottom edge: the store's buy box on phones (§6). Like a dialog,
+ * it ignores Escape and a click outside once something was typed in it (audit A10-20).
  */
-const Sheet = DialogPrimitive.Root;
+const Sheet = Dialog;
 const SheetTrigger = DialogPrimitive.Trigger;
 const SheetClose = DialogPrimitive.Close;
 const SheetTitle = DialogPrimitive.Title;
@@ -26,8 +27,11 @@ const SIDES = {
 function SheetContent({
   className,
   side = 'start',
+  onInput,
+  onSubmit,
   ...props
 }: DialogPrimitive.Popup.Props & { side?: keyof typeof SIDES }) {
+  const markTyped = useMarkTyped(onInput, onSubmit);
   return (
     <DialogPrimitive.Portal>
       <DialogOverlay />
@@ -41,6 +45,7 @@ function SheetContent({
           className,
         )}
         {...props}
+        {...markTyped}
       />
     </DialogPrimitive.Portal>
   );

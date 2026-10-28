@@ -78,6 +78,8 @@ export const customerSignIns = pgTable(
   (table) => [
     index('customer_sign_ins_customer_idx').on(table.customerId, table.createdAt.desc()),
     index('customer_sign_ins_ip_idx').on(table.ipAddress, table.createdAt.desc()),
+    // The nightly purge after 90 days (audit A10-43).
+    index('customer_sign_ins_created_at_idx').on(table.createdAt),
     check(
       'customer_sign_ins_user_agent_check',
       sql`${table.userAgent} is null or char_length(${table.userAgent}) <= 500`,

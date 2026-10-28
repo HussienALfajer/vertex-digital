@@ -33,7 +33,7 @@ export const supportOpenCountQuery = queryOptions({
   queryFn: () =>
     call(
       api.GET('/api/admin/support/tickets', {
-        params: { query: { status: 'open', limit: 1 } as never },
+        params: { query: { status: 'open', limit: 1 } },
         headers: BACKGROUND_REQUEST,
       }),
     ),
@@ -56,7 +56,7 @@ export const ticketListQuery = (search: SupportSearch) =>
               customerId: search.customerId,
               q: search.q,
               cursor: pageParam,
-            } as never,
+            },
           },
           // Audit A07-10: a page already shown, read again (the tab seen again, a change), is
           // background work; a first read or "عرض المزيد" is the admin's (rule D4).
@@ -92,7 +92,7 @@ export const ticketHistoryQuery = (id: string) =>
     queryFn: () =>
       call(
         api.GET('/api/admin/audit', {
-          params: { query: { entityType: 'support_ticket', entityId: id } as never },
+          params: { query: { entityType: 'support_ticket', entityId: id } },
         }),
       ),
   });
@@ -104,7 +104,7 @@ export const linkOrdersQuery = (customerId: string) =>
     queryFn: () =>
       call(
         api.GET('/api/admin/orders', {
-          params: { query: { customerId, page: 1, pageSize: 30 } as never },
+          params: { query: { customerId, page: 1, pageSize: 30 } },
         }),
       ),
   });
@@ -116,7 +116,7 @@ export const linkDepositsQuery = (customerId: string) =>
     queryFn: () =>
       call(
         api.GET('/api/admin/deposits', {
-          params: { query: { customerId, status: 'all', limit: 30 } as never },
+          params: { query: { customerId, status: 'all', limit: 30 } },
         }),
       ),
   });

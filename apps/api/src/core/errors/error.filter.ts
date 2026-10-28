@@ -55,12 +55,18 @@ export class ErrorFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { body, fault } = errorResponseOf(exception);
+    const http = host.switchToHttp();
     if (fault) {
-      // Never a query's parameters (codes, emails, hashes) in the logs or Sentry.
+      // Never a query's parameters (codes, emails, hashes) in the logs or Sentry. The request's
+      // id (its `X-Request-Id`, core/http/request-id.ts) ties the event to the log line.
       const reported = withoutQueryParameters(exception);
+      const id = http.getRequest<{ id?: unknown }>().id;
       this.logger.error(reported);
-      Sentry.captureException(reported);
+      Sentry.withScope((scope) => {
+        if (id !== undefined) scope.setTag('request_id', String(id));
+        Sentry.captureException(reported);
+      });
     }
-    host.switchToHttp().getResponse<Response>().status(body.statusCode).json(body);
+    http.getResponse<Response>().status(body.statusCode).json(body);
   }
 }

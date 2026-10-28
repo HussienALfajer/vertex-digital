@@ -38,9 +38,13 @@ export const emailOutbox = pgTable(
   'email_outbox',
   {
     id: id(),
-    toAddress: text('to_address').notNull(),
+    /** Cleared with `params` once the email is settled and past the retention (Q29, audit A10-46). */
+    toAddress: text('to_address'),
     template: emailTemplateEnum('template').notNull(),
-    /** The template's parameters; a code email's are cleared once sent or expired (rule E4). */
+    /**
+     * The template's parameters; a code email's are cleared once sent or expired (rule E4), every
+     * other's once settled and past the retention (Q29).
+     */
     params: jsonb('params'),
     priority: emailPriorityEnum('priority').notNull(),
     status: emailStatusEnum('status').notNull().default('pending'),

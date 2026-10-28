@@ -224,7 +224,7 @@ describe('module boundaries', () => {
     settings: 'settings',
     suppliers: 'suppliers',
     support: 'support',
-    system: null,
+    system: 'health',
     telegram: 'telegram',
     treasury: 'treasury',
     wallet: 'wallet',

@@ -254,7 +254,7 @@ export function GameShop({
           </div>
         </aside>
       ) : (
-        <Sheet open={!!open} onOpenChange={(next) => !next && choose(null)}>
+        <Sheet open={!!open} guardTyped={false} onOpenChange={(next) => !next && choose(null)}>
           <SheetContent side="bottom" className="bg-surface p-5 pb-8">
             <SheetTitle className="sr-only">{t('game.buyBox')}</SheetTitle>
             {box}

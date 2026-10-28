@@ -34,8 +34,11 @@ import { useRevokeShareLink } from './orders.queries';
 
 type ShareLinkRow = AdminOrder['shareLinks'][number];
 
-/** The first 8 characters of a checkout id: the "سلة" badge (S10 rule AD2). */
-export const shortCheckoutId = (id: string) => id.slice(0, 8);
+/**
+ * The last 8 characters of a checkout id: the "سلة" badge (S10 rule AD2). Never the first: a
+ * UUIDv7 starts with its time, so a minute's checkouts shared them (audit A10-35, as A09-40).
+ */
+export const shortCheckoutId = (id: string) => id.slice(-8);
 
 /**
  * S10 rule AD1: the checkout this order was paid in, with its total and the links to its other

@@ -290,7 +290,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       await recordOpening(page);
       await screenshot(page, testInfo, `reconciliation-movement-${colorScheme}`);
-      await page.keyboard.press('Escape');
+      // Typed: only its own button closes it (audit A10-20).
+      await page.getByRole('dialog').getByRole('button', { name: ar.common.close }).click();
       await expect(page.getByRole('dialog')).toBeHidden();
 
       await placeRow(page, r.places.sham_cash_usd)

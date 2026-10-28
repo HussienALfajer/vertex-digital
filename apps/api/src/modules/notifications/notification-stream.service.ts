@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
+import {
+  type BeforeApplicationShutdown,
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import {
   type AdminStreamEvent,
@@ -41,7 +47,7 @@ interface Stream {
  * get every order's `order` event (`{ orderId, status }`) and `resync`, with the same limits.
  */
 @Injectable()
-export class NotificationStreamService implements OnApplicationShutdown {
+export class NotificationStreamService implements BeforeApplicationShutdown, OnApplicationShutdown {
   private readonly logger = new Logger(NotificationStreamService.name);
   private readonly streams = new Map<string, Stream[]>();
   /** Connect times per customer (or the admin) in the last minute (in memory, as the IP limits). */
@@ -140,10 +146,18 @@ export class NotificationStreamService implements OnApplicationShutdown {
     await Promise.all([...this.streams.values()].flat().map((stream) => this.checkSession(stream)));
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  /**
+   * The open streams end before the HTTP server closes: Nest waits for its connections, so a
+   * stream left open held every shutdown until PM2 killed the API (audit A10-4).
+   */
+  beforeApplicationShutdown(): void {
     this.stopped = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     for (const stream of [...this.streams.values()].flat()) stream.close();
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    this.beforeApplicationShutdown();
     const listener = this.listener;
     this.listener = null;
     await listener?.end().catch(() => {});

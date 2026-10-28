@@ -85,6 +85,13 @@ export type EmailPriority = (typeof EMAIL_PRIORITIES)[number];
 
 export const EMAIL_STATUSES = ['pending', 'sent', 'failed'] as const;
 
+/**
+ * Q29 (owner's delegation, audit A10-46): how long a sent or failed email keeps its address and
+ * parameters, and a settled Telegram message its parameters, before `system.purge-outboxes`
+ * clears them. The rows stay as the delivery record.
+ */
+export const OUTBOX_RETENTION_DAYS = 90;
+
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
 const code = z.object({ code: otpCodeSchema });

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DepositsModule } from '../deposits/index.js';
+import { HealthModule } from '../health/index.js';
 import { MerchantsModule } from '../merchants/index.js';
 import { OrdersModule } from '../orders/index.js';
 import { PricingModule } from '../pricing/index.js';
@@ -14,12 +15,13 @@ import { DashboardService } from './dashboard.service.js';
 
 /**
  * The panel's home page (S11, F18): a read module above `orders`, `deposits`, `suppliers`,
- * `pricing`, `rates`, `reconciliation`, `settings`, `support`, `telegram` and (S20) `merchants`,
- * reading each through its service. Owns no table.
+ * `pricing`, `rates`, `reconciliation`, `settings`, `support`, `telegram`, (S20) `merchants` and
+ * (audit A10-53) `health`, reading each through its service. Owns no table.
  */
 @Module({
   imports: [
     DepositsModule,
+    HealthModule,
     MerchantsModule,
     OrdersModule,
     PricingModule,

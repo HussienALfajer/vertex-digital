@@ -839,6 +839,20 @@ describe('the admin stream (rule LR4)', () => {
     expect(session?.lastActiveAt).toEqual(tenMinutesAgo);
   });
 
+  it('ends the open streams when the API shuts down, so the shutdown never waits on them (audit A10-4)', async () => {
+    const other = await startApp();
+    try {
+      const stream = await openEventStream(api(other.url), admin.cookie, '/api/admin/stream');
+      expect(stream.response.status).toBe(200);
+      const started = Date.now();
+      await other.app.close();
+      expect(Date.now() - started).toBeLessThan(3_000);
+      await stream.waitEnded();
+    } finally {
+      await other.app.close().catch(() => {});
+    }
+  });
+
   it('refuses a 31st connect in a minute', async () => {
     let status = 0;
     for (let index = 0; index < 31 && status !== 429; index += 1) {
@@ -913,5 +927,25 @@ describe('the dashboard (rules DB1–DB8)', () => {
       }),
     );
     await setSwitches(test.db);
+  });
+
+  it('names a worker that stopped beating, and not one that beats (audit A10-53)', async () => {
+    const worker = `a10-${randomUUID()}`;
+    const kinds = async () =>
+      (await json<Read>(await adminGet('/api/admin/dashboard'), 200)).attention.map(
+        (entry) => entry.kind,
+      );
+    try {
+      await test.db.execute(
+        sql`insert into worker_heartbeats (worker, beat_at) values (${worker}, now() - interval '4 minutes')`,
+      );
+      expect(await kinds()).toContain('worker_silent');
+      await test.db.execute(
+        sql`update worker_heartbeats set beat_at = now() where worker = ${worker}`,
+      );
+      expect(await kinds()).not.toContain('worker_silent');
+    } finally {
+      await test.db.execute(sql`delete from worker_heartbeats where worker = ${worker}`);
+    }
   });
 });

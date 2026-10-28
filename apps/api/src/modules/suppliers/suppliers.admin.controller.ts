@@ -16,6 +16,8 @@ import {
 } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
+  type BadgeCount,
+  badgeCountSchema,
   checkCategoryListSchema,
   importOffersSchema,
   importResultSchema,
@@ -80,6 +82,20 @@ export class SuppliersAdminController {
   @ApiOkResponse({ description: 'One per supplier', standardSchema: supplierSummarySchema.array() })
   list() {
     return this.suppliers.list();
+  }
+
+  // Before `:code`, which would take `new-packs` as a code.
+  @Get('new-packs')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: badgeCountSchema })
+  @ApiOkResponse({
+    description:
+      'The new packs of every visible supplier: the navigation badge (SC11, audit A10-25)',
+    standardSchema: badgeCountSchema,
+  })
+  async newPacks(): Promise<BadgeCount> {
+    return { count: await this.suppliers.newPacks() };
   }
 
   // Before `:code`, which would take `policy` as a code.

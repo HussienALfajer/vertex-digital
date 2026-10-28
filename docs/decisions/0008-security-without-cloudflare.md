@@ -36,3 +36,6 @@ Cloudflare (and similar CDNs) is blocked in Syria, so the usual managed shield a
 ## Consequences
 - A large volumetric DDoS cannot be absorbed by this setup; the response is the hosting provider's network protection and temporary stricter limits. This risk is accepted for V1.
 - Every new public endpoint needs a rate-limit zone and a test that it rejects abuse; the reviewer checks it.
+
+## Amendments
+- 2026-10-28 (audit A10-66): the store caches its anonymous pages with Next.js Cache Components and tag expiry from the worker (ADR 0002, S09 SF4), not nginx `proxy_cache`. Rate refusals are logged below the sites' error log level and counted by the `vertexdigital-limit` jail on the access logs, so the server-wide `nginx-limit-req` jail never bans a carrier address shared by many customers (audit A10-10); access logs keep no query string and mask share tokens (audit A10-8).

@@ -573,8 +573,22 @@ describe('payment references of deposits (rule SC14)', () => {
 
 const TRON_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const txid = () => randomBytes(32).toString('hex');
-/** A free amount per test: random whole dollars, so open-amount checks never collide. */
-const freshDollars = () => (100 + (randomBytes(3).readUIntBE(0, 3) % 900_000)) * USD;
+/**
+ * A free amount per test: whole dollars above every USDT amount the test database holds, counted
+ * up from there, so an open amount left by an earlier run never collides (audit A10-50: a random
+ * one among 900,000 did, more often with every run, since refused and pending rows stay).
+ */
+let nextDollars: number | null = null;
+async function freshDollars(): Promise<number> {
+  if (nextDollars === null) {
+    const [row] = await db
+      .select({ top: sql<string | null>`max(${usdtDeposits.payAmountUnits})` })
+      .from(usdtDeposits);
+    nextDollars = Math.floor(Number(row?.top ?? 0) / USD) + 100;
+  }
+  nextDollars += 1;
+  return nextDollars * USD;
+}
 
 /** A pending USDT deposit of `declared` and its USDT row with `tail`. */
 async function usdtDeposit(
@@ -585,7 +599,7 @@ async function usdtDeposit(
     method?: 'usdt_trc20' | 'usdt_bep20';
   } = {},
 ) {
-  const declared = options.declared ?? freshDollars();
+  const declared = options.declared ?? (await freshDollars());
   const tail = options.tail ?? 3_700;
   const method = options.method ?? 'usdt_trc20';
   const depositId = await deposit({
@@ -652,12 +666,27 @@ describe('deposit decisions (S04)', () => {
     return posted.journalId;
   }
 
+  /** Binds a new transfer to the submitted deposit's USDT row (rule U12); its TXID. */
+  async function boundTxid(depositId: string): Promise<string> {
+    const hash = txid();
+    const transferId = await transfer({ txid: hash });
+    await db
+      .update(usdtDeposits)
+      .set({ transferId, checkStatus: 'confirming', txid: hash, txidSource: 'scan' })
+      .where(eq(usdtDeposits.depositId, depositId));
+    return hash;
+  }
+
   it('lets the system credit a USDT deposit without an admin or a reference check', async () => {
     const customerId = await customer();
     const { depositId } = await usdtDeposit({ customerId });
     await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const transactionNumber = await boundTxid(depositId);
     const journalId = await journalFor(customerId, depositId);
-    await db.update(deposits).set(credited(journalId)).where(eq(deposits.id, depositId));
+    await db
+      .update(deposits)
+      .set(credited(journalId, { transactionNumber }))
+      .where(eq(deposits.id, depositId));
     const [row] = await db.select().from(deposits).where(eq(deposits.id, depositId));
     expect(row).toMatchObject({ status: 'credited', decidedBy: 'system', adminId: null });
     expect((await usdtRow(depositId))?.depositOpen).toBe(false);
@@ -675,15 +704,33 @@ describe('deposit decisions (S04)', () => {
     const customerId = await customer();
     const { depositId } = await usdtDeposit({ customerId });
     await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const transactionNumber = await boundTxid(depositId);
     const journalId = await journalFor(customerId, depositId);
     expect(
       await refusal(
         db
           .update(deposits)
-          .set(credited(journalId, values as Partial<DepositRow>))
+          .set(credited(journalId, { transactionNumber, ...(values as Partial<DepositRow>) }))
           .where(eq(deposits.id, depositId)),
       ),
     ).toMatch(constraint);
+  });
+
+  it('refuses a USDT credit with no bound transfer, or with another TXID (audit A10-41)', async () => {
+    const customerId = await customer();
+    const { depositId } = await usdtDeposit({ customerId });
+    await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const journalId = await journalFor(customerId, depositId);
+    const credit = (transactionNumber: string) =>
+      refusal(
+        db
+          .update(deposits)
+          .set(credited(journalId, { transactionNumber }))
+          .where(eq(deposits.id, depositId)),
+      );
+    expect(await credit(txid())).toMatch(/credited only bound to the transfer of its TXID/);
+    await boundTxid(depositId);
+    expect(await credit(txid())).toMatch(/credited only bound to the transfer of its TXID/);
   });
 
   it('refuses a Sham Cash credit without its reference check, and a USDT deposit in pounds', async () => {
@@ -770,7 +817,7 @@ describe('the deposit guard for USDT (S04)', () => {
 
 describe('USDT deposit rows (S04)', () => {
   it("takes its deposit's method and the declared amount plus the tail", async () => {
-    const declared = freshDollars();
+    const declared = await freshDollars();
     const depositId = await deposit({
       customerId: await customer(),
       method: 'usdt_trc20',

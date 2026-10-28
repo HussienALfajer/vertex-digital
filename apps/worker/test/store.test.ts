@@ -12,20 +12,27 @@ import { StoreRevalidateJob } from '../src/jobs/store/revalidate.job.js';
  */
 
 const SECRET = 's'.repeat(48);
-const received: { method?: string; url?: string; authorization?: string }[] = [];
+const received: { method?: string; url?: string; authorization?: string; body?: string }[] = [];
 let status = 204;
 let server: Server;
 let port: number;
 
 beforeAll(async () => {
   server = createServer((request: IncomingMessage, response) => {
-    received.push({
-      method: request.method,
-      url: request.url,
-      authorization: request.headers.authorization,
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
     });
-    response.statusCode = status;
-    response.end();
+    request.on('end', () => {
+      received.push({
+        method: request.method,
+        url: request.url,
+        authorization: request.headers.authorization,
+        ...(body && { body }),
+      });
+      response.statusCode = status;
+      response.end();
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
@@ -49,6 +56,15 @@ describe('store.revalidate (S09 rule SF4)', () => {
     expect(await job().handle(0)).toBe(true);
     expect(received).toEqual([
       { method: 'POST', url: '/_internal/revalidate', authorization: `Bearer ${SECRET}` },
+    ]);
+  });
+
+  it('names the cache tag to expire, so a catalog change leaves the content cached (audit A10-16)', async () => {
+    expect(await job().handle(0, 'catalog')).toBe(true);
+    expect(await job().handle(0, 'content')).toBe(true);
+    expect(received.map((request) => request.body)).toEqual([
+      JSON.stringify({ tag: 'catalog' }),
+      JSON.stringify({ tag: 'content' }),
     ]);
   });
 

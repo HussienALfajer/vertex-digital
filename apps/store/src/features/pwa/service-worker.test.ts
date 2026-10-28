@@ -32,7 +32,10 @@ function load(version = 'build-2') {
       matchAll: async () => windows,
       openWindow: vi.fn(async () => null),
     },
-    registration: { showNotification: vi.fn(async () => {}) },
+    registration: {
+      showNotification: vi.fn(async () => {}),
+      navigationPreload: { enable: vi.fn(async () => {}) },
+    },
   };
   const network = vi.fn(async (_request: unknown) => ({ online: true }));
   class FakeRequest {
@@ -104,6 +107,8 @@ describe('/sw.js', () => {
     await worker.dispatch('activate');
     expect(worker.caches.delete.mock.calls.map(([name]) => name)).toEqual(['vd-offline-build-1']);
     expect(worker.self.clients.claim).toHaveBeenCalled();
+    // Audit A10-19: navigations are sent while the worker starts.
+    expect(worker.self.registration.navigationPreload.enable).toHaveBeenCalled();
   });
 
   it('leaves every request but a GET navigation to the browser (SW3, SW4)', async () => {
@@ -125,6 +130,17 @@ describe('/sw.js', () => {
     expect(await worker.dispatch('fetch', { request })).toEqual({ online: true });
     worker.network.mockRejectedValueOnce(new TypeError('offline'));
     expect(await worker.dispatch('fetch', { request })).toEqual({ offline: '/offline' });
+    // A preloaded answer is used as it is (audit A10-19); a failed preload is offline too.
+    worker.network.mockClear();
+    const preloadResponse = Promise.resolve({ preloaded: true });
+    expect(await worker.dispatch('fetch', { request, preloadResponse })).toEqual({
+      preloaded: true,
+    });
+    expect(worker.network).not.toHaveBeenCalled();
+    const failed = Promise.reject(new TypeError('offline'));
+    expect(await worker.dispatch('fetch', { request, preloadResponse: failed })).toEqual({
+      offline: '/offline',
+    });
   });
 
   it('shows a push with its tag, the icons and an RTL Arabic text (SW6)', async () => {

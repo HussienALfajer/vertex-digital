@@ -80,7 +80,8 @@ export function AccountMenu({
               {email}
             </span>
           </DropdownMenuHeader>
-          <DropdownMenuItem className="min-h-11" render={<Link href="/account" />}>
+          {/* Never prefetched: the account pages stay out of every page's loads (audit A10-57). */}
+          <DropdownMenuItem className="min-h-11" render={<Link href="/account" prefetch={false} />}>
             <UserRoundIcon />
             {t('header.account')}
           </DropdownMenuItem>
@@ -93,15 +94,21 @@ export function AccountMenu({
               {t('header.merchantTools')}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem className="min-h-11" render={<Link href="/orders" />}>
+          <DropdownMenuItem className="min-h-11" render={<Link href="/orders" prefetch={false} />}>
             <ShoppingBagIcon />
             {t('header.orders')}
           </DropdownMenuItem>
-          <DropdownMenuItem className="min-h-11" render={<Link href="/account/players" />}>
+          <DropdownMenuItem
+            className="min-h-11"
+            render={<Link href="/account/players" prefetch={false} />}
+          >
             <IdCardIcon />
             {t('header.players')}
           </DropdownMenuItem>
-          <DropdownMenuItem className="min-h-11" render={<Link href="/account/alerts" />}>
+          <DropdownMenuItem
+            className="min-h-11"
+            render={<Link href="/account/alerts" prefetch={false} />}
+          >
             <BellRingIcon />
             {t('header.alerts')}
           </DropdownMenuItem>

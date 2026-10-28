@@ -10,10 +10,31 @@ export function apiInternalUrl(): string {
   return process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:3000';
 }
 
-/** The store's public origin (`STORE_URL`), for absolute links: the sitemap, Open Graph images. */
+/**
+ * The store's public origin (`STORE_URL`), for absolute links: the sitemap, robots, Open Graph
+ * images, verification links. Required in production: a missing one pointed them all at loopback
+ * (audit A10-61).
+ */
 export function storeUrl(): string {
-  return (process.env.STORE_URL ?? 'http://127.0.0.1:3001').replace(/\/+$/, '');
+  const value = process.env.STORE_URL;
+  if (!value && process.env.NODE_ENV === 'production') throw new Error('STORE_URL is required');
+  return (value ?? 'http://127.0.0.1:3001').replace(/\/+$/, '');
 }
+
+/**
+ * How long a server read of the API may take (audit A10-14): a stalled API then fails the read,
+ * which is never cached, and the page shows its error view or the part's fallback instead of
+ * waiting until nginx cuts the response at 60 seconds.
+ */
+export const API_READ_TIMEOUT_MS = 8_000;
+
+/**
+ * The headers of the cached public reads (catalog, content, support channels). They carry no
+ * visitor's address, since one answer serves every visitor; the mark lets the API leave them out
+ * of its per-address limit, which they would otherwise all share (audit A10-36,
+ * `apps/api/src/core/rate-limit/rate-limit.ts`).
+ */
+export const CACHED_READ_HEADERS = { accept: 'application/json', 'x-store-cache-read': '1' };
 
 /** A value `.env.example` ships (never a real secret) counts as unset, as for the worker. */
 const isPlaceholder = (value: string) =>

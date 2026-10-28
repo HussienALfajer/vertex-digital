@@ -6,6 +6,7 @@ import {
   Logger,
   type NestInterceptor,
 } from '@nestjs/common';
+import type { StoreCacheTag } from '@vertex-digital/contracts';
 import { type Database, queueStoreRevalidate, withoutQueryParameters } from '@vertex-digital/db';
 import type { Request } from 'express';
 import { type Observable, tap } from 'rxjs';
@@ -21,6 +22,8 @@ import { JobsService } from './jobs.service.js';
 @Injectable()
 export class StoreRevalidateInterceptor implements NestInterceptor {
   private readonly logger = new Logger(StoreRevalidateInterceptor.name);
+  /** The store's cache tag the controller's data is under. */
+  protected readonly tag: StoreCacheTag = 'catalog';
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
@@ -33,11 +36,17 @@ export class StoreRevalidateInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap(() => {
         this.db
-          .transaction((tx) => queueStoreRevalidate(tx, this.jobs))
+          .transaction((tx) => queueStoreRevalidate(tx, this.jobs, this.tag))
           .catch((error: unknown) =>
             this.logger.warn({ err: withoutQueryParameters(error) }, 'store.revalidate not queued'),
           );
       }),
     );
   }
+}
+
+/** The same for the content controllers (S14 CP1): their changes expire only the `content` tag. */
+@Injectable()
+export class ContentRevalidateInterceptor extends StoreRevalidateInterceptor {
+  protected override readonly tag: StoreCacheTag = 'content';
 }

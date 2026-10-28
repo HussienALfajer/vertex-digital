@@ -66,7 +66,7 @@ export const customerListQuery = (search: CustomerSearch) =>
       call(
         api.GET('/api/admin/customers', {
           params: {
-            query: { q: search.q, status: search.status ?? 'all', cursor: pageParam } as never,
+            query: { q: search.q, status: search.status ?? 'all', cursor: pageParam },
           },
         }),
       ),
@@ -105,7 +105,7 @@ export const customerSignInsQuery = (id: string) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/customers/{id}/sign-ins', {
-          params: { path: { id }, query: { cursor: pageParam } as never },
+          params: { path: { id }, query: { cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -119,7 +119,7 @@ export const customerNotesQuery = (id: string, archived: boolean) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/customers/{id}/notes', {
-          params: { path: { id }, query: { archived, cursor: pageParam } as never },
+          params: { path: { id }, query: { archived: String(archived), cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -133,7 +133,7 @@ export const customerHistoryQuery = (id: string) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/customers/{id}/history', {
-          params: { path: { id }, query: { cursor: pageParam } as never },
+          params: { path: { id }, query: { cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -147,7 +147,7 @@ export const customerOrdersQuery = (customerId: string) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/orders', {
-          params: { query: { customerId, page: pageParam, pageSize: 25 } as never },
+          params: { query: { customerId, page: pageParam, pageSize: 25 } },
         }),
       ),
     initialPageParam: 1,
@@ -162,7 +162,7 @@ export const customerDepositsQuery = (customerId: string) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/deposits', {
-          params: { query: { customerId, status: 'all', cursor: pageParam } as never },
+          params: { query: { customerId, status: 'all', cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -238,7 +238,7 @@ export const useAddCustomerNote = (id: string) =>
     call(
       api.POST('/api/admin/customers/{id}/notes', {
         params: { path: { id } },
-        body: body as never,
+        body: body,
       }),
     ),
   );

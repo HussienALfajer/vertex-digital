@@ -232,11 +232,14 @@ export const importDraftQuery = (code: SupplierCode, categoryId: string, gameId?
     gcTime: 0,
   });
 
-/** The new packs count for the navigation badge (rule SC11), read in the background. */
+/**
+ * The new packs count for the navigation badge (rule SC11), read in the background through a
+ * count of its own (audit A10-25: it read every supplier's whole summary).
+ */
 export const newPacksQuery = queryOptions({
   queryKey: ['suppliers', 'new-packs'],
-  queryFn: () => call(api.GET('/api/admin/suppliers', { headers: BACKGROUND_REQUEST })),
-  select: (list: SupplierSummary[]) => list.reduce((sum, item) => sum + item.newOfferCount, 0),
+  queryFn: () => call(api.GET('/api/admin/suppliers/new-packs', { headers: BACKGROUND_REQUEST })),
+  select: (badge) => badge.count,
   refetchInterval: NEW_PACKS_REFRESH_MS,
 });
 
@@ -456,7 +459,7 @@ export const useImportOffers = (code: SupplierCode) =>
     call(
       api.POST('/api/admin/suppliers/{code}/import', {
         params: { path: { code } },
-        body: body as never,
+        body: body,
       }),
     ),
   );
@@ -474,7 +477,7 @@ export const useCreateRoute = (productId: string) =>
     call(
       api.POST('/api/admin/catalog/products/{id}/routes', {
         params: { path: { id: productId } },
-        body: body as never,
+        body: body,
       }),
     ),
   );
@@ -523,6 +526,8 @@ export const useImportCategory = (code: SupplierCode, categoryId: string) =>
     call(
       api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/import', {
         params: { path: { code, categoryId } },
+        // The input field's OpenAPI component is shared with the field the API answers, whose
+        // `required` is always set: the request type demands it although it has a default.
         body: body as never,
       }),
     ),
@@ -534,7 +539,7 @@ export const useLinkCategory = (code: SupplierCode, categoryId: string) =>
     call(
       api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/link', {
         params: { path: { code, categoryId } },
-        body: body as never,
+        body: body,
       }),
     ),
   );

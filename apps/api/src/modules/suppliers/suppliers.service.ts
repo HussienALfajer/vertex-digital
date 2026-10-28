@@ -134,6 +134,14 @@ export class SuppliersService {
     return this.summaries(states);
   }
 
+  /** Rule SC11's new packs of every visible supplier, for the panel's badge (audit A10-25). */
+  async newPacks(): Promise<number> {
+    const rows = await this.db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
+    const ids = rows.filter((row) => this.visible(row.code)).map((row) => row.id);
+    const counts = await newOfferCounts(this.db, ids);
+    return [...counts.values()].reduce((sum, value) => sum + value, 0);
+  }
+
   /**
    * S11 rule DB6: the suppliers whose sync failed `FAILING_SYNC_RUNS` times since its last
    * success, as the failing-sync alert counts them.

@@ -34,7 +34,7 @@ import {
   usdtTransfers,
   withinLimits,
 } from '@vertex-digital/db';
-import { and, between, eq, gt, ne, or, sql } from 'drizzle-orm';
+import { and, between, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -321,18 +321,28 @@ export class UsdtDepositsService {
     for (const method of USDT_METHODS) {
       if (await paymentReferenceOwner(tx, method, txid)) return true;
     }
-    const [other] = await tx
+    // Two indexed lookups, not an `or` across the join, which no index serves (audit A10-42):
+    // the TXID a deposit is verifying, then a deposit bound to a transfer of that TXID.
+    const [verifying] = await tx
       .select({ depositId: usdtDeposits.depositId })
       .from(usdtDeposits)
-      .leftJoin(usdtTransfers, eq(usdtTransfers.id, usdtDeposits.transferId))
+      .where(and(eq(usdtDeposits.txid, txid), ne(usdtDeposits.depositId, depositId)))
+      .limit(1);
+    if (verifying) return true;
+    const [bound] = await tx
+      .select({ depositId: usdtDeposits.depositId })
+      .from(usdtTransfers)
+      .innerJoin(usdtDeposits, eq(usdtDeposits.transferId, usdtTransfers.id))
+      // Both networks named, so the transfers' unique (method, txid) index serves it.
       .where(
         and(
+          inArray(usdtTransfers.method, [...USDT_METHODS]),
+          eq(usdtTransfers.txid, txid),
           ne(usdtDeposits.depositId, depositId),
-          or(eq(usdtDeposits.txid, txid), eq(usdtTransfers.txid, txid)),
         ),
       )
       .limit(1);
-    return other !== undefined;
+    return bound !== undefined;
   }
 
   /** The deposit of an earlier request with this key, or null; another body is refused. */

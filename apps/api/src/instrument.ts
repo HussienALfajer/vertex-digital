@@ -6,7 +6,7 @@
  */
 import * as Sentry from '@sentry/nestjs';
 import { loadRootEnv } from '@vertex-digital/db';
-import { SECRET_HEADERS, withoutPrivateQuery } from './core/http/secret-headers.js';
+import { scrubEvent } from './core/http/secret-headers.js';
 
 loadRootEnv();
 
@@ -14,19 +14,6 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV,
-    beforeSend(event) {
-      if (event.request) {
-        delete event.request.cookies;
-        delete event.request.data;
-        for (const header of SECRET_HEADERS) delete event.request.headers?.[header];
-        const { url, query_string: query, headers } = event.request;
-        if (url) event.request.url = withoutPrivateQuery(url);
-        if (typeof query === 'string')
-          event.request.query_string = withoutPrivateQuery(`?${query}`).slice(1);
-        else delete event.request.query_string;
-        if (headers?.referer) headers.referer = withoutPrivateQuery(headers.referer);
-      }
-      return event;
-    },
+    beforeSend: scrubEvent,
   });
 }

@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { DirectionProvider, Toaster } from '@vertex-digital/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { PageError } from './components/page-error';
 import i18n from './i18n';
 import { ApiError } from './lib/api/client';
 import { leaveSession } from './lib/auth';
@@ -61,7 +62,8 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
       // Do not retry what the server refused on purpose.
       retry: (failureCount, error) =>
-        !(error instanceof ApiError && error.status < 500) && failureCount < 2,
+        !(error instanceof ApiError && error.status >= 400 && error.status < 500) &&
+        failureCount < 2,
     },
   },
 });
@@ -70,6 +72,23 @@ const router = createRouter({
   routeTree,
   context: { queryClient },
   defaultPreload: 'intent',
+  // A page's error stays inside the shell (audit A10-27); the root keeps its own.
+  defaultErrorComponent: PageError,
+});
+
+// After a deploy an open panel asks for chunks the server no longer has (audit A10-6): one reload
+// loads the new release, at most once a minute so a missing file never loops.
+window.addEventListener('vite:preloadError', (event) => {
+  const key = 'vd-preload-reload';
+  try {
+    const last = Number(sessionStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    return;
+  }
+  event.preventDefault();
+  window.location.reload();
 });
 
 declare module '@tanstack/react-router' {

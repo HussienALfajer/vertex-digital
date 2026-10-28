@@ -85,12 +85,22 @@ export class SendEmailJob implements OnApplicationBootstrap {
           .where(eq(emailOutbox.id, row.id));
         return { result: 'expired' } as const;
       }
+      // Only a settled email's address is cleared (Q29, `system.purge-outboxes`); a pending row
+      // without one was written wrong and is never sent.
+      const to = row.toAddress;
+      if (to === null) {
+        await tx
+          .update(emailOutbox)
+          .set({ status: 'failed', params: null, lastError: 'No address' })
+          .where(eq(emailOutbox.id, row.id));
+        return { result: 'expired' } as const;
+      }
       const attempts = row.attempts + 1;
       try {
         const params = EMAIL_PARAMS[row.template].parse(row.params);
         await this.mailer.send({
           id: row.id,
-          to: row.toAddress,
+          to,
           ...renderEmail(row.template, params as never, this.env.STORE_URL),
         });
       } catch (raw) {

@@ -104,7 +104,10 @@ export function FieldsTab({ game }: { game: GameDetail }) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <span className="flex items-center justify-end gap-1">
+                  <fieldset
+                    aria-label={field.labelAr}
+                    className="m-0 min-w-0 border-0 p-0 flex items-center justify-end gap-1"
+                  >
                     {archived ? (
                       <Button
                         variant="outline"
@@ -171,7 +174,7 @@ export function FieldsTab({ game }: { game: GameDetail }) {
                         </Button>
                       </>
                     )}
-                  </span>
+                  </fieldset>
                 </TableCell>
               </TableRow>
             ))}

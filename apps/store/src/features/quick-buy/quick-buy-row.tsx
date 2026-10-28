@@ -19,8 +19,9 @@ import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { setQuickBuyHidden } from '@/features/players/requests';
 import { tq } from '@/features/quick-buy/i18n';
 import { ltr } from '@/lib/format';
+import { QUICK_BUY_HINT_KEY } from '@/lib/session';
 import { mainValue } from './main-value';
-import { RowSkeleton } from './quick-buy-slot';
+import { RowPlaceholder } from './quick-buy-slot';
 import { getQuickBuy } from './requests';
 
 // The sheet (slide-to-pay, the gap) loads on the first tap of a ready card.
@@ -40,6 +41,16 @@ const gameLink = (item: QuickBuyItem) =>
     player: item.savedPlayer.id,
   })}`;
 
+/** Whether the next visit reserves the row's height (audit A10-15). */
+function rememberCards(any: boolean) {
+  try {
+    if (any) localStorage.setItem(QUICK_BUY_HINT_KEY, '1');
+    else localStorage.removeItem(QUICK_BUY_HINT_KEY);
+  } catch {
+    // Storage can be unavailable (private mode): the row then appears without a reserved place.
+  }
+}
+
 /**
  * "اشحن مجدداً" (S22 QB2–QB5): the customer's saved IDs with their last pack at today's price, in
  * a horizontal row of cards. A ready card opens the quick-buy sheet on this page; the others open
@@ -54,6 +65,8 @@ export function QuickBuyRow() {
     let live = true;
     void getQuickBuy().then((result) => {
       if (!live) return;
+      // A clear answer sets the hint the next visit reserves the row by; a failed one leaves it.
+      if (result.ok) rememberCards(result.data.items.length > 0);
       setState(
         result.ok && result.data.items.length > 0
           ? { status: 'ready', items: result.data.items }
@@ -65,7 +78,7 @@ export function QuickBuyRow() {
     };
   }, []);
 
-  if (state.status === 'loading') return <RowSkeleton />;
+  if (state.status === 'loading') return <RowPlaceholder />;
   if (state.status === 'gone') return null;
 
   const restore = (item: QuickBuyItem, at: number) =>

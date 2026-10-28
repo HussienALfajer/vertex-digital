@@ -52,6 +52,8 @@ export const QUEUES = {
   supportAutoClose: 'support.auto-close',
   /** Deletes sign-ins older than 90 days, daily at 04:00 `Asia/Damascus` (S12 data). */
   customersPurgeSignIns: 'customers.purge-sign-ins',
+  /** Clears settled emails' addresses and parameters, and Telegram messages' parameters, past the retention, daily at 04:30 `Asia/Damascus` (Q29). */
+  systemPurgeOutboxes: 'system.purge-outboxes',
   /** Deletes ended sessions and expired codes and challenges of both auth instances, hourly (A01-1). */
   authPurgeExpired: 'auth.purge-expired',
   /** The nightly reconciliation at 00:30 `Asia/Damascus`, or a manual run (S13 RN1–RN5). */
@@ -205,3 +207,11 @@ export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;
 export const merchantsLevelPayloadSchema = z.object({ customerId: z.uuid() });
 
 export type MerchantsLevelPayload = z.infer<typeof merchantsLevelPayloadSchema>;
+
+/**
+ * The store's cache tags a `store.revalidate` job expires (S09 SF4, S14 CP1; audit A10-16). A job
+ * of the release before carries none: the store then expires both.
+ */
+export const STORE_CACHE_TAGS = ['catalog', 'content'] as const;
+
+export type StoreCacheTag = (typeof STORE_CACHE_TAGS)[number];

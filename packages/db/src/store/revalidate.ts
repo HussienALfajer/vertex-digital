@@ -2,6 +2,7 @@ import {
   QUEUES,
   STORE_REVALIDATE_RETRIES,
   STORE_REVALIDATE_THROTTLE_SECONDS,
+  type StoreCacheTag,
 } from '@vertex-digital/contracts';
 import type { Transaction } from '../client.js';
 import type { JobSender } from '../notifications/index.js';
@@ -11,15 +12,21 @@ import type { JobSender } from '../notifications/index.js';
  * (catalog, prices, availability, health, a supplier pause, the rate). One job per 10-second
  * slot, whatever number of changes queue it; the worker calls the store's revalidate route. A
  * change in a slot whose job is already queued or done is debounced into the next slot
- * (`singletonNextSlot`), so no change waits for the pages' 5-minute life.
+ * (`singletonNextSlot`), so no change waits for the pages' 5-minute life. Each cache tag has its
+ * own slot and job: a catalog change (every supplier sync) no longer expires the content every
+ * page's announcement bar reads (audit A10-16).
  */
-export async function queueStoreRevalidate(tx: Transaction, jobs: JobSender): Promise<void> {
+export async function queueStoreRevalidate(
+  tx: Transaction,
+  jobs: JobSender,
+  tag: StoreCacheTag = 'catalog',
+): Promise<void> {
   await jobs.send(
     tx,
     QUEUES.storeRevalidate,
-    {},
+    { tag },
     {
-      singletonKey: 'catalog',
+      singletonKey: tag,
       singletonSeconds: STORE_REVALIDATE_THROTTLE_SECONDS,
       singletonNextSlot: true,
       retryLimit: STORE_REVALIDATE_RETRIES,

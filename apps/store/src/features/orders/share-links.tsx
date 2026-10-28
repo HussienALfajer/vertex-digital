@@ -314,7 +314,7 @@ export function ReceiptSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} guardTyped={false} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto w-full max-w-2xl gap-4 bg-surface p-5 pb-8">
         <SheetTitle className="text-lg font-bold">{t('orders.receipt.title')}</SheetTitle>
         {merchant && (

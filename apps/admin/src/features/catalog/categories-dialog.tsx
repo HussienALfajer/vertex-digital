@@ -98,7 +98,10 @@ export function CategoriesDialog() {
               <span className="text-sm text-muted-foreground">
                 {t('catalog.categories.games', { count: category.gameCount })}
               </span>
-              <span className="ms-auto flex items-center gap-1">
+              <fieldset
+                aria-label={category.nameAr}
+                className="m-0 min-w-0 border-0 p-0 ms-auto flex items-center gap-1"
+              >
                 {!archived && (
                   <>
                     <MoveButton
@@ -159,7 +162,7 @@ export function CategoriesDialog() {
                     {t('catalog.actions.archive')}
                   </Button>
                 )}
-              </span>
+              </fieldset>
             </li>
           ))}
         </ul>

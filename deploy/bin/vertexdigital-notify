@@ -1,0 +1,33 @@
+#!/bin/bash
+# Sends one line to the owner's linked Telegram chat from the server itself (audit A10-12), for
+# the failures the apps cannot report: PM2, the API or the database down, a failed backup.
+# Installed as /usr/local/sbin/vertexdigital-notify (root, 700) by deploy/provision.sh.
+#
+#   vertexdigital-notify "<text>"
+#
+# The chat is the live link the bot keeps in the database (S05 rule AL1), remembered in the state
+# folder so a message still goes out while the database is down. Exits non-zero when nothing was
+# sent (no token, no chat, Telegram unreachable); callers log that and go on.
+set -u
+
+SITE_DIR=${VD_SITE_DIR:-/srv/digital.vertexmedia.pro}
+STATE_DIR=${VD_STATE_DIR:-/var/lib/vertexdigital-health}
+text=${1:?usage: vertexdigital-notify <text>}
+
+token=$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$SITE_DIR/shared/.env" 2>/dev/null | tail -1)
+[ -n "$token" ] || exit 1
+
+mkdir -p "$STATE_DIR"
+chat=$(runuser -u postgres -- psql -tAq -d vertex_digital \
+  -c "select chat_id from telegram_links where unlinked_at is null" 2>/dev/null)
+if [[ "$chat" =~ ^-?[0-9]+$ ]]; then
+  echo "$chat" >"$STATE_DIR/telegram-chat"
+else
+  chat=$(cat "$STATE_DIR/telegram-chat" 2>/dev/null || true)
+fi
+[ -n "$chat" ] || exit 1
+
+# The token stays out of the process list: curl reads the address from a file descriptor.
+curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+  --config <(printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$token") \
+  --data-urlencode "chat_id=$chat" --data-urlencode "text=$text" | grep -qx 200

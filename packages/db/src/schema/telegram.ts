@@ -108,10 +108,15 @@ export const telegramMessages = pgTable(
 );
 
 /** Updates already handled (rule TG5): a redelivery finds its id and does nothing. */
-export const telegramUpdates = pgTable('telegram_updates', {
-  updateId: bigint('update_id', { mode: 'number' }).primaryKey(),
-  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const telegramUpdates = pgTable(
+  'telegram_updates',
+  {
+    updateId: bigint('update_id', { mode: 'number' }).primaryKey(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // The review reminder's deletion of old updates, every 5 minutes (audit A10-43).
+  (table) => [index('telegram_updates_received_at_idx').on(table.receivedAt)],
+);
 
 export const telegramPromptKindEnum = pgEnum('telegram_prompt_kind', TELEGRAM_PROMPT_KINDS);
 

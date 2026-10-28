@@ -142,7 +142,7 @@ export function QuickBuySheet({
 
   const value = mainValue(item.savedPlayer, false);
   return (
-    <Sheet open onOpenChange={onOpenChange}>
+    <Sheet open guardTyped={false} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto max-w-lg bg-surface p-5 pb-8">
         <SheetTitle className="sr-only">
           {tq('row.sheetTitle', { label: item.savedPlayer.label })}

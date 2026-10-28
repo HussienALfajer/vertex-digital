@@ -120,7 +120,10 @@ export function GamePricing({ game }: { game: GameDetail }) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="flex justify-end gap-2">
+                      <fieldset
+                        aria-label={product.nameAr}
+                        className="m-0 min-w-0 border-0 p-0 flex justify-end gap-2"
+                      >
                         <Button
                           variant="outline"
                           size="sm"
@@ -144,7 +147,7 @@ export function GamePricing({ game }: { game: GameDetail }) {
                             {t('pricing.actions.archive')}
                           </Button>
                         )}
-                      </span>
+                      </fieldset>
                     </TableCell>
                   </TableRow>
                 );

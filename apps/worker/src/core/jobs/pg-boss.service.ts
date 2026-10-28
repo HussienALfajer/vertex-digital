@@ -13,6 +13,12 @@ import { TelegramAlerts } from '../alerts/telegram-alerts.js';
 import { ENV, type Env } from '../config/env.js';
 
 /**
+ * How long a stop lets running jobs finish before the pool closes: under PM2's `kill_timeout` for
+ * the worker (35 s, `deploy/ecosystem.config.cjs`), which used to kill it mid-job (audit A10-5).
+ */
+export const STOP_TIMEOUT_MS = 25_000;
+
+/**
  * Owns the pg-boss instance (the app role: no schema changes, ADR 0014), started before the jobs
  * register and stopped gracefully on shutdown. Jobs register through `work`, which reports a
  * failure to the logs, Sentry and the admin alert channel before pg-boss retries it.
@@ -46,7 +52,7 @@ export class PgBossService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async onApplicationShutdown(): Promise<void> {
-    await this.boss.stop({ graceful: true });
+    await this.boss.stop({ graceful: true, timeout: STOP_TIMEOUT_MS });
   }
 
   /**

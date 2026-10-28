@@ -3,8 +3,8 @@ import { join, resolve } from 'node:path';
 import type { INestApplicationContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { type EmailTemplate, QUEUES } from '@vertex-digital/contracts';
-import { type Database, emailOutbox, newId } from '@vertex-digital/db';
-import { eq, inArray } from 'drizzle-orm';
+import { type Database, emailOutbox, newId, telegramMessages } from '@vertex-digital/db';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENV, type Env } from '../src/core/config/env.js';
 import { DATABASE } from '../src/core/database/database.module.js';
@@ -13,6 +13,7 @@ import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { PurgeCodesJob } from '../src/jobs/email/purge-codes.job.js';
 import { MAX_EMAIL_ATTEMPTS, SendEmailJob } from '../src/jobs/email/send-email.job.js';
+import { PurgeOutboxesJob } from '../src/jobs/system/purge-outboxes.job.js';
 import { WorkerModule } from '../src/worker.module.js';
 
 /*
@@ -427,6 +428,48 @@ describe('email.purge-codes (rule E4)', () => {
   it('is scheduled every 10 minutes', async () => {
     expect(await app.get(PgBossService).boss.getSchedules(QUEUES.emailPurgeCodes)).toEqual([
       expect.objectContaining({ cron: '*/10 * * * *' }),
+    ]);
+  });
+});
+
+describe('system.purge-outboxes (Q29, audit A10-46)', () => {
+  it('clears a settled email’s address and parameters and a message’s parameters after the retention', async () => {
+    const old = sql`now() - interval '91 days'`;
+    const settledOld = await queue('customer_email_changed', { at: new Date().toISOString() });
+    const settledNew = await queue('customer_email_changed', { at: new Date().toISOString() });
+    const pendingOld = await queue('customer_email_changed', { at: new Date().toISOString() });
+    await db
+      .update(emailOutbox)
+      .set({ status: 'sent', sentAt: new Date(), updatedAt: old })
+      .where(eq(emailOutbox.id, settledOld));
+    await db.update(emailOutbox).set({ status: 'sent' }).where(eq(emailOutbox.id, settledNew));
+    await db.update(emailOutbox).set({ updatedAt: old }).where(eq(emailOutbox.id, pendingOld));
+    const message = (kind: 'ticket_opened' | 'supplier_health', params: Record<string, unknown>) =>
+      db
+        .insert(telegramMessages)
+        .values({ id: newId(), kind, params, status: 'sent', createdAt: old })
+        .returning({ id: telegramMessages.id })
+        .then(([row]) => row?.id as string);
+    const ticket = await message('ticket_opened', { number: 'T-1' });
+    const health = await message('supplier_health', { supplier: 'fake', state: 'down' });
+    try {
+      await app.get(PurgeOutboxesJob).purge();
+      expect(await rowOf(settledOld)).toMatchObject({ toAddress: null, params: null });
+      expect((await rowOf(settledNew))?.toAddress).not.toBeNull();
+      expect((await rowOf(pendingOld))?.toAddress).not.toBeNull();
+      const params = async (id: string) =>
+        (await db.select().from(telegramMessages).where(eq(telegramMessages.id, id)))[0]?.params;
+      expect(await params(ticket)).toEqual({});
+      // The newest state told per supplier is read by the health job: kept.
+      expect(await params(health)).toEqual({ supplier: 'fake', state: 'down' });
+    } finally {
+      await db.delete(telegramMessages).where(inArray(telegramMessages.id, [ticket, health]));
+    }
+  });
+
+  it('is scheduled daily at 04:30 Damascus', async () => {
+    expect(await app.get(PgBossService).boss.getSchedules(QUEUES.systemPurgeOutboxes)).toEqual([
+      expect.objectContaining({ cron: '30 4 * * *', timezone: 'Asia/Damascus' }),
     ]);
   });
 });

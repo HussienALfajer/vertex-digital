@@ -1,5 +1,5 @@
 import type { QuickLinkResolve } from '@vertex-digital/contracts';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl } from '@/lib/server-env';
 import type { QuickLinkOpen } from './handoff';
 
 /*
@@ -32,6 +32,7 @@ export async function resolveQuickLink(
   try {
     const response = await fetch(`${apiInternalUrl()}/api/q/${code.toUpperCase()}${query}`, {
       cache: 'no-store',
+      signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
       headers: { accept: 'application/json', ...(visitor && { 'x-forwarded-for': visitor }) },
     });
     if (!response.ok) return home;

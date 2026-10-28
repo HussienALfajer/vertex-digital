@@ -341,7 +341,7 @@ export class ContentFaqService {
         { type: 'faq', id: FAQ_ENTITY_ID },
         { revision, sections: publication.sections, items: publication.items },
       );
-      await queueStoreRevalidate(tx, this.jobs);
+      await queueStoreRevalidate(tx, this.jobs, 'content');
       return publication;
     });
   }

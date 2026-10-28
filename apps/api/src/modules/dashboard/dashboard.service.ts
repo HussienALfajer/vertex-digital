@@ -7,8 +7,10 @@ import {
   damascusDayBounds,
   isRateStale,
   marginPercent,
+  WORKER_SILENT_MINUTES,
 } from '@vertex-digital/contracts';
 import { DepositReviewService } from '../deposits/index.js';
+import { HealthService } from '../health/index.js';
 import { MerchantsAdminService } from '../merchants/index.js';
 import { OrderActionsService } from '../orders/index.js';
 import { PricingService } from '../pricing/index.js';
@@ -40,6 +42,7 @@ export class DashboardService {
     private readonly support: SupportAdminService,
     private readonly reconciliation: ReconciliationService,
     private readonly merchants: MerchantsAdminService,
+    private readonly health: HealthService,
   ) {}
 
   async dashboard(now = new Date()): Promise<Dashboard> {
@@ -56,6 +59,7 @@ export class DashboardService {
       tickets,
       books,
       applications,
+      lastBeat,
     ] = await Promise.all([
       this.orders.figures(bounds, now),
       this.deposits.dashboardFigures(now, bounds.todayStart),
@@ -68,13 +72,21 @@ export class DashboardService {
       this.support.waiting(),
       this.reconciliation.attention(now),
       this.merchants.waiting(),
+      this.health.lastWorkerBeat(),
     ]);
     const { today, yesterday, live } = orders;
     const profit = (period: typeof today) => period.salesUsdUnits - period.costUsdUnits;
     const rateStale = isRateStale(rate?.createdAt ?? null, now);
 
     // Rule DB6, in its order; an item at zero is left out.
+    const workerSilent =
+      lastBeat !== null && now.getTime() - lastBeat.getTime() > WORKER_SILENT_MINUTES * 60_000;
     const items: Item[] = [
+      // Audit A10-53: a stopped worker stops deposits, deliveries and emails; null is a store
+      // whose worker never ran yet.
+      ...(workerSilent
+        ? [{ kind: 'worker_silent' as const, count: 1, oldestAt: lastBeat, target: '/' }]
+        : []),
       { kind: 'orders_review', count: live.review, target: '/orders/live' },
       { kind: 'orders_manual', count: live.manual, target: '/orders/live' },
       {

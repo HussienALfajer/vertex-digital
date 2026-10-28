@@ -146,7 +146,10 @@ export function PriceListsPage() {
                     </TableCell>
                     <TableCell>
                       {!list.archivedAt && (
-                        <span className="flex justify-end gap-2">
+                        <fieldset
+                          aria-label={list.name}
+                          className="m-0 min-w-0 border-0 p-0 flex justify-end gap-2"
+                        >
                           <Button variant="outline" size="sm" onClick={() => setRenaming(list)}>
                             {t('pricing.lists.rename')}
                           </Button>
@@ -155,7 +158,7 @@ export function PriceListsPage() {
                               {t('pricing.actions.archive')}
                             </Button>
                           )}
-                        </span>
+                        </fieldset>
                       )}
                     </TableCell>
                   </TableRow>

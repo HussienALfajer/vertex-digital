@@ -12,7 +12,7 @@ import type {
   RemoveMerchantLogo,
   RevokeMerchant,
 } from '@vertex-digital/contracts';
-import { api, call } from '../../lib/api/client';
+import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
 import { type ApplicationsSearch, type MerchantsSearch, statusOf, tabOf } from './merchants-search';
 
@@ -22,6 +22,18 @@ import { type ApplicationsSearch, type MerchantsSearch, statusOf, tabOf } from '
  * merchants list (MA6, MA7), the merchants list and the merchant settings. Keys start with
  * `merchants`.
  */
+
+/**
+ * MA8: the applications under review, for the navigation badge, read every minute in the
+ * background through a count of its own (audit A10-25: it read the whole dashboard).
+ */
+export const waitingApplicationsQuery = queryOptions({
+  queryKey: ['merchants', 'applications', 'waiting'],
+  queryFn: () =>
+    call(api.GET('/api/admin/merchant-applications/waiting', { headers: BACKGROUND_REQUEST })),
+  select: (badge) => badge.count,
+  refetchInterval: 60_000,
+});
 
 /** MA8: under review oldest first, the other tabs newest first. */
 export const applicationsQuery = (search: ApplicationsSearch) =>

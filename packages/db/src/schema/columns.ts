@@ -1,4 +1,5 @@
 import { CURRENCIES } from '@vertex-digital/contracts';
+import { sql } from 'drizzle-orm';
 import { bigint, customType, pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { newId } from '../id.js';
 
@@ -10,13 +11,16 @@ import { newId } from '../id.js';
 /** Primary key: a UUIDv7 generated in the application. */
 export const id = () => uuid('id').primaryKey().$defaultFn(newId);
 
-/** Creation and last-update times, in UTC. */
+/**
+ * Creation and last-update times, in UTC, both from the database's clock: reads compare them with
+ * `now()` (audit A10-48: the update time came from the app's clock).
+ */
 export const timestamps = () => ({
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow()
-    .$onUpdate(() => new Date()),
+    .$onUpdate(() => sql`now()`),
 });
 
 /** Set when a business record is archived; business records are never hard-deleted. */
