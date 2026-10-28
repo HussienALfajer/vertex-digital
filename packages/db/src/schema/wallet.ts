@@ -93,6 +93,8 @@ export const ledgerJournals = pgTable(
       sql`char_length(${table.idempotencyKey}) between 1 and 200`,
     ),
     check('ledger_journals_posting_count_check', sql`${table.postingCount} >= 2`),
+    /** S13 R6 reads journals by time (audit A09-12). */
+    index('ledger_journals_created_at_idx').on(table.createdAt),
   ],
 );
 

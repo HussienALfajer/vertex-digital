@@ -164,7 +164,9 @@ function AuditFilters({
   const [actorKind, setActorKind] = useState<string>(search.actorKind ?? ALL);
   const [action, setAction] = useState<string>(search.action ?? ALL);
   const [entityType, setEntityType] = useState<string>(search.entityType ?? ALL);
-  const [invalid, setInvalid] = useState<{ actorId?: boolean; entityId?: boolean }>({});
+  const [invalid, setInvalid] = useState<{ actorId?: boolean; entityId?: boolean; to?: boolean }>(
+    {},
+  );
   const withActorId = actorKind === 'customer' || actorKind === 'admin';
   const { ref, focusInvalid } = useFocusInvalid();
 
@@ -174,20 +176,24 @@ function AuditFilters({
     const value = (name: string) => String(data.get(name) ?? '').trim();
     const actorId = withActorId ? value('actorId') : '';
     const entityId = value('entityId');
+    const from = value('from');
+    const to = value('to');
     const found = {
       actorId: !!actorId && !isUuid(actorId),
       entityId: !!entityId && !isUuid(entityId),
+      // Calendar days compare as text (audit A09-13).
+      to: !!from && !!to && to < from,
     };
     setInvalid(found);
-    if (found.actorId || found.entityId) return focusInvalid();
+    if (found.actorId || found.entityId || found.to) return focusInvalid();
     const next: Record<string, string> = {
       actorKind,
       actorId,
       action,
       entityType,
       entityId,
-      from: value('from'),
-      to: value('to'),
+      from,
+      to,
     };
     onSearch(
       Object.fromEntries(
@@ -248,12 +254,13 @@ function AuditFilters({
           <FieldLabel>{t('audit.filters.from')}</FieldLabel>
           <Input name="from" type="date" dir="ltr" defaultValue={search.from} />
         </Field>
-        <Field>
+        <Field invalid={invalid.to}>
           <FieldLabel>{t('audit.filters.to')}</FieldLabel>
           <Input name="to" type="date" dir="ltr" defaultValue={search.to} />
+          <FieldError match={!!invalid.to}>{t('audit.filters.invalidRange')}</FieldError>
         </Field>
         <div className="sm:col-span-2 lg:col-span-4 empty:hidden">
-          <InvalidAlert show={!!(invalid.actorId || invalid.entityId)} />
+          <InvalidAlert show={!!(invalid.actorId || invalid.entityId || invalid.to)} />
         </div>
         <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
           <Button type="submit">{t('audit.filters.apply')}</Button>

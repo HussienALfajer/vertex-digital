@@ -127,11 +127,15 @@ export class ReconciliationRunner {
     now = new Date(),
   ): Promise<string | null | { retryAt: Date }> {
     return this.db.transaction(async (tx) => {
-      await failStaleRuns(tx, now);
       // One nightly run per day: concurrent creations queue on the day's lock.
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${`reconciliation:${businessDate}`}))`,
       );
+      // The API's manual and count starts take this lock too: a manual run started at 00:30 is
+      // seen as running here, never met as a unique violation that fails the job (audit A09-7).
+      // Taken before any run row (the stale runs below), in the order the API takes them.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:start'))`);
+      await failStaleRuns(tx, now);
       const [existing] = await tx
         .select({ id: reconciliationRuns.id, status: reconciliationRuns.status })
         .from(reconciliationRuns)

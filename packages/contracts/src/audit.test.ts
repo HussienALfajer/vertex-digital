@@ -60,4 +60,17 @@ describe('the audit list query', () => {
     expect(auditListQuerySchema.safeParse({ action: 'customer.deleted' }).success).toBe(false);
     expect(auditListQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
   });
+
+  it('refuses a range that ends before it starts (audit A09-13)', () => {
+    const reversed = auditListQuerySchema.safeParse({
+      from: '2026-10-20T00:00:00Z',
+      to: '2026-10-10T00:00:00Z',
+    });
+    expect(reversed.success).toBe(false);
+    expect(reversed.error?.issues[0]?.path).toEqual(['to']);
+    // The same instant on both ends is a range, and either end alone is too.
+    const at = '2026-10-10T00:00:00Z';
+    expect(auditListQuerySchema.safeParse({ from: at, to: at }).success).toBe(true);
+    expect(auditListQuerySchema.safeParse({ to: at }).success).toBe(true);
+  });
 });

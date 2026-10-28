@@ -36415,8 +36415,7 @@
           },
           "externalReference": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 100
+            "maxLength": 400
           },
           "reason": {
             "type": "string",
@@ -36456,8 +36455,7 @@
           },
           "externalReference": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 100
+            "maxLength": 400
           },
           "reason": {
             "type": "string",

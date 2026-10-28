@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import i18n from '../../i18n';
 import ar from '../../i18n/locales/ar.json';
-import { changesOf, fieldValue, flatDetails } from './audit-labels';
+import { changesOf, fieldValue, flatDetails, shortId } from './audit-labels';
 
 const t = i18n.t.bind(i18n);
 
@@ -73,5 +73,15 @@ describe('margin rules in the audit log (S06)', () => {
       '$0.00',
       '$0.15',
     ]);
+  });
+});
+
+describe('shortId', () => {
+  it('tells apart records written in the same minute (A09-40)', () => {
+    // Two UUIDv7 of the same minute share their first 8 characters, the time.
+    const first = '01a1806a-1c2b-7000-8000-00000000a1b2';
+    const second = '01a1806a-1c2b-7000-8000-00000000c3d4';
+    expect(shortId(first)).not.toBe(shortId(second));
+    expect(shortId(first)).toBe('0000a1b2');
   });
 });

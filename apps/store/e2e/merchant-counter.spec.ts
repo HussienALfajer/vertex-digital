@@ -383,6 +383,21 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
     expect(api.last('POST /api/player-checks')).toBeUndefined();
   });
 
+  test('while purchases are stopped the notice shows and no pack opens a sale (A09-24)', async ({
+    page,
+    api,
+  }) => {
+    pos(api).on('GET /api/store/status', 200, {
+      registrationOpen: true,
+      purchasesStopped: true,
+      depositsStopped: false,
+    });
+    await page.goto('/merchant/pos');
+    await expect(page.getByText(ar.purchase.stopped)).toBeVisible();
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    await expect(page.getByRole('button', { name: /325 UC/ })).toBeDisabled();
+  });
+
   test('a typed price that was not saved is said, with the order to set it on (A06-7)', async ({
     page,
     api,
@@ -646,6 +661,21 @@ test.describe('bulk orders (F33, BK1–BK5)', () => {
     });
     await page.goto('/merchant/bulk');
     await expect(page.getByText(tools.common.frozen)).toBeVisible();
+    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
+    await expect(page.getByRole('button', { name: tools.bulk.check })).toBeDisabled();
+  });
+
+  test('while purchases are stopped no check spends the hour’s checks (A09-24)', async ({
+    page,
+    api,
+  }) => {
+    bulk(api).on('GET /api/store/status', 200, {
+      registrationOpen: true,
+      purchasesStopped: true,
+      depositsStopped: false,
+    });
+    await page.goto('/merchant/bulk');
+    await expect(page.getByText(ar.purchase.stopped)).toBeVisible();
     await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
     await expect(page.getByRole('button', { name: tools.bulk.check })).toBeDisabled();
   });

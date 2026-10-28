@@ -1,8 +1,7 @@
 'use client';
 
-import type { StoreStatus } from '@vertex-digital/contracts';
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useStoreStatus } from '@/lib/store-status';
 
 // Downloaded only while something is stopped: the first load stays within its budget.
 const StopNotice = dynamic(() => import('./stop-notice').then((module) => module.StopNotice));
@@ -10,23 +9,10 @@ const StopNotice = dynamic(() => import('./stop-notice').then((module) => module
 /**
  * The emergency stop notice (S05 rule SW9): a calm fixed text under the header on every page
  * while purchases or deposits are stopped, naming what is stopped. Read in the browser so every
- * page stays static; the API lets the browser keep the answer for 10 seconds.
+ * page stays static, again on each page and when the tab is seen (audit A09-22).
  */
 export function StopBanner() {
-  const [status, setStatus] = useState<StoreStatus | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetch('/api/store/status', { credentials: 'same-origin' })
-      .then((response) => (response.ok ? (response.json() as Promise<StoreStatus>) : null))
-      .catch(() => null)
-      .then((value) => {
-        if (active) setStatus(value);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const status = useStoreStatus();
 
   const stopped =
     status?.purchasesStopped && status.depositsStopped

@@ -229,8 +229,9 @@ export class ReconciliationService {
     const now = new Date();
     const row = await this.db
       .transaction(async (tx) => {
-        // Manual starts queue on one lock, so the cooldown is read after the previous commit.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:manual'))`);
+        // Run starts queue on one lock (manual, count and the worker's nightly run), so the
+        // cooldown and the running run are read after the previous start's commit (A09-7).
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:start'))`);
         const [last] = await tx
           .select({ startedAt: reconciliationRuns.startedAt })
           .from(reconciliationRuns)
@@ -297,6 +298,8 @@ export class ReconciliationService {
     const now = new Date();
     const runId = await this.db
       .transaction(async (tx) => {
+        // The run starts' lock, as `startManual` and the nightly run take it (A09-7).
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:start'))`);
         await failStaleRuns(tx, now);
         const id = newId();
         await tx
@@ -420,11 +423,23 @@ export class ReconciliationService {
     });
   }
 
-  /** Rule RN7: the newest result of each check and subject, a mismatch not explained. */
+  /**
+   * Rule RN7: the newest result of each check and subject, a mismatch not explained, with when the
+   * check and subject started mismatching without a break, read in the same query (audit A09-9).
+   */
   private async openMismatches(): Promise<OpenMismatch[]> {
-    const { rows } = await this.db.execute<{ id: string }>(sql`
-      select newest.id from (
-        select distinct on ("check", subject) id, status
+    const { rows } = await this.db.execute<{ id: string; first_seen: Date | string | null }>(sql`
+      select newest.id, (
+        select min(r.created_at) from reconciliation_results r
+        where r."check" = newest."check" and r.subject = newest.subject
+          and r.created_at > coalesce((
+            select max(b.created_at) from reconciliation_results b
+            where b."check" = newest."check" and b.subject = newest.subject
+              and b.status <> 'mismatch'
+          ), '-infinity')
+      ) as first_seen
+      from (
+        select distinct on ("check", subject) id, "check", subject, status
         from reconciliation_results
         order by "check", subject, created_at desc, id desc
       ) newest
@@ -440,29 +455,17 @@ export class ReconciliationService {
           rows.map((row) => row.id),
         ),
       );
-    const open: OpenMismatch[] = [];
-    for (const result of await this.withExplanations(results)) {
-      open.push({ ...result, firstSeenAt: await this.firstSeen(result) });
-    }
+    const firstSeen = new Map(rows.map((row) => [row.id, row.first_seen]));
+    const open: OpenMismatch[] = (await this.withExplanations(results)).map((result) => {
+      const at = firstSeen.get(result.id);
+      return { ...result, firstSeenAt: at ? new Date(at).toISOString() : result.createdAt };
+    });
     // Internal checks first, then the newest first.
     return open.sort(
       (a, b) =>
         Number(isInternalCheck(b.check)) - Number(isInternalCheck(a.check)) ||
         b.createdAt.localeCompare(a.createdAt),
     );
-  }
-
-  /** When the check and subject started mismatching without a break. */
-  private async firstSeen(result: ReconciliationResult): Promise<string> {
-    const { rows } = await this.db.execute<{ at: Date | null }>(sql`
-      select min(created_at) as at from reconciliation_results
-      where "check" = ${result.check} and subject = ${result.subject}
-        and created_at > coalesce((
-          select max(created_at) from reconciliation_results
-          where "check" = ${result.check} and subject = ${result.subject} and status <> 'mismatch'
-        ), '-infinity')`);
-    const at = rows[0]?.at;
-    return at ? new Date(at).toISOString() : result.createdAt;
   }
 
   private async detail(row: RunRow): Promise<ReconciliationRunDetail> {

@@ -349,7 +349,10 @@ function ReferenceHolder({ holder }: { holder: unknown }) {
   }
   return (
     <p className="text-sm text-muted-foreground">
-      {t('deposits.approve.takenByAdjustment')} <code dir="ltr">{owner.id}</code>
+      {owner.kind === 'treasury_movement'
+        ? t('deposits.approve.takenByMovement')
+        : t('deposits.approve.takenByAdjustment')}{' '}
+      <code dir="ltr">{owner.id}</code>
     </p>
   );
 }

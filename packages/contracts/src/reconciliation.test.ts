@@ -226,6 +226,29 @@ describe('movements', () => {
       paths({ ...base, from: 'outside_usd', outsideCategory: 'owner', openingBalance: true }),
     ).toBeUndefined();
     expect(paths({ ...base, reason: 'no' })).toEqual(['reason']);
+    // A reference compares as deposit claims do: marks, spaces and Arabic-Indic digits cleaned (A09-3).
+    const unclaimed = {
+      ...base,
+      from: 'outside_syp',
+      to: 'sham_cash_syp',
+      sentUnits: 10_000 * 100,
+      receivedUnits: 10_000 * 100,
+      outsideCategory: 'unclaimed_receipt',
+    } as const;
+    expect(
+      createTreasuryMovementSchema.parse({ ...unclaimed, externalReference: '\u200f١٢٣ ٤٥٦٧٨' })
+        .externalReference,
+    ).toBe('12345678');
+    // An unclaimed USDT receipt names its TXID, as a hash or an explorer link.
+    const usdt = {
+      ...unclaimed,
+      from: 'outside_usd',
+      to: 'usdt_trc20',
+      sentUnits: 5 * USD,
+      receivedUnits: 5 * USD,
+    } as const;
+    expect(paths({ ...usdt, externalReference: 'NOT-A-TXID' })).toEqual(['externalReference']);
+    expect(paths({ ...usdt, externalReference: `0x${'ab'.repeat(32)}` })).toBeUndefined();
   });
 
   it('validates a supplier correction and normalizes its order number', () => {

@@ -97,9 +97,10 @@ export function MovementsTab({
               <TableHead>{t('reconciliation.movements.sent')}</TableHead>
               <TableHead>{t('reconciliation.movements.received')}</TableHead>
               <TableHead>{t('reconciliation.movements.feeOrRate')}</TableHead>
-              <TableHead>{t('reconciliation.movement.category')}</TableHead>
-              <TableHead>{t('reconciliation.movement.reference')}</TableHead>
-              <TableHead>{t('reconciliation.movement.reason')}</TableHead>
+              {/* Column names of their own, not the dialog's labels (audit A09-39). */}
+              <TableHead>{t('reconciliation.movements.category')}</TableHead>
+              <TableHead>{t('reconciliation.movements.reference')}</TableHead>
+              <TableHead>{t('reconciliation.movements.reason')}</TableHead>
               <TableHead>{t('reconciliation.movements.admin')}</TableHead>
               <TableHead>
                 <span className="sr-only">{t('reconciliation.places.actions')}</span>

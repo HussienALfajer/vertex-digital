@@ -6,6 +6,7 @@ import {
   type Compared,
   type Dashboard,
   formatUsd,
+  formatUsdCents,
   LIVE_COLUMNS,
   type LiveColumn,
 } from '@vertex-digital/contracts';
@@ -96,7 +97,9 @@ export function DashboardPage() {
   useAdminStream(refetch);
   useVisibleAgain(() => void dashboard.refetch());
   const now = useMinuteClock();
-  const stale = dashboard.isSuccess && now - dashboard.dataUpdatedAt > STALE_AFTER_MS;
+  // A failed refetch leaves the query in error with its data: the note shows then too (S11
+  // screens, audit A09-27).
+  const stale = !!dashboard.data && now - dashboard.dataUpdatedAt > STALE_AFTER_MS;
 
   return (
     <>
@@ -183,10 +186,11 @@ function Content({ data }: { data: Dashboard }) {
         </Kpi>
         <Kpi
           label={t('dashboard.profit')}
-          value={formatUsd(data.profit.today)}
+          // Rounded to the cent as R1 shows it (S13 RP9, audit A09-37); costs keep sub-cent.
+          value={formatUsdCents(data.profit.today)}
           compared={data.profit}
           asOf={data.generatedAt}
-          format={formatUsd}
+          format={formatUsdCents}
         >
           <p className="text-sm text-muted-foreground">
             {data.marginPercent === null

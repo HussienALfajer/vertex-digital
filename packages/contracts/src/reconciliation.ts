@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paymentReferenceInputSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import {
   amountUnitsSchema,
@@ -12,6 +13,7 @@ import {
 } from './money.js';
 import { orderNumberSchema } from './orders.js';
 import { type SupplierCode, supplierCodeSchema } from './suppliers.js';
+import { normalizeTxid } from './usdt.js';
 import {
   ADJUSTMENT_CONFIRMATION_THRESHOLD_USD_UNITS,
   type JournalKind,
@@ -251,7 +253,11 @@ export function treasuryConfirmationError(
 }
 
 const reasonSchema = z.string().trim().min(5).max(500);
-const externalReferenceSchema = z.string().trim().min(1).max(100);
+/**
+ * Cleaned as the claims of deposits are (F4-3: marks, spaces and Arabic-Indic digits), so one
+ * receipt compares equal however it was typed or pasted (audit A09-3).
+ */
+const externalReferenceSchema = paymentReferenceInputSchema(100);
 const positiveUnitsSchema = amountUnitsSchema.refine((units) => units > 0, 'Expected above zero');
 
 /** `POST /api/admin/treasury/movements` (rules T2–T8). */
@@ -300,6 +306,19 @@ export const createTreasuryMovementSchema = z
         code: 'custom',
         path: ['openingBalance'],
         message: 'An opening balance comes from outside, category owner',
+      });
+    }
+    // A USDT transfer booked as the store's names its TXID, as a deposit's claim does (A09-3).
+    if (
+      input.outsideCategory === 'unclaimed_receipt' &&
+      (input.to === 'usdt_trc20' || input.to === 'usdt_bep20') &&
+      input.externalReference !== undefined &&
+      normalizeTxid(input.externalReference) === null
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['externalReference'],
+        message: 'Expected a TXID or an explorer link',
       });
     }
   })

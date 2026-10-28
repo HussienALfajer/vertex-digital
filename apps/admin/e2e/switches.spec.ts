@@ -111,6 +111,25 @@ test.describe('store switches', () => {
   });
 });
 
+test('a supplier’s pause is named as one, linked to its page (A09-41)', async ({ page, admin }) => {
+  admin.switchChanges = [
+    {
+      id: '0199a000-0000-7000-8000-000000000590',
+      switch: 'wdgzone_paused',
+      value: true,
+      channel: 'admin',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  await open(page, admin, '/reports');
+  await expect(page.getByText(ar.switches.banner.supplierPausedTitle)).toBeVisible();
+  await expect(page.getByText(ar.switches.banner.pausedTitle)).toHaveCount(0);
+  await expect(page.getByRole('link', { name: ar.switches.banner.supplierAction })).toHaveAttribute(
+    'href',
+    '/suppliers/wdgzone',
+  );
+});
+
 // RTL screenshots in both themes: the design review evidence (ADR 0011).
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {

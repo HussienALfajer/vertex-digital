@@ -27,3 +27,16 @@ export function OverviewSkeleton() {
     </div>
   );
 }
+
+/**
+ * A run's failure is the worker's English error: labelled in Arabic, kept left to right so its
+ * punctuation stays in place (audit A09-35).
+ */
+export function FailureLine({ failure }: { failure: string }) {
+  const { t } = useTranslation();
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t('reconciliation.status.failure')} <bdi dir="ltr">{failure}</bdi>
+    </p>
+  );
+}

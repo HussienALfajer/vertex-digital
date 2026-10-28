@@ -71,7 +71,9 @@ test('after a manual run without a nightly one, the status and its warnings show
   ];
   await open(page, admin);
   await expect(page.getByText(r.empty.title)).toBeHidden();
-  await expect(page.getByText(r.status.clean)).toBeVisible();
+  // No night has checked the books yet: no "clean" badge on a manual run's word (A09-38).
+  await expect(page.getByText(r.status.noNightly)).toBeVisible();
+  await expect(page.getByText(r.status.clean)).toHaveCount(0);
   await expect(page.getByRole('listitem').filter({ hasText: r.checks.usdt_balance })).toContainText(
     r.skipReasons.opening_missing,
   );
@@ -188,6 +190,66 @@ test('a movement by mistake is reversed once; both rows show', async ({ page, ad
   await expect(page.getByText(r.movements.reversal, { exact: true })).toBeVisible();
   await expect(page.getByText(r.movements.reversed, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: r.reverse.open })).toHaveCount(0);
+});
+
+test('a supplier correction above $100 asks for the amount and re-authentication, with one key (A09-31)', async ({
+  page,
+  admin,
+}) => {
+  admin.reauthenticationRequired = true;
+  await open(page, admin);
+  await placeRow(page, fakeSupplier).getByRole('button', { name: r.places.correct }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: r.correction.title })).toBeVisible();
+  // "خصم المورد" is the default direction.
+  await expect(
+    dialog.getByRole('button', { name: r.correction.directions.decrease }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await field(page, r.correction.amount).fill('120.123456');
+  await field(page, ar.wallets.adjust.confirm).fill('120.123456');
+  await field(page, r.correction.order).fill('VO-7KQ2MX');
+  await field(page, r.movement.reason).fill('خصم المورد طلبًا مكررًا');
+  await dialog.getByRole('button', { name: r.correction.submit }).click();
+  await reauthenticate(page);
+  // An unknown order is said under its field, not as a record to reload (A09-32).
+  await expect(dialog.getByText(r.correction.errors.orderNotFound)).toBeVisible();
+  await field(page, r.correction.order).fill('');
+  await dialog.getByRole('button', { name: r.correction.submit }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(admin.lastBody('POST /api/admin/treasury/supplier-corrections')).toMatchObject({
+    supplier: 'fake',
+    direction: 'decrease',
+    amountUnits: 120_123_456,
+    amountConfirmationUnits: 120_123_456,
+  });
+  await page.getByRole('tab', { name: r.tabs.movements }).click();
+  await expect(page.getByText(r.movements.correction).first()).toBeVisible();
+});
+
+test('the manual run comes back when its 5 minutes end, and a finished run refreshes the places (A09-28, A09-29)', async ({
+  page,
+  admin,
+}) => {
+  await page.clock.install();
+  admin.reconciliation.seed();
+  admin.reconciliation.manualAvailableAt = new Date(Date.now() + 5 * 60_000).toISOString();
+  await open(page, admin);
+  const runNow = page.getByRole('button', { name: r.runNow });
+  await expect(runNow).toBeDisabled();
+  await page.clock.runFor(6 * 60_000);
+  await expect(runNow).toBeEnabled();
+  // A run that ends while the page is open: the places table shows its new balance.
+  admin.reconciliation.manualAvailableAt = null;
+  await runNow.click();
+  await expect(page.getByRole('status')).toBeVisible();
+  admin.reconciliation.running = null;
+  admin.reconciliation.external['supplier:fake'] = {
+    units: 180 * USD,
+    at: new Date().toISOString(),
+    source: 'supplier',
+  };
+  await page.clock.runFor(11_000);
+  await expect(placeRow(page, fakeSupplier)).toContainText('180.00');
 });
 
 test('the history opens a run with every check', async ({ page, admin }) => {

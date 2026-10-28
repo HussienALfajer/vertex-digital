@@ -19,6 +19,7 @@ import {
   queueTelegramMessage,
   recordAudit,
   type Transaction,
+  unclaimedReceiptHolder,
   usdtCandidateMatch,
   usdtDeposits,
   usdtTransfers,
@@ -114,12 +115,16 @@ export async function transferHeldElsewhere(
   return txidClaimed(tx, transfer.txid);
 }
 
-/** True when `txid` is claimed in `payment_references` under either USDT network. */
+/**
+ * True when `txid` is claimed in `payment_references` under either USDT network, or booked as the
+ * store's by an `unclaimed_receipt` treasury movement (audit A09-3): either way it is never
+ * credited to a deposit, and the scan goes on past it.
+ */
 export async function txidClaimed(tx: Transaction, txid: string): Promise<boolean> {
   for (const method of USDT_METHODS) {
     if (await paymentReferenceOwner(tx, method, txid)) return true;
   }
-  return false;
+  return (await unclaimedReceiptHolder(tx, 'usdt_trc20', txid)) !== null;
 }
 
 export interface ExactMatch {

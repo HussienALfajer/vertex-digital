@@ -51,6 +51,7 @@ import { useNotificationEvents } from '@/features/notifications/live';
 import { listOrders } from '@/features/orders/requests';
 import { STAGE_TONES, stageText } from '@/features/orders/stages';
 import { sendAttempt } from '@/features/purchase/attempt';
+import { usePurchasesStopped } from '@/features/purchase/customer';
 import { checkFields, type FieldValues } from '@/features/purchase/fields';
 import { freesKey } from '@/features/purchase/order-key';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
@@ -58,6 +59,7 @@ import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { apiRequest, type Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { parseSellingPrice } from './form';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
@@ -107,6 +109,8 @@ export function PosPage() {
   const [help, setHelp] = useState(false);
   // S21 MA1: a frozen merchant reads only; the packs stay shown but open nothing.
   const frozen = isFrozenCustomer(useCustomer());
+  // S05 SW7, BB7: while purchases are stopped the packs open nothing either (audit A09-24).
+  const stopped = usePurchasesStopped();
 
   useEffect(() => {
     if (state.status === 'ready' && gameId === null) setGameId(state.data[0]?.id ?? null);
@@ -161,8 +165,9 @@ export function PosPage() {
         </Button>
       </div>
       {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
+      {stopped && <FormAlert>{t('purchase.stopped')}</FormAlert>}
       {game ? (
-        <GamePanel key={game.id} game={game} frozen={frozen} onPlaced={strip.reload} />
+        <GamePanel key={game.id} game={game} frozen={frozen || stopped} onPlaced={strip.reload} />
       ) : (
         <EmptyState icon={<CircleAlertIcon />} title={tm('pos.chooseGame')} />
       )}

@@ -32,10 +32,12 @@ import { freesCheckoutKey } from '@/features/cart/checkout-key';
 import { lineRefusals, payCart } from '@/features/cart/requests';
 import { centsParam } from '@/features/deposits/amounts';
 import { sendAttempt } from '@/features/purchase/attempt';
+import { usePurchasesStopped } from '@/features/purchase/customer';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { apiRequest, type Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { checkBulk, getMerchantGames } from './requests';
@@ -121,6 +123,8 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   const fileRef = useRef<HTMLInputElement>(null);
   // S21 MA1: a frozen merchant reads only; S20 MT2: the terms sheet after a refusal.
   const frozen = isFrozenCustomer(useCustomer());
+  // S05 SW7, BB7: no check (it spends the hour's checks) and no payment while stopped (A09-24).
+  const stopped = usePurchasesStopped();
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const game = games.find((item) => item.id === gameId) ?? null;
@@ -183,6 +187,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   const payable =
     result !== null &&
     !frozen &&
+    !stopped &&
     invalidCount === 0 &&
     confirmCount === 0 &&
     lines.length > 0 &&
@@ -232,6 +237,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
           <p className="text-sm text-muted-foreground">{tm('bulk.body')}</p>
         </div>
         {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
+        {stopped && <FormAlert>{t('purchase.stopped')}</FormAlert>}
         <Field>
           <FieldLabel>{tm('bulk.game')}</FieldLabel>
           <Select
@@ -289,7 +295,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
           </Button>
           <Button
             size="xl"
-            disabled={frozen || pending || !game || text.trim() === ''}
+            disabled={frozen || stopped || pending || !game || text.trim() === ''}
             onClick={() => void check()}
           >
             <SearchCheckIcon aria-hidden="true" />

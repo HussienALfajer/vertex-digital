@@ -21,6 +21,13 @@ describe('report periods (rule RP1)', () => {
 
   it('takes ISO dates and an optional breakdown', () => {
     expect(reportQuerySchema.parse({ from: '2026-10-01', to: '2026-10-11' }).by).toBeUndefined();
+    // Year 0 is an ISO date PostgreSQL refuses: the contract refuses it first (A09-18).
+    expect(reportQuerySchema.safeParse({ from: '0000-01-01', to: '2026-10-11' }).success).toBe(
+      false,
+    );
+    expect(reportQuerySchema.safeParse({ from: '2000-01-01', to: '2000-01-01' }).success).toBe(
+      true,
+    );
     expect(reportQuerySchema.safeParse({ from: '2026-10-1', to: '2026-10-11' }).success).toBe(
       false,
     );

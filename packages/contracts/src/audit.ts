@@ -942,6 +942,11 @@ export const auditListQuerySchema = cursorQuerySchema
     from: z.iso.datetime({ offset: true }).optional(),
     to: z.iso.datetime({ offset: true }).optional(),
   })
+  // A reversed range is refused, not answered with an empty page (audit A09-13).
+  .refine((query) => !query.from || !query.to || Date.parse(query.from) <= Date.parse(query.to), {
+    path: ['to'],
+    message: 'The end comes before the start',
+  })
   .meta({ id: 'AuditListQuery' });
 
 export type AuditListQuery = z.infer<typeof auditListQuerySchema>;

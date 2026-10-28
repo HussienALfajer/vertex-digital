@@ -35,7 +35,7 @@ import {
   SettingsIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatDay, formatSince, formatTime } from '../../lib/format';
@@ -45,7 +45,7 @@ import { ExplainDialog } from './explain-dialog';
 import { HistoryTab } from './history-tab';
 import { MovementDialog } from './movement-dialog';
 import { MovementsTab } from './movements-tab';
-import { overviewQuery, placesQuery, useStartRun } from './reconciliation.queries';
+import { overviewQuery, placesQuery, useAfterRunEnds, useStartRun } from './reconciliation.queries';
 import { money, placeLabel, resultStatusLabel, subjectLabel } from './reconciliation-labels';
 import { OpenMismatchList } from './reconciliation-results';
 import {
@@ -55,7 +55,7 @@ import {
   tabOf,
   withTab,
 } from './reconciliation-search';
-import { LoadError, OverviewSkeleton } from './reconciliation-states';
+import { FailureLine, LoadError, OverviewSkeleton } from './reconciliation-states';
 import { SettingsSheet } from './settings-sheet';
 
 type Place = MoneyPlaces['places'][number];
@@ -80,6 +80,7 @@ export function ReconciliationPage({
   const { t } = useTranslation();
   const overview = useQuery(overviewQuery);
   const places = useQuery(placesQuery);
+  useAfterRunEnds(overview.data);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const close = () => setDialog(null);
@@ -245,10 +246,15 @@ function StatusCard({ overview }: { overview: ReconciliationOverview }) {
           <div className="flex flex-wrap items-center gap-2">
             {lastNightly?.status === 'failed' ? (
               <Badge tone="danger">{t('reconciliation.status.failed')}</Badge>
-            ) : open === 0 ? (
-              <Badge tone="success">{t('reconciliation.status.clean')}</Badge>
-            ) : (
+            ) : open > 0 ? (
               <Badge tone="danger">{t('reconciliation.status.mismatches', { count: open })}</Badge>
+            ) : (
+              // "Clean" only once a night has checked every book, and not while a run waits to
+              // read a balance again (audit A09-38).
+              lastNightly &&
+              !running?.recheckAt && (
+                <Badge tone="success">{t('reconciliation.status.clean')}</Badge>
+              )
             )}
             {warnings.length > 0 && (
               <Badge tone="warning">
@@ -257,7 +263,7 @@ function StatusCard({ overview }: { overview: ReconciliationOverview }) {
             )}
           </div>
           {lastNightly?.status === 'failed' && lastNightly.failure && (
-            <p className="text-sm text-muted-foreground">{lastNightly.failure}</p>
+            <FailureLine failure={lastNightly.failure} />
           )}
         </div>
         <RunNowButton overview={overview} />
@@ -302,11 +308,27 @@ function StatusCard({ overview }: { overview: ReconciliationOverview }) {
   );
 }
 
+/**
+ * Re-renders once `at` has passed, so a wait that ends with no new read ends on screen too
+ * (audit A09-28: the overview is not read again once no run is running).
+ */
+function usePassed(at: string | null): boolean {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!at) return;
+    const left = Date.parse(at) - Date.now();
+    if (left <= 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), left + 500);
+    return () => clearTimeout(timer);
+  }, [at]);
+  return !at || Date.parse(at) <= now;
+}
+
 /** Rule RN2: one run at a time, one manual run per 5 minutes. */
 function RunNowButton({ overview }: { overview: ReconciliationOverview }) {
   const { t } = useTranslation();
   const start = useStartRun();
-  const waiting = overview.manualAvailableAt;
+  const waiting = usePassed(overview.manualAvailableAt) ? null : overview.manualAvailableAt;
   const disabled = !!overview.running || !!waiting || start.isPending;
   return (
     <div className="flex flex-col items-end gap-1">

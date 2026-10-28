@@ -135,6 +135,25 @@ test('an empty period says so; the export downloads the report', async ({ page, 
   expect((await download).suggestedFilename()).toMatch(
     /^vertex-deposits-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.xlsx$/,
   );
+  // The file itself is saved, not an empty one from an address revoked at once (A09-34).
+  const saved = await (await download).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of saved) chunks.push(chunk as Buffer);
+  expect(Buffer.concat(chunks).toString()).toBe('PK');
+});
+
+test('a page left open past midnight names the new day in its presets (A09-30)', async ({
+  page,
+  admin,
+}) => {
+  // 23:58 in Damascus (UTC+3) on 20 October.
+  await page.clock.install({ time: new Date('2026-10-20T20:58:00Z') });
+  await open(page, admin);
+  await expect(page.getByRole('table', { name: rp.kinds.sales })).toBeVisible();
+  await page.clock.runFor(3 * 60_000);
+  await page.getByRole('combobox', { name: rp.period.label }).click();
+  await page.getByRole('option', { name: rp.presets.today }).click();
+  await expect(page).toHaveURL(/from=2026-10-21&to=2026-10-21/);
 });
 
 // RTL screenshots of the S13 reports in both themes (ADR 0011).

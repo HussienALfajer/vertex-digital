@@ -1,19 +1,26 @@
 import {
   type ErrorCode,
   impliedRate,
+  normalizeTxid,
   type OutsideCategory,
+  type PaymentMethod,
   TREASURY_ACCOUNTS,
   type TreasuryEndpoint,
   type TreasuryMovementKind,
   treasuryEndpointOf,
   treasuryPostings,
 } from '@vertex-digital/contracts';
-import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
 import type { AdminActor } from '../customers/index.js';
 import { newId } from '../id.js';
-import { ensureSystemAccount, postJournal } from '../ledger/index.js';
+import {
+  ensureSystemAccount,
+  lockPaymentReference,
+  paymentReferenceOwner,
+  postJournal,
+} from '../ledger/index.js';
 import { treasuryMovements } from '../schema/index.js';
 
 /*
@@ -84,25 +91,41 @@ function ensureEndpoint(tx: Transaction, endpoint: TreasuryEndpoint): Promise<st
 }
 
 /**
- * Rule T6 with edge case 12: true when the account has a movement that stands. A movement and its
- * reversal cancel out, as if neither happened, so a reversed opening allows a new one.
+ * Rule T6 with edge case 12: true when an opening into the account stands. A reversed opening
+ * allows a new one, whatever moved through the place since (audit A09-1: a wrong opening reversed
+ * after the place was used left it without an opening for good, its external check skipped).
  */
-async function placeHasMovement(tx: Transaction, accountId: string): Promise<boolean> {
+async function placeHasOpening(tx: Transaction, accountId: string): Promise<boolean> {
   const [row] = await tx
     .select({ id: treasuryMovements.id })
     .from(treasuryMovements)
     .where(
       and(
-        or(
-          eq(treasuryMovements.fromAccountId, accountId),
-          eq(treasuryMovements.toAccountId, accountId),
-        ),
-        isNull(treasuryMovements.reversesMovementId),
+        eq(treasuryMovements.toAccountId, accountId),
+        eq(treasuryMovements.openingBalance, true),
         sql`not exists (select 1 from treasury_movements r where r.reverses_movement_id = ${treasuryMovements.id})`,
       ),
     )
     .limit(1);
   return row !== undefined;
+}
+
+/**
+ * An unclaimed USDT receipt keeps its TXID as the claims and the scanner do (64 lower-case hex,
+ * from a hash or an explorer link), so a claim of the same transfer finds it (audit A09-3).
+ */
+function storedReference(input: MovementInput): string | null {
+  const reference = input.externalReference;
+  if (reference === null || input.outsideCategory !== 'unclaimed_receipt') return reference;
+  if (input.to !== 'usdt_trc20' && input.to !== 'usdt_bep20') return reference;
+  return normalizeTxid(reference) ?? reference;
+}
+
+/** The deposit method whose money reaches a receipts place, or null for any other place. */
+function receiptMethod(endpoint: TreasuryEndpoint): PaymentMethod | null {
+  if (endpoint === 'usdt_trc20' || endpoint === 'usdt_bep20') return endpoint;
+  if (endpoint === 'sham_cash_syp' || endpoint === 'sham_cash_usd') return 'sham_cash';
+  return null;
 }
 
 async function postMovementJournal(
@@ -164,9 +187,10 @@ function auditEntry(actor: AdminActor, movementId: string, reason: string) {
  */
 export async function recordMovement(
   tx: Transaction,
-  input: MovementInput,
+  request: MovementInput,
   actor: AdminActor,
 ): Promise<MovementResult> {
+  const input = { ...request, externalReference: storedReference(request) };
   const fromAccountId = await ensureEndpoint(tx, input.from);
   const toAccountId = await ensureEndpoint(tx, input.to);
   const existing = await existingForKey(tx, input.idempotencyKey);
@@ -189,8 +213,8 @@ export async function recordMovement(
     return { movement: existing, created: false };
   }
   await lockAccounts(tx, [fromAccountId, toAccountId]);
-  if (input.openingBalance && (await placeHasMovement(tx, toAccountId))) {
-    throw new TreasuryError('OPENING_BALANCE_EXISTS', 'The place already has a movement');
+  if (input.openingBalance && (await placeHasOpening(tx, toAccountId))) {
+    throw new TreasuryError('OPENING_BALANCE_EXISTS', 'The place already has an opening');
   }
   if (input.externalReference !== null) {
     const [holder] = await tx
@@ -210,6 +234,20 @@ export async function recordMovement(
         'The reference is already booked from this place',
         { movementId: holder.id },
       );
+    }
+    // An unclaimed receipt books money no deposit credited: a reference a deposit or a manual
+    // deposit already claimed would count it twice (audit A09-3). The claims check this side.
+    const method = receiptMethod(input.to);
+    if (input.outsideCategory === 'unclaimed_receipt' && method !== null) {
+      await lockPaymentReference(tx, method, input.externalReference);
+      const claim = await paymentReferenceOwner(tx, method, input.externalReference);
+      if (claim) {
+        throw new TreasuryError(
+          'EXTERNAL_REFERENCE_TAKEN',
+          'The reference is already claimed by a deposit',
+          claim,
+        );
+      }
     }
   }
   const from = TREASURY_ACCOUNTS[input.from];

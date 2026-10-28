@@ -498,6 +498,13 @@ describe('external checks (E1–E4)', () => {
       const network = 'usdt_bep20';
       const check = (actualUnits: number) =>
         usdtBalanceCheck(tx, { network, actualUnits, toleranceUsdUnits: USD });
+      // Before the opening the check is skipped and keeps the balance read, which the proposed
+      // opening reads (rule T6, audit A09-2). Committed tests never leave an opening standing.
+      expect(await check(12 * USD)).toMatchObject({
+        status: 'skipped',
+        actualUnits: 12 * USD,
+        details: { reason: 'opening_missing' },
+      });
       await recordMovement(
         tx,
         transfer('outside_usd', network, 10 * USD, { openingBalance: true }),

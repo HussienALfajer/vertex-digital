@@ -1,6 +1,7 @@
 import { auditEntries, storeSwitchChanges } from '@vertex-digital/db';
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SettingsService } from '../src/modules/settings/index.js';
 import {
   api,
   auditOf,
@@ -313,5 +314,44 @@ describe('the history', () => {
         ),
       ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
     }
+  });
+});
+
+describe('locks (audit A09-23)', () => {
+  it('lets purchases and deposit creations go on while a supplier’s pause reprices', async () => {
+    const settings = test.app.get(SettingsService);
+    const rollback = new Error('rollback');
+    let changed!: () => void;
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      changed = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pause = test.db
+      .transaction(async (tx) => {
+        await settings.changeIn(tx, admin.id, { switch: 'fake_paused', value: true }, 'admin', {
+          ipAddress: '203.0.113.9',
+          userAgent: 'Test',
+        });
+        changed();
+        await held;
+        throw rollback;
+      })
+      .catch((error: unknown) => {
+        if (error !== rollback) throw error;
+      });
+    await ready;
+    // While the pause's transaction is open, a creation takes the switches lock shared.
+    const sharedTaken = await test.db.transaction(async (other) => {
+      const { rows } = await other.execute<{ taken: boolean }>(
+        sql`select pg_try_advisory_xact_lock_shared(hashtext('settings')) as taken`,
+      );
+      return rows[0]?.taken;
+    });
+    release();
+    await pause;
+    expect(sharedTaken).toBe(true);
   });
 });

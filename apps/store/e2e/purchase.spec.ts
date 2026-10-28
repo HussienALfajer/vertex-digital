@@ -224,6 +224,21 @@ test.describe('buy box', () => {
     expect(sent?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  test('while purchases are stopped, a chosen pack says so instead of paying (BB7, A09-25)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/store/status', 200, {
+      registrationOpen: true,
+      purchasesStopped: true,
+      depositsStopped: false,
+    });
+    await page.goto('/games/pubg-mobile');
+    await choose(page, '60 UC');
+    await expect(buyBox(page).getByText(p.stopped)).toBeVisible();
+    await expect(buyBox(page).getByRole('slider', { name: p.slidePay })).toHaveCount(0);
+  });
+
   test('a failed balance read says so and reads it again (audit A04-35)', async ({ page, api }) => {
     signedIn(api)
       .on('GET /api/wallet', 500, { statusCode: 500, code: 'INTERNAL_ERROR' })

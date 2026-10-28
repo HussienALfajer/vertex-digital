@@ -65,6 +65,24 @@ test('a failed read shows the error card, and the retry reads again', async ({ p
   await expect(page.getByText(d.attention.none)).toBeVisible();
 });
 
+test('a failed read after a good one keeps the figures under the stale note (A09-27, A09-37)', async ({
+  page,
+  admin,
+}) => {
+  await page.clock.install();
+  const busy = busyDashboard();
+  // A profit with sub-cent digits shows rounded to the cent, as R1 shows it.
+  admin.dashboard = { ...busy, profit: { ...busy.profit, today: 18_466_000 } };
+  await page.goto('/');
+  await expect(page.getByText('$18.47').first()).toBeVisible();
+  await page.route('**/api/admin/dashboard', (route) =>
+    route.fulfill({ status: 503, json: { statusCode: 503, code: 'INTERNAL', message: 'down' } }),
+  );
+  await page.clock.runFor(180_000);
+  await expect(page.getByText(/آخر تحديث/)).toBeVisible();
+  await expect(page.getByText('$18.47').first()).toBeVisible();
+});
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });
