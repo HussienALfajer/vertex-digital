@@ -30,4 +30,4 @@ Customers fund their wallet before buying. At launch two methods exist: Sham Cas
 ## Consequences
 - USDT deposits credit in minutes without staff; Sham Cash deposits depend on reviewer availability, shown honestly to the customer.
 - The fractional-tail amount is slightly unusual for customers; the wizard explains it and copy buttons make it easy.
-- Sham Cash automation (Phase 4) can replace the reviewer's step without changing the deposit model.
+- Sham Cash automation, if it is ever built, can replace the reviewer's step without changing the deposit model.

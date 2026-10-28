@@ -24,7 +24,7 @@ S08 can sell, but only from a developer's command line: the store has no catalog
   - Category pages: the home page shows every category as a section with jump chips; a category route can come with S14's content work.
   - AVIF images: not in V1. WebP at four widths covers the browsers in use, and encoding AVIF costs CPU on the shared server.
   - JSON-LD structured data: not in V1, since the store never injects API data as script (ADR 0015).
-  - English UI: Phase 4. English names are shown and searchable.
+  - English UI: not planned. English names are shown and searchable.
 
 ## Access
 | Action | Route kind | Who |
