@@ -1,6 +1,6 @@
 # A08 Content
 
-Status: merged (PR [#194](https://github.com/HussienALfajer/vertex-digital/pull/194))
+Status: deployed (`0a7650b`, 2026-10-28; PR [#194](https://github.com/HussienALfajer/vertex-digital/pull/194))
 Branch: fix/audit-a08-content · Started: 2026-10-28 · Specs: S14 · ADRs: 0028 (and 0015 for the dismissal script)
 
 ## Scope
@@ -92,3 +92,6 @@ Local stack (dev database seeded by the A07 session, so no reset; API from its b
 - `pnpm verify` (checker) on the whole branch: pass in 3m 23s (lint; typecheck, test and build, 25 tasks; migrations and OpenAPI in step; store `content.spec.ts` 37 passed, admin `content.spec.ts` 23 passed).
 - Reviewer: one blocking finding, fixed on A08-34: the carousel's timer was armed on hydration, so a carousel centred late (hydrated inside a boundary still hidden past 3 seconds) moved nothing and never armed again; the timer now waits for the centring (store e2e "hydrated while hidden, it starts once shown and moves on (A08-34)"). The rest checked clean: the FAQ lock order, `prepare`'s `accept` for other callers, the site content's answers, `BACKGROUND_REQUEST` (stricter idle only), `MoveButton` in the catalog, `RichText`'s server compatibility and link safety, the carousel's hydration match.
 - After the fix: `pnpm verify` on store `content.spec.ts` and `store.spec.ts` (the first-load budgets) and admin `catalog.spec.ts` and `quick-links.spec.ts` (the shared `MoveButton`): 61 and 17 passed.
+- CI: every check of PR #194 passed (lint, typecheck, the secrets scan, the four E2E shards); auto-merge merged it as `0a7650b`.
+- Deploy (2026-10-28): `vertexdigital-deploy` detached with `systemd-run`, built, snapshot, no migration (97 applied), switched to `0a7650b`; no new secret and no `deploy/` change, so `provision.sh` was not re-run; PM2 online.
+- Production smoke test, no money: `/`, `/faq`, `/terms`, `/privacy`, `/refund`, `/about`, `/merchant-terms`, `/sitemap.xml`, `/api/content/site` and `/api/health` answer 200; the sitemap lists `/faq` and the four published pages (the merchant terms are not published in production, so neither listed nor linked); at 375 px the home carousel's first banner is centred (offset 0), snapping on, three 44 px dots, and it advances; `/faq` (10 questions) and `/terms` carry their titles; the pages' HTML holds the footer's content links; no console error.
