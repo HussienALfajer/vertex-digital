@@ -1,6 +1,6 @@
 # A09 Control, reconciliation and reports
 
-Status: merged (PR [#196](https://github.com/HussienALfajer/vertex-digital/pull/196))
+Status: deployed (`ec5168e`, 2026-10-28; PR [#196](https://github.com/HussienALfajer/vertex-digital/pull/196))
 Branch: fix/audit-a09-control · Started: 2026-10-28 · Specs: S05 (switches), S11 (dashboard), S13 · ADRs: 0019, 0025, 0027
 
 ## Scope
@@ -103,4 +103,6 @@ Local stack on a dev database emptied and seeded in this session (owner's author
   3. The nightly run failed stale runs (row locks) before taking the start lock, the API the other way round: a deadlock at 00:30 with a stale run. The night now takes its locks first.
   - Not blocking, noted: the merchant breakdown counts orders with a `merchant_order_sales` row; a merchant order placed before S21 PR 1 deployed has none and is left out (production had no merchant before the pilot). Rule T8 compares a reference per source place, so one Sham Cash number could be booked from `outside_syp` and from `outside_usd` (pre-existing, with A09-5).
 - **`pnpm verify` (whole branch, final tree `0e64126`):** lint pass; typecheck, test and build pass (`packages/db/src/ledger/deposits.test.ts` failed once on a pre-existing random-amount collision of a unique open USDT amount, passed on rerun, recorded for A10); migrations and OpenAPI in step; store E2E 110 passed, admin E2E 329 passed.
-- **CI and deploy:** after the merge.
+- CI: the first run failed on a format of `report-workbook.ts` that the local lint never checked (this machine's `.git/info/exclude` hides every `reports/` folder from Biome); fixed in `9a90493`, then every check of PR #196 passed and auto-merge merged it as `ec5168e`.
+- Deploy (2026-10-28): `vertexdigital-deploy` detached with `systemd-run`, built, snapshot, migration 0097 applied (98 of 98; the three indexes present), switched to `ec5168e`, health checks passed; no new secret and no `deploy/` change, so `provision.sh` was not re-run; PM2 online, the API and worker error logs empty after the switch.
+- Production smoke test, no money: `/`, `/games/pubg-mobile`, `/api/store/status` (nothing stopped) and the panel's entry answer 200; the A09 admin routes (`/api/admin/reconciliation`, `/reports/sales`, `/audit`) answer 401 to a visitor; on the store a client navigation from a game page to `/` read `/api/store/status` again with the page state kept, console clean; the panel sends `/reconciliation` to sign-in with its target kept and serves the new bundle (the A09 strings present). The signed-in panel screens were not opened on production: no session in the browser pane, and no production credential is typed by an agent.

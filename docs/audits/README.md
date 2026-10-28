@@ -20,7 +20,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | A06 | Merchants | deployed | [A06-merchants.md](A06-merchants.md) | [#190](https://github.com/HussienALfajer/vertex-digital/pull/190) | `60f46b0` (2026-10-27) |
 | A07 | Customers, support and notifications | deployed | [A07-customers.md](A07-customers.md) | [#192](https://github.com/HussienALfajer/vertex-digital/pull/192) | `e9977c6` (2026-10-28) |
 | A08 | Content | deployed | [A08-content.md](A08-content.md) | [#194](https://github.com/HussienALfajer/vertex-digital/pull/194) | `0a7650b` (2026-10-28) |
-| A09 | Control, reconciliation and reports | merged | [A09-control.md](A09-control.md) | [#196](https://github.com/HussienALfajer/vertex-digital/pull/196) | |
+| A09 | Control, reconciliation and reports | deployed | [A09-control.md](A09-control.md) | [#196](https://github.com/HussienALfajer/vertex-digital/pull/196) | `ec5168e` (2026-10-28) |
 | A10 | Platform, performance and operations | not started | | | |
 
 Statuses: `not started` → `in progress` → `merged` → `deployed`. The group's PR sets `merged` with its link; the deploy step sets `deployed` with the commit, in a follow-up commit on the next group's branch or a small docs PR.

@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A09-control.md`. Specs S05 (sw
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (the reviewer's three blocking findings fixed and tested)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge (#196)
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed` (`ec5168e`)
 
 # TASKS — Audit A08 Content (branch `fix/audit-a08-content`)
 
