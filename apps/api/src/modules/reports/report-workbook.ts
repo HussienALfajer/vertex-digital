@@ -59,6 +59,13 @@ function syp(units: number): number {
 
 const date = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
+/** R3's manual deposits, in a block of their own after the methods' totals (audit A09-19). */
+const manualRow = (manual: DepositsReport['manualDeposits']): Cell[] => [
+  'إيداعات يدوية',
+  manual.count,
+  usd(manual.usdUnits),
+];
+
 const DAMASCUS = new Intl.DateTimeFormat('en-CA', {
   timeZone: REVIEW_TIME_ZONE,
   year: 'numeric',
@@ -290,13 +297,7 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
             { header: 'العدد', width: 12, format: 'count' },
             { header: 'المبلغ المقيد', width: 16, format: 'usd' },
           ],
-          rows: [
-            [
-              'إيداعات يدوية',
-              deposits.manualDeposits.count,
-              usd(deposits.manualDeposits.usdUnits),
-            ],
-          ],
+          rows: [manualRow(deposits.manualDeposits)],
         },
       ];
     }
