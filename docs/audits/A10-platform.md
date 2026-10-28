@@ -1,6 +1,6 @@
 # A10 Platform, performance and operations
 
-Status: merged (PR to be linked)
+Status: merged (PR [#198](https://github.com/HussienALfajer/vertex-digital/pull/198))
 Branch: fix/audit-a10-platform · Started: 2026-10-28 · Specs: S15 (PWA), Phase 0 · ADRs: 0001, 0002, 0008, 0009, 0011, 0012, 0014, 0015
 
 ## Scope

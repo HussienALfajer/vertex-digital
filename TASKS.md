@@ -9,7 +9,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A10-platform.md`. Specs S15 (P
 - [x] Fixes P0 → P3, each with its regression test (51 fixed, 5 partly, 9 deferred, 5 dropped, 2 decided)
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (the reviewer's five blocking findings fixed)
-- [ ] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge (#198)
 - [ ] Deploy, production smoke test, README `deployed`
 
 # TASKS — Audit A09 Control, reconciliation and reports (branch `fix/audit-a09-control`)
