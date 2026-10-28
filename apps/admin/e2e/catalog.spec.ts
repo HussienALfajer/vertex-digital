@@ -488,6 +488,25 @@ test.describe('the game form (audit A03)', () => {
     await dialog.getByRole('button', { name: ar.common.retry }).click();
     await expect(dialog.getByText(ar.catalog.categories.noneArchived)).toBeVisible();
   });
+
+  test('a failed price lists read offers a retry above the packs, never "no price"', async ({
+    page,
+    admin,
+  }) => {
+    const game = activeGame(admin);
+    admin.signedIn = true;
+    // The first read and TanStack's two retries of a server fault.
+    await page.route(
+      /\/api\/admin\/pricing\/matrix(\?|$)/,
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await page.goto(`/catalog/games/${game.id}`);
+    await page.getByRole('tab', { name: ar.catalog.game.tabs.products }).click();
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByRole('button', { name: ar.common.retry })).toHaveCount(0);
+    await expect(page.getByText('الجملة').first()).toBeVisible();
+  });
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -563,6 +582,52 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: ar.catalog.products.add }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await screenshot(page, testInfo, `game-product-dialog-${colorScheme}`);
+    });
+
+    test('every list’s price per pack, estimated for a pack with no usable route', async ({
+      page,
+      admin,
+    }, testInfo) => {
+      const game = admin.catalog.addGame({
+        categorySlug: 'games',
+        slug: 'pubg-mobile',
+        nameAr: 'ببجي موبايل',
+        nameEn: 'PUBG Mobile',
+      });
+      const priced = admin.catalog.addProduct(game.id, { nameAr: '60 UC', gameAmount: 60 });
+      const paused = admin.catalog.addProduct(game.id, { nameAr: '325 UC', gameAmount: 325 });
+      admin.catalog.pricing = (productId) => ({
+        price:
+          productId === priced.id ? { priceUsdUnits: 1_100_000, minMarginUsdUnits: 100_000 } : null,
+        usableRouteCostsUsdUnits: productId === priced.id ? [1_000_000] : [],
+        basisSupplierNameAr: productId === priced.id ? 'WDGZone' : null,
+        basisCostUsdUnits: productId === priced.id ? 1_000_000 : null,
+        basisStockLevel: null,
+        priceHeld: false,
+        routed: productId === priced.id,
+        reviewOpen: false,
+      });
+      admin.priceLists.estimates.set(paused.id, {
+        costUsdUnits: 4_390_000,
+        supplierCode: 'wdgzone',
+        reason: 'balance_low',
+      });
+
+      await open(page, admin, `/catalog/games/${game.id}`);
+      await page.getByRole('tab', { name: ar.catalog.game.tabs.products }).click();
+      const row = (name: string) => page.getByRole('row').filter({ hasText: name });
+      // A priced pack: retail, then the other lists with their profit, no estimate.
+      await expect(row('60 UC')).toContainText('$1.10');
+      await expect(row('60 UC').getByText('الجملة')).toBeVisible();
+      await expect(row('60 UC').getByText(ar.catalog.products.estimated)).toHaveCount(0);
+      // A pack never priced: the cheapest route's cost and every list's price, as estimates.
+      const estimated = row('325 UC');
+      await expect(estimated).toContainText('$4.39');
+      await expect(estimated.getByText(ar.suppliers.routes.unusable.balance_low)).toBeVisible();
+      await expect(estimated.getByText(ar.catalog.products.estimatedHint)).toBeVisible();
+      await expect(estimated.getByText(ar.catalog.products.estimated)).toHaveCount(4);
+      await expect(estimated.getByText(ar.catalog.products.noPrice)).toHaveCount(0);
+      await screenshot(page, testInfo, `game-products-lists-${colorScheme}`, { fullPage: true });
     });
   });
 }

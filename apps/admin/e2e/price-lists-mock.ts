@@ -69,6 +69,8 @@ export class PriceListsMock {
   assigned = new Map<string, string>();
   /** S21 LV6: live merchant levels holding a list, by its id (set per test). */
   levelsOn = new Map<string, number>();
+  /** The matrix's estimate of a product with no usable route, by its id (set per test). */
+  estimates = new Map<string, NonNullable<PriceMatrix['rows'][number]['estimate']>>();
 
   constructor(
     private readonly catalog: CatalogMock,
@@ -308,6 +310,27 @@ export class PriceListsMock {
     };
   }
 
+  /** The price a list would take at an estimate's cost, as the API's matrix does. */
+  private estimated(priceListId: string, productId: string, cost: number): number {
+    const path = { ...(this.catalog.target('product', productId)?.path ?? {}), productId };
+    const facts = { rules: this.catalog.rules, fixedPrices: this.fixed };
+    const at = (
+      listId: string,
+      retail: { priceUsdUnits: number; minMarginUsdUnits: number } | null,
+    ) => {
+      const entry = resolveListEntry(this.chain(listId), facts, path);
+      return listPrice(
+        cost,
+        { fixedPriceUsdUnits: entry.fixed?.priceUsdUnits ?? null, rule: entry.rule },
+        retail,
+      );
+    };
+    const retail = at(ROOT_PRICE_LIST_IDS.retail, null);
+    return priceListId === ROOT_PRICE_LIST_IDS.retail
+      ? retail.priceUsdUnits
+      : at(priceListId, retail).priceUsdUnits;
+  }
+
   private matrix(url: URL): PriceMatrix {
     const gameId = url.searchParams.get('gameId');
     const q = url.searchParams.get('q');
@@ -332,6 +355,8 @@ export class PriceListsMock {
       const pricing = this.catalog.pricing?.(product.id);
       const held = pricing?.reviewOpen ?? false;
       const available = (pricing?.routed ?? false) && !held;
+      const cost = pricing?.basisCostUsdUnits ?? null;
+      const estimate = cost === null ? (this.estimates.get(product.id) ?? null) : null;
       const cells = lists.map((list): PriceMatrixCell => {
         const cell = this.cell(list.id, product.id);
         const parent = list.parentListId ? this.cell(list.parentListId, product.id) : null;
@@ -343,6 +368,10 @@ export class PriceListsMock {
           fixedPriceUsdUnits:
             this.fixed.find((row) => row.priceListId === list.id && row.productId === product.id)
               ?.priceUsdUnits ?? null,
+          estimatedPriceUsdUnits:
+            cell.priceUsdUnits === null && estimate
+              ? this.estimated(list.id, product.id, estimate.costUsdUnits)
+              : null,
           warnings: matrixCellWarnings({
             source: cell.source,
             priceUsdUnits: cell.priceUsdUnits,
@@ -362,8 +391,9 @@ export class PriceListsMock {
           productNameAr: product.nameAr,
           gameId: product.gameId,
           gameNameAr: game?.nameAr ?? '',
-          costUsdUnits: pricing?.basisCostUsdUnits ?? null,
+          costUsdUnits: cost,
           supplierCode: pricing?.routed ? ('fake' as const) : null,
+          estimate,
           held,
           cells,
         },

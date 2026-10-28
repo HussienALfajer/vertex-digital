@@ -9925,6 +9925,11 @@ export interface components {
                 gameNameAr: string;
                 costUsdUnits: number | null;
                 supplierCode: components["schemas"]["SupplierCode"] | null;
+                estimate: {
+                    costUsdUnits: number;
+                    supplierCode: components["schemas"]["SupplierCode"];
+                    reason: components["schemas"]["RouteUnusableReason"];
+                } | null;
                 held: boolean;
                 cells: components["schemas"]["PriceMatrixCell"][];
             }[];
@@ -9939,6 +9944,7 @@ export interface components {
             availability: components["schemas"]["ProductAvailability"];
             targetPriceUsdUnits: number | null;
             fixedPriceUsdUnits: number | null;
+            estimatedPriceUsdUnits: number | null;
             warnings: components["schemas"]["PriceMatrixWarning"][];
         };
         /** @enum {string} */

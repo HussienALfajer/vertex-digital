@@ -2033,7 +2033,8 @@
         "maxQuantity": "أقصى كمية",
         "status": "الحالة",
         "availability": "التوفر",
-        "price": "السعر",
+        "price": "سعر المفرق",
+        "lists": "قوائم الأسعار",
         "deliveryTime": "وقت التسليم",
         "cost": "التكلفة"
       },
@@ -2067,6 +2068,9 @@
         "redemptionAr": "تعليمات الاستخدام حتى 2000 حرف."
       },
       "noPrice": "لا سعر بعد",
+      "estimated": "تقديري",
+      "estimatedHint": "من تكلفة المورد، يُعتمد حين يصلح مسار",
+      "estimateSupplier": "من {{supplier}}",
       "syp": "{{amount}} ل.س",
       "basis": "يتبع {{supplier}}",
       "priceHeld": "السعر محفوظ: لا مسار محسوب متاح",

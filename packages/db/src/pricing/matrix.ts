@@ -1,4 +1,5 @@
 import {
+  listPrice,
   marginBasisPoints,
   matrixCellWarnings,
   PRICE_MATRIX_MAX_LISTS,
@@ -6,17 +7,33 @@ import {
   type PriceMatrix,
   type PriceMatrixCell,
   ROOT_PRICE_LIST_IDS,
+  resolveListEntry,
 } from '@vertex-digital/contracts';
 import { and, asc, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 import { type Executor, readAll } from '../client.js';
 import { catalogGames, catalogProducts, priceLists, productPrices } from '../schema/index.js';
-import { listIsPriced, listPricingFacts, listTarget } from './reprice.js';
-import { type PriceRow, productRoutingStates, type RoutingContext } from './routing.js';
+import {
+  type ListPricingFacts,
+  listIsPriced,
+  listPricingFacts,
+  listTarget,
+  type RetailFigures,
+} from './reprice.js';
+import {
+  type PriceRow,
+  type ProductRoutingState,
+  productRoutingStates,
+  type RouteState,
+  type RoutingContext,
+  ruleValues,
+} from './routing.js';
 
 /*
  * The product × list matrix of the panel (S20 screens): per product the basis cost, and per list
  * its current price, margin, source and availability (PO1), its fixed price, the target it would
- * take while a review holds every list (RP2), and its warnings. Reads only.
+ * take while a review holds every list (RP2), and its warnings. Reads only. A list without a row
+ * shows the price it would take, and a product with no usable route its cheapest known route's
+ * cost and why it cannot serve, so a paused pack still shows its prices (display only).
  */
 
 const DEFAULT_COLUMNS = [ROOT_PRICE_LIST_IDS.wholesale, ROOT_PRICE_LIST_IDS.cost];
@@ -100,7 +117,11 @@ export async function priceMatrix(
     const state = states.get(product.id);
     if (!state) continue;
     const cost = state.basis ? (state.basis.costUsdUnits as number) : null;
+    // A held price (S17 WR4) keeps its row; an estimate is only for a product no route serves.
+    const estimate = state.basis || state.priceHeld ? null : estimateRoute(state);
     const held = state.openReview !== null;
+    const retailRow = currentOf.get(`${product.id}:${ROOT_PRICE_LIST_IDS.retail}`) ?? null;
+    const retailEstimate = estimate ? estimatedRetail(state, facts, estimate) : null;
     const cells = lists.map((list): PriceMatrixCell => {
       const retail = list.id === ROOT_PRICE_LIST_IDS.retail;
       const current = currentOf.get(`${product.id}:${list.id}`) ?? null;
@@ -125,6 +146,18 @@ export async function priceMatrix(
         }
       }
       const price = current?.priceUsdUnits ?? null;
+      let estimated: number | null = null;
+      if (price === null) {
+        if (retail) estimated = state.targetPriceUsdUnits ?? retailEstimate?.priceUsdUnits ?? null;
+        else if (known && listIsPriced(facts, known.chain)) {
+          const figures = retailRow ?? retailEstimate;
+          const basis = state.basis ?? estimate;
+          if (figures && basis) {
+            estimated =
+              listTarget(facts, known.chain, { ...state, basis }, figures)?.priceUsdUnits ?? null;
+          }
+        }
+      }
       const marginCost = cost ?? current?.costUsdUnits ?? null;
       const fixed = facts.fixedPrices.find(
         (candidate) => candidate.priceListId === list.id && candidate.productId === product.id,
@@ -139,6 +172,7 @@ export async function priceMatrix(
         availability,
         targetPriceUsdUnits: target,
         fixedPriceUsdUnits: fixed?.priceUsdUnits ?? null,
+        estimatedPriceUsdUnits: estimated,
         warnings: matrixCellWarnings({
           source: current?.source ?? null,
           priceUsdUnits: price,
@@ -156,9 +190,53 @@ export async function priceMatrix(
       gameNameAr: product.gameNameAr,
       costUsdUnits: cost,
       supplierCode: state.basis?.supplierCode ?? null,
+      estimate: estimate
+        ? {
+            costUsdUnits: estimate.costUsdUnits as number,
+            supplierCode: estimate.supplierCode,
+            reason: estimate.unusableReason as NonNullable<RouteState['unusableReason']>,
+          }
+        : null,
       held,
       cells,
     });
   }
   return { lists, rows };
+}
+
+/** The cheapest enabled, unarchived, unusable route with a known cost. */
+function estimateRoute(state: ProductRoutingState): RouteState | null {
+  let cheapest: RouteState | null = null;
+  for (const route of state.routes) {
+    if (route.archivedAt !== null || !route.enabled || route.costUsdUnits === null) continue;
+    if (route.unusableReason === null) continue;
+    if (!cheapest || route.costUsdUnits < (cheapest.costUsdUnits as number)) cheapest = route;
+  }
+  return cheapest;
+}
+
+/** Retail's figures at an estimate's cost (LS4 with retail's fixed prices, LP1), for display. */
+function estimatedRetail(
+  state: ProductRoutingState,
+  facts: ListPricingFacts,
+  route: RouteState,
+): RetailFigures {
+  const entry = resolveListEntry([ROOT_PRICE_LIST_IDS.retail], facts, {
+    productId: state.productId,
+    gameId: state.gameId,
+    categoryId: state.categoryId,
+  });
+  const values = ruleValues(entry.rule);
+  const price = listPrice(
+    route.costUsdUnits as number,
+    { fixedPriceUsdUnits: entry.fixed?.priceUsdUnits ?? null, rule: values },
+    null,
+  );
+  return {
+    priceUsdUnits: price.priceUsdUnits,
+    minMarginUsdUnits: price.minMarginUsdUnits,
+    ruleId: entry.rule.id,
+    percentBp: values.percentBp,
+    fixedUsdUnits: values.fixedUsdUnits,
+  };
 }

@@ -18,7 +18,7 @@ import {
   type PriceKind,
   priceKindSchema,
 } from './price-kinds.js';
-import { supplierCodeSchema } from './suppliers.js';
+import { routeUnusableReasonSchema, supplierCodeSchema } from './suppliers.js';
 
 /*
  * The pricing engine (S06, F10; ADR 0020), owned by the api `pricing` module: margin rules per
@@ -762,6 +762,11 @@ export const priceMatrixCellSchema = listPriceCellSchema
     targetPriceUsdUnits: z.int().positive().nullable(),
     /** The list's own fixed price for the product, when it has one. */
     fixedPriceUsdUnits: z.int().positive().nullable(),
+    /**
+     * Without a row on the list: the price the list would take at the row's cost, or at its
+     * estimate's cost with no usable route; a display figure only, never stored. Else null.
+     */
+    estimatedPriceUsdUnits: z.int().positive().nullable(),
     warnings: z.array(priceMatrixWarningSchema),
   })
   .meta({ id: 'PriceMatrixCell' });
@@ -780,6 +785,17 @@ export const priceMatrixSchema = z
         /** The basis route's cost (S07 P1); null with no usable route. */
         costUsdUnits: z.int().positive().nullable(),
         supplierCode: supplierCodeSchema.nullable(),
+        /**
+         * With no usable route: the cheapest enabled route with a known cost, and why it cannot
+         * serve now (a supplier balance below the cost, say); null with a usable route or none.
+         */
+        estimate: z
+          .object({
+            costUsdUnits: z.int().positive(),
+            supplierCode: supplierCodeSchema,
+            reason: routeUnusableReasonSchema,
+          })
+          .nullable(),
         /** An open review holds every list (RP2). */
         held: z.boolean(),
         cells: z.array(priceMatrixCellSchema),

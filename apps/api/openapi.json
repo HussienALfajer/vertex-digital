@@ -35007,6 +35007,30 @@
                     }
                   ]
                 },
+                "estimate": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "costUsdUnits": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "supplierCode": {
+                      "$ref": "#/components/schemas/SupplierCode"
+                    },
+                    "reason": {
+                      "$ref": "#/components/schemas/RouteUnusableReason"
+                    }
+                  },
+                  "required": [
+                    "costUsdUnits",
+                    "supplierCode",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                },
                 "held": {
                   "type": "boolean"
                 },
@@ -35024,6 +35048,7 @@
                 "gameNameAr",
                 "costUsdUnits",
                 "supplierCode",
+                "estimate",
                 "held",
                 "cells"
               ],
@@ -35089,6 +35114,13 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
+          "estimatedPriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
           "warnings": {
             "type": "array",
             "items": {
@@ -35105,6 +35137,7 @@
           "availability",
           "targetPriceUsdUnits",
           "fixedPriceUsdUnits",
+          "estimatedPriceUsdUnits",
           "warnings"
         ],
         "additionalProperties": false

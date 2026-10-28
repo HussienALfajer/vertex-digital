@@ -1,4 +1,4 @@
-import { priceFromCost, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
+import { priceFromCost, priceMatrixSchema, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
@@ -482,6 +482,11 @@ describe('price basis routes (S17 WR3–WR5, WR8, WR11)', () => {
     const held = await state(p.id);
     expect(held).toMatchObject({ basis: null, priceHeld: true, availability: 'available' });
     expect((await prices(p.id))[0]?.routeId).toBe(dear);
+    // The matrix keeps the held row and estimates nothing; its answer passes the contract.
+    const matrix = await priceMatrix(db, { gameId: p.game }, context());
+    expect(priceMatrixSchema.safeParse(matrix).success).toBe(true);
+    expect(matrix.rows[0]?.estimate).toBeNull();
+    expect(matrix.rows[0]?.cells[0]?.estimatedPriceUsdUnits).toBeNull();
 
     // A product that never had a price takes the first usable route.
     const fresh = await product();
@@ -827,11 +832,15 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
       warnings: ['fallback'],
     });
     expect(cell(fresh)).toMatchObject({ priceUsdUnits: usd(1.1), warnings: [] });
+    // Without a row: the price the list would take, for display only.
     expect(cell(late)).toMatchObject({
       priceUsdUnits: null,
+      estimatedPriceUsdUnits: usd(1.1),
       availability: 'out_of_stock',
       warnings: ['no_row'],
     });
+    expect(cell(retail)?.estimatedPriceUsdUnits).toBeNull();
+    expect(row?.estimate).toBeNull();
 
     // A held product keeps every list and shows the price each would take now (RP2).
     await setCost(offerId, usd(1.2));
@@ -850,5 +859,32 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
     const found = await read({ q: named?.name_ar as string, warnings: true });
     expect(found.rows.map((r) => r.productId)).toEqual([p.id]);
     expect(found.lists.map((list) => list.id)).toEqual([retail, wholesale, cost]);
+  });
+
+  it('estimates a never-priced product’s cost and list prices from its cheapest route (matrix)', async () => {
+    const p = await product();
+    const dear = await offer('fake', usd(2));
+    const cheap = await offer('fake', usd(1));
+    await route(p.id, 'fake', dear);
+    await route(p.id, 'fake', cheap);
+    await pool.query('update supplier_offers set in_stock = false where id = any($1::uuid[])', [
+      [dear, cheap],
+    ]);
+    await repriceAll([p.id], 'route_change');
+    expect(await prices(p.id)).toEqual([]);
+    const matrix = await priceMatrix(db, { gameId: p.game, listIds: [wholesale] }, context());
+    expect(priceMatrixSchema.safeParse(matrix).success).toBe(true);
+    const [row] = matrix.rows;
+    expect(row).toMatchObject({
+      costUsdUnits: null,
+      supplierCode: null,
+      estimate: { costUsdUnits: usd(1), supplierCode: 'fake', reason: 'out_of_stock' },
+    });
+    expect(
+      row?.cells.map((c) => [c.priceUsdUnits, c.estimatedPriceUsdUnits, c.availability]),
+    ).toEqual([
+      [null, usd(1.1), 'out_of_stock'],
+      [null, usd(1.05), 'out_of_stock'],
+    ]);
   });
 });
