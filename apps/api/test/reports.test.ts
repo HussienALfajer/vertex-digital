@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import {
   MAX_QUANTITY_LIMIT,
   priceFromCost,
+  REPORT_EXPORTS_PER_MINUTE,
   TOP_CUSTOMERS_LIMIT,
   TREASURY_PLACES,
 } from '@vertex-digital/contracts';
@@ -33,6 +34,7 @@ import { parseEnv } from '../src/core/config/env.js';
 import {
   api,
   body,
+  clientIp,
   PASSWORD,
   PHONE,
   removeAccounts,
@@ -599,21 +601,22 @@ describe('Excel export (X1–X4)', () => {
     });
   });
 
-  it('refuses exports past 10 a minute (X4)', async () => {
+  it('refuses exports past 10 a minute from one address (X4)', async () => {
+    // Every call of these tests comes from a new address unless one is given (helpers.ts).
+    const ip = clientIp();
     const statuses: number[] = [];
-    for (let index = 0; index < 11; index += 1) {
-      const response = await adminGet(
+    for (let index = 0; index <= REPORT_EXPORTS_PER_MINUTE; index += 1) {
+      const response = await client.get(
         '/api/admin/reports/sales/export?from=2001-01-01&to=2001-01-01',
+        { cookie: admin.cookie, ip },
       );
       statuses.push(response.status);
       if (response.status === 429) {
         expect(await body(response)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
-        break;
+      } else {
+        await response.arrayBuffer();
       }
-      await response.arrayBuffer();
     }
-    // Exports earlier in this file count in the same minute, so the refusal may come sooner.
-    expect(statuses.at(-1)).toBe(429);
-    expect(statuses.every((status) => status === 200 || status === 429)).toBe(true);
+    expect(statuses).toEqual([...Array(REPORT_EXPORTS_PER_MINUTE).fill(200), 429]);
   });
 });
