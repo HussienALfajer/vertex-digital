@@ -5,13 +5,13 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | ID | Question | Needed before | Recommendation |
 |---|---|---|---|
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money. Interim (owner, 2026-10-20): the daily backups stay on the production server until the owner subscribes to a second server; the destination is set up and a restore tested then |
-| Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
-| Q30 | Which USDT transfers widen the nightly USDT check (S13 E3, audit A09-4): today every recorded transfer to the store's address that no deposit credited and no claim or `unclaimed_receipt` movement names counts, for good, including those from before the network's opening (already inside its amount) and bounced transfers sent back by a `return_to_sender` movement (which names the outgoing TXID), so the check's upper bound only grows and money booked out of USDT that never left can hide under it | Before USDT volumes grow | Count only transfers recorded after the network's standing opening, and let a `return_to_sender` movement name the incoming TXID it returns, which then leaves the allowance |
 
 ## Resolved
 
 | Question | Answer | Date |
 |---|---|---|
+| Q30: which USDT transfers widen the nightly USDT check (S13 E3, audit A09-4) | Only transfers on chain after the network's standing opening (earlier ones are inside its amount); a `return_to_sender` movement out of a USDT place names the incoming TXID it sends back, which then leaves the range (S13 E3, T8) | 2026-10-28 |
+| Q3: license for the public repository | None: all rights reserved | 2026-10-28 |
 | Q23: how long a credited USDT deposit keeps its exact amount reserved (S04 rule U4, audit A02) | 30 days after a deposit closes, credited included (`USDT_RESERVATION_GRACE_DAYS`, 7 before): a resent exact amount is far likelier than a tail shortage at pilot volumes | 2026-10-28 |
 | Q25: which cost wins when a supplier charges more than its listing says (S18 CH3, audit A05-8) | The charged cost: a higher quoted or charged cost stays while the listing still shows the figure the last sync read (`supplier_offers.listed_cost_usd_units`); a new listed figure replaces it, and a cost below the listing never outlasts the next sync (S18 PQ4) | 2026-10-28 |
 | Q29: how long the email and Telegram outboxes keep addresses and message parameters (audit A07-33) | 90 days after an email or a message is settled, then `system.purge-outboxes` (04:30 Damascus) clears the email's address and parameters and the message's parameters; the rows stay as the delivery record; the supplier state messages later jobs read are kept (decided under the owner's delegation, audit A10-46) | 2026-10-28 |

@@ -206,6 +206,10 @@ export const ERROR_CODES = [
   'MOVEMENT_RECEIVED_EXCEEDS_SENT',
   /** The place already has a movement: an opening balance comes first (S13 T6). */
   'OPENING_BALANCE_EXISTS',
+  /** A USDT return names a TXID no standing unclaimed receipt into the place books (S13 T8, Q30). */
+  'RETURN_RECEIPT_MISSING',
+  /** A USDT unclaimed receipt a standing return names: reverse the return first (S13 T9, Q30). */
+  'RECEIPT_RETURNED',
   /** The movement was already reversed (S13 T9). */
   'MOVEMENT_ALREADY_REVERSED',
   /** A reversal cannot itself be reversed (S13 T9). */

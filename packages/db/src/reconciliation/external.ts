@@ -253,8 +253,10 @@ export async function supplierChargesCheck(
 
 /**
  * Rule E3: the store address's USDT balance on one network against the held amount on
- * `usdt_receipts:<network>`; the range is `[held, held + uncredited]`, uncredited = the recorded
- * transfers no credited deposit holds and no manual deposit or `unclaimed_receipt` movement claims.
+ * `usdt_receipts:<network>`; the range is `[held, held + uncredited]`, uncredited = the transfers
+ * on chain after the standing opening (earlier ones are inside its amount) that no credited deposit
+ * holds, no manual deposit or `unclaimed_receipt` movement claims and no `return_to_sender`
+ * movement from the place names as the transfer it sent back (Q30, audit A09-4).
  */
 export async function usdtBalanceCheck(
   db: Executor,
@@ -269,6 +271,11 @@ export async function usdtBalanceCheck(
   const { rows } = await db.execute<{ id: string; amount: string }>(sql`
     select t.id, t.amount_units::text as amount from usdt_transfers t
     where t.method = ${input.network}
+      and t.block_time > (
+        select m.created_at from treasury_movements m
+        join ledger_accounts a on a.id = m.to_account_id
+        where a.code = ${TREASURY_ACCOUNTS[place].code} and m.opening_balance
+          and not exists (select 1 from treasury_movements r where r.reverses_movement_id = m.id))
       and not exists (
         select 1 from usdt_deposits u join deposits d on d.id = u.deposit_id
         where u.transfer_id = t.id and d.status = 'credited')
@@ -280,6 +287,12 @@ export async function usdtBalanceCheck(
         select 1 from treasury_movements m join ledger_accounts a on a.id = m.to_account_id
         where a.code = ${TREASURY_ACCOUNTS[place].code}
           and m.outside_category = 'unclaimed_receipt' and m.reverses_movement_id is null
+          and not exists (select 1 from treasury_movements r where r.reverses_movement_id = m.id)
+          and upper(m.external_reference) in (upper(t.txid), '0X' || upper(t.txid)))
+      and not exists (
+        select 1 from treasury_movements m join ledger_accounts a on a.id = m.from_account_id
+        where a.code = ${TREASURY_ACCOUNTS[place].code}
+          and m.outside_category = 'return_to_sender' and m.reverses_movement_id is null
           and not exists (select 1 from treasury_movements r where r.reverses_movement_id = m.id)
           and upper(m.external_reference) in (upper(t.txid), '0X' || upper(t.txid)))
     order by t.block_time, t.id`);

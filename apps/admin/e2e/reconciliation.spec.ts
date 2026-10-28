@@ -192,6 +192,34 @@ test('a movement by mistake is reversed once; both rows show', async ({ page, ad
   await expect(page.getByRole('button', { name: r.reverse.open })).toHaveCount(0);
 });
 
+test('a USDT return to its sender names the incoming TXID (Q30)', async ({ page, admin }) => {
+  await open(page, admin);
+  await page.getByRole('button', { name: r.places.record }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('combobox', { name: r.movement.from }).click();
+  await page.getByRole('option', { name: r.places.usdt_bep20 }).click();
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await dialog.getByRole('combobox', { name: r.movement.to }).click();
+  await page.getByRole('option', { name: r.places.outside_usd }).click();
+  await field(page, r.movement.sent.replace('{{currency}}', r.currencies.USD)).fill('5');
+  await expect(dialog.getByText(r.movement.returnedTxidHint)).toBeHidden();
+  await dialog.getByRole('combobox', { name: r.movement.category }).click();
+  await page.getByRole('option', { name: r.categories.return_to_sender }).click();
+  await expect(dialog.getByText(r.movement.returnedTxidHint)).toBeVisible();
+  await field(page, r.movement.reference).fill('NOT-A-TXID');
+  await field(page, r.movement.reason).fill('إعادة تحويل خاطئ');
+  await dialog.getByRole('button', { name: r.movement.submit }).click();
+  await expect(dialog.getByText(r.movement.errors.reference)).toBeVisible();
+  // No unclaimed receipt booked this transfer in: the refusal sits under the reference.
+  await field(page, r.movement.reference).fill(`0x${'ab'.repeat(32)}`);
+  await dialog.getByRole('button', { name: r.movement.submit }).click();
+  await expect(dialog.getByText(ar.errors.api.RETURN_RECEIPT_MISSING)).toBeVisible();
+  expect(admin.lastBody('POST /api/admin/treasury/movements')).toMatchObject({
+    from: 'usdt_bep20',
+    outsideCategory: 'return_to_sender',
+  });
+});
+
 test('a supplier correction above $100 asks for the amount and re-authentication, with one key (A09-31)', async ({
   page,
   admin,

@@ -358,6 +358,9 @@ export function MovementDialog({
             spellCheck={false}
             maxLength={100}
           />
+          {category === 'return_to_sender' && (from === 'usdt_trc20' || from === 'usdt_bep20') && (
+            <FieldDescription>{t('reconciliation.movement.returnedTxidHint')}</FieldDescription>
+          )}
           <FieldError match={!!errors.reference}>{errors.reference}</FieldError>
         </Field>
         <Field invalid={!!errors.reason}>

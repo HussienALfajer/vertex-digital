@@ -391,6 +391,21 @@ export class ReconciliationMock {
       if (input.openingBalance && this.movements.some((item) => item.to === input.to)) {
         return error(409, 'OPENING_BALANCE_EXISTS');
       }
+      // S13 T8 (Q30): a USDT return names a TXID an unclaimed receipt into the place booked.
+      if (
+        input.outsideCategory === 'return_to_sender' &&
+        input.externalReference !== undefined &&
+        (input.from === 'usdt_trc20' || input.from === 'usdt_bep20') &&
+        !this.movements.some(
+          (item) =>
+            item.to === input.from &&
+            item.outsideCategory === 'unclaimed_receipt' &&
+            item.externalReference?.toLowerCase().replace(/^0x/, '') ===
+              input.externalReference?.toLowerCase().replace(/^0x/, ''),
+        )
+      ) {
+        return error(409, 'RETURN_RECEIPT_MISSING');
+      }
       return this.record(idempotencyKey, {
         kind: 'transfer',
         from: input.from,
