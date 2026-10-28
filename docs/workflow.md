@@ -24,7 +24,7 @@ A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.
 - A grouped spec usually needs more than two PRs: `/feature-slice` splits it per feature or per layer so each PR stays reviewable; the spec is done when its last PR merges.
 - A small feature (about one table and one screen) does sessions 2 and 3 in one session and one PR.
 - A new supplier or a supplier API change runs `/supplier-adapter <code>` in its own session at `high`.
-- `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR.
+- `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR, and the next session may run Local or Cloud ("Moving work between Local and Cloud" below).
 - After each merge the owner runs the cleanup line from the report, then `/clear`.
 - **When a deploy happens:** when the task includes one: the owner asks for it, an audit group, a fix of a production bug, or the end of a phase. Other feature PRs wait for the next deploy. A deploy needs no approval (`AGENTS.md`, "How to work").
 - **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with admin-created test customers only, so nobody can deposit real money before there is something to buy.
@@ -126,6 +126,16 @@ Cloud limits:
 - `gh pr create` is refused in a cloud session: push the branch, the owner presses **Create PR**, then auto-merge is turned on as in "Finishing a task".
 - `pnpm db:seed-local` does not work in the cloud: it needs the production catalog snapshot, copied over SSH (`scripts/pull-catalog-snapshot.sh`).
 - The Claude GitHub App must be installed on the repository (needed to clone and push).
+
+### Moving work between Local and Cloud
+
+One spec often runs some PRs locally and others in the cloud. The only shared state is GitHub, so everything the next session needs is committed and pushed before a session ends:
+
+- `TASKS.md` is tracked (never git-ignored). Its first line names the task, the spec path and the branch; each PR's heading says whether it is merged, open (its number) or not started.
+- **Between PRs:** nothing extra; the merged PR carried `TASKS.md`. The next session pulls `main` and continues from the first open PR.
+- **In the middle of a PR:** tick what is done in `TASKS.md`, add a line `Stopped at: <what is half done, the next step, any failing check and its command>`, commit everything with `chore: wip <topic>` (never `.env` or local data) and push the branch without opening the PR. The next session runs `git fetch && git switch <branch>` (the branch named in `TASKS.md` on that branch; `git branch -r` lists it), reads `TASKS.md` and continues; the wip commits stay in the PR, which is merged with a merge commit, never squashed.
+- **Local-only steps** (the list below) are written in `TASKS.md` as items for a local session, so a cloud session leaves them open instead of skipping them silently.
+- Never leave work only in a local stash, an uncommitted tree or a local-only file: `CLAUDE.local.md`, `TASKS.local.md`, `.env` and `storage/` never reach the cloud.
 
 What always stays local:
 - **Production deploys** (`ssh`): the server's SSH key never goes into a cloud environment.
