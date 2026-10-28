@@ -14,7 +14,7 @@ Implement **$ARGUMENTS**. This skill orders the work and names the gates; the ru
 
 ## 1. Plan (no code)
 - Read only: the spec, the ADRs it lists, `wiring.md`, and the `CLAUDE.md` of each folder you will touch. Open reference files by range, when you write the layer that needs them.
-- If `TASKS.md` already holds this feature, continue from its first open PR instead of planning again. Check that the earlier PRs are merged into `main`.
+- If `TASKS.md` already holds this feature, continue from its first open PR instead of planning again. Check that the earlier PRs are merged into `main`. If that PR's branch exists on `origin` (a session stopped in the middle of it, Local or Cloud), switch to it, read its `TASKS.md` and its `Stopped at:` line, and continue there (`docs/workflow.md`, "Moving work between Local and Cloud").
 - Split the feature into PRs. Default: PR 1 is contracts, db, api and worker with their tests; PR 2 is admin and/or store and E2E. Use a single PR when the whole feature is small. A PR never leaves `main` broken or half-wired, and never ships a money path without its concurrency and idempotency tests.
 - Write `TASKS.md` for this feature (replace the previous task's file): a heading per PR, one item per layer below, the wiring items from `wiring.md` that apply, and "checks, reviewer, browser check, PR and merge" at the end of each PR.
 - Show the owner the PR split and the task list in a few lines, in Arabic, then **stop and wait for approval of the split**. This is the skill's only planned stop.
