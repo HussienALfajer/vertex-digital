@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Daily local backup of digital.vertexmedia.pro (vertexdigital-backup.timer), kept 14 days in
-# /var/backups/digital.vertexmedia.pro (700, root). An off-server copy is required before launch
-# (ADR 0009, docs/open-questions.md).
+# Daily backup of digital.vertexmedia.pro (vertexdigital-backup.timer), kept 14 days in
+# /var/backups/digital.vertexmedia.pro (700, root), with an off-server copy (Q1): the backup as
+# one tar, encrypted to the owner's public key (/etc/vertexdigital/backup-public.asc; the private
+# key never reaches this server), uploaded to Backblaze B2 with the bucket and key in
+# /etc/vertexdigital/backup.env (600, root; the apps never read it), its SHA-1 checked against the
+# bucket's. The bucket's Object Lock keeps each copy 30 days and its lifecycle rule deletes it
+# after; this key can shorten neither. A verified upload touches `offsite-last`, which the health
+# check reads.
 #
 # Restore (as the owner role, ADR 0014; docs/deployment.md):
 #   runuser -u postgres -- pg_restore --clean --if-exists --no-owner --role=vertex_digital_owner \
@@ -13,16 +18,22 @@
 # a folder that looks whole; the failure is logged and sent to the owner (vertexdigital-notify),
 # and the health check alerts when no complete backup is a day old (audit A10-13).
 set -euo pipefail
+shopt -s inherit_errexit
 umask 077
 
 SITE=digital.vertexmedia.pro
 DB=vertex_digital
 DEST=/var/backups/$SITE
 KEEP_DAYS=14
+OFFSITE_ENV=/etc/vertexdigital/backup.env
+OFFSITE_KEY=/etc/vertexdigital/backup-public.asc
 
+stage=local
 failed() {
-  logger -t vertexdigital-backup "backup FAILED at line $1"
-  /usr/local/sbin/vertexdigital-notify "⚠️ $SITE: the daily backup failed (journalctl -t vertexdigital-backup)" || true
+  logger -t vertexdigital-backup "backup FAILED at line $1 ($stage)"
+  local what="the daily backup failed"
+  [ "$stage" = offsite ] && what="the off-server copy failed (the local backup is complete)"
+  /usr/local/sbin/vertexdigital-notify "⚠️ $SITE: $what (journalctl -t vertexdigital-backup)" || true
 }
 trap 'failed $LINENO' ERR
 
@@ -49,7 +60,33 @@ cat "/srv/$SITE/current/REVISION" >>"$target/release.txt" 2>/dev/null || true
 (cd "$target" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
 mv -T "$target" "$final"
 
-# Complete backups past the period, and any partial one a failed run left.
+# Complete backups past the period, and any partial one or archive a failed run left.
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -name '*.partial' ! -path "$target" -exec rm -rf {} +
+find "$DEST" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gpg' -delete
 logger -t vertexdigital-backup "backup completed: $final ($(du -sh "$final" | cut -f1))"
+
+stage=offsite
+name="$(basename "$final").tar.gpg"
+archive="$DEST/$name"
+gnupg=$(mktemp -d)
+tar -C "$DEST" -cf - "$(basename "$final")" |
+  GNUPGHOME="$gnupg" gpg --batch --quiet --trust-model always --recipient-file "$OFFSITE_KEY" \
+    --encrypt --output "$archive"
+rm -rf "$gnupg"
+local_sha1=$(sha1sum "$archive" | cut -d' ' -f1)
+# The key reaches rclone through this subshell's environment only, never its arguments.
+remote_sha1=$(
+  set -a
+  # shellcheck source=/dev/null
+  . "$OFFSITE_ENV"
+  set +a
+  export RCLONE_CONFIG_OFFSITE_TYPE=b2 RCLONE_CONFIG_OFFSITE_ACCOUNT="$B2_KEY_ID" \
+    RCLONE_CONFIG_OFFSITE_KEY="$B2_APPLICATION_KEY"
+  rclone copyto --quiet "$archive" "offsite:$B2_BUCKET/daily/$name"
+  rclone hashsum sha1 "offsite:$B2_BUCKET/daily/$name" | cut -d' ' -f1
+)
+[ "$remote_sha1" = "$local_sha1" ] || { echo "the uploaded copy's SHA-1 differs" >&2; false; }
+rm -f "$archive"
+touch "$DEST/offsite-last"
+logger -t vertexdigital-backup "off-server copy uploaded: daily/$name (sha1 $local_sha1)"

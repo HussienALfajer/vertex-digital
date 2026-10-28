@@ -26,7 +26,8 @@ Status: in production since 2026-10-07. Each deploy is a line of the deploy log 
 | Database | PostgreSQL 17, database `vertex_digital`; owner role `vertex_digital_owner` (migrations, dumps, restores), app role `vertex_digital` (the apps); `CONNECT` and `TEMPORARY` revoked from `PUBLIC`; schema `pgboss` owned by the owner (ADR 0014) |
 | fail2ban | `vertexdigital-auth` jail: 20 failed sign-ins (store or panel) in 10 minutes ban the address for an hour; `vertexdigital-limit` jail: 300 rate refusals (429) in 10 minutes ban it for an hour. The sites log their own `limit_req` refusals at `notice`, below their error log, so the server's `nginx-limit-req` jail (10 in 10 minutes, every site) no longer bans a carrier address shared by many customers (audit A10-10); its `nginx-4xx-flood` jail still reads the access logs |
 | Daily backups | `/var/backups/digital.vertexmedia.pro/` (700, root), 03:50, 14 days; written into `<time>.partial` and renamed when complete, with a `SHA256SUMS` manifest; a failure is logged and sent to Telegram (audit A10-13) |
-| Health check | `vertexdigital-health.timer`, every 2 minutes: API, store, worker heartbeat, PM2, the public pages, certificates, disk, the newest backup under 26 hours; heals a check only after two failed runs in a row, with a 10-minute cooldown, never the store while the API is down; waits while a deploy holds its lock and heals nothing while `.hold` exists (a restore); one Telegram message when a problem starts and one when it ends, through `vertexdigital-notify` (audit A10-1, A10-3, A10-12) |
+| Off-server copies (Q1) | Each daily backup as one tar encrypted to the owner's public key (`/etc/vertexdigital/backup-public.asc`, from `deploy/backup-public.asc`; fingerprint `4D821B04810E4AA9644EF1B4270D35628F1E3070`), uploaded to the private Backblaze B2 bucket `vertexdigital-backups-1` as `daily/<time>.tar.gpg`; bucket and application key (that bucket only) in `/etc/vertexdigital/backup.env` (600, root: `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET`; the apps never read it); Object Lock keeps each copy 30 days (compliance mode: nobody can delete it sooner), a lifecycle rule deletes it after 31. The private key is only on the owner's machines |
+| Health check | `vertexdigital-health.timer`, every 2 minutes: API, store, worker heartbeat, PM2, the public pages, certificates, disk, the newest backup and the newest verified off-server copy (`offsite-last`) under 26 hours; heals a check only after two failed runs in a row, with a 10-minute cooldown, never the store while the API is down; waits while a deploy holds its lock and heals nothing while `.hold` exists (a restore); one Telegram message when a problem starts and one when it ends, through `vertexdigital-notify` (audit A10-1, A10-3, A10-12) |
 
 | Repository file | Installed as |
 |---|---|
@@ -155,7 +156,23 @@ Restore the files from the same backup:
 ssh vertex "rsync -a /var/backups/digital.vertexmedia.pro/<time>/files/ /srv/digital.vertexmedia.pro/shared/files/ && chown -R vertexdigital:www-data /srv/digital.vertexmedia.pro/shared/files"
 ```
 
-Check a copy before restoring it: `cd <backup> && sha256sum -c SHA256SUMS`. The dumps are not encrypted yet: encrypting them needs a key the owner holds off the server, set up with the off-server destination (audit A10-13). Backups stay on the server until an off-server destination is chosen. That is required before launch (ADR 0009). Interim (owner, 2026-10-20): they stay on this server until the owner subscribes to a second server, which then becomes the destination (Q1); a disk or server loss until then loses the backups with the database.
+Check a copy before restoring it: `cd <backup> && sha256sum -c SHA256SUMS`.
+
+### Off-server copies (Q1)
+
+After the local backup is complete, the script tars it, encrypts the tar to the owner's public key with `gpg --recipient-file` (the server holds no private key, so neither it nor Backblaze can read a copy), uploads it with `rclone copyto` to `b2:vertexdigital-backups-1/daily/<time>.tar.gpg`, compares the bucket's SHA-1 with its own, deletes the local archive and touches `offsite-last`. A failure is logged and sent to Telegram as "the off-server copy failed" (the local backup stays complete); the health check alerts when no verified copy is under 26 hours old. The B2 key reaches rclone through the environment of one subshell, never its arguments or `shared/.env`. `provision.sh` installs `rclone` and the public key; the owner writes `/etc/vertexdigital/backup.env` by hand (`install -m 600 /dev/null /etc/vertexdigital/backup.env`, then the three lines, single-quoted).
+
+The bucket (Backblaze account of `info@vertexmedia.pro`, region `us-east-005`): private, Backblaze's own encryption at rest on, Object Lock with a default retention of 30 days (compliance), lifecycle rule "hide after 31 days, delete 1 day after hiding" on every file. A copy can therefore not be deleted for 30 days, not by a stolen server key and not from the account.
+
+The private key and its revocation certificate are in `D:\vertex-digital-backup-key\` on the owner's PC (`private.asc`, `gnupg/`), with copies the owner keeps on a USB drive and in the password manager. Without it no copy can be read: never store it on the server or in the repository.
+
+Restore from an off-server copy, on any machine with the private key, gpg and PostgreSQL 17 (a lost server included):
+
+1. Download `daily/<time>.tar.gpg` from the bucket (the Backblaze web console, "Browse Files").
+2. Decrypt and unpack: `GNUPGHOME=$(mktemp -d) sh -c 'gpg --batch --import private.asc && gpg --batch --decrypt <time>.tar.gpg' | tar -x`, then `cd <time> && sha256sum -c SHA256SUMS`.
+3. The folder is a daily backup: restore it as above (the database dump as the owner role, `files/` into `shared/files/`). `environment` is the server's `shared/.env` of that day (the keys that decrypt supplier keys and order codes, `SUPPLIER_KEYS_SECRET` and `ORDER_CODES_SECRET`, are in it).
+
+A restore test of the newest copy runs monthly on the owner's PC: decrypt, `sha256sum -c`, `pg_restore` into a scratch local database, count the tables and the ledger rows against production, drop the scratch database. First test: see the deploy log.
 
 ## First-time setup
 

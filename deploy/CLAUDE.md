@@ -7,6 +7,7 @@ Everything installed on the production server comes from this folder (ADR 0009, 
 - `ecosystem.config.cjs`: PM2 processes `vertexdigital-api`, `vertexdigital-worker`, `vertexdigital-store` with memory limits; the api and worker cap V8's heap below theirs through `NODE_OPTIONS` (PM2's `--update-env` applies env, not `node_args`).
 - `nginx/`: one site per host (`digital.vertexmedia.pro`, `digital-admin.vertexmedia.pro`), their `.bootstrap` variants for the first certificate, the `vertexdigital-*` snippets (headers, CSP, proxy, compression) and rate-limit zones.
 - `fail2ban/` (failed sign-ins and 429 floods), `systemd/` (PM2 service, health and backup timers), `logrotate/`, `bin/` (deploy entry point, health check, backup, `vertexdigital-notify` for Telegram alerts from the server).
+- `backup-public.asc`: the owner's public key the off-server backup copies are encrypted to (Q1). Public, safe in the repository; its private key never reaches the server or this folder.
 - Tests: `deploy/test/nginx-check.sh` (`nginx -t` on this folder with Docker, run by CI) and `apps/api/test/deploy-scripts.test.ts` (the scripts and nginx sites; the `bin/` scripts take `VD_*` path variables for it). Run the latter with `pnpm verify apps/api/test/deploy-scripts.test.ts`.
 
 ## Approvals

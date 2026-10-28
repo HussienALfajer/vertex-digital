@@ -1,8 +1,11 @@
-# TASKS — Owner answers Q30 and Q3 (branch `fix/q30-q3-owner-answers`, spec S13)
+# TASKS — Off-server backups (Q1, launch checklist; branch `feat/offsite-backups`)
 
-The owner answered on 2026-10-28: Q30 with the recommendation, Q3 with no license; the post-reset hand steps and the registration opening are done.
+The owner chose Backblaze B2 on 2026-10-28 and created the bucket (Object Lock 30 days, lifecycle 31 + 1 days) and a key limited to it, in `/etc/vertexdigital/backup.env` on the server.
 
-- [x] Q30: the nightly USDT check counts only transfers after the standing opening and drops those a `return_to_sender` movement names (S13 E3, T8); the return's TXID is validated and stored as a claim's; the movement dialog's hint
-- [x] Q3 resolved (no license); `docs/open-questions.md`, S13, audit A09 and `docs/ROADMAP.md` updated
-- [x] Reviewer (three rounds: the receipt rule, `RECEIPT_RETURNED`, the required TXID); `pnpm verify` pass
-- [x] PR with auto-merge; the deploy follows its merge
+- [x] Encryption key pair on the owner's PC (`D:\vertex-digital-backup-key\`); round trip checked; public key in `deploy/backup-public.asc`
+- [x] `vertexdigital-backup`: encrypt the backup to the public key, upload with rclone, compare SHA-1, touch `offsite-last`
+- [x] Health check alerts on no verified copy in 26 hours; `provision.sh` installs rclone and the key
+- [x] `docs/deployment.md`, `docs/open-questions.md` (Q1 resolved), `deploy/CLAUDE.md`
+- [x] `pnpm verify`; reviewer (no blocking issue)
+- [ ] PR and merge; deploy with `provision.sh`; one backup run now, its copy in the bucket
+- [ ] Restore test on the owner's PC; launch checklist ticked; deploy log

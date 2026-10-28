@@ -263,6 +263,11 @@ systemctl enable --now pm2-vertexdigital.service
 systemctl is-active pm2-vertexdigital.service
 
 step "Backup timer"
+# The off-server copy (Q1): rclone uploads it, encrypted to the owner's public key. The bucket and
+# its key are in /etc/vertexdigital/backup.env, written by the owner (docs/deployment.md).
+command -v rclone >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q rclone
+install -m 644 "$src/deploy/backup-public.asc" /etc/vertexdigital/backup-public.asc
+[ -e /etc/vertexdigital/backup.env ] || echo "warning: /etc/vertexdigital/backup.env is missing: the off-server copy fails until the owner writes it" >&2
 systemctl enable --now vertexdigital-backup.timer
 
 cat <<EOF
