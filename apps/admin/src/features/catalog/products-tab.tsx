@@ -1,17 +1,24 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   formatSyp,
   formatUsd,
   type GameDetail,
   marginPercent,
+  PRICE_MATRIX_MAX_LISTS,
+  PRICE_MATRIX_MAX_PRODUCTS,
+  type PriceMatrix,
   type Product,
+  ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
+  Callout,
   cn,
   Dialog,
   EmptyState,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -35,9 +42,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { formatDuration, ltr } from '../../lib/format';
+import { priceListsQuery, priceMatrixQuery } from '../pricing/pricing.queries';
 import { StockChip } from '../suppliers/offer-cells';
 import { RoutesDrawer } from '../suppliers/routes-drawer';
+import { UnusableReason } from '../suppliers/supplier-parts';
 import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
 import { moved } from './catalog-search';
@@ -50,7 +60,9 @@ import { QuickLinkDialog } from './quick-link-dialog';
  * order (rule CT5), archive after a confirmation (audit A7) and restore with an archived filter
  * (rule CT1). S07: the stored price
  * in USD and SYP, the supplier it follows, a held review, and each product's routes drawer.
- * S22 DL5: each pack's direct buy link, with its QR and campaign tag.
+ * S22 DL5: each pack's direct buy link, with its QR and campaign tag. Every other price list's
+ * price beside retail, from the price matrix; a pack with no usable route shows its cheapest
+ * route's cost and the prices it would take, marked as estimates.
  */
 export function ProductsTab({ game }: { game: GameDetail }) {
   const { t } = useTranslation();
@@ -66,6 +78,18 @@ export function ProductsTab({ game }: { game: GameDetail }) {
   const products = game.products.filter((product) => (product.archivedAt !== null) === archived);
   const live = game.products.filter((product) => product.archivedAt === null);
   const busy = reorder.isPending || archive.isPending || update.isPending;
+  const lists = useQuery(priceListsQuery);
+  const others = (lists.data ?? [])
+    .filter((list) => list.archivedAt === null && list.id !== ROOT_PRICE_LIST_IDS.retail)
+    .slice(0, PRICE_MATRIX_MAX_LISTS - 1);
+  const matrix = useQuery({
+    ...priceMatrixQuery({ gameId: game.id, lists: others.map((list) => list.id) }),
+    enabled: lists.isSuccess && live.length > 0,
+  });
+  const sheets = new Map((matrix.data?.rows ?? []).map((row) => [row.productId, row]));
+  const listsFailure = lists.isError ? lists : matrix.isError ? matrix : null;
+  // Until the matrix answers, its cells show a placeholder rather than "no price".
+  const loadingSheets = !archived && !listsFailure && (lists.isPending || matrix.isPending);
 
   async function run(action: () => Promise<unknown>) {
     setFailure(null);
@@ -105,6 +129,15 @@ export function ProductsTab({ game }: { game: GameDetail }) {
         </Button>
       </div>
       {failure && <FormAlert>{failure}</FormAlert>}
+      {!archived && listsFailure && (
+        <ReadFailure error={listsFailure.error} onRetry={() => listsFailure.refetch()} />
+      )}
+      {!archived && (matrix.data?.rows.length ?? 0) >= PRICE_MATRIX_MAX_PRODUCTS && (
+        <Callout
+          tone="info"
+          title={t('pricing.matrix.truncated', { max: PRICE_MATRIX_MAX_PRODUCTS })}
+        />
+      )}
       {products.length === 0 ? (
         <EmptyState
           icon={<PackageIcon />}
@@ -119,6 +152,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
               <TableHead>{t('catalog.products.columns.amount')}</TableHead>
               <TableHead>{t('catalog.products.columns.official')}</TableHead>
               <TableHead>{t('catalog.products.columns.price')}</TableHead>
+              <TableHead>{t('catalog.products.columns.lists')}</TableHead>
               <TableHead>{t('catalog.products.columns.cost')}</TableHead>
               <TableHead>{t('catalog.products.columns.maxQuantity')}</TableHead>
               <TableHead>{t('catalog.products.columns.status')}</TableHead>
@@ -151,10 +185,29 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <ProductPrice product={product} />
+                  {loadingSheets && product.priceUsdUnits === null ? (
+                    <Skeleton className="h-5 w-16" aria-hidden="true" />
+                  ) : (
+                    <ProductPrice product={product} sheet={sheets.get(product.id)} />
+                  )}
                 </TableCell>
                 <TableCell>
-                  <ProductCost product={product} />
+                  {loadingSheets ? (
+                    <Skeleton className="h-10 w-28" aria-hidden="true" />
+                  ) : (
+                    <ListPrices
+                      product={product}
+                      sheet={sheets.get(product.id)}
+                      lists={matrix.data?.lists ?? []}
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {loadingSheets && product.basisCostUsdUnits === null ? (
+                    <Skeleton className="h-5 w-16" aria-hidden="true" />
+                  ) : (
+                    <ProductCost product={product} sheet={sheets.get(product.id)} />
+                  )}
                 </TableCell>
                 <TableCell className="tabular-nums">{product.maxQuantity}</TableCell>
                 <TableCell>
@@ -319,45 +372,158 @@ export function ProductsTab({ game }: { game: GameDetail }) {
   );
 }
 
-/** The basis route's unit cost, and what the current price leaves over it. */
-function ProductCost({ product }: { product: Product }) {
+type PriceSheet = PriceMatrix['rows'][number];
+
+/** The retail price, stored or (without a row) estimated by the matrix. */
+function retailFigure(product: Product, sheet: PriceSheet | undefined) {
+  if (product.priceUsdUnits !== null) return { price: product.priceUsdUnits, estimated: false };
+  const cell = sheet?.cells.find((item) => item.priceListId === ROOT_PRICE_LIST_IDS.retail);
+  const estimated = cell?.estimatedPriceUsdUnits ?? null;
+  return estimated === null ? null : { price: estimated, estimated: true };
+}
+
+/** The basis route's cost, or with no usable route the cheapest route's cost as an estimate. */
+function costFigure(product: Product, sheet: PriceSheet | undefined) {
+  if (product.basisCostUsdUnits !== null) {
+    return { cost: product.basisCostUsdUnits, estimate: null };
+  }
+  return sheet?.estimate ? { cost: sheet.estimate.costUsdUnits, estimate: sheet.estimate } : null;
+}
+
+function EstimatedBadge() {
   const { t } = useTranslation();
-  const cost = product.basisCostUsdUnits;
-  if (cost === null) return <span className="text-muted-foreground">—</span>;
-  const profit = product.priceUsdUnits === null ? null : product.priceUsdUnits - cost;
-  const percent = profit === null ? null : marginPercent(profit, product.priceUsdUnits as number);
+  return <Badge tone="neutral">{t('catalog.products.estimated')}</Badge>;
+}
+
+/** What a price leaves over the cost, in dollars and as a share of the price. */
+function Profit({ price, cost }: { price: number; cost: number }) {
+  const { t } = useTranslation();
+  const profit = price - cost;
+  return (
+    <span
+      className={cn(
+        'text-xs tabular-nums',
+        profit > 0 ? 'text-status-success-foreground' : 'text-destructive-text',
+      )}
+    >
+      {t('catalog.products.profit', {
+        amount: ltr(formatUsd(profit)),
+        percent: ltr(`${marginPercent(profit, price)}%`),
+      })}
+    </span>
+  );
+}
+
+/**
+ * The unit cost and what the retail price leaves over it; with no usable route, the cheapest
+ * route's cost, its supplier and why it cannot serve now.
+ */
+function ProductCost({ product, sheet }: { product: Product; sheet: PriceSheet | undefined }) {
+  const { t } = useTranslation();
+  const figure = costFigure(product, sheet);
+  if (figure === null) return <span className="text-muted-foreground">—</span>;
+  const retail = retailFigure(product, sheet);
   return (
     <span className="flex flex-col items-start gap-0.5">
-      <bdi dir="ltr" className="font-medium tabular-nums">
-        {formatUsd(cost)}
-      </bdi>
-      {profit !== null && percent !== null && (
-        <span
-          className={cn(
-            'text-xs tabular-nums',
-            profit > 0 ? 'text-status-success-foreground' : 'text-destructive-text',
-          )}
-        >
-          {t('catalog.products.profit', {
-            amount: ltr(formatUsd(profit)),
-            percent: ltr(`${percent}%`),
-          })}
-        </span>
+      <span className="flex items-center gap-1.5">
+        <bdi dir="ltr" className="font-medium tabular-nums">
+          {formatUsd(figure.cost)}
+        </bdi>
+        {figure.estimate && <EstimatedBadge />}
+      </span>
+      {retail && <Profit price={retail.price} cost={figure.cost} />}
+      {figure.estimate && (
+        <>
+          <span className="text-xs text-muted-foreground">
+            {t('catalog.products.estimateSupplier', {
+              supplier: t(`suppliers.names.${figure.estimate.supplierCode}`),
+            })}
+          </span>
+          <UnusableReason reason={figure.estimate.reason} />
+        </>
       )}
     </span>
   );
 }
 
-/** The stored price (S07 rule P2) with its SYP display price, and the supplier it follows (P1). */
-function ProductPrice({ product }: { product: Product }) {
+/**
+ * Every price list but retail (S20): its stored price and the profit over the cost, or the price
+ * it would take, marked as an estimate.
+ */
+function ListPrices({
+  product,
+  sheet,
+  lists,
+}: {
+  product: Product;
+  sheet: PriceSheet | undefined;
+  lists: PriceMatrix['lists'];
+}) {
+  const cost = costFigure(product, sheet)?.cost ?? null;
+  const rows = lists.filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail);
+  if (!sheet || rows.length === 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <dl className="m-0 grid grid-cols-[auto_auto] items-baseline gap-x-3 gap-y-1">
+      {rows.map((list) => {
+        const cell = sheet.cells.find((item) => item.priceListId === list.id);
+        const stored = cell?.priceUsdUnits ?? null;
+        const price = stored ?? cell?.estimatedPriceUsdUnits ?? null;
+        return (
+          <div key={list.id} className="contents">
+            <dt className="text-xs text-muted-foreground">{list.name}</dt>
+            <dd className="m-0 flex flex-col items-start gap-0.5">
+              {price === null ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <bdi
+                    dir="ltr"
+                    className={cn(
+                      'text-sm font-medium tabular-nums',
+                      stored === null && 'text-muted-foreground',
+                    )}
+                  >
+                    {formatUsd(price)}
+                  </bdi>
+                  {stored === null && <EstimatedBadge />}
+                </span>
+              )}
+              {price !== null && cost !== null && <Profit price={price} cost={cost} />}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+/**
+ * The retail price (S07 rule P2) with its SYP display price and the supplier it follows (P1); a
+ * pack never priced shows the price it would take, marked as an estimate.
+ */
+function ProductPrice({ product, sheet }: { product: Product; sheet: PriceSheet | undefined }) {
   const { t } = useTranslation();
-  if (product.priceUsdUnits === null) {
+  const retail = retailFigure(product, sheet);
+  if (retail === null) {
     return <span className="text-sm text-muted-foreground">{t('catalog.products.noPrice')}</span>;
+  }
+  if (retail.estimated) {
+    return (
+      <span className="flex flex-col items-start gap-0.5">
+        <span className="flex items-center gap-1.5">
+          <bdi dir="ltr" className="font-medium tabular-nums text-muted-foreground">
+            {formatUsd(retail.price)}
+          </bdi>
+          <EstimatedBadge />
+        </span>
+        <span className="text-xs text-muted-foreground">{t('catalog.products.estimatedHint')}</span>
+      </span>
+    );
   }
   return (
     <span className="flex flex-col items-start gap-0.5">
       <bdi dir="ltr" className="font-medium tabular-nums">
-        {formatUsd(product.priceUsdUnits)}
+        {formatUsd(retail.price)}
       </bdi>
       {product.priceSypUnits !== null && (
         <span className="text-xs text-muted-foreground tabular-nums">
