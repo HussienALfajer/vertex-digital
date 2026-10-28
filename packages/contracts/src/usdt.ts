@@ -59,8 +59,8 @@ export const USDT_TAIL_MIN_UNITS = 100;
 export const USDT_TAIL_MAX_UNITS = 9_900;
 export const USDT_TAIL_STEP_UNITS = 100;
 
-/** An expired or cancelled deposit's amount stays reserved this long (rule U4). */
-export const USDT_RESERVATION_GRACE_DAYS = 7;
+/** A closed deposit's amount (credited included) stays reserved this long (rule U4; Q23: 30 days). */
+export const USDT_RESERVATION_GRACE_DAYS = 30;
 /** Transfers below $1 are not recorded (rule U14). */
 export const USDT_DUST_THRESHOLD_UNITS = 1 * CURRENCY_SCALE.USD;
 /** TXID submissions per deposit and per customer per hour (rule U8). */

@@ -145,6 +145,11 @@ export const supplierOffers = pgTable(
     /** Null: no usable USD cost; the raw value is kept in `cost_raw` (edge case 6). */
     costUsdUnits: amountUnits('cost_usd_units'),
     costRaw: text('cost_raw'),
+    /**
+     * Q25: the cost the last sync read from the listing. While the listing still shows it, a
+     * higher cost a quote or a charge recorded since (S18 PQ3, CH3) stays the offer's cost.
+     */
+    listedCostUsdUnits: amountUnits('listed_cost_usd_units'),
     inStock: boolean('in_stock').notNull(),
     costConfirmedAt: timestamp('cost_confirmed_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
@@ -205,6 +210,10 @@ export const supplierOffers = pgTable(
     ),
     check('supplier_offers_cost_raw_check', sql`char_length(${table.costRaw}) <= 64`),
     check('supplier_offers_cost_check', sql`${table.costUsdUnits} between 1 and 10000000000`),
+    check(
+      'supplier_offers_listed_cost_check',
+      sql`${table.listedCostUsdUnits} between 1 and 10000000000`,
+    ),
     check('supplier_offers_discount_check', sql`${table.discountBp} between 1 and 10000`),
     check(
       'supplier_offers_quantity_check',

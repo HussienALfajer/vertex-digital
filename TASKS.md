@@ -1,9 +1,9 @@
-# TASKS — Local/Cloud handoff rules (branch `docs/cloud-handoff`, no spec)
+# TASKS — Owner answers Q23 and Q25 (branch `fix/q23-q25-owner-answers`, specs S04 and S18)
 
-The owner runs one spec's PRs sometimes locally, sometimes in the cloud. Make the handoff explicit so a cloud session can always continue.
+The owner answered two pilot questions on 2026-10-28, both with the recommendation.
 
-- [x] Repository state checked on 2026-10-28: every branch merged into `main`, no open PR, no stash or extra worktree, local `main` equals `origin/main`
-- [x] Production runs `c982286` (audit A10); `main` adds only docs, tests, CI and scripts since, so no runtime deploy is pending
-- [x] `docs/workflow.md`: "Moving work between Local and Cloud" (between PRs, in the middle of a PR with a `Stopped at:` line, local-only steps)
-- [x] `AGENTS.md` and `/feature-slice`: point to it; resume from a pushed branch
-- [x] PR and merge
+- [x] Q23: `USDT_RESERVATION_GRACE_DAYS` 7 → 30 (S04 rule U4)
+- [x] Q25: `supplier_offers.listed_cost_usd_units` (migrations 0100, 0101 backfill); the sync keeps a higher quoted or charged cost while the listing shows the same figure (S18 PQ4); worker test
+- [x] `docs/open-questions.md`, S04, S18, audits A02 and A05 updated
+- [x] `pnpm verify` pass; reviewer: no blocking issue
+- [x] PR and merge (no deploy: it ships with the next one, the production reset)

@@ -1065,13 +1065,49 @@ describe('suppliers.sync: audit F9 regressions', () => {
       };
       expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 0 });
       expect(await offerRow(tx, 'a')).toMatchObject({ costUsdUnits: usd(0.95) });
-      // A later run reads after it: the listing wins again (Q25 open).
+      // A later run reads after it: the listing still shows $0.88, so the charge stays (Q25).
       await tx
         .update(supplierOffers)
         .set({ costConfirmedAt: new Date(Date.now() - 60_000) })
         .where(eq(supplierOffers.id, a.id));
       current = listing(offer('a', 0.88));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 0 });
+      expect(await offerRow(tx, 'a')).toMatchObject({ costUsdUnits: usd(0.95) });
+    }));
+
+  it('keeps a charged cost until the listing shows a new figure (Q25)', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('a', 0.88));
+      await sync.sync(payload(), tx);
+      const a = await offerRow(tx, 'a');
+      expect(a).toMatchObject({ listedCostUsdUnits: usd(0.88) });
+      await route(tx, p, a.id);
+      // A charge of $0.95 recorded before this run (S18 CH3).
+      const earlier = new Date(Date.now() - 60_000);
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: usd(0.95), costConfirmedAt: earlier })
+        .where(eq(supplierOffers.id, a.id));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 0 });
+      expect(await offerRow(tx, 'a')).toMatchObject({
+        costUsdUnits: usd(0.95),
+        listedCostUsdUnits: usd(0.88),
+      });
+      // The supplier lists a new figure: it wins, even below the charge.
+      current = listing(offer('a', 0.9));
       expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 1 });
+      expect(await offerRow(tx, 'a')).toMatchObject({
+        costUsdUnits: usd(0.9),
+        listedCostUsdUnits: usd(0.9),
+      });
+      // A quote below the listing never outlasts it: the higher listed cost comes back.
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: usd(0.85), costConfirmedAt: earlier })
+        .where(eq(supplierOffers.id, a.id));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ costsChanged: 1 });
+      expect(await offerRow(tx, 'a')).toMatchObject({ costUsdUnits: usd(0.9) });
     }));
 
   it('stops a route whose offer the supplier turned into another kind (audit F9-5)', () =>

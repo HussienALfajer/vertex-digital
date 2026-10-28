@@ -70,7 +70,7 @@ What changed:
 | A02-43 | P3 | UI | `apps/admin/src/features/deposits/deposit-settings-page.tsx:549` | A USDT network with no address on the server shows "التحقق متأخر" next to "غير مضبوط على الخادم" (found in the live test). | The badge only for a network with an address | admin E2E `usdt-deposits.spec.ts` (settings) | fixed |
 
 ## Owner decisions
-- **Q23** (`docs/open-questions.md`): the USDT reservation grace of a credited exact amount (rule U4, 7 days). Recommended 30 days. Unanswered: 7 days stays.
+- **Q23** (`docs/open-questions.md`): the USDT reservation grace of a credited exact amount (rule U4, 7 days). Answered 2026-10-28: 30 days.
 
 ## Deferred
 - **A02-28** (P3): the scanner never moves past a listed transfer it could not settle. Deliberate: moving on would drop that transfer from the scan for good; the stale alert and the network's delayed state already fire. A dedicated alert naming the transfer is recorded for A10.

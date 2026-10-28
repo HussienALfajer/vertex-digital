@@ -21,7 +21,7 @@ import { lockCustomerWallet } from './wallet.js';
 
 /**
  * A USDT deposit whose amount is reserved (rules U3, U4): open, or closed (expired, cancelled,
- * credited or rejected) less than 7 days ago. A closed deposit's last change is its closing, so
+ * credited or rejected) less than `USDT_RESERVATION_GRACE_DAYS` (30) days ago. A closed deposit's last change is its closing, so
  * `updated_at` dates it; an expired one is never closed before `expires_at`. Keeping credited
  * amounts reserved too means a customer's second payment of the same amount is never credited
  * to someone else's new deposit (edge case 3). Used over `usdt_deposits` joined to `deposits`.

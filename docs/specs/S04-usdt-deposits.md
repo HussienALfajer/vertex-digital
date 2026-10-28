@@ -48,7 +48,7 @@ A customer only ever reaches their own deposits (S03: lookup by id **and** sessi
     - `confirmations`: 19 on TRON (a solidified block), 15 on BSC (and the block at or below the `finalized` block);
     - `explorerTxUrl`: `https://tronscan.org/#/transaction/<txid>`, `https://bscscan.com/tx/0x<txid>`.
   - `USDT_TAIL_MIN_UNITS = 100`, `USDT_TAIL_MAX_UNITS = 9_900`, `USDT_TAIL_STEP_UNITS = 100`: tails 0.0001–0.0099 USDT in USD units (rule U3).
-  - `USDT_RESERVATION_GRACE_DAYS = 7` (rule U4), `USDT_DUST_THRESHOLD_UNITS = 1 * CURRENCY_SCALE.USD` (rule U14), `MAX_TXID_SUBMISSIONS = 5`, `TXID_SUBMISSIONS_PER_HOUR = 20`, `TXID_SEARCH_MINUTES = 30`, `USDT_SCANNER_STALE_MINUTES = 10`.
+  - `USDT_RESERVATION_GRACE_DAYS = 30` (rule U4; 7 until Q23, owner 2026-10-28), `USDT_DUST_THRESHOLD_UNITS = 1 * CURRENCY_SCALE.USD` (rule U14), `MAX_TXID_SUBMISSIONS = 5`, `TXID_SUBMISSIONS_PER_HOUR = 20`, `TXID_SEARCH_MINUTES = 30`, `USDT_SCANNER_STALE_MINUTES = 10`.
   - `txidSchema`: accepts a bare 64-hex hash, a `0x`-prefixed one, or a Tronscan / BscScan transaction link, in any case, trimmed; normalizes to 64 lower-case hex characters without `0x`. Anything else fails (`TXID_INVALID`).
   - `usdtPayAmount(declaredUsdUnits, tailUnits)` and `formatUsdtAmount(units)` (`"25.0037"`, always 4 decimals), `rawToUsdUnits(raw, decimals)` (BigInt, floored to USD units), `usdtRawForUnits(units, decimals)` (exact) in `money.ts`, with tests.
   - `addressSchema` per network: TRON base58check (`T…`, 34 characters, checksum verified), BSC 20-byte hex with the EIP-55 checksum when mixed case. Used by the environment check (rule U1).
@@ -166,11 +166,11 @@ Every transition locks the deposit row (`SELECT … FOR UPDATE`), checks the tra
   The options route says why a network is unavailable: `not_configured`, `disabled` or `delayed`. Each deposit stores the address it showed (`receiving_address`). Changing an address is a server change, and open deposits keep the address they showed (edge case 12).
 - U2. **Creation** takes the method and the USD amount in whole cents. It requires an `Idempotency-Key` and ALTCHA, as S03 SC2 does (the same replay rules).
 - U3. **Exact amount.** The deposit gets a random free tail `t` in {0.0001, 0.0002, …, 0.0099} USDT. The amount to pay is `declared + t` (for example `25.0037`).
-  - "Free" means no **reserved** USDT deposit on the same network has the same `pay_amount_units`. A deposit is reserved while `pending` or `submitted`, and while `expired` or `cancelled` for 7 more days after `expires_at` or its cancellation (U4).
+  - "Free" means no **reserved** USDT deposit on the same network has the same `pay_amount_units`. A deposit is reserved while `pending` or `submitted`, and while `expired` or `cancelled` for 30 more days after `expires_at` or its cancellation (U4).
   - Tails are chosen under a transaction-level advisory lock per network, with the partial unique index as the backstop.
   - When all 99 tails of that amount are reserved, creation answers `DEPOSIT_AMOUNT_BUSY`, and the store suggests the same amount plus or minus one cent.
   - The tail is below one cent, so the credit of an exact match is exactly the declared amount (U7). The customer pays at most $0.0099 more, which goes to `deposit_rounding`.
-- U4. **Validity**: `expires_at` is 24 hours after creation (owner, 2026-10-08), with S03's `deposits.expire` job and edge case 19. After expiry or cancellation, the amount stays reserved for 7 days. A late exact transfer then matches no live deposit and lands in the unmatched list with this deposit as its **candidate** (U13), so the admin knows whose it is.
+- U4. **Validity**: `expires_at` is 24 hours after creation (owner, 2026-10-08), with S03's `deposits.expire` job and edge case 19. After expiry or cancellation, the amount stays reserved for 30 days (Q23, owner 2026-10-28; 7 before). A late exact transfer then matches no live deposit and lands in the unmatched list with this deposit as its **candidate** (U13), so the admin knows whose it is.
 - U5. **Limits**, shared with Sham Cash (owner, 2026-10-08):
   - the S03 SC3 tiers and the one 24-hour window across all methods (new account $50 per deposit and $100 per 24 hours; established $300 and $1,000);
   - the USDT minimum, $5 (`usdt_min_deposit_usd_units`), instead of the Sham Cash $2;
@@ -459,7 +459,7 @@ Tests:
 - Update `docs/architecture.md` (the `deposits` module's USDT parts, jobs `deposits.usdt-scan` and `deposits.usdt-verify`, the chain readers), `.env.example`, `docs/deployment.md` (the new variables and the address-change note), and the commands table for `usdt:fake-transfer`.
 - Settled in PR 1 (contracts, db, api):
   - PRs: three instead of two. PR 1 is contracts, db and api; PR 2 the chain readers and the worker jobs; PR 3 the screens. Until PR 2, no scanner writes `usdt_scan_cursors`, so every network reads `delayed` and creation is refused (rule U1).
-  - Reservation (U3, U4): a deposit's amount is reserved while open and for 7 days after its last change, whatever its final status, credited and rejected included, so a customer's second payment of a credited amount never matches another customer's new deposit (edge case 3). Candidates use the same set.
+  - Reservation (U3, U4): a deposit's amount is reserved while open and for 30 days after its last change, whatever its final status, credited and rejected included, so a customer's second payment of a credited amount never matches another customer's new deposit (edge case 3). Candidates use the same set.
   - `deposit_open` is kept by a database trigger on the deposit's status (`deposits_sync_usdt_open`, migration 0014), not by the service; the USDT row's guard refuses any other value.
   - A deposit's USDT check becomes `done` when it is credited, rejected, cancelled or expired.
   - `POST /api/deposits/:id/txid` takes the pasted text (`submitTxidSchema`: up to 300 characters); the API normalizes it and answers `TXID_INVALID`. A TXID held by another deposit (bound, or being verified) or claimed on either network is `EXTERNAL_REFERENCE_TAKEN`.

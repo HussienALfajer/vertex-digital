@@ -279,14 +279,15 @@ function* batches<T>(items: readonly T[]): Generator<T[]> {
 /**
  * Rule SY3 for listed offers already stored, in one statement: each row takes the listing's
  * values, is seen at the run's start and no longer missing; a usable cost is confirmed then, or
- * keeps a later confirmation (a cost observed after the read began, audit A05-8).
+ * keeps a later confirmation (a cost observed after the read began, audit A05-8); the listed cost
+ * is stored as read (Q25).
  */
 async function updateOffers(
   tx: Transaction,
-  batch: readonly { row: OfferRow; offer: ListedOffer }[],
+  batch: readonly { row: OfferRow; offer: ListedOffer; listedCostUsdUnits: number | null }[],
   seenAt: Date,
 ): Promise<void> {
-  const values = batch.map(({ row, offer }) => ({
+  const values = batch.map(({ row, offer, listedCostUsdUnits }) => ({
     id: row.id,
     name: offer.name,
     group_name: offer.groupName,
@@ -294,6 +295,7 @@ async function updateOffers(
     required_fields: offer.requiredFields,
     cost_usd_units: offer.costUsdUnits,
     cost_raw: offer.costRaw,
+    listed_cost_usd_units: listedCostUsdUnits,
     in_stock: offer.inStock,
     category_id: offer.categoryId,
     stock: offer.stock,
@@ -312,6 +314,7 @@ async function updateOffers(
       required_fields = v.required_fields,
       cost_usd_units = v.cost_usd_units,
       cost_raw = v.cost_raw,
+      listed_cost_usd_units = v.listed_cost_usd_units,
       in_stock = v.in_stock,
       category_id = v.category_id,
       stock = v.stock,
@@ -328,7 +331,7 @@ async function updateOffers(
       updated_at = now()
     from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as v(
       id uuid, name text, group_name text, kind product_kind, required_fields text[],
-      cost_usd_units bigint, cost_raw text, in_stock boolean, category_id text, stock integer,
+      cost_usd_units bigint, cost_raw text, listed_cost_usd_units bigint, in_stock boolean, category_id text, stock integer,
       original_cost_usd_units bigint, field_specs jsonb, unsupported_reason text,
       discount_bp integer, min_quantity integer, max_quantity integer
     )
@@ -868,7 +871,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
 
       const counts = { offersNew: 0, costsChanged: 0, offersMissing: 0, mappedMissing: 0 };
       const changed: string[] = [];
-      const updates: { row: OfferRow; offer: ListedOffer }[] = [];
+      const updates: { row: OfferRow; offer: ListedOffer; listedCostUsdUnits: number | null }[] =
+        [];
       const missing: OfferRow[] = [];
       const now = new Date();
       const byOfferId = new Map(existing.map((row) => [row.offerId, row]));
@@ -878,10 +882,18 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         // Audit A05-8: a cost observed after this run's read began (a quote or a charge, S18
         // PQ3) is newer than the listing, so it stays.
         const observedLater = row.costConfirmedAt !== null && row.costConfirmedAt >= run.startedAt;
-        const offer = observedLater
-          ? { ...listedOffer, costUsdUnits: row.costUsdUnits, costRaw: row.costRaw }
-          : listedOffer;
-        updates.push({ row, offer });
+        // Q25: a higher cost a quote or a charge recorded stays while the listing still shows the
+        // cost it showed before; a new listed figure replaces it.
+        const listingLags =
+          row.costUsdUnits !== null &&
+          row.listedCostUsdUnits !== null &&
+          listedOffer.costUsdUnits === row.listedCostUsdUnits &&
+          row.costUsdUnits > row.listedCostUsdUnits;
+        const offer =
+          observedLater || listingLags
+            ? { ...listedOffer, costUsdUnits: row.costUsdUnits, costRaw: row.costRaw }
+            : listedOffer;
+        updates.push({ row, offer, listedCostUsdUnits: listedOffer.costUsdUnits });
         const moved =
           row.costUsdUnits !== offer.costUsdUnits ||
           row.inStock !== offer.inStock ||
@@ -946,6 +958,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             id: newId(),
             supplierId: supplier.id,
             ...offer,
+            listedCostUsdUnits: offer.costUsdUnits,
             costConfirmedAt: offer.costUsdUnits === null ? null : run.startedAt,
             lastSeenAt: run.startedAt,
           })),

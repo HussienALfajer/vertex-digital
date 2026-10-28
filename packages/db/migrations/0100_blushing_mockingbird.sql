@@ -1,0 +1,2 @@
+ALTER TABLE "supplier_offers" ADD COLUMN "listed_cost_usd_units" bigint;--> statement-breakpoint
+ALTER TABLE "supplier_offers" ADD CONSTRAINT "supplier_offers_listed_cost_check" CHECK ("supplier_offers"."listed_cost_usd_units" between 1 and 10000000000);
