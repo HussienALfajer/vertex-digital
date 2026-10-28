@@ -4,12 +4,12 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 
 | ID | Question | Needed before | Recommendation |
 |---|---|---|---|
-| Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money. Interim (owner, 2026-10-20): the daily backups stay on the production server until the owner subscribes to a second server; the destination is set up and a restore tested then |
 
 ## Resolved
 
 | Question | Answer | Date |
 |---|---|---|
+| Q1: off-server backup destination | Backblaze B2 (owner, 2026-10-28): a private bucket with Object Lock (30 days, compliance) and a lifecycle rule; each daily backup encrypted on the server to the owner's public key and uploaded (`docs/deployment.md`, "Off-server copies") | 2026-10-28 |
 | Q30: which USDT transfers widen the nightly USDT check (S13 E3, audit A09-4) | Only transfers on chain after the network's standing opening (earlier ones are inside its amount); a `return_to_sender` movement out of a USDT place names the incoming TXID it sends back, which then leaves the range (S13 E3, T8) | 2026-10-28 |
 | Q3: license for the public repository | None: all rights reserved | 2026-10-28 |
 | Q23: how long a credited USDT deposit keeps its exact amount reserved (S04 rule U4, audit A02) | 30 days after a deposit closes, credited included (`USDT_RESERVATION_GRACE_DAYS`, 7 before): a resent exact amount is far likelier than a tail shortage at pilot volumes | 2026-10-28 |

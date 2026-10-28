@@ -191,4 +191,14 @@ else
   resolved backup "digital.vertexmedia.pro: backups complete again"
 fi
 
+# 9. The newest off-server copy (vertexdigital-backup touches offsite-last after a verified upload,
+# Q1) is at most a day old.
+offsite=$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type f -name offsite-last -mmin -$((BACKUP_MAX_AGE_HOURS * 60)) 2>/dev/null | head -n 1)
+if [ -z "$offsite" ]; then
+  log "warning: no off-server copy in the last $BACKUP_MAX_AGE_HOURS hours"
+  alert offsite "digital.vertexmedia.pro: no off-server backup copy in the last $BACKUP_MAX_AGE_HOURS hours; check journalctl -t vertexdigital-backup"
+else
+  resolved offsite "digital.vertexmedia.pro: off-server backup copies complete again"
+fi
+
 exit 0

@@ -59,6 +59,7 @@ beforeEach(() => {
   chmodSync(join(bin, 'notify'), 0o755);
   mkdirSync(join(root, 'site'));
   mkdirSync(join(root, 'backups', '20261028T025008Z'), { recursive: true });
+  writeFileSync(join(root, 'backups', 'offsite-last'), '');
   env = {
     STUBS: slash(bin),
     VD_SITE_DIR: slash(join(root, 'site')),
@@ -162,6 +163,36 @@ describe('the health check (deploy/bin/vertexdigital-healthcheck)', () => {
     healthCheck();
     healthCheck();
     expect(lines('notes')).toEqual([expect.stringContaining('no complete backup')]);
+  });
+
+  it('alerts once when no off-server copy is a day old, and when it is back (Q1)', () => {
+    rmSync(join(root, 'backups', 'offsite-last'));
+    healthCheck();
+    healthCheck();
+    writeFileSync(join(root, 'backups', 'offsite-last'), '');
+    healthCheck();
+    expect(lines('notes')).toEqual([
+      expect.stringContaining('no off-server backup copy'),
+      expect.stringContaining('off-server backup copies complete again'),
+    ]);
+  });
+});
+
+describe('the backup (deploy/bin/vertexdigital-backup)', () => {
+  const script = read('bin/vertexdigital-backup');
+
+  it('uploads only an encrypted archive, checks its hash, then marks the copy (Q1)', () => {
+    const encrypt = script.indexOf('--recipient-file "$OFFSITE_KEY"');
+    const upload = script.indexOf('rclone copyto');
+    expect(encrypt).toBeGreaterThan(-1);
+    expect(upload).toBeGreaterThan(encrypt);
+    expect(script.slice(upload)).toContain('rclone copyto --quiet "$archive"');
+    expect(script.indexOf('[ "$remote_sha1" = "$local_sha1" ]')).toBeGreaterThan(upload);
+    expect(script.indexOf('touch "$DEST/offsite-last"')).toBeGreaterThan(
+      script.indexOf('[ "$remote_sha1" = "$local_sha1" ]'),
+    );
+    // The B2 key never appears in a command's arguments.
+    expect(script).not.toMatch(/--b2-(account|key)/);
   });
 });
 
