@@ -1,6 +1,6 @@
 # A10 Platform, performance and operations
 
-Status: merged (PR [#198](https://github.com/HussienALfajer/vertex-digital/pull/198))
+Status: deployed (`c982286`, 2026-10-28; PR [#198](https://github.com/HussienALfajer/vertex-digital/pull/198))
 Branch: fix/audit-a10-platform · Started: 2026-10-28 · Specs: S15 (PWA), Phase 0 · ADRs: 0001, 0002, 0008, 0009, 0011, 0012, 0014, 0015
 
 ## Scope
@@ -152,4 +152,6 @@ Local stack: the production catalog snapshot, `pnpm db:reset-local --yes` (appro
 ## Checks
 - `pnpm verify` on the final tree: pass (lint; typecheck, test and build of every package; migrations in step; OpenAPI in step; the changed E2E specs: store 31 passed, panel 335 passed). The first full run found the generated client out of step (`scripts/verify.mjs` generated it without `--default-non-nullable=false`, now aligned) and five E2E failures from the dialog guard and the new shell spec, all fixed and run again.
 - The reviewer found five blocking issues, all fixed: the `general` zone refused with nginx's default 503, which no jail counted once its refusals left the error log (`limit_req_status 429` and `limit_conn_status 429` at server level); the dialog guard counted toggles and nested dialogs, kept its mark across controlled opens and after a sent form, and trapped four sheets without a close button (only typed text inside the popup counts, cleared on open and on submit, `guardTyped={false}` on the four sheets); the store's Sentry events carried `/g/`, `/r/`, `/v/` tokens (the route's pattern only); the kept static files were counted from now, not from the running release's build; Q29's period (kept at 90 days under the owner's delegation; nothing is cleared before about 2027-01-05).
-- CI and the production deploy: below once they run.
+- CI on PR #198 and on `main` after the merge: green (`c982286`).
+- Production deploy, 2026-10-28: `c982286` through `systemd-run`, migrations 0098 and 0099 applied (100 in `drizzle.__drizzle_migrations`), the switch healthy and no `.hold` left; PM2 stopped the three apps on SIGINT (no SIGKILL, against one at each of the two deploys before). `provision.sh` re-run: `nginx -t` passes, the `vertexdigital-auth`, `vertexdigital-limit`, `nginx-4xx-flood` and `nginx-limit-req` jails active, `vertexdigital-notify` installed (700, root). A health run by hand passed with one log line, the API's restart count (24, PM2 reloads, no crash) noted once.
+- Production smoke test, no money: `robots.txt` without `/g/` and `/r/`; `/games/pubg-mobile?pack=1` names its canonical without the query; an unknown game answers `noindex`, an unknown path 404; `/api/health` returns `X-Request-Id`; `POST /api/admin/client-errors`, `/api/admin/merchant-applications/waiting` and `/api/admin/suppliers/new-packs` answer 401 to a visitor; the access log records `/?_rsc=…` as `/` (no query); in the browser pane a client navigation's RSC payload arrived gzipped (93.8 KB read as 9.8 KB, A10-9), console clean. The signed-in panel screens (titles, badges, the error page) were not opened on production: no session in the browser pane, and no production credential is typed by an agent.
