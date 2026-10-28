@@ -682,7 +682,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
             id: 'd2',
             event: 'order.status_changed',
             attempt: 1,
-            status: 'delivered',
+            status: 'succeeded',
             responseStatus: 200,
             durationMs: 140,
             createdAt: '2026-10-20T09:00:02.000Z',

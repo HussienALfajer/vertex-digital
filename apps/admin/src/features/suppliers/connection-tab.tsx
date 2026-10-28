@@ -98,7 +98,8 @@ function SubscriptionCard({ supplier }: { supplier: SupplierDetail }) {
 
 /**
  * S19 FC8: where the supplier sends its order results. "ضبط الإشعارات" points it at this store
- * (re-authentication) and sends its test event; the log is FazerCards' last 50 deliveries.
+ * (re-authentication) and sends its test event; the log is FazerCards' last 50 deliveries, whose
+ * status reads `succeeded` or `failed`.
  */
 function WebhookCard({ supplier }: { supplier: SupplierDetail }) {
   const { t } = useTranslation();
@@ -212,8 +213,8 @@ function WebhookCard({ supplier }: { supplier: SupplierDetail }) {
               <ul className="flex flex-col gap-1 text-sm">
                 {settings.deliveries.slice(0, 10).map((delivery) => (
                   <li key={delivery.id} className="flex flex-wrap items-center gap-2">
-                    <Badge tone={delivery.status === 'delivered' ? 'success' : 'danger'}>
-                      {delivery.status === 'delivered'
+                    <Badge tone={delivery.status === 'succeeded' ? 'success' : 'danger'}>
+                      {delivery.status === 'succeeded'
                         ? t('suppliers.webhook.delivered')
                         : t('suppliers.webhook.failed')}
                     </Badge>

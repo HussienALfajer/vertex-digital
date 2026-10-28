@@ -934,7 +934,7 @@ export class SuppliersMock {
           id: nextId(),
           event,
           attempt: 1,
-          status: 'delivered',
+          status: 'succeeded',
           responseStatus: 200,
           durationMs: 120,
           createdAt: new Date().toISOString(),
