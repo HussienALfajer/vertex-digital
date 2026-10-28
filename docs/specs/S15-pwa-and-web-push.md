@@ -21,7 +21,7 @@ Customers wait for an order or a deposit with the store open, or they come back 
   - A home-page install card: not in V1 (owner, 2026-10-11); install lives in the menu, the footer and the permission card.
   - Push delivery statistics in the panel: not in V1 (owner, 2026-10-11).
   - A list of the customer's push devices in the store: not in V1; the customer controls the current device and the per-event switches.
-  - Native apps (scope §6), Telegram for customers (Phase 4).
+  - Native apps (scope §6), Telegram for customers (not planned).
 
 ## Access
 | Action | Route kind | Who |

@@ -21,7 +21,7 @@ Customers in Syria pay through Sham Cash, a wallet app with no merchant API, so 
   - Per-customer limit overrides and freezing: S12 (F19). S03 reads limits from the deposit settings only.
   - SYP prices on products: S06/S09. The ADR 0003 rule that refuses a step adding more than 2% to the cheapest active product is enforced once products exist (S06). S03 bounds the step to 1–50 SYP (rule FX3).
   - Reversing a credited deposit: not a deposit action. A mistaken credit is fixed with an S02 `correction` adjustment.
-  - Sham Cash automation (Phase 4), deposit fees (none in V1, owner 2026-10-08), customer withdrawals (never in V1).
+  - Sham Cash automation (not planned), deposit fees (none in V1, owner 2026-10-08), customer withdrawals (never in V1).
 
 ## Access
 | Action | Route kind | Who |

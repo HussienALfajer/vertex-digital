@@ -15,7 +15,7 @@ The owner runs the store alone and needs three things before any real money arri
   - Reading the purchase stop in the pay transaction and holding A02 while purchases are stopped: S08 (F11). S05 stores and shows the switch.
   - Order, ticket and `awaiting_balance` notification events: S08, S09, S12 add theirs through the same write path.
   - Supplier alerts (A07, A08): S07 sends them through the alert channel.
-  - Web push: S15 (F24). Telegram for customers: Phase 4.
+  - Web push: S15 (F24). Telegram for customers: not planned.
   - Security events (new sign-in, password change) in the notification center: they stay emails only and cannot be turned off (S01).
   - Approving USDT reviews or flagged Sham Cash deposits from Telegram: never (ADR 0006, 0019).
 

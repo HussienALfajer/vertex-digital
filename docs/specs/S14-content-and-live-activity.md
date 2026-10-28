@@ -25,7 +25,7 @@ The store has no FAQ, no terms, privacy or refund pages, no way to announce anyt
   - Category pages (mentioned in S09 as possible here): not in V1; the home page keeps its category sections.
   - The texts of the four pages: written in a separate session before the pilot from the project's rules and reviewed by the owner (Q10 stays open for launch, owner 2026-10-11). S14 ships the pages unpublished.
   - Public history of past page versions: not in V1; the panel keeps them.
-  - English content: Phase 4 (ADR 0012).
+  - English content: not planned (ADR 0012).
 
 ## Access
 | Action | Route kind | Who |
