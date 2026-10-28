@@ -14,7 +14,7 @@ The books must prove themselves every night, and the owner must see where the mo
   - Reports R1–R6 with Excel export.
   - Admin screens `/reconciliation` (with the money places and movements) and `/reports`.
 - Out (later or never):
-  - Automatic Sham Cash balance reading: no API (Phase 4, with Sham Cash automation).
+  - Automatic Sham Cash balance reading: no API (Sham Cash automation is not planned).
   - Automatic fixes: reconciliation never posts a journal, pauses the store or changes an order (owner, 2026-10-11: alert only; the admin uses the F26 emergency stop if needed).
   - Profit distribution, tax or accounting exports (chart of accounts, trial balance files): not in V1.
   - Reports for test customers: excluded from R1–R5 (S01); R6 shows their share on its own line.
