@@ -97,6 +97,7 @@ Drizzle schema, migrations, the database client and the shared write paths for m
 ## Append-only tables
 - A new append-only table gets, in its custom migration, the `append_only_guard` trigger and the revokes of `0001_ledger_guards.sql`; it joins `APPEND_ONLY_TABLES` in `src/conventions.test.ts` (the current list of append-only tables) and the trigger list in `src/ledger/guards.test.ts`. The trigger refuses the owner role too.
 - `product_prices` and the append-only supplier tables are stamped with `clock_timestamp()` (the row's real time, not the transaction's start).
+- Two retention exceptions, each through a `SECURITY DEFINER` function the app role may run and a guard that refuses everything else (migration 0103): `purge_supplier_logs` deletes `supplier_calls` and `supplier_balance_reads` past 180 days; `stored_files_mark_unreferenced` / `stored_files_sweep` set only `stored_files.unreferenced_since` and `swept_at` on catalog images, QR images and logos.
 
 ## Columns and migrations
 - Money: `amountUnits('<name>_units')` next to `currencyEnum('currency')`, or a currency-fixed name (`price_usd_units`); `*_units` is `bigint`. Exchange rates: `numeric`. Amounts are JS numbers checked as safe integers; math on them lives in `@vertex-digital/contracts`.

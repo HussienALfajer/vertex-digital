@@ -715,6 +715,20 @@
       "when": 1793187050646,
       "tag": "0101_q25_listed_cost_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1793226998549,
+      "tag": "0102_a10_stored_files_sweep",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1793227004119,
+      "tag": "0103_a10_retention_guards",
+      "breakpoints": true
     }
   ]
 }

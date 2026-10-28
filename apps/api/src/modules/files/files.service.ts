@@ -12,7 +12,7 @@ import {
   UPLOAD_MAX_INPUT_PIXELS,
 } from '@vertex-digital/contracts';
 import { type Database, newId, storedFiles, type Transaction } from '@vertex-digital/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import sharp, { type OutputInfo } from 'sharp';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -193,12 +193,14 @@ export class FilesService {
     return this.db.transaction((tx) => this.record(tx, prepared));
   }
 
-  /** A stored file of `kind`, or null. */
+  /** A stored file of `kind`, or null; a swept one (audit A10-45) is gone. */
   async serve(fileId: string, kind: StoredFileKind): Promise<ServedFile | null> {
     const [row] = await this.db
       .select({ storageKey: storedFiles.storageKey, contentType: storedFiles.contentType })
       .from(storedFiles)
-      .where(and(eq(storedFiles.id, fileId), eq(storedFiles.kind, kind)));
+      .where(
+        and(eq(storedFiles.id, fileId), eq(storedFiles.kind, kind), isNull(storedFiles.sweptAt)),
+      );
     if (!row) return null;
     return {
       contentType: row.contentType,
@@ -216,7 +218,13 @@ export class FilesService {
     const [row] = await this.db
       .select({ storageKey: storedFiles.storageKey, width: storedFiles.width })
       .from(storedFiles)
-      .where(and(eq(storedFiles.id, fileId), eq(storedFiles.kind, 'catalog_image')));
+      .where(
+        and(
+          eq(storedFiles.id, fileId),
+          eq(storedFiles.kind, 'catalog_image'),
+          isNull(storedFiles.sweptAt),
+        ),
+      );
     if (!row) return null;
     if (row.width !== null && row.width <= width) return this.serve(fileId, 'catalog_image');
     const key = row.storageKey.replace(/\.webp$/, `.w${width}.webp`);
@@ -247,7 +255,13 @@ export class FilesService {
     const rows = await db
       .select({ id: storedFiles.id, width: storedFiles.width, height: storedFiles.height })
       .from(storedFiles)
-      .where(and(inArray(storedFiles.id, [...fileIds]), eq(storedFiles.kind, kind)));
+      .where(
+        and(
+          inArray(storedFiles.id, [...fileIds]),
+          eq(storedFiles.kind, kind),
+          isNull(storedFiles.sweptAt),
+        ),
+      );
     return new Map(rows.map(({ id, ...size }) => [id, size]));
   }
 

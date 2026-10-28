@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { CURRENCY_SCALE, TREASURY_ACCOUNTS } from '@vertex-digital/contracts';
 import { reverseMovement } from '@vertex-digital/db';
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { RatesService } from '../src/modules/rates/rates.service.js';
 import { api, auditOf, body, PASSWORD, removeAccounts, seedCustomer, totp } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
@@ -196,6 +197,29 @@ describe('movements', () => {
     expect((await recorded({ ...payload, amountConfirmationUnits: 150 * USD })).sentUnits).toBe(
       150 * USD,
     );
+  });
+
+  it('asks for the amount typed again from a pounds place while no rate exists (rule T7, A09-10)', async () => {
+    // With no exchange rate the pounds cannot be valued, so even a small amount is confirmed.
+    vi.spyOn(RatesService.prototype, 'current').mockResolvedValue(null);
+    const payload = {
+      from: 'sham_cash_syp',
+      to: 'outside_syp',
+      sentUnits: 50_000,
+      receivedUnits: 50_000,
+      outsideCategory: 'owner',
+    };
+    expect(await body(await movement(payload))).toMatchObject({
+      status: 400,
+      code: 'AMOUNT_CONFIRMATION_REQUIRED',
+    });
+    expect(
+      await body(await movement({ ...payload, amountConfirmationUnits: 50_100 })),
+    ).toMatchObject({
+      status: 400,
+      code: 'AMOUNT_CONFIRMATION_MISMATCH',
+    });
+    vi.restoreAllMocks();
   });
 
   it('records an opening once while the place stands empty (rule T6)', async () => {
