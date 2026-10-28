@@ -8,7 +8,7 @@ import { formatDateTime, formatDay } from '../../lib/format';
 import { runQuery } from './reconciliation.queries';
 import { runTone } from './reconciliation-labels';
 import { ResultsTable } from './reconciliation-results';
-import { LoadError, OverviewSkeleton } from './reconciliation-states';
+import { FailureLine, LoadError, OverviewSkeleton } from './reconciliation-states';
 
 /** A run's page (S13 "السجل"): when, why and how it ended, and every check with its result. */
 export function RunPage({ id }: { id: string }) {
@@ -59,9 +59,7 @@ export function RunPage({ id }: { id: string }) {
                 warnings: run.data.warningCount,
               })}
             </span>
-            {run.data.failure && (
-              <span className="text-sm text-destructive-text">{run.data.failure}</span>
-            )}
+            {run.data.failure && <FailureLine failure={run.data.failure} />}
           </Card>
           {run.data.results.length > 0 ? (
             <ResultsTable results={run.data.results} />

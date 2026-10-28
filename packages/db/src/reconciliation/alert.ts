@@ -42,11 +42,13 @@ const isWarning = (row: ResultRow) =>
 async function previousResult(tx: Transaction, row: ResultRow) {
   const { rows } = await tx.execute<{
     status: ResultRow['status'];
+    reason: ReconciliationDetails['reason'];
     difference: string | null;
     offending: number;
     explained: boolean;
   }>(sql`
-    select r.status, r.difference_units::text as difference, r.offending_count as offending,
+    select r.status, r.details->>'reason' as reason, r.difference_units::text as difference,
+      r.offending_count as offending,
       exists (select 1 from reconciliation_explanations e where e.result_id = r.id) as explained
     from reconciliation_results r
     where r."check" = ${row.check} and r.subject = ${row.subject} and r.run_id <> ${row.runId}
@@ -119,6 +121,11 @@ export async function queueReconciliationAlert(
       ) {
         alerting.push(row);
       }
+    } else if (isWarning(row) && run.trigger === 'count') {
+      // A count's check is in count runs only, never the night's: its warning is new against the
+      // previous count of that currency, so each count before an opening alerts once (A09-8).
+      const previous = await previousResult(tx, row);
+      if (!previous || !isWarningResult(previous)) alerting.push(row);
     } else if (isWarning(row) && !previousWarnings.has(`${row.check}|${row.subject}`)) {
       alerting.push(row);
     }

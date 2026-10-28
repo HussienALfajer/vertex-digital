@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
 import { newId } from '../id.js';
 import { customers, exchangeRates, paymentReferences, walletAdjustments } from '../schema/index.js';
+import { recordMovement, TreasuryError } from '../treasury/movements.js';
 import { LedgerError } from './errors.js';
 import { claimPaymentReference, paymentReferenceOwner } from './payment-references.js';
 import { postJournal } from './post-journal.js';
@@ -333,5 +334,70 @@ describe('append-only rates and payment references', () => {
         ).rejects.toThrow(new RegExp(check));
       });
     }
+  });
+});
+
+describe('unclaimed receipts (audit A09-3)', () => {
+  const actor = { adminId: newId(), ipAddress: '203.0.113.9', userAgent: 'Test' };
+  const unclaimed = (to: 'usdt_trc20' | 'sham_cash_syp', externalReference: string) => ({
+    idempotencyKey: newId(),
+    kind: 'transfer' as const,
+    from: to === 'sham_cash_syp' ? ('outside_syp' as const) : ('outside_usd' as const),
+    to,
+    sentUnits: to === 'sham_cash_syp' ? 10_000 * CURRENCY_SCALE.SYP : 5 * CURRENCY_SCALE.USD,
+    receivedUnits: to === 'sham_cash_syp' ? 10_000 * CURRENCY_SCALE.SYP : 5 * CURRENCY_SCALE.USD,
+    outsideCategory: 'unclaimed_receipt' as const,
+    openingBalance: false,
+    orderId: null,
+    externalReference,
+    reason: 'A transfer nobody claimed',
+  });
+  /** Runs `work` in a transaction that is rolled back: the places stay as other tests left them. */
+  async function rolledBackTx(work: (tx: Transaction) => Promise<void>) {
+    const rollback = new Error('rollback');
+    await db
+      .transaction(async (tx) => {
+        await work(tx);
+        throw rollback;
+      })
+      .catch((error: unknown) => {
+        if (error !== rollback) throw error;
+      });
+  }
+
+  it('refuses a claim on a TXID booked as an unclaimed receipt, under either network', async () => {
+    await rolledBackTx(async (tx) => {
+      const txid = newId().replaceAll('-', '').padEnd(64, 'a');
+      const { movement } = await recordMovement(tx, unclaimed('usdt_trc20', txid), actor);
+      const id = await manualDeposit(tx, reference());
+      const error = await refusalOf(
+        claimPaymentReference(tx, 'usdt_bep20', `0x${txid.toUpperCase()}`, {
+          walletAdjustmentId: id,
+        }),
+      );
+      expect(error.code).toBe('EXTERNAL_REFERENCE_TAKEN');
+      expect(error.details).toEqual({ kind: 'treasury_movement', id: movement.id });
+    });
+  });
+
+  it('refuses booking as an unclaimed receipt a reference a deposit claimed', async () => {
+    await rolledBackTx(async (tx) => {
+      const claimed = reference();
+      const id = await manualDeposit(tx, claimed);
+      await claimPaymentReference(tx, 'sham_cash', claimed, { walletAdjustmentId: id });
+      const refused = await recordMovement(
+        tx,
+        unclaimed('sham_cash_syp', claimed.toLowerCase()),
+        actor,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(TreasuryError);
+      expect(refused).toMatchObject({
+        code: 'EXTERNAL_REFERENCE_TAKEN',
+        details: { kind: 'adjustment', id },
+      });
+    });
   });
 });

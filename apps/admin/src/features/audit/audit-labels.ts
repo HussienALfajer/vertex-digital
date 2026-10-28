@@ -103,4 +103,8 @@ export function flatDetails(details: Values): [string, unknown][] {
 }
 
 /** The first block of a UUID, enough to tell entries apart in the table. */
-export const shortId = (id: string) => id.slice(0, 8);
+/**
+ * The last 8 characters: a UUIDv7 starts with its time, so its first 8 are the same for every
+ * record written in the same minute (audit A09-40); the end is random.
+ */
+export const shortId = (id: string) => id.slice(-8);

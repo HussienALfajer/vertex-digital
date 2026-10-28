@@ -82,7 +82,9 @@ const sum = <Row>(rows: Row[], pick: (row: Row) => number) =>
 
 /**
  * Real customers' orders finished in the period, with their delivered attempts' cost: the ones
- * customers paid, or (S16 AP14) the owner-funded admin orders, which are reported apart.
+ * customers paid, or (S16 AP14) the owner-funded admin orders, which are reported apart. A
+ * cancelled reservation was never paid, so it is no finished order (audit A09-11: it counted in
+ * R4's refund rate and gave R2 and R5 rows without a sale).
  */
 const finishedOrders = (period: ReportPeriod, payer: 'customer' | 'owner' = 'customer') => sql`
   select o.*,
@@ -91,7 +93,8 @@ const finishedOrders = (period: ReportPeriod, payer: 'customer' | 'owner' = 'cus
       from fulfilment_attempts f where f.order_id = o.id and f.status = 'delivered'), 0) as cost,
     (o.status in ('delivered', 'partially_refunded'))::int as is_delivered
   from orders o
-  where not o.is_test and o.payer = ${payer} and ${within(sql`o.finished_at`, period)}`;
+  where not o.is_test and o.payer = ${payer} and o.status <> 'cancelled'
+    and ${within(sql`o.finished_at`, period)}`;
 
 /** S16 AP14: the "طلبات من مال المالك" line of R1 and R2, the period's owner-funded orders. */
 async function ownerFundedFigures(db: Executor, period: ReportPeriod) {
@@ -155,6 +158,7 @@ export async function breakdownReport(
     sent: string | null;
     failed: string | null;
     resolved: string | null;
+    delivered_total?: string;
   };
   let query: SQL;
   if (by === 'supplier') {
@@ -174,7 +178,10 @@ export async function breakdownReport(
           count(*) filter (where f.status = 'failed' and ${within(sql`f.resolved_at`, period)}) as failed,
           count(*) filter (where f.status in ('delivered', 'failed') and ${within(sql`f.resolved_at`, period)}) as resolved
         from fulfilment_attempts f join orders o on o.id = f.order_id
+        -- Only the attempts sent or resolved in the period (audit A09-16: every attempt ever made
+        -- was read and narrowed in the filters).
         where not o.is_test
+          and ((${within(sql`f.sent_at`, period)}) or (${within(sql`f.resolved_at`, period)}))
         group by f.supplier_id
       )
       select s.code::text as key, s.name_ar, null as game_name_ar, null as game_id,
@@ -185,7 +192,10 @@ export async function breakdownReport(
         coalesce((select sum(sales) from delivered d where d.supplier_id = s.id), 0)::text as sales,
         coalesce((select sum(cost) from delivered d where d.supplier_id = s.id), 0)::text as cost,
         coalesce(a.sent, 0)::text as sent, coalesce(a.failed, 0)::text as failed,
-        coalesce(a.resolved, 0)::text as resolved
+        coalesce(a.resolved, 0)::text as resolved,
+        -- The totals row counts an order split between suppliers once (audit A09-17).
+        (select count(distinct d.order_id) from delivered d
+          where d.status in ('delivered', 'partially_refunded'))::text as delivered_total
       from suppliers s left join attempts a on a.supplier_id = s.id
       where exists (select 1 from delivered d where d.supplier_id = s.id) or coalesce(a.sent, 0) > 0
         or coalesce(a.resolved, 0) > 0`;
@@ -201,7 +211,8 @@ export async function breakdownReport(
       join price_lists l on l.id = o.price_list_id
       group by l.id, l.name`;
   } else if (by === 'merchant') {
-    // S20: the orders of accounts that are or were merchants, by trade name.
+    // S20: the orders placed as a merchant (each holds its sale row, S21), by trade name; the
+    // account's retail orders from before the grant stay out (audit A09-20).
     query = sql`
       select m.customer_id::text as key, m.trade_name as name_ar, null as game_name_ar,
         null as game_id, null as supplier,
@@ -209,6 +220,7 @@ export async function breakdownReport(
         sum(o.sales)::text as sales, sum(o.cost)::text as cost,
         null as sent, null as failed, null as resolved
       from (${finishedOrders(period)}) o
+      join merchant_order_sales sale on sale.order_id = o.id
       join merchant_profiles m on m.customer_id = o.customer_id
       group by m.customer_id, m.trade_name`;
   } else {
@@ -253,7 +265,9 @@ export async function breakdownReport(
     rows: items,
     totals: {
       ...figures({
-        delivered: sum(items, (row) => row.delivered),
+        delivered: supplierRows
+          ? num(rows[0]?.delivered_total)
+          : sum(items, (row) => row.delivered),
         sales: sum(items, (row) => row.salesUsdUnits),
         cost: sum(items, (row) => row.costUsdUnits),
       }),

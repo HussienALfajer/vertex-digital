@@ -313,6 +313,11 @@ describe('Sham Cash counts and explanations', () => {
     expect((reopened.openMismatches as { id: string }[]).map((item) => item.id)).toContain(
       (again.results as { id: string }[])[0]?.id,
     );
+    // It has mismatched since the first short count, without a break (read in one query, A09-9).
+    const lasting = (reopened.openMismatches as { id: string; firstSeenAt: string }[]).find(
+      (item) => item.id === (again.results as { id: string }[])[0]?.id,
+    );
+    expect(lasting?.firstSeenAt).toBe((short.results as { createdAt: string }[])[0]?.createdAt);
     // The navigation badge and the dashboard's items (S13 screens) count the same open mismatches.
     const badge = await body(
       await client.get('/api/admin/reconciliation/counts', { cookie: admin.cookie }),

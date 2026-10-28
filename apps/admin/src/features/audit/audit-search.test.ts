@@ -41,6 +41,18 @@ describe('parseAuditSearch', () => {
   });
 });
 
+describe('parseAuditSearch, reversed ranges', () => {
+  it('keeps the start of a reversed range only (A09-13)', () => {
+    expect(parseAuditSearch({ from: '2026-10-20', to: '2026-10-10' })).toEqual({
+      from: '2026-10-20',
+    });
+    expect(parseAuditSearch({ from: '2026-10-10', to: '2026-10-10' })).toEqual({
+      from: '2026-10-10',
+      to: '2026-10-10',
+    });
+  });
+});
+
 describe('toAuditQuery', () => {
   it('turns calendar days into the whole days of the viewer', () => {
     const query = toAuditQuery({ from: '2026-10-01', to: '2026-10-08', actorKind: 'cli' });

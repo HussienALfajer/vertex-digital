@@ -71,6 +71,33 @@ test.describe('the stop banner (rule SW9)', () => {
       await expect(page.getByRole('status')).toHaveText(text);
     }
   });
+
+  test('follows a stop and a reopen across client navigations (audit A09-22)', async ({
+    page,
+    api,
+  }) => {
+    await page.goto('/');
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.getByRole('status')).toHaveCount(0);
+    // Stopped while the page is open: the next page shown by a link names it, with no reload.
+    api.on('GET /api/store/status', 200, status({ purchasesStopped: true }));
+    await page.evaluate(() => {
+      (window as unknown as { stayed: boolean }).stayed = true;
+    });
+    await page.locator('main a[href^="/games/"]').first().click();
+    await expect(page).toHaveURL(/\/games\//);
+    await expect(
+      page.getByRole('status').filter({ hasText: ar.stopBanner.purchases }),
+    ).toBeVisible();
+    // Reopened: the banner leaves on the next link.
+    api.on('GET /api/store/status', 200, status({}));
+    await page.locator('header a[href="/"]').first().click();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByText(ar.stopBanner.purchases)).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(
+      true,
+    );
+  });
 });
 
 test.describe('the deposit wizard while stopped (rules SW4, SW6)', () => {

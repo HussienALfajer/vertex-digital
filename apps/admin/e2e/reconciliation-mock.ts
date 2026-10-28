@@ -82,6 +82,8 @@ export class ReconciliationMock {
   };
   runs: ReconciliationRunDetail[] = [];
   running: ReconciliationRun | null = null;
+  /** Rule RN2: the next manual run's time while the 5 minutes run (A09-28). */
+  manualAvailableAt: string | null = null;
   open: OpenMismatch[] = [];
   settings: ReconciliationSettings = { toleranceUsdUnits: 1 * USD, countStaleDays: 7 };
   /** Report data by kind; a kind left out answers an empty report. */
@@ -225,7 +227,7 @@ export class ReconciliationMock {
         status: item.status,
       })),
       settings: this.settings,
-      manualAvailableAt: null,
+      manualAvailableAt: this.manualAvailableAt,
     };
   }
 
@@ -417,6 +419,8 @@ export class ReconciliationMock {
         input.amountConfirmationUnits,
       );
       if (confirmation) return error(400, confirmation);
+      // The mock holds no orders: any order number is unknown (A09-32).
+      if (input.orderNumber) return error(404, 'NOT_FOUND');
       const { from, to } = correctionEndpoints(input.supplier, input.direction);
       return this.record(idempotencyKey, {
         kind: 'supplier_correction',

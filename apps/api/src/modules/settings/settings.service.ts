@@ -35,7 +35,8 @@ import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor
 
 /**
  * The switches lock (rules SW2, SW5): a change takes it exclusively, a deposit creation shared,
- * so a creation either commits before a stop or sees it. A transaction-level advisory lock, since
+ * so a creation either commits before a stop or sees it (a supplier's pause takes a lock of its
+ * own instead, audit A09-23). A transaction-level advisory lock, since
  * the app role cannot lock rows of an append-only table.
  */
 const SWITCHES_KEY = sql`hashtext('settings')`;
@@ -128,7 +129,15 @@ export class SettingsService {
     channel: SwitchChannel,
     meta: RequestMeta,
   ): Promise<boolean> {
-    await tx.execute(sql`select pg_advisory_xact_lock(${SWITCHES_KEY})`);
+    // A supplier's pause gates no creation: its routes go out through the repricing's product
+    // locks, which purchases share. It locks its own switch only, so the store's purchases and
+    // deposit creations never wait for its repricing (audit A09-23).
+    const supplier = PAUSED_SUPPLIER.get(input.switch);
+    await tx.execute(
+      supplier
+        ? sql`select pg_advisory_xact_lock(hashtext(${`settings:${input.switch}`}))`
+        : sql`select pg_advisory_xact_lock(${SWITCHES_KEY})`,
+    );
     const before = (await this.values(tx))[input.switch];
     if (before === input.value) return false;
     const id = newId();
@@ -157,7 +166,6 @@ export class SettingsService {
       dedupeKey: `switch:${id}`,
     });
     // A paused supplier's routes are unusable at once, and usable again on resume (rule SP3).
-    const supplier = PAUSED_SUPPLIER.get(input.switch);
     if (supplier) {
       await repriceProducts(tx, {
         productIds: await routedProductIds(tx, [supplier]),

@@ -1,3 +1,17 @@
+# TASKS — Audit A09 Control, reconciliation and reports (branch `fix/audit-a09-control`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A09-control.md`. Specs S05 (switches), S11 (dashboard), S13; ADR 0019, 0025, 0027.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store and admin screens of the group)
+- [x] Findings shown to the owner (41 findings; decisions taken under the owner's delegation)
+- [ ] Fixes P0 → P3, each with its regression test
+- [ ] Re-test live with screenshots
+- [ ] `pnpm verify` (checker) and the reviewer; findings fixed
+- [ ] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A08 Content (branch `fix/audit-a08-content`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A08-content.md`. Spec S14; ADR 0028.

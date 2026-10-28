@@ -1,9 +1,9 @@
 'use client';
 
-import type { StoreStatus } from '@vertex-digital/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { isMoneyEvent, useNotificationEvents } from '@/features/notifications/live';
 import { getWallet } from '@/features/wallet/requests';
+import { useStoreStatus } from '@/lib/store-status';
 
 /*
  * What the buy box knows about the visitor besides the session (session.ts), read in the browser
@@ -59,20 +59,10 @@ export function useBalance(enabled: boolean): { balance: Balance; refresh: () =>
   return { balance, refresh };
 }
 
-/** Rule BB7: purchases stopped (S05 SW7); false until known, the server decides anyway. */
+/**
+ * Rule BB7: purchases stopped (S05 SW7); false until known, the server decides anyway. The same
+ * read as the stop banner's, so the two agree after a stop or a reopen (audit A09-22).
+ */
 export function usePurchasesStopped(): boolean {
-  const [stopped, setStopped] = useState(false);
-  useEffect(() => {
-    let live = true;
-    fetch('/api/store/status', { credentials: 'same-origin' })
-      .then((response) => (response.ok ? (response.json() as Promise<StoreStatus>) : null))
-      .catch(() => null)
-      .then((status) => {
-        if (live) setStopped(status?.purchasesStopped === true);
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
-  return stopped;
+  return useStoreStatus()?.purchasesStopped === true;
 }

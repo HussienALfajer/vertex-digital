@@ -34,6 +34,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import { depositSettingsQuery } from '../deposits/deposits.queries';
@@ -57,6 +58,8 @@ export function SwitchesPage({
   const { t } = useTranslation();
   const switches = useQuery(switchesQuery);
   const settings = useQuery(depositSettingsQuery);
+  // A stop from Telegram while the page was in the background shows when it is seen (A09-36).
+  useVisibleAgain(() => void switches.refetch());
   const [pending, setPending] = useState<SwitchView | null>(null);
   const byName = new Map(switches.data?.switches.map((item) => [item.switch, item]));
   const row = (name: StoreSwitch) => {

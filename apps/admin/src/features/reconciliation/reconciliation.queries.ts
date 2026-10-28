@@ -14,6 +14,7 @@ import type {
   ShamCashCount,
   TreasuryPlace,
 } from '@vertex-digital/contracts';
+import { useEffect, useRef } from 'react';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
 
@@ -83,8 +84,19 @@ export const runsQuery = infiniteQueryOptions({
 export const runQuery = (id: string) =>
   queryOptions({
     queryKey: ['reconciliation', 'run', id],
-    queryFn: () =>
-      call(api.GET('/api/admin/reconciliation/runs/{id}', { params: { path: { id } } })),
+    queryFn: ({ client, queryKey }) =>
+      call(
+        api.GET('/api/admin/reconciliation/runs/{id}', {
+          params: { path: { id } },
+          headers:
+            client.getQueryData<{ status: string }>(queryKey)?.status === 'running'
+              ? BACKGROUND_REQUEST
+              : undefined,
+        }),
+      ),
+    // A run still running is read again until it ends (audit A09-36).
+    refetchInterval: (query) =>
+      query.state.data?.status === 'running' ? RUNNING_REFRESH_MS : false,
   });
 
 export const settingsQuery = queryOptions({
@@ -100,11 +112,37 @@ const invalidateBooks = (queryClient: ReturnType<typeof useQueryClient>) =>
     queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   ]);
 
-/** Rule RN2: a manual run, run by the worker (`202`). */
+/**
+ * When the overview sees a run end, the places, runs, badge and dashboard are read again: they
+ * changed with the run, after the start's own invalidation (audit A09-29).
+ */
+export function useAfterRunEnds(overview: ReconciliationOverview | undefined) {
+  const queryClient = useQueryClient();
+  const runningId = overview ? (overview.running?.id ?? null) : undefined;
+  const previous = useRef(runningId);
+  useEffect(() => {
+    if (previous.current && runningId === null) {
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['reconciliation'],
+          predicate: (query) => query.queryKey[1] !== 'overview',
+        }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    }
+    if (runningId !== undefined) previous.current = runningId;
+  }, [queryClient, runningId]);
+}
+
+/**
+ * Rule RN2: a manual run, run by the worker (`202`). Not sensitive today (S13 Access), but
+ * through the re-authentication as every admin mutation, so a later rule needs no change here.
+ */
 export function useStartRun() {
   const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
   return useMutation({
-    mutationFn: () => call(api.POST('/api/admin/reconciliation/runs')),
+    mutationFn: () => withReauthentication(() => call(api.POST('/api/admin/reconciliation/runs'))),
     onSettled: () => invalidateBooks(queryClient),
   });
 }
@@ -112,13 +150,16 @@ export function useStartRun() {
 /** Rule RN8: a note on an open mismatch, once. */
 export function useExplainResult() {
   const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: ExplainResult }) =>
-      call(
-        api.POST('/api/admin/reconciliation/results/{id}/explanation', {
-          params: { path: { id } },
-          body,
-        }),
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/reconciliation/results/{id}/explanation', {
+            params: { path: { id } },
+            body,
+          }),
+        ),
       ),
     onSettled: () => invalidateBooks(queryClient),
   });
@@ -127,13 +168,16 @@ export function useExplainResult() {
 /** Rules RN6, E4: a Sham Cash count, checked at once; the key replays it. */
 export function useShamCashCount() {
   const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: ({ body, key }: { body: ShamCashCount; key: string }) =>
-      call(
-        api.POST('/api/admin/reconciliation/sham-cash-counts', {
-          params: { header: { 'Idempotency-Key': key } },
-          body,
-        }),
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/reconciliation/sham-cash-counts', {
+            params: { header: { 'Idempotency-Key': key } },
+            body,
+          }),
+        ),
       ),
     onSettled: () => invalidateBooks(queryClient),
   });

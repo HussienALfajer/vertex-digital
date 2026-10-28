@@ -70,8 +70,12 @@ export function useExportReport() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `vertex-${kind}-${from}-${to}.xlsx`;
+      // Attached while it is clicked, and the file's address kept a minute: some browsers read
+      // it after the click returns, and a revoked one saves nothing (audit A09-34).
+      document.body.append(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     },
   });
 }

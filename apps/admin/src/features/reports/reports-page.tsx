@@ -29,7 +29,7 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { DownloadIcon } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { formatDay } from '../../lib/format';
@@ -62,7 +62,7 @@ export function ReportsPage({
   onSearch: (search: ReportSearch) => void;
 }) {
   const { t } = useTranslation();
-  const [now] = useState(() => new Date());
+  const now = useNow();
   const kind = kindOf(search);
   const period = periodOf(search, now);
   const by = breakdownOf(search);
@@ -127,11 +127,50 @@ export function ReportsPage({
   );
 }
 
+/**
+ * The time the presets and the default period are read at, kept current every minute and when
+ * the tab is seen again, so a page left open past midnight names the right days (audit A09-30).
+ */
+function useNow(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const timer = setInterval(tick, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+  return now;
+}
+
 function Report({ request }: { request: ReportRequest }) {
+  const { t } = useTranslation();
   const report = useQuery(reportQuery(request));
   if (report.isPending) return <OverviewSkeleton />;
-  if (report.isError) return <LoadError error={report.error} onRetry={() => report.refetch()} />;
-  return <ReportView kind={request.kind} report={report.data} />;
+  if (!report.data) return <LoadError error={report.error} onRetry={() => report.refetch()} />;
+  return (
+    <>
+      {/* A failed read again keeps the report shown, with the retry (audit A09-36). */}
+      {report.isError && <LoadError error={report.error} onRetry={() => report.refetch()} />}
+      {/* The previous period stays while the new one loads, marked as such (audit A09-36). */}
+      <div
+        aria-busy={report.isPlaceholderData}
+        className={report.isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}
+      >
+        {report.isPlaceholderData && (
+          <p className="sr-only" role="status">
+            {t('reports.loading')}
+          </p>
+        )}
+        <ReportView kind={request.kind} report={report.data} />
+      </div>
+    </>
+  );
 }
 
 /** Rule RP1: a preset, or two Damascus dates, both included, at most 366 days. */
@@ -161,7 +200,8 @@ function PeriodPicker({
       return;
     }
     setCustom(false);
-    onPeriod(presetPeriod(value as ReportPreset, now));
+    // The day of the choice, whatever day the page was opened (audit A09-30).
+    onPeriod(presetPeriod(value as ReportPreset, new Date()));
   }
 
   function apply(event: FormEvent<HTMLFormElement>) {

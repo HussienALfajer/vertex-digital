@@ -193,7 +193,7 @@ describe('recording movements', () => {
     });
   });
 
-  it('allows an opening only as the place stands empty, again once it is reversed (T6, edge 12)', async () => {
+  it('allows one standing opening, again once it is reversed, whatever moved since (T6, edge 12, A09-1)', async () => {
     await rolledBack(async (tx) => {
       const opening = (overrides: Partial<MovementInput> = {}) =>
         transfer('outside_usd', 'supplier:manual', { openingBalance: true, ...overrides });
@@ -210,13 +210,14 @@ describe('recording movements', () => {
         actor,
       );
       expect(second.created).toBe(true);
-      // A later movement into the place makes a new opening impossible.
+      // A later movement into the place leaves a wrong opening fixable: reversed, a new one is taken.
       await recordMovement(tx, transfer('usdt_trc20', 'supplier:manual'), actor);
       await reverseMovement(
         tx,
         { movementId: second.movement.id, idempotencyKey: newId(), reason: 'Reset' },
         actor,
       );
+      expect((await recordMovement(tx, opening(), actor)).created).toBe(true);
       expect(await refusal(recordMovement(tx, opening(), actor))).toBe('OPENING_BALANCE_EXISTS');
     });
   });

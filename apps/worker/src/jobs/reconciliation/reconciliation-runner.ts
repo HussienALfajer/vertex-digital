@@ -132,6 +132,9 @@ export class ReconciliationRunner {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${`reconciliation:${businessDate}`}))`,
       );
+      // The API's manual and count starts take this lock too: a manual run started at 00:30 is
+      // seen as running here, never met as a unique violation that fails the job (audit A09-7).
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:start'))`);
       const [existing] = await tx
         .select({ id: reconciliationRuns.id, status: reconciliationRuns.status })
         .from(reconciliationRuns)

@@ -47,6 +47,8 @@ export function parseAuditSearch(search: Record<string, unknown>): AuditSearch {
     const day = text(search[key]);
     if (DAY.test(day) && !Number.isNaN(localDay(day).getTime())) parsed[key] = day;
   }
+  // A reversed range from the URL keeps its start only: the API refuses it (audit A09-13).
+  if (parsed.from && parsed.to && parsed.to < parsed.from) delete parsed.to;
   return parsed;
 }
 

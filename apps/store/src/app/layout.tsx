@@ -52,8 +52,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="flex min-h-dvh flex-col">
         <DirectionProvider direction="rtl">
           <SiteHeader />
-          <StopBanner />
-          <FrozenBanner />
+          {/* Read in the browser on every page (audit A09-22): `usePathname` needs a boundary. */}
+          <Suspense fallback={null}>
+            <StopBanner />
+            <FrozenBanner />
+          </Suspense>
           <Suspense fallback={null}>
             <SiteAnnouncement />
           </Suspense>

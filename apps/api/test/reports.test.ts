@@ -16,6 +16,7 @@ import {
   ensureSystemAccount,
   fulfilmentAttempts,
   lockOrder,
+  merchantProfiles,
   newId,
   orderCodesKey,
   postJournal,
@@ -67,7 +68,7 @@ async function json<T = Record<string, unknown>>(response: Response, status: num
 
 const adminGet = (path: string) => client.get(path, { cookie: admin.cookie });
 
-async function buyer(options: { isTest?: boolean; name?: string } = {}) {
+async function buyer(options: { isTest?: boolean; name?: string; funded?: boolean } = {}) {
   const customer = await seedCustomer(test.db, options.isTest ? { isTest: true } : {});
   seeded.push(customer.id);
   if (options.name) {
@@ -75,6 +76,9 @@ async function buyer(options: { isTest?: boolean; name?: string } = {}) {
       .update(customers)
       .set({ name: options.name })
       .where(eq(customers.id, customer.id));
+  }
+  if (options.funded === false) {
+    return { ...customer, cookie: await client.signInCustomer(customer.email) };
   }
   await test.db.transaction(async (tx) => {
     await postJournal(tx, {
@@ -366,13 +370,63 @@ describe('figures', () => {
     const bySupplier = await json<{
       by: string;
       rows: { key: string; attemptsSent: number; deliveredUnits: number }[];
-      totals: { attemptsSent: number | null };
+      totals: { attemptsSent: number | null; delivered: number };
     }>(await adminGet(`/api/admin/reports/breakdown?${period}&by=supplier`), 200);
+    // The totals count each order once, as R1 does, whatever suppliers delivered it (A09-17).
+    const sales = await json<Sales>(await adminGet(`/api/admin/reports/sales?${period}`), 200);
+    expect(bySupplier.totals.delivered).toBe(sales.totals.delivered);
     expect(bySupplier.by).toBe('supplier');
     const fake = bySupplier.rows.find((row) => row.key === 'fake');
     expect(fake?.attemptsSent).toBeGreaterThanOrEqual(1);
     expect(fake?.deliveredUnits).toBeGreaterThanOrEqual(1);
     expect(bySupplier.totals.attemptsSent).toBeGreaterThanOrEqual(1);
+  });
+
+  it('counts no cancelled reservation as a finished order (A09-11)', async () => {
+    const productRow = async () =>
+      (
+        await json<{ products: { productId: string; finished: number; refunded: number }[] }>(
+          await adminGet(`/api/admin/reports/refunds?${period}`),
+          200,
+        )
+      ).products.find((row) => row.productId === state.productId);
+    const before = await productRow();
+    const poor = await buyer({ funded: false });
+    const { id } = await json<{ id: string; status: string }>(
+      await client.post('/api/orders', {
+        cookie: poor.cookie,
+        headers: { 'idempotency-key': randomUUID() },
+        body: {
+          productId: state.productId,
+          quantity: 1,
+          fields: { player_id: '5123456789' },
+          expectedUnitPriceUsdUnits: state.price,
+          confirmPlayer: true,
+          whenBalanceShort: 'reserve',
+        },
+      }),
+      201,
+    );
+    await json(await client.post(`/api/orders/${id}/cancel`, { cookie: poor.cookie }), 200);
+    const after = await productRow();
+    expect(after?.finished ?? 0).toBe(before?.finished ?? 0);
+  });
+
+  it('leaves a merchant’s retail orders from before the grant out of the merchant breakdown (A09-20)', async () => {
+    const shop = await buyer();
+    await delivered(shop);
+    await test.db.insert(merchantProfiles).values({
+      customerId: shop.id,
+      tradeName: `Shop ${run}`,
+      governorate: 'damascus',
+      city: 'Damascus',
+      grantedAt: new Date(),
+    });
+    const byMerchant = await json<{ rows: { key: string }[] }>(
+      await adminGet(`/api/admin/reports/breakdown?${period}&by=merchant`),
+      200,
+    );
+    expect(byMerchant.rows.find((row) => row.key === shop.id)).toBeUndefined();
   });
 
   it('shows the ledger with test customers apart (RP8)', async () => {

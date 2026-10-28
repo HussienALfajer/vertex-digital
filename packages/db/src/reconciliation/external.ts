@@ -91,7 +91,10 @@ export function skippedResult(
   place: TreasuryPlace,
   reason: ReconciliationDetails['reason'],
   booksUnits: number | null = null,
-  /** A count keeps the amount the admin typed: its replay and the proposed opening read it. */
+  /**
+   * The outside amount, when one was read: a count's typed amount (its replay and the proposed
+   * opening read it) or a chain balance before the opening (the proposed opening reads it).
+   */
   actualUnits: number | null = null,
 ): CheckResult {
   return {
@@ -260,7 +263,8 @@ export async function usdtBalanceCheck(
   const place: TreasuryPlace = input.network;
   const booksUnits = await placeBooks(db, place);
   if (!(await openingRecorded(db, place))) {
-    return skippedResult('usdt_balance', place, 'opening_missing', booksUnits);
+    // The balance read is kept: the proposed opening reads it (rule T6, audit A09-2).
+    return skippedResult('usdt_balance', place, 'opening_missing', booksUnits, input.actualUnits);
   }
   const { rows } = await db.execute<{ id: string; amount: string }>(sql`
     select t.id, t.amount_units::text as amount from usdt_transfers t

@@ -53,9 +53,14 @@ export function treasuryFailure(
 ): { field?: TreasuryField; message: string } {
   const code = error instanceof ApiError ? error.code : undefined;
   const field = code ? FIELD_OF_CODE[code] : undefined;
+  const shown = field && fields.includes(field) ? field : undefined;
   return {
-    field: field && fields.includes(field) ? field : undefined,
-    message: errorMessage(t, error),
+    field: shown,
+    // Under the order number, "not found" names the order, not a record to reload (A09-32).
+    message:
+      shown === 'order' && code === 'NOT_FOUND'
+        ? t('reconciliation.correction.errors.orderNotFound')
+        : errorMessage(t, error),
   };
 }
 

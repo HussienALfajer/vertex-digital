@@ -5,6 +5,7 @@ import {
   type CustomersReport,
   type DepositsReport,
   type LedgerReport,
+  REVIEW_TIME_ZONE,
   type RefundsReport,
   type Report,
   type ReportKind,
@@ -57,6 +58,24 @@ function syp(units: number): number {
 }
 
 const date = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+const DAMASCUS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: REVIEW_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** `2026-10-11 13:00`: the export time in Damascus, as every report day is (audit A09-19). */
+function damascusTime(iso: string): string {
+  const part = Object.fromEntries(
+    DAMASCUS.formatToParts(new Date(iso)).map((item) => [item.type, item.value]),
+  );
+  return `${part.year}-${part.month}-${part.day} ${part.hour}:${part.minute}`;
+}
 
 const METHODS: Record<string, string> = {
   sham_cash: 'شام كاش',
@@ -253,15 +272,6 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
               row.expired,
               row.medianReviewMinutes,
             ]),
-            [
-              'إيداعات يدوية',
-              deposits.manualDeposits.count,
-              usd(deposits.manualDeposits.usdUnits),
-              null,
-              null,
-              null,
-              null,
-            ],
           ],
           totals: [
             'الإجمالي',
@@ -271,6 +281,21 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
             deposits.totals.rejected,
             deposits.totals.expired,
             null,
+          ],
+        },
+        // Apart from the methods, as the panel shows them: the totals above leave them out (A09-19).
+        {
+          columns: [
+            { header: 'إيداعات يدوية', width: 18 },
+            { header: 'العدد', width: 12, format: 'count' },
+            { header: 'المبلغ المقيد', width: 16, format: 'usd' },
+          ],
+          rows: [
+            [
+              'إيداعات يدوية',
+              deposits.manualDeposits.count,
+              usd(deposits.manualDeposits.usdUnits),
+            ],
           ],
         },
       ];
@@ -388,17 +413,17 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
             row.testUsdUnits === null ? null : usd(row.testUsdUnits),
           ]),
         },
+        // The places in dollars, then in pounds: a column's format is its currency's (A09-19).
         {
           columns: [
             { header: 'المكان', width: 24 },
-            { header: 'في البداية', width: 16 },
-            { header: 'في النهاية', width: 16 },
+            { header: 'في البداية', width: 16, format: 'usd' },
+            { header: 'في النهاية', width: 16, format: 'usd' },
           ],
           rows: [
-            ...ledger.places.map((row) => {
-              const value = row.currency === 'USD' ? usd : syp;
-              return [label(PLACES, row.place), value(row.startUnits), value(row.endUnits)];
-            }),
+            ...ledger.places
+              .filter((row) => row.currency === 'USD')
+              .map((row) => [label(PLACES, row.place), usd(row.startUnits), usd(row.endUnits)]),
             // S16: what the owner took in goods, held.
             [
               'أخذه المالك بضاعةً',
@@ -406,6 +431,16 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
               usd(ledger.ownerDrawings.endUnits),
             ],
           ],
+        },
+        {
+          columns: [
+            { header: 'المكان (بالليرة)', width: 24 },
+            { header: 'في البداية', width: 16, format: 'syp' },
+            { header: 'في النهاية', width: 16, format: 'syp' },
+          ],
+          rows: ledger.places
+            .filter((row) => row.currency === 'SYP')
+            .map((row) => [label(PLACES, row.place), syp(row.startUnits), syp(row.endUnits)]),
         },
       ];
     }
@@ -437,7 +472,7 @@ export async function writeReportWorkbook(
   }));
   const title = sheet.addRow([
     `${TITLES[kind]}: ${report.from} إلى ${report.to}`,
-    `صُدّر في ${report.generatedAt.slice(0, 16).replace('T', ' ')} UTC`,
+    `صُدّر في ${damascusTime(report.generatedAt)} بتوقيت دمشق`,
   ]);
   title.font = { bold: true, size: 13 };
   title.commit();

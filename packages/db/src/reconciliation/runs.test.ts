@@ -250,6 +250,35 @@ describe('reconciliation alert (NT1)', () => {
     });
   });
 
+  it('alerts a count before an opening once, not each count after it (A09-8)', async () => {
+    await rolledBack(db, async (tx) => {
+      const place = subject();
+      const countRun = async () => {
+        const [row] = await tx
+          .insert(reconciliationRuns)
+          .values({
+            trigger: 'count',
+            adminId: newId(),
+            idempotencyKey: newId(),
+            status: 'finished',
+            finishedAt: new Date(),
+          })
+          .returning({ id: reconciliationRuns.id });
+        if (!row) throw new Error('No run');
+        await result(tx, row.id, {
+          check: 'sham_cash_count',
+          subject: place,
+          status: 'skipped',
+          details: { offending: [], lines: [], reason: 'opening_missing' },
+        });
+        return row.id;
+      };
+      expect(await queueReconciliationAlert(tx, jobs, await countRun())).not.toBeNull();
+      // The night never holds a count's check: the previous count is the comparison.
+      expect(await queueReconciliationAlert(tx, jobs, await countRun())).toBeNull();
+    });
+  });
+
   it('alerts a failed run with no results, and never a running one', async () => {
     await rolledBack(db, async (tx) => {
       await tx

@@ -42,11 +42,21 @@ export const TOP_CUSTOMERS_LIMIT = 50;
 /** Rule X4: exports per minute, at most. */
 export const REPORT_EXPORTS_PER_MINUTE = 10;
 
+/**
+ * The earliest date a report reads: before the store, and far from year 0, which the ISO format
+ * takes and PostgreSQL refuses (audit A09-18: a `500` instead of a refusal).
+ */
+export const REPORT_EARLIEST_DATE = '2000-01-01';
+
+/** An ISO date from `REPORT_EARLIEST_DATE` on (four-digit years compare as text). */
+const reportDate = () =>
+  z.iso.date().refine((date) => date >= REPORT_EARLIEST_DATE, 'Before the earliest report date');
+
 /** `GET /api/admin/reports/:kind` and its export (rule RP1): `Asia/Damascus` dates, inclusive. */
 export const reportQuerySchema = z
   .object({
-    from: z.iso.date(),
-    to: z.iso.date(),
+    from: reportDate(),
+    to: reportDate(),
     /** `breakdown` only; `game` when left out. */
     by: reportBreakdownSchema.optional(),
   })

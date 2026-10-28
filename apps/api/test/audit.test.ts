@@ -96,6 +96,13 @@ describe('the audit log', () => {
     expect((await client.get('/api/admin/audit?cursor=xyz', { cookie: admin.cookie })).status).toBe(
       400,
     );
+    // A reversed range is refused, not answered with an empty page (A09-13).
+    const reversed = await client.get(
+      '/api/admin/audit?from=2026-10-20T00:00:00Z&to=2026-10-10T00:00:00Z',
+      { cookie: admin.cookie },
+    );
+    expect(reversed.status).toBe(400);
+    expect(await reversed.json()).toMatchObject({ code: 'VALIDATION_FAILED' });
     const customer = await seedCustomer(test.db);
     seeded.push(customer.id);
     const customerCookie = await client.signInCustomer(customer.email);

@@ -2,6 +2,7 @@ import {
   isUsdtMethod,
   normalizePaymentReference,
   type PaymentMethod,
+  TREASURY_ACCOUNTS,
   USDT_METHODS,
 } from '@vertex-digital/contracts';
 import { and, eq, inArray, or, type SQLWrapper, sql } from 'drizzle-orm';
@@ -49,6 +50,53 @@ const storedForms = (method: PaymentMethod, reference: string) => {
 const claimMethods = (method: PaymentMethod): readonly PaymentMethod[] =>
   isUsdtMethod(method) ? USDT_METHODS : [method];
 
+/**
+ * Serializes the writes that take a reference (S03 SC14, S13 T4): a claim here and an
+ * `unclaimed_receipt` treasury movement, which hold it in different tables (audit A09-3). A TXID
+ * locks the same key under both networks and both stored forms.
+ */
+export async function lockPaymentReference(
+  tx: Transaction,
+  method: PaymentMethod,
+  reference: string,
+): Promise<void> {
+  const space = isUsdtMethod(method) ? 'usdt' : method;
+  const [bare] = storedForms(method, reference);
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`payment-reference:${space}:`} || ${bare}))`,
+  );
+}
+
+/**
+ * The `unclaimed_receipt` treasury movement that booked `reference` into one of the method's
+ * places and stands (not reversed), or null (audit A09-3): money booked that way is the store's,
+ * so no deposit or manual deposit may credit it again.
+ */
+export async function unclaimedReceiptHolder(
+  db: Database | Transaction,
+  method: PaymentMethod,
+  reference: string,
+): Promise<string | null> {
+  const codes = isUsdtMethod(method)
+    ? USDT_METHODS.map((network) => TREASURY_ACCOUNTS[network].code)
+    : [TREASURY_ACCOUNTS.sham_cash_syp.code, TREASURY_ACCOUNTS.sham_cash_usd.code];
+  const [bare] = storedForms(method, reference);
+  const booked = isUsdtMethod(method)
+    ? sql`regexp_replace(upper(btrim(m.external_reference)), '^0X', '')`
+    : sql`upper(btrim(m.external_reference))`;
+  const { rows } = await db.execute<{ id: string }>(sql`
+    select m.id from treasury_movements m join ledger_accounts a on a.id = m.to_account_id
+    where a.code in (${sql.join(
+      codes.map((code) => sql`${code}`),
+      sql`, `,
+    )})
+      and m.outside_category = 'unclaimed_receipt' and m.reverses_movement_id is null
+      and not exists (select 1 from treasury_movements r where r.reverses_movement_id = m.id)
+      and ${booked} = ${bare}
+    limit 1`);
+  return rows[0]?.id ?? null;
+}
+
 /** The record that holds the claim on `reference`, or null when it is free. */
 export async function paymentReferenceOwner(
   db: Database | Transaction,
@@ -87,6 +135,15 @@ export async function claimPaymentReference(
   reference: string,
   owner: { walletAdjustmentId: string } | { depositId: string },
 ): Promise<void> {
+  await lockPaymentReference(tx, method, reference);
+  const booked = await unclaimedReceiptHolder(tx, method, reference);
+  if (booked) {
+    throw new LedgerError(
+      'EXTERNAL_REFERENCE_TAKEN',
+      'The reference is booked as an unclaimed receipt',
+      { kind: 'treasury_movement', id: booked },
+    );
+  }
   if (isUsdtMethod(method)) {
     const legacy = await paymentReferenceOwner(tx, method, reference);
     if (legacy) {

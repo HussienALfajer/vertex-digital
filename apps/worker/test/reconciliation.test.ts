@@ -23,7 +23,7 @@ import {
   type Transaction,
   telegramMessages,
 } from '@vertex-digital/db';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
@@ -542,6 +542,43 @@ describe('the nightly run (RN1, RN5, edge cases 4, 16)', () => {
         .where(eq(reconciliationRuns.businessDate, date));
       expect(night?.status).toBe('finished');
     });
+  });
+
+  it('waits for a manual run started at the same moment, never failing on it (A09-7)', async () => {
+    // Another transaction starts a manual run as the API does, under the starts' lock, and
+    // commits only once the night has had time to reach its own start.
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let manualId = '';
+    const manual = db.transaction(async (other) => {
+      await other.execute(sql`select pg_advisory_xact_lock(hashtext('reconciliation:start'))`);
+      manualId = await manualRun(other);
+      started();
+      await held;
+    });
+    await ready;
+    try {
+      await inRollback(async ({ runner }) => {
+        const night = runner.nightlyRun(businessDate());
+        setTimeout(release, 500);
+        // Before the shared lock, the night met the manual run's row on the one-running index and
+        // the job failed with a unique violation.
+        expect(await night).toEqual({ retryAt: expect.any(Date) });
+      });
+    } finally {
+      release();
+      await manual;
+      await db
+        .update(reconciliationRuns)
+        .set({ status: 'failed', finishedAt: new Date(), failure: 'Test' })
+        .where(eq(reconciliationRuns.id, manualId));
+    }
   });
 
   it('fails a run still running after an hour before the night starts', async () => {

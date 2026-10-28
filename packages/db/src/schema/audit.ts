@@ -38,5 +38,7 @@ export const auditEntries = pgTable(
     index('audit_entries_actor_idx').on(table.actorKind, table.actorId, table.occurredAt.desc()),
     index('audit_entries_entity_idx').on(table.entityType, table.entityId, table.occurredAt.desc()),
     index('audit_entries_action_idx').on(table.action, table.occurredAt.desc()),
+    /** The log filtered by a record's id without its type (audit A09-14). */
+    index('audit_entries_entity_id_idx').on(table.entityId, table.occurredAt.desc()),
   ],
 );
