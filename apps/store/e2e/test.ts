@@ -174,6 +174,19 @@ export class MockApi {
     return this.requests.filter((request) => request.key === key).length;
   }
 
+  /**
+   * Session reads the sign-in page sent. It reads the session when it mounts and leaves for `next`
+   * once a read answers signed in, so a test that signs in there waits for this count to grow
+   * first: signed in sooner, the page's redirect cuts the test's next `goto` short.
+   */
+  sessionReadsFromSignIn() {
+    return this.requests.filter(
+      (request) =>
+        request.key === 'GET /api/auth/get-session' &&
+        new URL(request.headers.referer ?? 'http://store/').pathname === '/sign-in',
+    ).length;
+  }
+
   /** Answers `key`, after `delayMs` when a test acts while the request is in flight (A04-1). */
   on(key: string, status: number, body: unknown = {}, delayMs = 0): this {
     this.answers.set(key, { status, body, delayMs });

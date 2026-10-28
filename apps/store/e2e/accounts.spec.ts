@@ -540,9 +540,12 @@ test.describe('account', () => {
     api,
   }) => {
     api.on('GET /api/account', 401, { code: 'UNAUTHORIZED' });
+    const sessionReads = api.sessionReadsFromSignIn();
     await page.goto('/account/email');
     await expect(page).toHaveURL('/sign-in?next=%2Faccount%2Femail');
     expect(api.last('POST /api/auth/email-otp/request-email-change')).toBeUndefined();
+    // The sign-in page's own session read answers signed out first (`sessionReadsFromSignIn`).
+    await expect.poll(() => api.sessionReadsFromSignIn()).toBeGreaterThan(sessionReads);
 
     signedIn(api);
     api.on('POST /api/auth/email-otp/request-email-change', 400, { code: 'INVALID_PASSWORD' });

@@ -96,6 +96,9 @@ test('an idle session returns to sign-in with a notice, then to the same page', 
   await expect(page.getByText(ar.login.idleNotice)).toBeVisible();
 
   await signIn(page);
+  // The code step first: typed sooner, the code went into the password form still on screen and
+  // the panel stayed on the sign-in page (CI on main, 2026-10-27), as in admin.spec.ts.
+  await expect(page.getByRole('heading', { name: ar.login.twoFactor.title })).toBeVisible();
   await page.getByRole('textbox').first().pressSequentially(TOTP_CODE);
   await expect(page).toHaveURL(/\/audit$/);
 });
