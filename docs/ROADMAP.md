@@ -92,7 +92,7 @@ Scope: `docs/product/v1-scope.md` Phase M (F28–F42). One `/spec` session per s
 - [ ] English UI
 
 ## Launch checklist
-- [ ] Off-server backups configured and a restore tested (interim, owner 2026-10-20: on the production server until the owner subscribes to a second server, Q1)
+- [x] Off-server backups configured and a restore tested (Q1, owner 2026-10-28: Backblaze B2, PR #210; each daily backup encrypted to the owner's key and uploaded; restore of `daily/20261028T175707Z.tar.gpg` tested on the owner's PC on 2026-10-28: SHA-1 and `SHA256SUMS` matched, `pg_restore` clean, tables, migrations, ledger, customers, games and audit counts equal to production at the backup time)
 - [x] Domains and TLS for both hosts (checked 2026-10-12)
 - [x] Production secrets on the server only; supplier keys entered in the panel (checked 2026-10-20: every `shared/.env` value set, 600, linked from each release, no fake transport; WDGZone and FazerCards keys stored encrypted; full git history searched with no secret found)
 - [x] SPF, DKIM and DMARC for the sending mailbox (checked 2026-10-14 on public DNS: SPF includes Hostinger mail, DKIM `hostingermail-a` published, DMARC `p=quarantine`)
