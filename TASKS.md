@@ -1,11 +1,6 @@
-# TASKS — Off-server backups (Q1, launch checklist; branch `feat/offsite-backups`)
+# TASKS — Off-server backups (Q1, launch checklist; PR #210 merged, deployed `f0cf61c`)
 
-The owner chose Backblaze B2 on 2026-10-28 and created the bucket (Object Lock 30 days, lifecycle 31 + 1 days) and a key limited to it, in `/etc/vertexdigital/backup.env` on the server.
-
-- [x] Encryption key pair on the owner's PC (`D:\vertex-digital-backup-key\`); round trip checked; public key in `deploy/backup-public.asc`
-- [x] `vertexdigital-backup`: encrypt the backup to the public key, upload with rclone, compare SHA-1, touch `offsite-last`
-- [x] Health check alerts on no verified copy in 26 hours; `provision.sh` installs rclone and the key
-- [x] `docs/deployment.md`, `docs/open-questions.md` (Q1 resolved), `deploy/CLAUDE.md`
-- [x] `pnpm verify`; reviewer (no blocking issue)
-- [ ] PR and merge; deploy with `provision.sh`; one backup run now, its copy in the bucket
-- [ ] Restore test on the owner's PC; launch checklist ticked; deploy log
+- [x] Key pair on the owner's PC; public key in `deploy/backup-public.asc`
+- [x] Backup script, health check and `provision.sh`; docs; reviewer; `pnpm verify`; PR #210 merged
+- [x] Deployed `f0cf61c` and `provision.sh` re-run; one backup run uploaded and verified
+- [x] Restore test on the owner's PC matched production; launch checklist ticked; deploy log
