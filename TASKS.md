@@ -1,6 +1,9 @@
-# TASKS — Off-server backups (Q1, launch checklist; PR #210 merged, deployed `f0cf61c`)
+# TASKS — Professional catalog build-out (docs/ROADMAP.md, Pilot)
 
-- [x] Key pair on the owner's PC; public key in `deploy/backup-public.asc`
-- [x] Backup script, health check and `provision.sh`; docs; reviewer; `pnpm verify`; PR #210 merged
-- [x] Deployed `f0cf61c` and `provision.sh` re-run; one backup run uploaded and verified
-- [x] Restore test on the owner's PC matched production; launch checklist ticked; deploy log
+- [x] Read both suppliers' mirrored catalogs (read-only) and match them region by region
+- [x] Six store categories; 352 games, 4,400 packs, 3,777 with both suppliers' routes; names, search terms, fields, regions and redemption steps; games ordered by demand
+- [x] Games with no payable pack paused until the suppliers are funded
+- [ ] Upload the 23 covers neither supplier offers (Claude in Chrome), then import those games
+- [ ] After the owner funds WDGZone and FazerCards: run "activate all" on every game once
+- [ ] LOTR Rise to War: verify the game still runs before adding it
+- [ ] ID guide images, official prices, accent colors; the owner's review on a phone and a PC
