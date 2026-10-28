@@ -511,29 +511,37 @@ describe('external checks (E1–E4)', () => {
         actor,
       );
       const books = await placeBooks(tx, network);
-      // Other suites leave uncredited transfers on the network: the range starts above them.
-      const elsewhere = ((await check(books)).allowedHighUnits ?? 0) - books;
-      const txid = newId().replaceAll('-', '').padEnd(64, '0');
-      const [transferRow] = await tx
-        .insert(usdtTransfers)
-        .values({
-          method: network,
-          txid,
-          fromAddress: '0x1111111111111111111111111111111111111111',
-          toAddress: '0x2222222222222222222222222222222222222222',
-          rawAmount: '5000000000000000000',
-          amountUnits: 5 * USD,
-          blockNumber: 1,
-          // The oldest: the result lists 50 lines, oldest first, and other suites leave more.
-          blockTime: new Date('2020-01-01T00:00:00Z'),
-          source: 'scan',
-        })
-        .returning();
+      const lineIds = async (actualUnits: number) =>
+        (await check(actualUnits)).details.lines.map((line) => line.id);
+      const received = async (blockTime: Date) => {
+        const txid = newId().replaceAll('-', '').padEnd(64, '0');
+        const [row] = await tx
+          .insert(usdtTransfers)
+          .values({
+            method: network,
+            txid,
+            fromAddress: '0x1111111111111111111111111111111111111111',
+            toAddress: '0x2222222222222222222222222222222222222222',
+            rawAmount: '5000000000000000000',
+            amountUnits: 5 * USD,
+            blockNumber: 1,
+            blockTime,
+            source: 'scan',
+          })
+          .returning();
+        return { txid, id: row?.id };
+      };
+      // Other files write transfers meanwhile: the bound moves, so lines and books are asserted.
+      // On chain before the opening: inside its amount, never in the range (Q30, audit A09-4).
+      const before = await received(new Date('2020-01-01T00:00:00Z'));
+      expect(await lineIds(books)).not.toContain(before.id);
+      // After the opening (the transaction's start): the earliest such, listed first.
+      const after = await received(new Date(Date.now() + 60_000));
       const withTransfer = await check(books + 5 * USD);
       expect(withTransfer.status).toBe('ok');
       expect(withTransfer.details.lines).toContainEqual({
         kind: 'uncredited_transfer',
-        id: transferRow?.id,
+        id: after.id,
         amountUnits: 5 * USD,
       });
       expect((await check(books - 2 * USD)).status).toBe('mismatch');
@@ -541,17 +549,58 @@ describe('external checks (E1–E4)', () => {
         tx,
         transfer('outside_usd', network, 5 * USD, {
           outsideCategory: 'unclaimed_receipt',
-          externalReference: txid,
+          externalReference: after.txid,
         }),
         actor,
       );
       const booked = await check(books + 5 * USD);
-      expect(booked).toMatchObject({
-        status: 'ok',
-        booksUnits: books + 5 * USD,
-        allowedHighUnits: books + 5 * USD + elsewhere,
-      });
-      expect(booked.details.lines.map((line) => line.id)).not.toContain(transferRow?.id);
+      expect(booked).toMatchObject({ status: 'ok', booksUnits: books + 5 * USD });
+      expect(booked.details.lines.map((line) => line.id)).not.toContain(after.id);
+      // A transfer sent back to its sender: booked in as unclaimed, then returned naming it once
+      // (Q30, S13 T8); a return naming a transfer the books never took in is refused, and so is
+      // reversing the receipt while the return stands.
+      const bounced = await received(new Date(Date.now() + 120_000));
+      expect(await lineIds(books + 10 * USD)).toContain(bounced.id);
+      const giveBack = () =>
+        recordMovement(
+          tx,
+          transfer(network, 'outside_usd', 5 * USD, {
+            outsideCategory: 'return_to_sender',
+            externalReference: `0x${bounced.txid.toUpperCase()}`,
+          }),
+          actor,
+        );
+      await expect(giveBack()).rejects.toMatchObject({ code: 'RETURN_RECEIPT_MISSING' });
+      await expect(
+        recordMovement(
+          tx,
+          transfer(network, 'outside_usd', 5 * USD, { outsideCategory: 'return_to_sender' }),
+          actor,
+        ),
+      ).rejects.toMatchObject({ code: 'RETURN_RECEIPT_MISSING' });
+      const { movement: receipt } = await recordMovement(
+        tx,
+        transfer('outside_usd', network, 5 * USD, {
+          outsideCategory: 'unclaimed_receipt',
+          externalReference: bounced.txid,
+        }),
+        actor,
+      );
+      const { movement: given } = await giveBack();
+      // The chain holds the booked transfer only, as the books do.
+      const returned = await check(books + 5 * USD);
+      expect(returned).toMatchObject({ status: 'ok', booksUnits: books + 5 * USD });
+      expect(returned.details.lines.map((line) => line.id)).not.toContain(bounced.id);
+      await expect(giveBack()).rejects.toMatchObject({ code: 'EXTERNAL_REFERENCE_TAKEN' });
+      const undo = (movementId: string) =>
+        reverseMovement(
+          tx,
+          { movementId, idempotencyKey: newId(), reason: 'Booked by mistake' },
+          actor,
+        );
+      await expect(undo(receipt.id)).rejects.toMatchObject({ code: 'RECEIPT_RETURNED' });
+      await undo(given.id);
+      await undo(receipt.id);
     });
   });
 

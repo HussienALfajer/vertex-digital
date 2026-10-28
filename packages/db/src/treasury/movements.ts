@@ -111,14 +111,55 @@ async function placeHasOpening(tx: Transaction, accountId: string): Promise<bool
 }
 
 /**
- * An unclaimed USDT receipt keeps its TXID as the claims and the scanner do (64 lower-case hex,
- * from a hash or an explorer link), so a claim of the same transfer finds it (audit A09-3).
+ * An unclaimed USDT receipt, and a USDT return to its sender (which names the incoming transfer it
+ * sends back, Q30), keep the TXID as the claims and the scanner do (64 lower-case hex, from a hash
+ * or an explorer link), so the claims and the nightly USDT check find it (audit A09-3, A09-4).
  */
 function storedReference(input: MovementInput): string | null {
   const reference = input.externalReference;
-  if (reference === null || input.outsideCategory !== 'unclaimed_receipt') return reference;
-  if (input.to !== 'usdt_trc20' && input.to !== 'usdt_bep20') return reference;
+  if (reference === null) return reference;
+  const place =
+    input.outsideCategory === 'unclaimed_receipt'
+      ? input.to
+      : input.outsideCategory === 'return_to_sender'
+        ? input.from
+        : null;
+  if (place !== 'usdt_trc20' && place !== 'usdt_bep20') return reference;
   return normalizeTxid(reference) ?? reference;
+}
+
+function isUsdtReturn(
+  input: MovementInput,
+): input is MovementInput & { from: 'usdt_trc20' | 'usdt_bep20' } {
+  return (
+    input.outsideCategory === 'return_to_sender' &&
+    (input.from === 'usdt_trc20' || input.from === 'usdt_bep20')
+  );
+}
+
+/**
+ * True when an unreversed movement of the category names the reference: an `unclaimed_receipt`
+ * into the account, or a `return_to_sender` out of it (Q30).
+ */
+async function standingMovement(
+  tx: Transaction,
+  category: 'unclaimed_receipt' | 'return_to_sender',
+  accountId: string,
+  reference: string,
+): Promise<boolean> {
+  const side =
+    category === 'unclaimed_receipt'
+      ? sql`m.to_account_id = ${accountId}`
+      : sql`m.from_account_id = ${accountId}`;
+  const { rows } = await tx.execute<{ found: boolean }>(sql`
+    select exists (
+      select 1 from treasury_movements m
+      where ${side}
+        and m.outside_category = ${category} and m.reverses_movement_id is null
+        and not exists (select 1 from treasury_movements r where r.reverses_movement_id = m.id)
+        and upper(m.external_reference) = upper(${reference})
+    ) as found`);
+  return rows[0]?.found === true;
 }
 
 /** The deposit method whose money reaches a receipts place, or null for any other place. */
@@ -216,6 +257,10 @@ export async function recordMovement(
   if (input.openingBalance && (await placeHasOpening(tx, toAccountId))) {
     throw new TreasuryError('OPENING_BALANCE_EXISTS', 'The place already has an opening');
   }
+  // Q30: a USDT return always names the incoming transfer it sends back (contracts check it too).
+  if (isUsdtReturn(input) && input.externalReference === null) {
+    throw new TreasuryError('RETURN_RECEIPT_MISSING', 'A USDT return names its incoming TXID');
+  }
   if (input.externalReference !== null) {
     const [holder] = await tx
       .select({ id: treasuryMovements.id })
@@ -234,6 +279,19 @@ export async function recordMovement(
         'The reference is already booked from this place',
         { movementId: holder.id },
       );
+    }
+    // A USDT return names the incoming transfer it sends back (Q30): only one booked in by a
+    // standing unclaimed receipt into the place, so the books took it in once and no deposit can
+    // claim it later (the receipt holds its TXID against claims).
+    if (isUsdtReturn(input)) {
+      await lockPaymentReference(tx, input.from, input.externalReference);
+      const reference = input.externalReference;
+      if (!(await standingMovement(tx, 'unclaimed_receipt', fromAccountId, reference))) {
+        throw new TreasuryError(
+          'RETURN_RECEIPT_MISSING',
+          'No standing unclaimed receipt into the place names the returned TXID',
+        );
+      }
     }
     // An unclaimed receipt books money no deposit credited: a reference a deposit or a manual
     // deposit already claimed would count it twice (audit A09-3). The claims check this side.
@@ -344,6 +402,26 @@ export async function reverseMovement(
     });
   }
   const endpoints = await endpointsOf(tx, original);
+  // A USDT receipt a standing return names stays (Q30): reversed, it would free the TXID for a
+  // deposit claim of money already sent back. The return is reversed first.
+  const receiptPlace = endpoints.to;
+  if (
+    original.outsideCategory === 'unclaimed_receipt' &&
+    original.externalReference !== null &&
+    (receiptPlace === 'usdt_trc20' || receiptPlace === 'usdt_bep20')
+  ) {
+    await lockPaymentReference(tx, receiptPlace, original.externalReference);
+    if (
+      await standingMovement(
+        tx,
+        'return_to_sender',
+        original.toAccountId,
+        original.externalReference,
+      )
+    ) {
+      throw new TreasuryError('RECEIPT_RETURNED', 'A standing return names the receipt');
+    }
+  }
   const id = newId();
   const journalId = await postMovementJournal(
     tx,

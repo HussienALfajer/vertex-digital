@@ -308,10 +308,16 @@ export const createTreasuryMovementSchema = z
         message: 'An opening balance comes from outside, category owner',
       });
     }
-    // A USDT transfer booked as the store's names its TXID, as a deposit's claim does (A09-3).
+    // A USDT transfer booked as the store's names its TXID, as a deposit's claim does (A09-3);
+    // a USDT return to its sender names the incoming transfer it sends back (Q30, A09-4).
+    const usdtPlace =
+      input.outsideCategory === 'unclaimed_receipt'
+        ? input.to
+        : input.outsideCategory === 'return_to_sender'
+          ? input.from
+          : undefined;
     if (
-      input.outsideCategory === 'unclaimed_receipt' &&
-      (input.to === 'usdt_trc20' || input.to === 'usdt_bep20') &&
+      (usdtPlace === 'usdt_trc20' || usdtPlace === 'usdt_bep20') &&
       input.externalReference !== undefined &&
       normalizeTxid(input.externalReference) === null
     ) {
@@ -319,6 +325,17 @@ export const createTreasuryMovementSchema = z
         code: 'custom',
         path: ['externalReference'],
         message: 'Expected a TXID or an explorer link',
+      });
+    }
+    if (
+      input.outsideCategory === 'return_to_sender' &&
+      (input.from === 'usdt_trc20' || input.from === 'usdt_bep20') &&
+      input.externalReference === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['externalReference'],
+        message: 'A USDT return names the incoming TXID it sends back',
       });
     }
   })

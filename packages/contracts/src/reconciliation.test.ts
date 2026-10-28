@@ -249,6 +249,20 @@ describe('movements', () => {
     } as const;
     expect(paths({ ...usdt, externalReference: 'NOT-A-TXID' })).toEqual(['externalReference']);
     expect(paths({ ...usdt, externalReference: `0x${'ab'.repeat(32)}` })).toBeUndefined();
+    // A USDT return to its sender names the incoming transfer it sends back (Q30, A09-4).
+    const returned = {
+      ...usdt,
+      from: 'usdt_bep20',
+      to: 'outside_usd',
+      outsideCategory: 'return_to_sender',
+    } as const;
+    expect(paths({ ...returned, externalReference: 'NOT-A-TXID' })).toEqual(['externalReference']);
+    expect(paths({ ...returned, externalReference: `0x${'ab'.repeat(32)}` })).toBeUndefined();
+    expect(paths({ ...returned, externalReference: undefined })).toEqual(['externalReference']);
+    // A Sham Cash return keeps any reference.
+    expect(
+      paths({ ...returned, from: 'sham_cash_usd', externalReference: 'NOT-A-TXID' }),
+    ).toBeUndefined();
   });
 
   it('validates a supplier correction and normalizes its order number', () => {

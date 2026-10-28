@@ -226,6 +226,22 @@ describe('movements', () => {
     });
   });
 
+  it('refuses a USDT return naming a TXID no unclaimed receipt booked (rule T8, Q30)', async () => {
+    expect(
+      await body(
+        await movement({
+          from: 'usdt_trc20',
+          to: 'outside_usd',
+          sentUnits: 5 * USD,
+          receivedUnits: 5 * USD,
+          outsideCategory: 'return_to_sender',
+          externalReference: randomUUID().replaceAll('-', '').padEnd(64, 'a'),
+          reason: 'Bounced transfer sent back',
+        }),
+      ),
+    ).toMatchObject({ status: 409, code: 'RETURN_RECEIPT_MISSING' });
+  });
+
   it('records a supplier correction about an order number it knows (rule T5)', async () => {
     const payload = {
       supplier: 'manual',

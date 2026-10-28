@@ -40,6 +40,7 @@ const FIELD_OF_CODE: Partial<Record<string, TreasuryField>> = {
   MOVEMENT_RECEIVED_EXCEEDS_SENT: 'received',
   OPENING_BALANCE_EXISTS: 'opening',
   EXTERNAL_REFERENCE_TAKEN: 'reference',
+  RETURN_RECEIPT_MISSING: 'reference',
   AMOUNT_CONFIRMATION_REQUIRED: 'confirm',
   AMOUNT_CONFIRMATION_MISMATCH: 'confirm',
   NOT_FOUND: 'order',
