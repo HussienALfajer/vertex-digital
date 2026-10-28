@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A08-content.md`. Spec S14; ADR
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (verify passed; the reviewer's A08-34 timer finding fixed and tested)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge (#194)
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed` (`0a7650b`)
 
 # TASKS — Audit A07 Customers, support and notifications (branch `fix/audit-a07-customers`)
 
