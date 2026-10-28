@@ -318,6 +318,8 @@ async function openApiDrift() {
           [
             bin(join(root, 'apps/admin'), 'openapi-typescript'),
             '../api/openapi.json',
+            // As `api:generate` in apps/admin/package.json (audit A10-21).
+            '--default-non-nullable=false',
             '-o',
             'src/lib/api/schema.gen.ts',
           ],

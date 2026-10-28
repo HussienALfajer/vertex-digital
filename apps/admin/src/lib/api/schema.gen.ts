@@ -212,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminAccountController_reportClientError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/me/sessions": {
         parameters: {
             query?: never;
@@ -1404,6 +1420,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["MerchantsAdminController_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/merchant-applications/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantsAdminController_waiting"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3020,6 +3052,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["SuppliersAdminController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/new-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_newPacks"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4987,7 +5035,7 @@ export interface components {
         NotificationListQuery: {
             cursor?: string;
             /** @default 20 */
-            limit: number;
+            limit?: number;
         };
         NotificationPage: {
             items: components["schemas"]["CustomerNotification"][];
@@ -5458,7 +5506,7 @@ export interface components {
         SwitchHistoryQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             switch?: components["schemas"]["StoreSwitch"];
         };
         SwitchHistoryPage: {
@@ -5489,6 +5537,12 @@ export interface components {
         Reauthentication: {
             /** Format: date-time */
             reauthenticatedUntil: string;
+        };
+        AdminClientError: {
+            name: string;
+            message: string;
+            stack?: string;
+            path: string;
         };
         AdminSessionList: components["schemas"]["AdminSession"][];
         AdminSession: {
@@ -5591,7 +5645,7 @@ export interface components {
         TestCustomerListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
         };
         TestCustomerPage: {
             items: components["schemas"]["TestCustomer"][];
@@ -5630,7 +5684,7 @@ export interface components {
         AuditListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             actorKind?: components["schemas"]["AuditActorKind"];
             /** Format: uuid */
             actorId?: string;
@@ -5713,7 +5767,7 @@ export interface components {
         WalletEntryQuery: {
             cursor?: string;
             /** @default 30 */
-            limit: number;
+            limit?: number;
         };
         WalletEntryPage: {
             items: components["schemas"]["WalletEntry"][];
@@ -5763,7 +5817,7 @@ export interface components {
         WalletSearchQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             q: string;
         };
         WalletSearchPage: {
@@ -6058,7 +6112,7 @@ export interface components {
         DepositListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
         };
         DepositPage: {
             items: components["schemas"]["Deposit"][];
@@ -6136,12 +6190,12 @@ export interface components {
         AdminDepositQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             /**
              * @default submitted
              * @enum {string}
              */
-            status: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
+            status?: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
             /** @enum {string} */
             flagged?: "true" | "false";
             method?: components["schemas"]["DepositMethod"];
@@ -6383,13 +6437,13 @@ export interface components {
         AdminUsdtTransferQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             method?: components["schemas"]["UsdtMethod"];
             /**
              * @default unmatched
              * @enum {string}
              */
-            state: "unmatched" | "all";
+            state?: "unmatched" | "all";
         };
         AdminUsdtTransferPage: {
             items: components["schemas"]["AdminUsdtTransfer"][];
@@ -6431,10 +6485,10 @@ export interface components {
         CustomerSearchQuery: {
             cursor?: string;
             /** @default 25 */
-            limit: number;
+            limit?: number;
             q?: string;
             /** @default all */
-            status: components["schemas"]["CustomerFilter"];
+            status?: components["schemas"]["CustomerFilter"];
         };
         /** @enum {string} */
         CustomerFilter: "all" | "active" | "frozen" | "archived" | "test";
@@ -6622,7 +6676,7 @@ export interface components {
         CustomerNoteListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             archived?: string;
         };
         CustomerNotePage: {
@@ -6641,7 +6695,7 @@ export interface components {
         CreateCustomerNote: {
             body: string;
             /** @default false */
-            pinned: boolean;
+            pinned?: boolean;
         };
         SetCustomerPriceList: {
             /** Format: uuid */
@@ -6740,7 +6794,7 @@ export interface components {
         MerchantApplicationListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             status?: components["schemas"]["MerchantApplicationStatus"];
         };
         AdminMerchantApplicationPage: {
@@ -6766,6 +6820,9 @@ export interface components {
                 sharedPhone: number;
                 newAccount: boolean;
             };
+        };
+        BadgeCount: {
+            count: number;
         };
         AdminMerchantApplication: {
             /** Format: uuid */
@@ -6833,7 +6890,7 @@ export interface components {
         MerchantListQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             q?: string;
             /** Format: uuid */
             listId?: string;
@@ -6930,7 +6987,7 @@ export interface components {
              * @default today
              * @enum {string}
              */
-            period: "today" | "month";
+            period?: "today" | "month";
         };
         MerchantDashboard: {
             /** @enum {string} */
@@ -7046,7 +7103,7 @@ export interface components {
         MerchantAlertQuery: {
             cursor?: string;
             /** @default 20 */
-            limit: number;
+            limit?: number;
         };
         MerchantAlertPage: {
             items: components["schemas"]["MerchantAlert"][];
@@ -7170,15 +7227,15 @@ export interface components {
              * @default selling
              * @enum {string}
              */
-            mode: "selling" | "purchase";
+            mode?: "selling" | "purchase";
             /**
              * @default syp
              * @enum {string}
              */
-            currency: "syp" | "usd" | "both";
+            currency?: "syp" | "usd" | "both";
             unavailable?: string;
             /** @default 1 */
-            page: number;
+            page?: number;
         };
         MerchantPriceList: {
             tradeName: string;
@@ -7274,7 +7331,7 @@ export interface components {
             /** Format: uuid */
             productId: string;
             /** @default {} */
-            fields: {
+            fields?: {
                 [key: string]: string;
             };
         };
@@ -7283,7 +7340,7 @@ export interface components {
             productId: string;
             quantity: number;
             /** @default {} */
-            fields: {
+            fields?: {
                 [key: string]: string;
             };
             expectedUnitPriceUsdUnits: number;
@@ -7291,9 +7348,9 @@ export interface components {
              * @default refuse
              * @enum {string}
              */
-            whenBalanceShort: "refuse" | "reserve";
+            whenBalanceShort?: "refuse" | "reserve";
             /** @default false */
-            confirmPlayer: boolean;
+            confirmPlayer?: boolean;
             savePlayer?: {
                 label: string;
             };
@@ -7464,19 +7521,19 @@ export interface components {
         CheckoutRequest: {
             lines: components["schemas"]["CheckoutLine"][];
             /** @default cart */
-            source: components["schemas"]["CheckoutSource"];
+            source?: components["schemas"]["CheckoutSource"];
         };
         CheckoutLine: {
             /** Format: uuid */
             productId: string;
             quantity: number;
             /** @default {} */
-            fields: {
+            fields?: {
                 [key: string]: string;
             };
             expectedUnitPriceUsdUnits: number;
             /** @default false */
-            confirmPlayer: boolean;
+            confirmPlayer?: boolean;
             savePlayer?: {
                 label: string;
             };
@@ -7559,7 +7616,7 @@ export interface components {
         OrderListQuery: {
             cursor?: string;
             /** @default 20 */
-            limit: number;
+            limit?: number;
             /** Format: uuid */
             checkout?: string;
         };
@@ -7710,11 +7767,11 @@ export interface components {
         };
         ReceiptOptions: {
             /** @default true */
-            showPrice: boolean;
+            showPrice?: boolean;
             /** @default masked */
-            playerDisplay: components["schemas"]["ReceiptPlayerDisplay"];
+            playerDisplay?: components["schemas"]["ReceiptPlayerDisplay"];
             /** @default true */
-            branded: boolean;
+            branded?: boolean;
         };
         RevealedCode: {
             code: string;
@@ -7726,12 +7783,12 @@ export interface components {
             productId: string;
             quantity: number;
             /** @default {} */
-            fields: {
+            fields?: {
                 [key: string]: string;
             };
             expectedUnitPriceUsdUnits: number;
             /** @default false */
-            confirmPlayer: boolean;
+            confirmPlayer?: boolean;
             purpose: components["schemas"]["AdminOrderPurpose"];
             /** Format: uuid */
             customerId?: string;
@@ -8020,11 +8077,11 @@ export interface components {
         };
         AdminOrderListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 50 */
-            pageSize: number;
+            pageSize?: number;
             /** @default all */
-            tab: components["schemas"]["AdminOrderTab"];
+            tab?: components["schemas"]["AdminOrderTab"];
             status?: components["schemas"]["OrderStatus"];
             q?: string;
             /** Format: uuid */
@@ -8099,7 +8156,7 @@ export interface components {
              * @default all
              * @enum {string}
              */
-            test: "all" | "hide" | "only";
+            test?: "all" | "hide" | "only";
         };
         LiveBoard: {
             columns: {
@@ -8204,7 +8261,7 @@ export interface components {
             outcome: "delivered";
             quantity: number;
             /** @default [] */
-            codes: string[];
+            codes?: string[];
             reason: string;
         } | {
             /** @enum {string} */
@@ -8249,10 +8306,10 @@ export interface components {
         FulfilOrder: {
             quantity: number;
             /** @default [] */
-            codes: string[];
+            codes?: string[];
             unitCostUsdUnits: number;
             /** @default false */
-            acceptLoss: boolean;
+            acceptLoss?: boolean;
             /** Format: uuid */
             proofFileId: string;
             reference?: string;
@@ -8290,9 +8347,9 @@ export interface components {
             categoryId: string;
             fieldMap: components["schemas"]["FieldMap"];
             /** @default {} */
-            optionMap: components["schemas"]["OptionMap"];
+            optionMap?: components["schemas"]["OptionMap"];
             /** @default [] */
-            allowedRegions: string[];
+            allowedRegions?: string[];
             enabled: boolean;
         };
         PublicShare: {
@@ -8347,7 +8404,7 @@ export interface components {
              * @default og
              * @enum {string}
              */
-            format: "og" | "square";
+            format?: "og" | "square";
         };
         PublicVerification: {
             issuer: components["schemas"]["ReceiptIssuer"];
@@ -8550,9 +8607,9 @@ export interface components {
         CatalogStatus: "active" | "paused";
         GameListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 50 */
-            pageSize: number;
+            pageSize?: number;
             /** Format: uuid */
             categoryId?: string;
             status?: components["schemas"]["CatalogStatus"];
@@ -8693,14 +8750,14 @@ export interface components {
             /** @enum {string} */
             type: "digits";
             /** @default null */
-            minLength: number | null;
+            minLength?: number | null;
             /** @default null */
-            maxLength: number | null;
+            maxLength?: number | null;
             /**
              * @default null
              * @enum {string|null}
              */
-            options: null;
+            options?: null;
         } | {
             key: string;
             labelAr: string;
@@ -8709,14 +8766,14 @@ export interface components {
             /** @enum {string} */
             type: "text";
             /** @default null */
-            minLength: number | null;
+            minLength?: number | null;
             /** @default null */
-            maxLength: number | null;
+            maxLength?: number | null;
             /**
              * @default null
              * @enum {string|null}
              */
-            options: null;
+            options?: null;
         } | {
             key: string;
             labelAr: string;
@@ -8728,12 +8785,12 @@ export interface components {
              * @default null
              * @enum {string|null}
              */
-            minLength: null;
+            minLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            maxLength: null;
+            maxLength?: null;
             options: components["schemas"]["SelectOptionInput"][];
         } | {
             key: string;
@@ -8746,17 +8803,17 @@ export interface components {
              * @default null
              * @enum {string|null}
              */
-            minLength: null;
+            minLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            maxLength: null;
+            maxLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            options: null;
+            options?: null;
         } | {
             key: string;
             labelAr: string;
@@ -8768,17 +8825,17 @@ export interface components {
              * @default null
              * @enum {string|null}
              */
-            minLength: null;
+            minLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            maxLength: null;
+            maxLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            options: null;
+            options?: null;
         } | {
             key: string;
             labelAr: string;
@@ -8790,17 +8847,17 @@ export interface components {
              * @default null
              * @enum {string|null}
              */
-            minLength: null;
+            minLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            maxLength: null;
+            maxLength?: null;
             /**
              * @default null
              * @enum {string|null}
              */
-            options: null;
+            options?: null;
         };
         SelectOptionInput: {
             value: string;
@@ -8838,7 +8895,7 @@ export interface components {
             gameAmount?: number | null;
             officialPriceUsdUnits?: number | null;
             /** @default 1 */
-            maxQuantity: number;
+            maxQuantity?: number;
         } | {
             /** @enum {string} */
             kind: "code";
@@ -8846,7 +8903,7 @@ export interface components {
             gameAmount?: number | null;
             officialPriceUsdUnits?: number | null;
             /** @default 10 */
-            maxQuantity: number;
+            maxQuantity?: number;
             regionAr?: string | null;
             redemptionAr?: string | null;
         };
@@ -8904,7 +8961,7 @@ export interface components {
              * @default active
              * @enum {string}
              */
-            status: "active" | "ended";
+            status?: "active" | "ended";
         };
         ProductAlertList: {
             items: components["schemas"]["ProductAlert"][];
@@ -9176,9 +9233,9 @@ export interface components {
         FailureKind: "timeout" | "dns" | "connect" | "tls" | "rate_limited" | "http_5xx" | "http_4xx" | "unreadable" | "redirect" | "other";
         SupplierCallListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 50 */
-            pageSize: number;
+            pageSize?: number;
             /** @enum {string} */
             result?: "ok" | "refused" | "error";
         };
@@ -9210,9 +9267,9 @@ export interface components {
         };
         OfferListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 50 */
-            pageSize: number;
+            pageSize?: number;
             q?: string;
             group?: string;
             /** @enum {string} */
@@ -9286,9 +9343,9 @@ export interface components {
             gameId: string;
             kind?: components["schemas"]["ProductKind"];
             /** @default {} */
-            fieldMap: components["schemas"]["FieldMap"];
+            fieldMap?: components["schemas"]["FieldMap"];
             /** @default {} */
-            optionMap: components["schemas"]["OptionMap"];
+            optionMap?: components["schemas"]["OptionMap"];
             rows: {
                 /** Format: uuid */
                 offerId: string;
@@ -9379,17 +9436,17 @@ export interface components {
             /** Format: uuid */
             offerId: string;
             /** @default 1 */
-            priority: number;
+            priority?: number;
             /** @default {} */
-            fieldMap: components["schemas"]["FieldMap"];
+            fieldMap?: components["schemas"]["FieldMap"];
             /** @default {} */
-            optionMap: components["schemas"]["OptionMap"];
+            optionMap?: components["schemas"]["OptionMap"];
             /** @default true */
-            priceBasis: boolean;
+            priceBasis?: boolean;
             /** @default null */
-            expectedDeliveryMinutes: number | null;
+            expectedDeliveryMinutes?: number | null;
             /** @default null */
-            hardLimitMinutes: number | null;
+            hardLimitMinutes?: number | null;
         };
         CreateManualRoute: {
             costUsdUnits: number;
@@ -9406,9 +9463,9 @@ export interface components {
         SetManualCost: components["schemas"]["CreateManualRoute"];
         SupplierCategoryListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 100 */
-            pageSize: number;
+            pageSize?: number;
             parentId?: components["schemas"]["SupplierCategoryId"];
             state?: components["schemas"]["SupplierCategoryState"];
             kind?: components["schemas"]["ProductKind"];
@@ -9554,9 +9611,9 @@ export interface components {
             };
             fields: components["schemas"]["CreateInputField"][];
             /** @default {} */
-            fieldMap: components["schemas"]["FieldMap"];
+            fieldMap?: components["schemas"]["FieldMap"];
             /** @default {} */
-            optionMap: components["schemas"]["OptionMap"];
+            optionMap?: components["schemas"]["OptionMap"];
             rows: {
                 /** Format: uuid */
                 offerId: string;
@@ -9581,16 +9638,16 @@ export interface components {
             /** Format: uuid */
             gameId: string;
             /** @default {} */
-            fieldMap: components["schemas"]["FieldMap"];
+            fieldMap?: components["schemas"]["FieldMap"];
             /** @default {} */
-            optionMap: components["schemas"]["OptionMap"];
+            optionMap?: components["schemas"]["OptionMap"];
             rows: ({
                 /** Format: uuid */
                 offerId: string;
                 /** Format: uuid */
                 productId: string;
                 /** @default true */
-                priceBasis: boolean;
+                priceBasis?: boolean;
             } | {
                 /** Format: uuid */
                 offerId: string;
@@ -9619,7 +9676,7 @@ export interface components {
         };
         StatementQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
         };
         SupplierTransactionPage: {
             items: components["schemas"]["SupplierTransaction"][];
@@ -9711,11 +9768,11 @@ export interface components {
         };
         PriceReviewListQuery: {
             /** @default 1 */
-            page: number;
+            page?: number;
             /** @default 50 */
-            pageSize: number;
+            pageSize?: number;
             /** @default open */
-            status: components["schemas"]["PriceReviewStatus"];
+            status?: components["schemas"]["PriceReviewStatus"];
             supplier?: components["schemas"]["SupplierCode"];
         };
         /** @enum {string} */
@@ -9919,7 +9976,7 @@ export interface components {
         TicketListQuery: {
             cursor?: string;
             /** @default 20 */
-            limit: number;
+            limit?: number;
         };
         TicketPage: {
             items: components["schemas"]["TicketSummary"][];
@@ -10018,12 +10075,12 @@ export interface components {
         AdminTicketListQuery: {
             cursor?: string;
             /** @default 25 */
-            limit: number;
+            limit?: number;
             /**
              * @default open
              * @enum {string}
              */
-            status: "open" | "answered" | "closed" | "all";
+            status?: "open" | "answered" | "closed" | "all";
             category?: components["schemas"]["TicketCategory"];
             problem?: components["schemas"]["OrderProblem"];
             /** Format: uuid */
@@ -10166,7 +10223,7 @@ export interface components {
         TreasuryMovementQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             place?: components["schemas"]["TreasuryPlace"];
         };
         TreasuryMovementPage: {
@@ -10217,7 +10274,7 @@ export interface components {
             receivedUnits: number;
             outsideCategory?: components["schemas"]["OutsideCategory"];
             /** @default false */
-            openingBalance: boolean;
+            openingBalance?: boolean;
             externalReference?: string;
             reason: string;
             amountConfirmationUnits?: number;
@@ -10358,7 +10415,7 @@ export interface components {
         ReconciliationRunQuery: {
             cursor?: string;
             /** @default 50 */
-            limit: number;
+            limit?: number;
             trigger?: components["schemas"]["ReconciliationRunTrigger"];
         };
         ReconciliationRunPage: {
@@ -10850,7 +10907,7 @@ export interface components {
             text: string;
             linkPath?: string | null;
             /** @default info */
-            tone: components["schemas"]["AnnouncementTone"];
+            tone?: components["schemas"]["AnnouncementTone"];
             /** Format: date-time */
             startsAt?: string | null;
             /** Format: date-time */
@@ -11017,7 +11074,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        AttentionKind: "orders_review" | "orders_manual" | "deposits_overdue" | "deposits_flagged" | "usdt_unmatched" | "reconciliation_open" | "reconciliation_missing" | "sham_cash_count_due" | "supplier_down" | "supplier_degraded" | "supplier_balance_low" | "supplier_sync_failing" | "validation_quota_reached" | "price_reviews" | "rate_stale" | "switches_active" | "order_conflicts" | "telegram_unlinked" | "tickets_waiting" | "merchant_applications_waiting";
+        AttentionKind: "worker_silent" | "orders_review" | "orders_manual" | "deposits_overdue" | "deposits_flagged" | "usdt_unmatched" | "reconciliation_open" | "reconciliation_missing" | "sham_cash_count_due" | "supplier_down" | "supplier_degraded" | "supplier_balance_low" | "supplier_sync_failing" | "validation_quota_reached" | "price_reviews" | "rate_stale" | "switches_active" | "order_conflicts" | "telegram_unlinked" | "tickets_waiting" | "merchant_applications_waiting";
         HealthResponse: {
             /** @enum {string} */
             status: "ok" | "error";
@@ -11379,6 +11436,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Reauthentication"];
                 };
+            };
+        };
+    };
+    AdminAccountController_reportClientError: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminClientError"];
+            };
+        };
+        responses: {
+            /** @description Reported */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13345,6 +13424,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminMerchantApplicationPage"];
+                };
+            };
+        };
+    };
+    MerchantsAdminController_waiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The applications under review: the navigation badge (MA8, audit A10-25) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeCount"];
                 };
             };
         };
@@ -16125,6 +16224,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierSummary"][];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_newPacks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new packs of every visible supplier: the navigation badge (SC11, audit A10-25) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeCount"];
                 };
             };
         };

@@ -1030,6 +1030,25 @@ describe('the scanner (rules U12–U14)', () => {
     const send = vi.spyOn(alerts, 'send');
     expect(await job.scan('usdt_bep20')).toMatchObject({ scanned: true, caughtUp: false });
     expect(send.mock.calls.filter(([text]) => text.includes('failing'))).toEqual([]);
+    // Audit A10-40: once the scan has been behind for 10 minutes, the alert names the transfer it
+    // waits for. Restored at once: other suites read this row.
+    await db
+      .update(usdtScanCursors)
+      .set({ lastSuccessAt: sql`now() - interval '11 minutes'` })
+      .where(eq(usdtScanCursors.method, 'usdt_bep20'));
+    try {
+      await job.scan('usdt_bep20');
+    } finally {
+      await db
+        .update(usdtScanCursors)
+        .set({ lastSuccessAt: before?.lastSuccessAt ?? sql`now()` })
+        .where(eq(usdtScanCursors.method, 'usdt_bep20'));
+    }
+    expect(
+      send.mock.calls.map(([text]) => text).filter((text) => text.includes('delayed')),
+    ).toEqual([
+      expect.stringMatching(new RegExp(`waiting since \\S+Z for ${hash} to read final$`)),
+    ]);
     send.mockRestore();
     const [after] = await db
       .select()

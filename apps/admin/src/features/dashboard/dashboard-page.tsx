@@ -60,6 +60,7 @@ const EVENT_DEBOUNCE_MS = 10_000;
 const STALE_AFTER_MS = 2 * 60_000;
 
 const ATTENTION_ICONS: Record<AttentionKind, LucideIcon> = {
+  worker_silent: TriangleAlertIcon,
   orders_review: HourglassIcon,
   orders_manual: HandIcon,
   deposits_overdue: ArrowDownToLineIcon,

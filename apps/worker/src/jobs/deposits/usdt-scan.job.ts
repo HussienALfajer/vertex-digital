@@ -72,6 +72,11 @@ const NOT_SCANNED: ScanResult = {
 @Injectable()
 export class UsdtScanJob implements OnApplicationBootstrap {
   private readonly logger = new Logger(UsdtScanJob.name);
+  /**
+   * The listed transfer a network's scan stopped at because it did not read final, with when it
+   * first did: the delayed alert names it (audit A10-40). In memory: a restart reads it again.
+   */
+  private readonly heldBy = new Map<UsdtMethod, { txid: string; since: number }>();
 
   constructor(
     private readonly pgBoss: PgBossService,
@@ -144,6 +149,8 @@ export class UsdtScanJob implements OnApplicationBootstrap {
         // confirmations, a lagging node): not an outage. Stop here without moving the cursor;
         // the next scan, 20 seconds on, reads it again.
         this.logger.log(`USDT scan of ${method}: ${incoming.txid} not final yet`);
+        if (this.heldBy.get(method)?.txid !== incoming.txid)
+          this.heldBy.set(method, { txid: incoming.txid, since: Date.now() });
         return { ...result, caughtUp: false };
       }
       if (read.status === 'failed') {
@@ -159,6 +166,7 @@ export class UsdtScanJob implements OnApplicationBootstrap {
       if (outcome !== 'known') result.recorded += 1;
       if (outcome === 'credited') result.credited += 1;
     }
+    this.heldBy.delete(method);
     await this.db
       .insert(usdtScanCursors)
       .values({
@@ -227,8 +235,13 @@ export class UsdtScanJob implements OnApplicationBootstrap {
       );
     if (fresh) return;
     this.logger.warn(`USDT scanner ${method} is delayed`);
+    const held = this.heldBy.get(method);
+    // The same text for one blocking transfer, so the channel's repeat window keeps it to one.
+    const blocker = held
+      ? `; waiting since ${new Date(held.since).toISOString().slice(0, 16)}Z for ${held.txid} to read final`
+      : '';
     await this.alerts.send(
-      `USDT scanner ${method} delayed: no complete scan for ${USDT_SCANNER_STALE_MINUTES} minutes; new deposits wait`,
+      `USDT scanner ${method} delayed: no complete scan for ${USDT_SCANNER_STALE_MINUTES} minutes; new deposits wait${blocker}`,
     );
   }
 

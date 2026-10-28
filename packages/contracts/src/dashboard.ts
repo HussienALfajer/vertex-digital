@@ -48,8 +48,16 @@ export function marginPercent(profitUsdUnits: number, salesUsdUnits: number): nu
   return Math.round((profitUsdUnits * 1000) / salesUsdUnits) / 10;
 }
 
+/**
+ * The worker beats every minute (`system.heartbeat`): a newest beat older than this means it
+ * stopped, and every job with it (audit A10-53).
+ */
+export const WORKER_SILENT_MINUTES = 3;
+
 /** What the attention list may hold, in its order (rule DB6). */
 export const ATTENTION_KINDS = [
+  /** Audit A10-53: no worker heartbeat for `WORKER_SILENT_MINUTES` (deposits, deliveries and emails wait). */
+  'worker_silent',
   'orders_review',
   'orders_manual',
   'deposits_overdue',
@@ -180,3 +188,13 @@ export const dashboardSchema = z
   .meta({ id: 'Dashboard' });
 
 export type Dashboard = z.infer<typeof dashboardSchema>;
+
+/**
+ * A navigation badge's count, read each minute in the background on every panel page (audit
+ * A10-25): a route of its own instead of the whole dashboard or supplier list.
+ */
+export const badgeCountSchema = z
+  .object({ count: z.int().nonnegative() })
+  .meta({ id: 'BadgeCount' });
+
+export type BadgeCount = z.infer<typeof badgeCountSchema>;

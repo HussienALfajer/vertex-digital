@@ -92,6 +92,10 @@ export async function netPurchases(
       and(
         eq(ledgerPostings.accountId, wallet),
         inArray(ledgerJournals.kind, ['purchase', 'refund']),
+        // Implied by the next condition (a refund's journal begins after its purchase's), and
+        // served by `ledger_journals_created_at_idx`: the read no longer walks the wallet's whole
+        // history (audit A10-47).
+        gte(ledgerJournals.createdAt, from),
         gte(sql`coalesce(${paidBy.createdAt}, ${ledgerJournals.createdAt})`, from),
         lt(sql`coalesce(${paidBy.createdAt}, ${ledgerJournals.createdAt})`, to),
       ),

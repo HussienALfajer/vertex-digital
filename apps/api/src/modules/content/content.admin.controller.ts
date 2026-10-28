@@ -54,7 +54,7 @@ import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
-import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
+import { ContentRevalidateInterceptor } from '../../core/jobs/index.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { uploadBody } from '../files/index.js';
@@ -87,7 +87,7 @@ type PageDraftBody = z.output<typeof savePageDraftSchema>;
  * Never cached.
  */
 @ApiTags('content')
-@UseInterceptors(StoreRevalidateInterceptor)
+@UseInterceptors(ContentRevalidateInterceptor)
 @Controller('admin/content')
 export class ContentAdminController {
   constructor(

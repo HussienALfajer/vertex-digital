@@ -11,7 +11,7 @@ import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { LocalTime } from '@/features/shares/local-time';
 import { t } from '@/lib/i18n';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl } from '@/lib/server-env';
 import { tm } from './i18n';
 
 /*
@@ -28,6 +28,7 @@ async function readVerification(code: string): Promise<PublicVerification | null
   const visitor = (await headers()).get('x-forwarded-for');
   const response = await fetch(`${apiInternalUrl()}/api/verify/${code}`, {
     cache: 'no-store',
+    signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
     headers: { accept: 'application/json', ...(visitor && { 'x-forwarded-for': visitor }) },
   });
   if (response.status === 404) return null;

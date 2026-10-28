@@ -1,11 +1,16 @@
 import { Writable } from 'node:stream';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CodedException } from '../src/core/errors/coded-exception.js';
+import { errorResponseOf } from '../src/core/errors/error.filter.js';
 import {
   LOG_REDACT_PATHS,
   LOG_SERIALIZERS,
+  scrubEvent,
   withoutPrivateQuery,
 } from '../src/core/http/secret-headers.js';
+import { HealthController } from '../src/modules/health/health.controller.js';
+import { HealthService } from '../src/modules/health/health.service.js';
 import { api, body, clientIp } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -151,6 +156,73 @@ describe('rate limits', () => {
     });
     expect((await client.get('/api/probe/limited')).status).toBe(200);
   });
+
+  it("leave the store server's cached reads out, never a request nginx passed on (audit A10-36)", async () => {
+    // The store's cached reads carry no visitor address: from this machine, marked, no
+    // X-Forwarded-For. Over a route limit they still pass.
+    const cached = () =>
+      fetch(`${test.url}/api/probe/limited`, { headers: { 'x-store-cache-read': '1' } });
+    for (let index = 0; index < 4; index += 1) expect((await cached()).status).toBe(200);
+    // nginx sets X-Forwarded-For on every request from outside: the mark changes nothing then.
+    const ip = clientIp();
+    const marked = { ip, headers: { 'x-store-cache-read': '1' } };
+    expect((await client.get('/api/probe/limited', marked)).status).toBe(200);
+    expect((await client.get('/api/probe/limited', marked)).status).toBe(200);
+    expect((await client.get('/api/probe/limited', marked)).status).toBe(429);
+  });
+});
+
+describe('request ids (audit A10-37)', () => {
+  it('name every request in X-Request-Id, a new id each time', async () => {
+    const first = (await client.get('/api/probe/crash')).headers.get('x-request-id');
+    const second = (await client.get('/api/health')).headers.get('x-request-id');
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second).not.toBe(first);
+  });
+});
+
+describe('Sentry (audit A10-38)', () => {
+  it('gets server faults only, never a refusal', () => {
+    expect(errorResponseOf(new Error('boom')).fault).toBe(true);
+    expect(errorResponseOf(new CodedException(409, 'IDEMPOTENCY_KEY_REUSED', 'taken')).fault).toBe(
+      false,
+    );
+    expect(errorResponseOf(Object.assign(new Error('too large'), { status: 413 })).fault).toBe(
+      false,
+    );
+  });
+
+  it('never gets cookies, bodies, secret headers or a search', () => {
+    const event = scrubEvent({
+      request: {
+        cookies: { 'vd.session_token': 'secret' },
+        data: '{"password":"secret"}',
+        headers: {
+          cookie: 'vd.session_token=secret',
+          authorization: 'Bearer secret',
+          'x-altcha': 'secret',
+          'x-telegram-bot-api-secret-token': 'secret',
+          referer: 'https://digital-admin.vertexmedia.pro/customers?q=layla%40example.com',
+          accept: 'application/json',
+        },
+        url: 'https://digital-admin.vertexmedia.pro/api/admin/customers?q=layla%40example.com&page=2',
+        query_string: 'q=layla%40example.com&page=2',
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('secret');
+    expect(JSON.stringify(event)).not.toContain('layla');
+    expect(event.request).toEqual({
+      headers: {
+        referer: 'https://digital-admin.vertexmedia.pro/customers?q=REDACTED',
+        accept: 'application/json',
+      },
+      url: 'https://digital-admin.vertexmedia.pro/api/admin/customers?q=REDACTED&page=2',
+      query_string: 'q=REDACTED&page=2',
+    });
+    // A query Sentry parsed into pairs is dropped, not checked pair by pair.
+    expect(scrubEvent({ request: { query_string: [['q', 'layla']] } }).request).toEqual({});
+  });
 });
 
 describe('health', () => {
@@ -162,6 +234,17 @@ describe('health', () => {
       checks: { database: 'up' },
       timestamp: expect.any(String),
     });
+  });
+
+  it('answers 503 with the database down (audit A10-39)', async () => {
+    const down = new HealthService({ execute: () => Promise.reject(new Error('down')) } as never);
+    const status: number[] = [];
+    const response = { status: (code: number) => status.push(code) };
+    expect(await new HealthController(down).check(response as never)).toMatchObject({
+      status: 'error',
+      checks: { database: 'down' },
+    });
+    expect(status).toEqual([503]);
   });
 });
 

@@ -49,6 +49,8 @@ export const productAlerts = pgTable(
     index('product_alerts_product_idx').on(table.productId, table.status),
     index('product_alerts_status_idx').on(table.status, table.productId),
     index('product_alerts_price_list_idx').on(table.priceListId),
+    // The sweep's every-minute deletion of alerts ended 90 days ago (audit A10-43, A04-28).
+    index('product_alerts_ended_at_idx').on(table.endedAt).where(sql`${table.endedAt} is not null`),
     check(
       'product_alerts_baseline_check',
       sql`(${table.kind} = 'price_drop') = (${table.baselinePriceUsdUnits} is not null) and (${table.baselinePriceUsdUnits} is null or (${table.baselinePriceUsdUnits} > 0 and ${table.baselinePriceUsdUnits} % 10000 = 0))`,

@@ -1,6 +1,6 @@
 import type { PublicShare, ShareKind } from '@vertex-digital/contracts';
 import { headers } from 'next/headers';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl } from '@/lib/server-env';
 
 /*
  * The public gift and receipt (S10 rules SH1, SH6), read by the store's server on every request
@@ -20,6 +20,7 @@ export async function readShare(kind: ShareKind, token: string): Promise<PublicS
   const visitor = (await headers()).get('x-forwarded-for');
   const response = await fetch(`${apiInternalUrl()}/api/shares/${token}`, {
     cache: 'no-store',
+    signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
     headers: { accept: 'application/json', ...(visitor && { 'x-forwarded-for': visitor }) },
   });
   if (response.status === 404) return null;

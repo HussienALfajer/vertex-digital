@@ -36,8 +36,7 @@ export const orderCountsQuery = queryOptions({
 export const orderListQuery = (search: OrderSearch) =>
   queryOptions({
     queryKey: ['orders', 'list', search],
-    queryFn: () =>
-      call(api.GET('/api/admin/orders', { params: { query: listQuery(search) as never } })),
+    queryFn: () => call(api.GET('/api/admin/orders', { params: { query: listQuery(search) } })),
     placeholderData: keepPreviousData,
   });
 
@@ -94,7 +93,7 @@ export const liveBoardQuery = (query: LiveBoardQuery) =>
     queryFn: () =>
       call(
         api.GET('/api/admin/orders/live', {
-          params: { query: query as never },
+          params: { query: query },
           headers: BACKGROUND_REQUEST,
         }),
       ),
@@ -158,7 +157,7 @@ export const useResolveAttempt = (orderId: string) =>
       call(
         api.POST('/api/admin/orders/{id}/attempts/{attemptId}/resolve', {
           params: { path: { id: orderId, attemptId }, header: { 'Idempotency-Key': key } },
-          body: body as never,
+          body: body,
         }),
       ),
     { gcTime: 0 },
@@ -215,7 +214,7 @@ export const useFulfilOrder = (orderId: string) =>
       call(
         api.POST('/api/admin/orders/{id}/fulfil', {
           params: { path: { id: orderId }, header: { 'Idempotency-Key': key } },
-          body: body as never,
+          body: body,
         }),
       ),
     { gcTime: 0 },
@@ -268,7 +267,7 @@ export const useCreateAdminOrder = () =>
     call(
       api.POST('/api/admin/orders', {
         params: { header: { 'Idempotency-Key': key } },
-        body: body as never,
+        body: body,
       }),
     ),
   );
@@ -277,7 +276,7 @@ export const useCreateAdminOrder = () =>
 export function useAdminPlayerCheck() {
   return useMutation({
     mutationFn: (body: AdminPlayerCheck) =>
-      call(api.POST('/api/admin/player-checks', { body: body as never })),
+      call(api.POST('/api/admin/player-checks', { body: body })),
   });
 }
 
@@ -301,7 +300,7 @@ export function useSetGamePlayerCheck(gameId: string) {
         call(
           api.PUT('/api/admin/catalog/games/{id}/player-check', {
             params: { path: { id: gameId } },
-            body: body as never,
+            body: body,
           }),
         ),
       ),

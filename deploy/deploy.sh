@@ -24,6 +24,11 @@ STORE_URL="http://127.0.0.1:3061/"
 WORKER_NAME=production
 KEEP_RELEASES=5
 KEEP_DB_SNAPSHOTS=10
+# Static files of earlier releases kept beside the new ones, for tabs opened before the switch.
+KEEP_STATIC_DAYS=7
+# While this file exists the health timer heals nothing: a restore leaves the apps stopped on
+# purpose, and a restart would run the current code on the restored schema (audit A10-1).
+HOLD="$SITE_DIR/.hold"
 
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 export TURBO_TELEMETRY_DISABLED=1
@@ -105,10 +110,11 @@ switch_to() {
 # old worker never counts for the new one.
 switch_checked() {
   local target=$1 fallback=${2:-} since
-  if switch_to "$target" && since=$(date +%s) && healthy "$since"; then return 0; fi
+  if switch_to "$target" && since=$(date +%s) && healthy "$since"; then rm -f "$HOLD"; return 0; fi
   log "$(basename "$target") failed to start or its health checks"
   if [ -n "$fallback" ] && [ -d "$fallback" ]; then
     if switch_to "$fallback" && since=$(date +%s) && healthy "$since"; then
+      rm -f "$HOLD"
       log "back on $(basename "$fallback")"
     else
       log "$(basename "$fallback") is unhealthy too"
@@ -135,7 +141,9 @@ if [ "${1:-}" = restore ]; then
   [[ "$name" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$ ]] || fail "usage: deploy.sh restore <release>"
   snapshot="$SHARED/db-snapshots/$name.dump"
   [ -f "$snapshot" ] || fail "no snapshot $snapshot"
-  # Nothing may write while the tables are replaced: stop every process first.
+  # Nothing may write while the tables are replaced: stop every process first, and keep the
+  # health timer from starting them again until a release is switched to (audit A10-1).
+  echo "restore of $name at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$HOLD"
   log "stopping the apps"
   pm2 stop "$ECOSYSTEM" >/dev/null
   # Everything written since the snapshot (journals, orders, queued jobs) is lost by the restore:
@@ -190,6 +198,19 @@ DATABASE_OWNER_URL="$OWNER_URL" node "$release/packages/db/dist/cli/migrate.js"
 trap - ERR
 
 previous=$(readlink -f "$CURRENT" 2>/dev/null || true)
+# Hashed static files of the running release (and those it kept), so a tab opened before the
+# switch still loads its lazy chunks after it (audit A10-6). Names carry their content hash, so
+# nothing is overwritten. The week is counted back from the running release's own build, so its
+# files are always kept and only those it inherited age out.
+keep_static() {
+  local from="$previous/$1" to="$release/$1" built
+  [ -n "$previous" ] && [ -d "$from" ] && [ -d "$to" ] || return 0
+  built=$(stat -c %Y "$previous/REVISION")
+  (cd "$from" && find . -type f -newermt "@$((built - KEEP_STATIC_DAYS * 86400))" -print0 |
+    rsync -a --ignore-existing --from0 --files-from=- ./ "$to/")
+}
+keep_static apps/store/.next/static
+keep_static apps/admin/dist/assets
 log "switching to $(basename "$release")"
 if ! switch_checked "$release" "$previous"; then
   # A release that failed its checks is removed, so `rollback` never picks it later.

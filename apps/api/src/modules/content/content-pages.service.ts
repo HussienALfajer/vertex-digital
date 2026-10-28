@@ -142,7 +142,7 @@ export class ContentPagesService {
           bodySha256: createHash('sha256').update(version.body).digest('hex'),
         },
       );
-      await queueStoreRevalidate(tx, this.jobs);
+      await queueStoreRevalidate(tx, this.jobs, 'content');
       return toVersion(version);
     });
   }

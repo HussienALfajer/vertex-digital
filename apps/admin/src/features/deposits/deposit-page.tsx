@@ -282,7 +282,8 @@ function Decision({ deposit }: { deposit: AdminDeposit }) {
             )}
             <Fact label={t('deposits.detail.journal')}>
               <code dir="ltr" title={credit.journalId}>
-                {credit.journalId.slice(0, 8)}
+                {/* The end: a UUIDv7's start is its time, shared by a minute's journals (A10-35). */}
+                {credit.journalId.slice(-8)}
               </code>
             </Fact>
           </>

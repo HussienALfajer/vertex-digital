@@ -9,7 +9,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name digital-admin.vertexmedia.pro;
-    access_log /var/log/nginx/digital-admin.vertexmedia.pro.access.log;
+    access_log /var/log/nginx/digital-admin.vertexmedia.pro.access.log vdprivacy;
     error_log /var/log/nginx/digital-admin.vertexmedia.pro.error.log warn;
     location ^~ /.well-known/acme-challenge/ { root /var/www/vertexdigital-acme; }
     location / { return 301 https://digital-admin.vertexmedia.pro$request_uri; }
@@ -24,7 +24,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/digital-admin.vertexmedia.pro/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    access_log /var/log/nginx/digital-admin.vertexmedia.pro.access.log;
+    access_log /var/log/nginx/digital-admin.vertexmedia.pro.access.log vdprivacy;
     error_log /var/log/nginx/digital-admin.vertexmedia.pro.error.log warn;
 
     root /srv/digital.vertexmedia.pro/current/apps/admin/dist;
@@ -36,6 +36,12 @@ server {
 
     limit_conn perip 100;
     limit_req zone=general burst=50 nodelay;
+    # Refusals answer 429 and count in the vertexdigital-limit jail, not the server's
+    # (vertexdigital-limits.conf); the `general` zone's too, which answered nginx's default 503
+    # that no jail counts (audit A10-10).
+    limit_req_log_level notice;
+    limit_req_status 429;
+    limit_conn_status 429;
 
     include snippets/vertexdigital-admin-headers.conf;
     include snippets/vertexdigital-compression.conf;

@@ -29,6 +29,7 @@ export function errorMessage(t: TFunction, error: unknown): string {
   if (error instanceof ApiError) {
     if (isApiCode(error.knownCode)) return t(`errors.api.${error.knownCode}`);
     if (error.status === 429) return t('errors.TOO_MANY_REQUESTS');
+    if (error.status === 0) return t('errors.network');
     return t('errors.generic');
   }
   const auth = error as Partial<AuthClientError> | null;

@@ -5,7 +5,10 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { t } from '@/lib/i18n';
-import { readSession, type Session } from '@/lib/session';
+import { readSessionResult, type Session } from '@/lib/session';
+
+/** A failed session read is tried again after this long, and when the tab is seen again. */
+const RETRY_MS = 5_000;
 
 /** The signed-in header's shape (balance, bell, menu) while it loads. */
 function SignedInPlaceholder({ className }: { className?: string }) {
@@ -41,22 +44,42 @@ export function AccountLink() {
 
   useEffect(() => {
     let active = true;
-    readSession().then(async (value) => {
-      if (!active) return;
-      setSession(value);
-      if (value) return;
-      // Signed out since the last visit: the phone header shows the theme switch again.
-      document.documentElement.removeAttribute('data-signed-in-hint');
-      const registration = await fetch('/api/auth/registration', {
-        credentials: 'same-origin',
-        cache: 'no-store',
-      })
-        .then((response) => (response.ok ? (response.json() as Promise<{ open: boolean }>) : null))
-        .catch(() => null);
-      if (active) setCanSignUp(registration?.open === true);
-    });
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    // A failed read is not "signed out" (audit A10-17): the header keeps its placeholder (or the
+    // sign-in button for a browser with no hint) and reads again, instead of telling a signed-in
+    // customer to sign in until the next full page load.
+    const read = () =>
+      readSessionResult().then(async ({ session: value, known }) => {
+        if (!active) return;
+        if (!known) {
+          clearTimeout(retry);
+          retry = setTimeout(read, RETRY_MS);
+          return;
+        }
+        document.removeEventListener('visibilitychange', onVisible);
+        setSession(value);
+        if (value) return;
+        // Signed out since the last visit: the phone header shows the theme switch again.
+        document.documentElement.removeAttribute('data-signed-in-hint');
+        const registration = await fetch('/api/auth/registration', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        })
+          .then((response) =>
+            response.ok ? (response.json() as Promise<{ open: boolean }>) : null,
+          )
+          .catch(() => null);
+        if (active) setCanSignUp(registration?.open === true);
+      });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void read();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    void read();
     return () => {
       active = false;
+      clearTimeout(retry);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 

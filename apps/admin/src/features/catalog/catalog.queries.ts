@@ -192,6 +192,8 @@ export const useCreateField = (gameId: string) =>
     call(
       api.POST('/api/admin/catalog/games/{id}/fields', {
         params: { path: { id: gameId } },
+        // The input field's OpenAPI component is shared with the field the API answers, whose
+        // `required` is always set: the request type demands it although it has a default.
         body: body as never,
       }),
     ),
@@ -228,7 +230,7 @@ export const useCreateProduct = (gameId: string) =>
     call(
       api.POST('/api/admin/catalog/games/{id}/products', {
         params: { path: { id: gameId } },
-        body: body as never,
+        body: body,
       }),
     ),
   );

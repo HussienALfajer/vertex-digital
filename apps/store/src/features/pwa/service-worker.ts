@@ -58,22 +58,26 @@ self.addEventListener('activate', (event) => {
             .map((key) => caches.delete(key)),
         ),
       )
+      // The browser sends a navigation while the worker starts (audit A10-19), where it can.
+      .then(() => self.registration.navigationPreload && self.registration.navigationPreload.enable())
       .then(() => self.clients.claim()),
   );
 });
 
-// Navigations go to the network; only a failed one answers the kept offline page. Every other
-// request is left to the browser untouched.
+// Navigations go to the network (the preloaded answer when the browser sent one); only a failed
+// one answers the kept offline page. Every other request is left to the browser untouched.
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.mode !== 'navigate' || request.method !== 'GET') return;
   event.respondWith(
-    fetch(request).catch(() =>
-      caches
-        .open(CACHE)
-        .then((cache) => cache.match(OFFLINE))
-        .then((response) => response || Response.error()),
-    ),
+    Promise.resolve(event.preloadResponse)
+      .then((preloaded) => preloaded || fetch(request))
+      .catch(() =>
+        caches
+          .open(CACHE)
+          .then((cache) => cache.match(OFFLINE))
+          .then((response) => response || Response.error()),
+      ),
   );
 });
 

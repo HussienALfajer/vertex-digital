@@ -1,6 +1,7 @@
 import { gzipSync } from 'node:zlib';
 import type { Page } from '@playwright/test';
 import ar from '../src/messages/ar.json' with { type: 'json' };
+import { CATALOG } from './catalog';
 import { CONTENT_STORE_URL } from './servers';
 import { expect, screenshot, test } from './test';
 
@@ -33,9 +34,61 @@ test.describe('shell', () => {
 
   test('an unknown page says what to do next', async ({ page, api: _api }) => {
     await page.goto('/no-such-page');
-    await expect(page.getByText(ar.notFound.title)).toBeVisible();
+    // Audit A10-60: a heading and a title name what happened.
+    await expect(page.getByRole('heading', { level: 1, name: ar.notFound.title })).toBeVisible();
+    await expect(page).toHaveTitle(new RegExp(ar.notFound.title));
     await page.getByRole('link', { name: ar.notFound.back }).click();
     await expect(page).toHaveURL('/');
+  });
+
+  test('a failed session read keeps a signed-in customer signed in (audit A10-17)', async ({
+    page,
+    api,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem('vd-signed-in', '1'));
+    api.on('GET /api/auth/get-session', 503, { code: 'INTERNAL_ERROR' });
+    await page.goto('/');
+    await expect
+      .poll(() => api.requests.filter((r) => r.key === 'GET /api/auth/get-session').length)
+      .toBeGreaterThan(0);
+    // Not told to sign in: the placeholder stays while the read is tried again.
+    await expect(page.getByRole('link', { name: ar.header.signIn })).toBeHidden();
+    api.on('GET /api/auth/get-session', 200, {
+      user: { name: 'سامي', email: 'customer@example.com' },
+      session: {},
+    });
+    await expect(page.getByRole('button', { name: ar.header.menu })).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+});
+
+test.describe('crawlers and errors (audit A10)', () => {
+  test('an unknown game says so and is never indexed (A10-59)', async ({ page, api: _api }) => {
+    // The shell streams before the game is read, so the status stays 200 (deferred): the page
+    // names it and keeps crawlers from listing it.
+    await page.goto('/games/no-such-game-a10');
+    await expect(page.getByRole('heading', { level: 1, name: ar.notFound.title })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute('content', /noindex/);
+  });
+
+  test('a game page names its one address, whatever its query (A10-62)', async ({
+    page,
+    api: _api,
+  }) => {
+    const slug = CATALOG.storefront.categories[0]?.games[0]?.slug as string;
+    await page.goto(`/games/${slug}?via=q`);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      `http://127.0.0.1:4001/games/${slug}`,
+    );
+  });
+
+  test('share links are crawled to read their noindex (A10-58)', async ({ request }) => {
+    const robots = await (await request.get('/robots.txt')).text();
+    expect(robots).not.toContain('Disallow: /g/');
+    expect(robots).not.toContain('Disallow: /r/');
+    expect(robots).toContain('Disallow: /cart');
   });
 });
 

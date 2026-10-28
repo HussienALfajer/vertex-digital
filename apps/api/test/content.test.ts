@@ -484,8 +484,10 @@ describe('pages (PG1–PG6)', () => {
     );
     const jobs = await test.db.execute<{ count: number }>(
       sql`select count(*)::int as count from pgboss.job
-          where name = ${QUEUES.storeRevalidate} and created_on > now() - interval '1 minute'`,
+          where name = ${QUEUES.storeRevalidate} and created_on > now() - interval '1 minute'
+            and data ->> 'tag' = 'content'`,
     );
+    // Audit A10-16: a content change expires the content tag only.
     expect(jobs.rows[0]?.count).toBeGreaterThan(0);
     // Edge case 2: the same revision again has nothing new.
     expect(

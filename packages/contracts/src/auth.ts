@@ -234,3 +234,22 @@ export type Registration = z.infer<typeof registrationSchema>;
 export const signUpResultSchema = z
   .object({ status: z.literal('code_sent') })
   .meta({ id: 'SignUpResult' });
+
+/**
+ * A crash of the panel in the admin's browser, reported to Sentry through the API (audit A10-26):
+ * the error's name, message and stack, and the page's path without its query (a search may hold
+ * a name or an email).
+ */
+export const adminClientErrorSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    message: z.string().trim().max(500),
+    stack: z.string().max(4000).optional(),
+    path: z
+      .string()
+      .max(300)
+      .regex(/^\/[^?#]*$/),
+  })
+  .meta({ id: 'AdminClientError' });
+
+export type AdminClientError = z.infer<typeof adminClientErrorSchema>;

@@ -1,3 +1,17 @@
+# TASKS — Audit A10 Platform, performance and operations (branch `fix/audit-a10-platform`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A10-platform.md`. Specs S15 (PWA), Phase 0; ADR 0001, 0002, 0008, 0009, 0011, 0012, 0014, 0015.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (store and panel platform, api platform, worker system jobs, database leads, ops and CI); known leads checked
+- [x] Live browser test (the store's and the panel's shared screens)
+- [x] Findings shown to the owner (decisions taken under the owner's delegation: Q29, A10-22, A10-33)
+- [x] Fixes P0 → P3, each with its regression test (51 fixed, 5 partly, 9 deferred, 5 dropped, 2 decided)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (the reviewer's five blocking findings fixed)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge (#198)
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A09 Control, reconciliation and reports (branch `fix/audit-a09-control`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A09-control.md`. Specs S05 (switches), S11 (dashboard), S13; ADR 0019, 0025, 0027.

@@ -20,6 +20,10 @@ describe('queueStoreRevalidate (S09 rule SF4)', () => {
       },
     };
     await queueStoreRevalidate({} as Transaction, recorder);
+    // Audit A10-16: the content tag has a slot of its own.
+    await queueStoreRevalidate({} as Transaction, recorder, 'content');
+    expect(sent.at(1)?.options).toMatchObject({ singletonKey: 'content' });
+    sent.splice(1);
     expect(sent).toEqual([
       {
         queue: QUEUES.storeRevalidate,

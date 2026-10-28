@@ -54,7 +54,7 @@ export function TermsSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} guardTyped={false} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="gap-4 bg-surface p-5 pb-8" data-testid="terms-sheet">
         <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
           <SheetTitle className="text-lg font-bold">{t('merchant.terms.title')}</SheetTitle>

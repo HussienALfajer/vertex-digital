@@ -7,7 +7,7 @@ import type {
 import { cacheLife, cacheTag } from 'next/cache';
 import { connection } from 'next/server';
 import { CONTENT_TAG } from '@/lib/cache-tags';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl, CACHED_READ_HEADERS } from '@/lib/server-env';
 
 /*
  * Store content as the server components read it (S14 CP2): the API's public content routes,
@@ -22,7 +22,8 @@ class ContentUnavailable extends Error {}
 
 async function readContent<T>(path: string): Promise<T | null> {
   const response = await fetch(`${apiInternalUrl()}${path}`, {
-    headers: { accept: 'application/json' },
+    headers: CACHED_READ_HEADERS,
+    signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new ContentUnavailable(`GET ${path} answered ${response.status}`);

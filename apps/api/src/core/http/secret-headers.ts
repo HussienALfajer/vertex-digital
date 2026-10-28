@@ -62,3 +62,35 @@ export const LOG_SERIALIZERS = {
     };
   },
 };
+
+/** The part of a Sentry event `scrubEvent` reads (no Sentry import: see the top of this file). */
+interface ReportedEvent {
+  request?: {
+    cookies?: unknown;
+    data?: unknown;
+    headers?: Record<string, string>;
+    url?: string;
+    query_string?: unknown;
+  };
+}
+
+/**
+ * Sentry's `beforeSend` (`instrument.ts`): an event never carries cookies, request bodies, the
+ * secret headers or the values of private query parameters, in the URL, the query string or the
+ * `Referer` (ADR 0008). A query string Sentry parsed into pairs is dropped. Tested in
+ * `test/http.test.ts` (audit A10-38).
+ */
+export function scrubEvent<T extends ReportedEvent>(event: T): T {
+  const request = event.request;
+  if (!request) return event;
+  delete request.cookies;
+  delete request.data;
+  for (const header of SECRET_HEADERS) delete request.headers?.[header];
+  if (request.url) request.url = withoutPrivateQuery(request.url);
+  if (typeof request.query_string === 'string')
+    request.query_string = withoutPrivateQuery(`?${request.query_string}`).slice(1);
+  else delete request.query_string;
+  if (request.headers?.referer)
+    request.headers.referer = withoutPrivateQuery(request.headers.referer);
+  return event;
+}

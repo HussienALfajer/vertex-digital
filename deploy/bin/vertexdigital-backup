@@ -7,6 +7,11 @@
 #   runuser -u postgres -- pg_restore --clean --if-exists --no-owner --role=vertex_digital_owner \
 #     -d vertex_digital database.dump
 # Files: rsync -a <backup>/files/ /srv/digital.vertexmedia.pro/shared/files/
+# Check a copy first: cd <backup> && sha256sum -c SHA256SUMS
+#
+# A backup is written into <time>.partial and renamed when complete, so a failed run never leaves
+# a folder that looks whole; the failure is logged and sent to the owner (vertexdigital-notify),
+# and the health check alerts when no complete backup is a day old (audit A10-13).
 set -euo pipefail
 umask 077
 
@@ -15,8 +20,15 @@ DB=vertex_digital
 DEST=/var/backups/$SITE
 KEEP_DAYS=14
 
-previous=$(find "$DEST" -mindepth 1 -maxdepth 1 -type d -name '20*' | sort | tail -n 1)
-target="$DEST/$(date -u +%Y%m%dT%H%M%SZ)"
+failed() {
+  logger -t vertexdigital-backup "backup FAILED at line $1"
+  /usr/local/sbin/vertexdigital-notify "⚠️ $SITE: the daily backup failed (journalctl -t vertexdigital-backup)" || true
+}
+trap 'failed $LINENO' ERR
+
+previous=$(find "$DEST" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | tail -n 1)
+final="$DEST/$(date -u +%Y%m%dT%H%M%SZ)"
+target="$final.partial"
 mkdir -p "$target"
 
 # pg_dump runs as postgres, which cannot write here: it writes to stdout and root redirects.
@@ -34,6 +46,10 @@ if [ -d "/srv/$SITE/shared/files" ]; then
 fi
 readlink -f "/srv/$SITE/current" >"$target/release.txt" 2>/dev/null || true
 cat "/srv/$SITE/current/REVISION" >>"$target/release.txt" 2>/dev/null || true
+(cd "$target" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
+mv -T "$target" "$final"
 
+# Complete backups past the period, and any partial one a failed run left.
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
-logger -t vertexdigital-backup "backup completed: $target ($(du -sh "$target" | cut -f1))"
+find "$DEST" -mindepth 1 -maxdepth 1 -type d -name '*.partial' ! -path "$target" -exec rm -rf {} +
+logger -t vertexdigital-backup "backup completed: $final ($(du -sh "$final" | cut -f1))"

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { scrubBreadcrumb } from '../src/core/alerts/scrub-breadcrumb.js';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 import { TelegramBot } from '../src/telegram/bot-api.js';
+import { LinkedChat } from '../src/telegram/linked-chat.js';
 
 /*
  * The admin alert channel against a local fake Bot API: nothing calls Telegram in tests. The chat
@@ -103,6 +104,32 @@ describe('Telegram alerts', () => {
   it('are logged and dropped while no chat is linked', async () => {
     expect(await channel(null).send('nobody linked')).toBe(false);
     expect(received).toEqual([]);
+  });
+
+  it('still reach the chat read last while the database is down (audit A10-52)', async () => {
+    let down = false;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: async () => {
+            if (down) throw new Error('connection refused');
+            return [{ chatId: 4200 }];
+          },
+        }),
+      }),
+    };
+    const chat = new LinkedChat(db as never);
+    const start = Date.now();
+    expect(await chat.chatId(start)).toBe(4200);
+    down = true;
+    expect(await chat.chatId(start + 61_000)).toBe(4200);
+    const alerts = new TelegramAlerts({ source: 'worker test' }, bot(), () =>
+      chat.chatId(start + 120_000),
+    );
+    expect(await alerts.send('the database is down')).toBe(true);
+    expect(received.map((message) => message.body.chat_id)).toEqual([4200]);
+    // With no chat ever read, the failure stays a failure: nothing is sent to a guess.
+    await expect(new LinkedChat(db as never).chatId(start)).rejects.toThrow('connection refused');
   });
 
   it('never reach Sentry with the token: request breadcrumbs are scrubbed', () => {

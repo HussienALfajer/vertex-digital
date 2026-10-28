@@ -95,7 +95,7 @@ export function RoutesDrawer({
 }) {
   const { t } = useTranslation();
   return (
-    <Sheet open={product !== null} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={product !== null} guardTyped={false} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-[min(46rem,100vw)] max-w-none overflow-y-auto bg-surface p-6">
         {product && (
           <div className="flex flex-col gap-6">

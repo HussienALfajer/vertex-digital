@@ -13,7 +13,9 @@ import {
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
   type AdminChangePassword,
+  type AdminClientError,
   adminChangePasswordSchema,
+  adminClientErrorSchema,
   adminSessionListSchema,
   adminSessionSchema,
   type Reauthenticate,
@@ -65,6 +67,16 @@ export class AdminAccountController {
     @Req() request: Request,
   ) {
     return this.account.reauthenticate(admin, body, request.headers);
+  }
+
+  /** A crash of the panel, to Sentry and the logs (audit A10-26); during the setup steps too. */
+  @Post('client-errors')
+  @AdminSetupRoute()
+  @RateLimit({ limit: 10, perSeconds: 60 })
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Reported' })
+  reportClientError(@Body({ schema: adminClientErrorSchema }) body: AdminClientError): void {
+    this.account.reportClientError(body);
   }
 
   @Get('me/sessions')

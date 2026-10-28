@@ -21,6 +21,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: { absolute: t('game.metaTitle', { name: game.nameAr }) },
     description,
+    // One address for search engines, whatever query it was opened with (`?pack=`, `?via=`,
+    // `?player=`, `?repeat=`; audit A10-62).
+    alternates: { canonical: `${storeUrl()}/games/${game.slug}` },
     openGraph: {
       title: t('game.metaTitle', { name: game.nameAr }),
       description,

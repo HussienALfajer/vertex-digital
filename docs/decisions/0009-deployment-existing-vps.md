@@ -20,3 +20,6 @@ Follow the server's conventions, as Vertex Hub does:
 - Three Node processes for this site on a shared server: memory limits are set per process in the PM2 ecosystem and checked at provisioning.
 - No staging environment in V1; the fake supplier and test mode settings keep risky tests off production.
 - `docs/deployment.md` (the runbook) is written with the deployment skeleton in Phase 0.
+
+## Amendments
+- 2026-10-18 (owner): server commands, deploys and rollbacks need no approval in the conversation; a restore, deleting data and real-money actions still do (`AGENTS.md`). Deploys follow each audit group and each merged change the owner asks for, not only the end of a phase.

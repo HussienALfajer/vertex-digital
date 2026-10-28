@@ -40,10 +40,10 @@ import {
   UsersRoundIcon,
   WalletIcon,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { dashboardQuery } from '../features/dashboard/dashboard.queries';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
+import { waitingApplicationsQuery } from '../features/merchants/merchants.queries';
 import { orderCountsQuery } from '../features/orders/orders.queries';
 import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
@@ -213,9 +213,42 @@ const navBadges: Partial<Record<string, () => ReactNode>> = {
   '/merchants/applications': MerchantApplicationsBadge,
 };
 
+/**
+ * The navigation item a page belongs to: the deepest whose path holds it, a section's own page
+ * under its section (audit A10-28).
+ */
+export function navLabelOf(pathname: string): NavItem['label'] | NavChild['label'] | null {
+  const holds = (to: string, exact?: boolean) =>
+    pathname === to || (!exact && to !== '/' && pathname.startsWith(`${to}/`));
+  let best: { label: NavItem['label'] | NavChild['label']; length: number } | null = null;
+  for (const item of navItems) {
+    const entries = [
+      { to: item.to, label: item.label, exact: item.exact },
+      ...(item.children ?? []),
+    ];
+    for (const entry of entries) {
+      // At equal length a section's own child wins ("كل الطلبات" over "الطلبات").
+      if (
+        holds(entry.to, 'exact' in entry ? entry.exact : false) &&
+        entry.to.length >= (best?.length ?? -1)
+      ) {
+        best = { label: entry.label, length: entry.to.length };
+      }
+    }
+  }
+  return best?.label ?? null;
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const session = useSession();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // Each tab and history entry names its page (WCAG 2.4.2, audit A10-28). A layout effect, so a
+  // page that writes its own title (the live room's counts) does it after.
+  useLayoutEffect(() => {
+    const label = navLabelOf(pathname);
+    document.title = label ? `${t(label)} · ${t('app.name')}` : t('app.name');
+  }, [pathname, t]);
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Keyboard users skip the navigation on every page (WCAG 2.4.1). */}
@@ -282,7 +315,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 onClick={onNavigate}
                 activeOptions={{ exact: exact ?? false }}
                 data-current={children ? children.some((child) => within(child.to)) : undefined}
-                className={cn(children ? navSection : navLink, 'h-10 gap-3 px-3 text-base')}
+                className={cn(
+                  children ? navSection : navLink,
+                  'h-10 gap-3 px-3 text-base pointer-coarse:h-11',
+                )}
               >
                 <Icon className="size-5" />
                 {t(label)}
@@ -301,7 +337,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                           exact: child.except?.some((path) => pathname.startsWith(path)) ?? false,
                           includeSearch: false,
                         }}
-                        className={cn(navLink, 'h-8 gap-3 ps-11 pe-3 text-sm')}
+                        className={cn(navLink, 'h-8 gap-3 ps-11 pe-3 text-sm pointer-coarse:h-11')}
                       >
                         {t(child.label)}
                         {ChildBadge && <ChildBadge />}
@@ -452,16 +488,12 @@ function SupportBadge() {
 }
 
 /**
- * S20 MA8 (audit A07-12): the merchant applications under review, from the dashboard's attention
- * list (its only count), read every minute in the background; shared with the home page's read.
+ * S20 MA8 (audit A07-12, A10-25): the merchant applications under review, read every minute in
+ * the background through a count of its own.
  */
 function MerchantApplicationsBadge() {
   const { t } = useTranslation();
-  const count = useQuery({
-    ...dashboardQuery,
-    select: (dashboard) =>
-      dashboard.attention.find((item) => item.kind === 'merchant_applications_waiting')?.count ?? 0,
-  });
+  const count = useQuery(waitingApplicationsQuery);
   const waiting = count.data ?? 0;
   if (waiting === 0) return null;
   return (
@@ -514,7 +546,13 @@ function UserMenu({ session }: { session: AdminSession }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" className="h-10 gap-2 px-2" aria-label={t('user.menu')} />}
+        render={
+          <Button
+            variant="ghost"
+            className="h-10 gap-2 px-2 pointer-coarse:h-11"
+            aria-label={t('user.menu')}
+          />
+        }
       >
         <Avatar name={user.name} size="sm" className="size-8" />
         <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">{user.name}</span>

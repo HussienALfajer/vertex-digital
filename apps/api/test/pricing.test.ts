@@ -106,15 +106,20 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Archived, never deleted: the app role has no DELETE on rules or the catalog (audit A10-44).
   await test.db
-    .delete(marginRules)
+    .update(marginRules)
+    .set({ archivedAt: new Date() })
     .where(
-      inArray(marginRules.targetId, [
-        target.categoryId,
-        target.gameId,
-        target.productId,
-        target.otherProductId,
-      ]),
+      and(
+        isNull(marginRules.archivedAt),
+        inArray(marginRules.targetId, [
+          target.categoryId,
+          target.gameId,
+          target.productId,
+          target.otherProductId,
+        ]),
+      ),
     );
   await test.db
     .update(marginRules)
@@ -126,9 +131,19 @@ afterAll(async () => {
         isNull(marginRules.archivedAt),
       ),
     );
-  await test.db.delete(catalogProducts).where(eq(catalogProducts.gameId, target.gameId));
-  await test.db.delete(catalogGames).where(eq(catalogGames.id, target.gameId));
-  await test.db.delete(catalogCategories).where(eq(catalogCategories.id, target.categoryId));
+  const archived = { archivedAt: new Date() };
+  await test.db
+    .update(catalogProducts)
+    .set(archived)
+    .where(and(eq(catalogProducts.gameId, target.gameId), isNull(catalogProducts.archivedAt)));
+  await test.db
+    .update(catalogGames)
+    .set(archived)
+    .where(and(eq(catalogGames.id, target.gameId), isNull(catalogGames.archivedAt)));
+  await test.db
+    .update(catalogCategories)
+    .set(archived)
+    .where(and(eq(catalogCategories.id, target.categoryId), isNull(catalogCategories.archivedAt)));
   await removeAccounts(test.db, seeded);
   await test.app.close();
 });
@@ -359,7 +374,10 @@ describe('rules (PR2, PR9)', () => {
       .where(and(eq(marginRules.targetId, target.gameId), isNull(marginRules.archivedAt)));
     expect(live).toHaveLength(1);
     expect([700, 800]).toContain(live[0]?.percentBp);
-    await test.db.delete(marginRules).where(eq(marginRules.targetId, target.gameId));
+    await test.db
+      .update(marginRules)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(marginRules.targetId, target.gameId), isNull(marginRules.archivedAt)));
   });
 });
 

@@ -74,7 +74,8 @@ runuser -u "$APP_USER" -- git -C "$SITE_DIR/repo.git" fetch --quiet --prune orig
   '+refs/heads/*:refs/remotes/origin/*'
 sha=$(runuser -u "$APP_USER" -- git -C "$SITE_DIR/repo.git" rev-parse --verify "$REF^{commit}")
 src=$(mktemp -d)
-trap 'rm -rf "$src"' EXIT
+nginx_saved=$(mktemp -d)
+trap 'rm -rf "$src" "$nginx_saved"' EXIT
 runuser -u "$APP_USER" -- git -C "$SITE_DIR/repo.git" archive "$sha" deploy | tar -x -C "$src"
 echo "configuration from ${sha:0:7}"
 
@@ -82,6 +83,7 @@ step "Scripts, systemd units, logrotate"
 install -m 755 "$src/deploy/bin/vertexdigital-deploy" /usr/local/bin/vertexdigital-deploy
 install -m 755 "$src/deploy/bin/vertexdigital-healthcheck" /usr/local/bin/vertexdigital-healthcheck
 install -m 700 "$src/deploy/bin/vertexdigital-backup" /usr/local/sbin/vertexdigital-backup
+install -m 700 "$src/deploy/bin/vertexdigital-notify" /usr/local/sbin/vertexdigital-notify
 for unit in pm2-vertexdigital.service vertexdigital-health.service vertexdigital-health.timer \
   vertexdigital-backup.service vertexdigital-backup.timer; do
   install -m 644 "$src/deploy/systemd/$unit" "/etc/systemd/system/$unit"
@@ -178,52 +180,81 @@ for zone in 'zone=general:' 'zone=perip:'; do
   nginx -T 2>/dev/null | grep -q "$zone" ||
     { echo "the nginx ${zone%:} zone the sites use is not defined" >&2; exit 1; }
 done
+# Every nginx file goes in through nginx_install or nginx_link, which keep what they replace, and
+# nginx_commit tests the whole configuration once: when `nginx -t` refuses it, every file is put
+# back as it was and nothing is reloaded. The snippets and the zones are shared by both sites and
+# the zones by the whole server, so a broken one must never stay behind (audit A10-2; SERVER.md
+# rule 1: one broken file takes every site down on the next reload or restart).
+nginx_changed=()
+nginx_keep() {
+  local path=$1 saved
+  saved="$nginx_saved/$(printf '%s' "$path" | tr / _)"
+  [ -e "$saved" ] || [ -L "$saved" ] || [ -e "$saved.absent" ] && return 0
+  if [ -e "$path" ] || [ -L "$path" ]; then cp -a "$path" "$saved"; else touch "$saved.absent"; fi
+  nginx_changed+=("$path")
+}
+nginx_install() { nginx_keep "$2"; install -m 644 "$1" "$2"; }
+nginx_link() {
+  nginx_keep "/etc/nginx/sites-enabled/$1"
+  ln -sfn "/etc/nginx/sites-available/$1" "/etc/nginx/sites-enabled/$1"
+}
+nginx_commit() {
+  local out path saved
+  out=$(mktemp)
+  if nginx -t 2>"$out"; then
+    rm -f "$out"
+    rm -rf "${nginx_saved:?}"/*
+    nginx_changed=()
+    systemctl reload nginx
+    return 0
+  fi
+  cat "$out" >&2
+  rm -f "$out"
+  for path in "${nginx_changed[@]}"; do
+    saved="$nginx_saved/$(printf '%s' "$path" | tr / _)"
+    rm -f "$path"
+    [ -e "$saved.absent" ] || cp -a "$saved" "$path"
+  done
+  echo "nginx refused the new configuration: every file was put back as it was, nothing reloaded" >&2
+  exit 1
+}
+
 for snippet in vertexdigital-store-headers.conf vertexdigital-admin-headers.conf \
   vertexdigital-store-csp.conf vertexdigital-admin-csp.conf vertexdigital-proxy.conf; do
-  install -m 644 "$src/deploy/nginx/$snippet" "/etc/nginx/snippets/$snippet"
+  nginx_install "$src/deploy/nginx/$snippet" "/etc/nginx/snippets/$snippet"
 done
-install -m 644 "$src/deploy/nginx/vertexdigital-limits.conf" /etc/nginx/conf.d/vertexdigital-limits.conf
+nginx_install "$src/deploy/nginx/vertexdigital-limits.conf" /etc/nginx/conf.d/vertexdigital-limits.conf
 # Brotli where the server's nginx has the module (ADR 0008: slow connections), gzip otherwise.
 if nginx -V 2>&1 | grep -q brotli || ls /etc/nginx/modules-enabled/ 2>/dev/null | grep -q brotli; then
-  install -m 644 "$src/deploy/nginx/vertexdigital-compression-brotli.conf" /etc/nginx/snippets/vertexdigital-compression.conf
+  nginx_install "$src/deploy/nginx/vertexdigital-compression-brotli.conf" /etc/nginx/snippets/vertexdigital-compression.conf
   echo "compression: brotli and gzip"
 else
-  install -m 644 "$src/deploy/nginx/vertexdigital-compression-gzip.conf" /etc/nginx/snippets/vertexdigital-compression.conf
+  nginx_install "$src/deploy/nginx/vertexdigital-compression-gzip.conf" /etc/nginx/snippets/vertexdigital-compression.conf
   echo "compression: gzip (no brotli module in this nginx)"
 fi
 
-# A config that fails `nginx -t` is removed from sites-enabled at once: one broken file there
-# takes every site down on the next reload or restart (SERVER.md rule 1).
-activate() {
-  local file=$1 name=$2
-  install -m 644 "$file" "/etc/nginx/sites-available/$name"
-  ln -sfn "/etc/nginx/sites-available/$name" "/etc/nginx/sites-enabled/$name"
-  if ! nginx -t 2>/tmp/vertexdigital-nginx-test; then
-    rm -f "/etc/nginx/sites-enabled/$name"
-    cat /tmp/vertexdigital-nginx-test >&2
-    echo "nginx rejected $name; it was disabled again, other sites untouched" >&2
-    exit 1
-  fi
-  systemctl reload nginx
-}
-
 for domain in "$STORE_DOMAIN" "$ADMIN_DOMAIN"; do
   if [ ! -f "/etc/letsencrypt/live/$domain/fullchain.pem" ]; then
-    activate "$src/deploy/nginx/$domain.bootstrap" "$domain"
+    nginx_install "$src/deploy/nginx/$domain.bootstrap" "/etc/nginx/sites-available/$domain"
+    nginx_link "$domain"
+    nginx_commit
     certbot certonly --webroot -w "$ACME_ROOT" -d "$domain" --non-interactive --keep-until-expiring
   fi
 done
 for domain in "$STORE_DOMAIN" "$ADMIN_DOMAIN"; do
-  activate "$src/deploy/nginx/$domain" "$domain"
+  nginx_install "$src/deploy/nginx/$domain" "/etc/nginx/sites-available/$domain"
+  nginx_link "$domain"
 done
+nginx_commit
 echo "sites enabled with TLS"
 
 step "fail2ban"
 install -m 644 "$src/deploy/fail2ban/filter.d/vertexdigital-auth.conf" /etc/fail2ban/filter.d/vertexdigital-auth.conf
+install -m 644 "$src/deploy/fail2ban/filter.d/vertexdigital-limit.conf" /etc/fail2ban/filter.d/vertexdigital-limit.conf
 install -m 644 "$src/deploy/fail2ban/jail.d/vertexdigital.conf" /etc/fail2ban/jail.d/vertexdigital.conf
 fail2ban-client reload >/dev/null && echo "fail2ban reloaded"
 # The server's nginx jails expand their log globs when they start: they now watch these logs too.
-for jail in vertexdigital-auth nginx-4xx-flood nginx-limit-req; do
+for jail in vertexdigital-auth vertexdigital-limit nginx-4xx-flood nginx-limit-req; do
   fail2ban-client status "$jail" >/dev/null 2>&1 && echo "$jail active"
 done
 

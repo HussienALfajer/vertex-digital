@@ -1,7 +1,9 @@
 #!/bin/bash
 # Periodic health check for digital.vertexmedia.pro (vertexdigital-health.timer, every 2 minutes).
-# Heals, not only logs, with a cooldown so it never loops on restarts. Read with:
+# Heals, not only logs, with a cooldown so it never loops on restarts, and tells the owner on
+# Telegram when something breaks and when it is fixed (vertexdigital-notify). Read with:
 #   journalctl -t vertexdigital-health -n 50
+# The paths can be moved for the tests (apps/api/test/deploy-scripts.test.ts).
 set -u
 
 STORE_DOMAIN=digital.vertexmedia.pro
@@ -11,17 +13,61 @@ UNIT=pm2-vertexdigital.service
 API_PORT=3060
 STORE_PORT=3061
 APPS="vertexdigital-api vertexdigital-worker vertexdigital-store"
-STATE_DIR=/var/lib/vertexdigital-health
+SITE_DIR=${VD_SITE_DIR:-/srv/$STORE_DOMAIN}
+STATE_DIR=${VD_STATE_DIR:-/var/lib/vertexdigital-health}
+BACKUP_DIR=${VD_BACKUP_DIR:-/var/backups/$STORE_DOMAIN}
+LETSENCRYPT=${VD_LETSENCRYPT:-/etc/letsencrypt/live}
+NOTIFY=${VD_NOTIFY:-/usr/local/sbin/vertexdigital-notify}
 COOLDOWN=600
+# A check heals only after failing this many runs in a row (audit A10-3): a single answer of 000
+# is a process restarting, not one that is down.
+FAILURES_TO_HEAL=2
+# The newest backup may be this old before it counts as missing (the timer runs daily).
+BACKUP_MAX_AGE_HOURS=26
 mkdir -p "$STATE_DIR"
 
 log() { logger -t vertexdigital-health "$*"; }
+
+# A deploy holds this lock from its build to its health checks (deploy.sh); a restore leaves the
+# hold file until a release is started again (audit A10-1).
+LOCK="$SITE_DIR/.deploy.lock"
+HOLD="$SITE_DIR/.hold"
+if [ -e "$HOLD" ]; then
+  log "held: $(head -c 200 "$HOLD"); nothing is healed until a release is started (vertexdigital-deploy)"
+  exit 0
+fi
+if [ -e "$LOCK" ] && ! flock -n 8 8<"$LOCK"; then
+  log "a deploy is running; checked again on the next run"
+  exit 0
+fi
 
 cooled_down() {
   local f="$STATE_DIR/$1.last" now last
   now=$(date +%s); last=$(cat "$f" 2>/dev/null || echo 0)
   if [ $((now - last)) -ge "$COOLDOWN" ]; then echo "$now" >"$f"; return 0; fi
   return 1
+}
+
+# Counts the runs in a row a check failed; `passed` resets it.
+failed_again() {
+  local f="$STATE_DIR/$1.failures" n
+  n=$(( $(cat "$f" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$f"
+  [ "$n" -ge "$FAILURES_TO_HEAL" ]
+}
+passed() { rm -f "$STATE_DIR/$1.failures"; }
+
+# One Telegram message when a problem starts and one when it ends, never one per run.
+alert() {
+  local key=$1; shift
+  [ -e "$STATE_DIR/$key.alerted" ] && return 0
+  touch "$STATE_DIR/$key.alerted"
+  "$NOTIFY" "⚠️ $*" >/dev/null 2>&1 || log "could not send the alert for $key"
+}
+resolved() {
+  local key=$1; shift
+  [ -e "$STATE_DIR/$key.alerted" ] || return 0
+  rm -f "$STATE_DIR/$key.alerted"
+  "$NOTIFY" "✅ $*" >/dev/null 2>&1 || true
 }
 
 pm2_as_app() { sudo -u "$APP_USER" -H env PM2_HOME="/home/$APP_USER/.pm2" pm2 "$@"; }
@@ -34,27 +80,60 @@ restart_app() {
 # 1. The PM2 unit: if it is down, nothing else is worth checking.
 if ! systemctl is-active --quiet "$UNIT"; then
   log "$UNIT is not active"
+  alert unit "digital.vertexmedia.pro: $UNIT is not active; the health check starts it"
   cooled_down unit && systemctl start "$UNIT" && log "$UNIT started"
   exit 0
 fi
+resolved unit "digital.vertexmedia.pro: $UNIT is active again"
 
 # 2. The API answers on loopback, database included (/api/health checks it).
+api_ok=1
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://127.0.0.1:$API_PORT/api/health")
 if [ "$code" != 200 ]; then
+  api_ok=0
   log "API answers $code on port $API_PORT"
-  [ "$code" = 503 ] && log "the API is up but reports a dependency down (database?)" || restart_app vertexdigital-api
+  if [ "$code" = 503 ]; then
+    log "the API is up but reports a dependency down (database?)"
+    failed_again api && alert api "digital.vertexmedia.pro: the API reports a dependency down (503); check the database"
+  elif failed_again api; then
+    alert api "digital.vertexmedia.pro: the API answers $code; the health check restarts it"
+    restart_app vertexdigital-api
+  fi
+else
+  passed api
+  resolved api "digital.vertexmedia.pro: the API answers again"
 fi
 
-# 3. The store renders its home page.
+# 3. The store renders its home page. With the API down the page fails too, and restarting the
+# store cannot help (audit A10-71).
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://127.0.0.1:$STORE_PORT/")
-[ "$code" = 200 ] || { log "store answers $code on port $STORE_PORT"; restart_app vertexdigital-store; }
+if [ "$code" != 200 ]; then
+  log "store answers $code on port $STORE_PORT"
+  if [ "$api_ok" = 1 ] && failed_again store; then
+    alert store "digital.vertexmedia.pro: the store answers $code; the health check restarts it"
+    restart_app vertexdigital-store
+  fi
+else
+  passed store
+  resolved store "digital.vertexmedia.pro: the store answers again"
+fi
 
 # 4. The worker wrote its heartbeat in the last 3 minutes (it beats every minute).
 fresh=$(runuser -u postgres -- psql -tAq -d vertex_digital \
   -c "select count(*) from worker_heartbeats where worker = 'production' and beat_at > now() - interval '3 minutes'" 2>/dev/null)
-[ "$fresh" = 1 ] || { log "no recent worker heartbeat"; restart_app vertexdigital-worker; }
+if [ "$fresh" != 1 ]; then
+  log "no recent worker heartbeat"
+  if failed_again worker; then
+    alert worker "digital.vertexmedia.pro: the worker wrote no heartbeat for 3 minutes (deposits, deliveries and emails wait); the health check restarts it"
+    restart_app vertexdigital-worker
+  fi
+else
+  passed worker
+  resolved worker "digital.vertexmedia.pro: the worker beats again"
+fi
 
-# 5. PM2 state and restart counts of each process.
+# 5. PM2 state and restart counts of each process. A count is reported when it grows past 20,
+# once per new count, not on every run (audit A10-55: every deploy adds one for good).
 jlist=$(pm2_as_app jlist 2>/dev/null || echo '[]')
 for app in $APPS; do
   read -r state restarts < <(printf '%s' "$jlist" | python3 -c "
@@ -64,22 +143,52 @@ env = apps.get('$app')
 print(env['status'], env['restart_time']) if env else print('missing', 0)
 " 2>/dev/null || echo "unknown 0")
   [ "$state" = online ] || { log "$app is $state"; restart_app "$app"; }
-  [ "${restarts:-0}" -gt 20 ] && log "warning: $app restarted $restarts times; check pm2 logs $app --err"
+  seen=$(cat "$STATE_DIR/$app.restarts" 2>/dev/null || echo 0)
+  if [ "${restarts:-0}" -gt 20 ] && [ "${restarts:-0}" -gt "$seen" ]; then
+    log "warning: $app restarted $restarts times; check pm2 logs $app --err"
+  fi
+  echo "${restarts:-0}" >"$STATE_DIR/$app.restarts"
 done
 
 # 6. Public paths and certificates.
 for domain in "$STORE_DOMAIN" "$ADMIN_DOMAIN"; do
-  cert="/etc/letsencrypt/live/$domain/fullchain.pem"
+  cert="$LETSENCRYPT/$domain/fullchain.pem"
   [ -f "$cert" ] || continue
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://$domain/")
-  [ "$code" = 200 ] || log "public https://$domain/ answers $code"
+  if [ "$code" != 200 ]; then
+    log "public https://$domain/ answers $code"
+    failed_again "public-$domain" && alert "public-$domain" "https://$domain/ answers $code to the public"
+  else
+    passed "public-$domain"
+    resolved "public-$domain" "https://$domain/ answers again"
+  fi
   end=$(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)
   days=$(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 ))
-  [ "$days" -lt 15 ] && log "warning: certificate for $domain expires in $days days"
+  if [ "$days" -lt 15 ]; then
+    log "warning: certificate for $domain expires in $days days"
+    alert "cert-$domain" "the certificate of $domain expires in $days days; check certbot"
+  else
+    resolved "cert-$domain" "the certificate of $domain was renewed"
+  fi
 done
 
 # 7. Disk.
 use=$(df --output=pcent / | tail -1 | tr -dc '0-9')
-[ "$use" -ge 85 ] && log "warning: disk is ${use}% full"
+if [ "$use" -ge 85 ]; then
+  log "warning: disk is ${use}% full"
+  alert disk "the server's disk is ${use}% full"
+else
+  resolved disk "the server's disk is below 85% again (${use}%)"
+fi
+
+# 8. The newest complete backup (vertexdigital-backup writes into a .partial folder and renames it
+# when done) is at most a day old.
+newest=$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '20*Z' -mmin -$((BACKUP_MAX_AGE_HOURS * 60)) 2>/dev/null | head -n 1)
+if [ -z "$newest" ]; then
+  log "warning: no backup in the last $BACKUP_MAX_AGE_HOURS hours"
+  alert backup "digital.vertexmedia.pro: no complete backup in the last $BACKUP_MAX_AGE_HOURS hours; check journalctl -t vertexdigital-backup"
+else
+  resolved backup "digital.vertexmedia.pro: backups complete again"
+fi
 
 exit 0

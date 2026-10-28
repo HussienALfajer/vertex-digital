@@ -430,6 +430,30 @@
         ]
       }
     },
+    "/api/admin/client-errors": {
+      "post": {
+        "operationId": "AdminAccountController_reportClientError",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminClientError"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Reported"
+          }
+        },
+        "tags": [
+          "admin-account"
+        ]
+      }
+    },
     "/api/admin/me/sessions": {
       "get": {
         "operationId": "AdminAccountController_sessions",
@@ -3696,6 +3720,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminMerchantApplicationPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/waiting": {
+      "get": {
+        "operationId": "MerchantsAdminController_waiting",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The applications under review: the navigation badge (MA8, audit A10-25)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeCount"
                 }
               }
             }
@@ -8026,6 +8071,27 @@
                   "items": {
                     "$ref": "#/components/schemas/SupplierSummary"
                   }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
+    "/api/admin/suppliers/new-packs": {
+      "get": {
+        "operationId": "SuppliersAdminController_newPacks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The new packs of every visible supplier: the navigation badge (SC11, audit A10-25)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeCount"
                 }
               }
             }
@@ -15392,6 +15458,34 @@
         ],
         "additionalProperties": false
       },
+      "AdminClientError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "stack": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 300,
+            "pattern": "^\\/[^?#]*$"
+          }
+        },
+        "required": [
+          "name",
+          "message",
+          "path"
+        ]
+      },
       "AdminSessionList": {
         "type": "array",
         "items": {
@@ -21170,6 +21264,20 @@
           "monthlyVolume",
           "submittedAt",
           "customer"
+        ],
+        "additionalProperties": false
+      },
+      "BadgeCount": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "count"
         ],
         "additionalProperties": false
       },
@@ -40053,6 +40161,7 @@
       "AttentionKind": {
         "type": "string",
         "enum": [
+          "worker_silent",
           "orders_review",
           "orders_manual",
           "deposits_overdue",

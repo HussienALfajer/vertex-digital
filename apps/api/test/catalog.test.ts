@@ -8,7 +8,7 @@ import {
   newId,
   STORED_FILE_KINDS,
 } from '@vertex-digital/db';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { JobsService } from '../src/core/jobs/index.js';
@@ -143,13 +143,29 @@ afterAll(async () => {
     .from(catalogGames)
     .where(inArray(catalogGames.categoryId, categoryIds.length ? categoryIds : [run]));
   const allGames = [...new Set([...gameIds, ...games.map((game) => game.id)])];
+  // Archived, never deleted: the app role has no DELETE on the catalog (audit A10-44).
+  const archived = { archivedAt: new Date() };
   if (allGames.length) {
-    await test.db.delete(catalogProducts).where(inArray(catalogProducts.gameId, allGames));
-    await test.db.delete(catalogInputFields).where(inArray(catalogInputFields.gameId, allGames));
-    await test.db.delete(catalogGames).where(inArray(catalogGames.id, allGames));
+    await test.db
+      .update(catalogProducts)
+      .set(archived)
+      .where(and(inArray(catalogProducts.gameId, allGames), isNull(catalogProducts.archivedAt)));
+    await test.db
+      .update(catalogInputFields)
+      .set(archived)
+      .where(
+        and(inArray(catalogInputFields.gameId, allGames), isNull(catalogInputFields.archivedAt)),
+      );
+    await test.db
+      .update(catalogGames)
+      .set(archived)
+      .where(and(inArray(catalogGames.id, allGames), isNull(catalogGames.archivedAt)));
   }
   if (categoryIds.length) {
-    await test.db.delete(catalogCategories).where(inArray(catalogCategories.id, categoryIds));
+    await test.db
+      .update(catalogCategories)
+      .set(archived)
+      .where(and(inArray(catalogCategories.id, categoryIds), isNull(catalogCategories.archivedAt)));
   }
   await removeAccounts(test.db, seeded);
   await test.app.close();

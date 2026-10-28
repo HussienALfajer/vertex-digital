@@ -14,8 +14,17 @@ export async function POST(request: Request) {
   if (!authorizedRevalidation(request.headers, revalidateSecret())) {
     return new Response(null, { status: 401 });
   }
+  // The job names the tag it expires (audit A10-16): a catalog change (every supplier sync) used
+  // to expire the content too, which every page's announcement bar then read again. A job with no
+  // tag (the release before, during a deploy) expires both.
+  const body = (await request.json().catch(() => null)) as { tag?: unknown } | null;
+  const tags =
+    body?.tag === 'catalog'
+      ? [CATALOG_TAG]
+      : body?.tag === 'content'
+        ? [CONTENT_TAG]
+        : [CATALOG_TAG, CONTENT_TAG];
   // Expired at once: the next visitor reads the new prices, not the old page once more.
-  revalidateTag(CATALOG_TAG, { expire: 0 });
-  revalidateTag(CONTENT_TAG, { expire: 0 });
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
   return new Response(null, { status: 204 });
 }

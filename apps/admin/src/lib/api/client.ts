@@ -44,7 +44,15 @@ export class ApiError extends Error {
 export async function call<Data>(
   request: Promise<{ data?: Data; error?: unknown; response: Response }>,
 ): Promise<Data> {
-  const { data, error, response } = await request;
+  let answer: Awaited<typeof request>;
+  try {
+    answer = await request;
+  } catch (failure) {
+    // No answer at all (offline, the server unreachable): status 0, the network's own message
+    // (audit A10-31), and retried like a server fault.
+    throw new ApiError(0, undefined, undefined, (failure as Error).message || 'Network error');
+  }
+  const { data, error, response } = answer;
   if (!response.ok) {
     const body = (
       typeof error === 'object' && error !== null ? error : {}

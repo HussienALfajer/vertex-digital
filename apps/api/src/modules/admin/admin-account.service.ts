@@ -1,7 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import {
   ADMIN_SESSION_RULES,
   type AdminChangePassword,
+  type AdminClientError,
   type AdminSession,
   PASSWORD_EQUALS_EMAIL,
   passwordEqualsEmail,
@@ -32,6 +34,24 @@ import { AdminAuthService, type AdminIdentity } from './admin-auth.service.js';
  */
 @Injectable()
 export class AdminAccountService {
+  private readonly logger = new Logger(AdminAccountService.name);
+
+  /**
+   * A crash of the panel (audit A10-26): Sentry gets it as an error of its own kind, tagged with
+   * the page; the logs get its name and path. Nothing else of the admin's browser is kept.
+   */
+  reportClientError(report: AdminClientError): void {
+    const error = new Error(report.message);
+    error.name = `Admin${report.name}`;
+    if (report.stack) error.stack = report.stack;
+    this.logger.warn(`The panel failed on ${report.path}: ${report.name}`);
+    Sentry.withScope((scope) => {
+      scope.setTag('source', 'admin');
+      scope.setTag('path', report.path);
+      Sentry.captureException(error);
+    });
+  }
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly admins: AdminAuthService,

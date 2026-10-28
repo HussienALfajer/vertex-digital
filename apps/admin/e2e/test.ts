@@ -228,6 +228,8 @@ export class AdminApi {
   idleExpired = false;
   /** Sensitive routes answer `REAUTHENTICATION_REQUIRED` until a re-authentication (rule D5). */
   reauthenticationRequired = false;
+  /** Audit A10-26: the crashes the panel reported. */
+  clientErrors: { name: string; message: string; path: string }[] = [];
   testCustomers: TestCustomer[] = [];
   sessions = [
     {
@@ -969,6 +971,33 @@ export class AdminApi {
     }
     if (key === 'GET /api/admin/dashboard') {
       return json(200, this.dashboard ?? quietDashboard(this.rates[0] ?? null));
+    }
+    // Audit A10-26: a crash the panel reports; the test reads them in `clientErrors`.
+    if (key === 'POST /api/admin/client-errors') {
+      this.clientErrors.push(body as { name: string; message: string; path: string });
+      return route.fulfill({ status: 204 });
+    }
+    // Audit A10-25: the badges' counts, from what the dashboard and the supplier list answer.
+    if (key === 'GET /api/admin/merchant-applications/waiting') {
+      const attention = (this.dashboard ?? quietDashboard(this.rates[0] ?? null)).attention as {
+        kind: string;
+        count: number;
+      }[];
+      const waiting = attention.find((item) => item.kind === 'merchant_applications_waiting');
+      return json(200, { count: waiting?.count ?? 0 });
+    }
+    if (key === 'GET /api/admin/suppliers/new-packs') {
+      const list = new URL(url);
+      list.pathname = '/api/admin/suppliers';
+      const answer =
+        this.supplierCatalog.answer('GET', list, null) ?? this.suppliers.answer('GET', list, null);
+      const summaries =
+        answer && 'json' in answer ? (answer.json as { newOfferCount?: number }[]) : [];
+      return json(200, {
+        count: Array.isArray(summaries)
+          ? summaries.reduce((sum, item) => sum + (item.newOfferCount ?? 0), 0)
+          : 0,
+      });
     }
     if (
       path.startsWith('/api/admin/reconciliation') ||

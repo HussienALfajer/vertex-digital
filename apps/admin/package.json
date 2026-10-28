@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "api:generate": "openapi-typescript ../api/openapi.json -o src/lib/api/schema.gen.ts"
+    "api:generate": "openapi-typescript ../api/openapi.json --default-non-nullable=false -o src/lib/api/schema.gen.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

@@ -88,6 +88,7 @@ export function ProblemSheet({
 
   return (
     <Sheet
+      guardTyped={false}
       open
       onOpenChange={(open) =>
         !open && refusal?.reason === 'ORDER_PROBLEM_UNAVAILABLE' ? onRefused() : onOpenChange(open)

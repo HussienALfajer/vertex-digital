@@ -21,6 +21,8 @@ import {
   adminMerchantApplicationSchema,
   adminMerchantPageSchema,
   approveApplicationSchema,
+  type BadgeCount,
+  badgeCountSchema,
   type GrantMerchant,
   grantMerchantSchema,
   type MerchantApplicationListQuery,
@@ -70,6 +72,19 @@ export class MerchantsAdminController {
     @Query({ schema: merchantApplicationListQuerySchema }) query: MerchantApplicationListQuery,
   ) {
     return this.merchants.queue(query);
+  }
+
+  // Before `:id`, which would take `waiting` as an id.
+  @Get('merchant-applications/waiting')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: badgeCountSchema })
+  @ApiOkResponse({
+    description: 'The applications under review: the navigation badge (MA8, audit A10-25)',
+    standardSchema: badgeCountSchema,
+  })
+  async waiting(): Promise<BadgeCount> {
+    return { count: (await this.merchants.waiting()).count };
   }
 
   @Get('merchant-applications/:id')

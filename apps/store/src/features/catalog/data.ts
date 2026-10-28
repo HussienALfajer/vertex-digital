@@ -1,7 +1,7 @@
 import type { Storefront, StoreGame } from '@vertex-digital/contracts';
 import { cacheLife, cacheTag } from 'next/cache';
 import { CATALOG_TAG } from '@/lib/cache-tags';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl, CACHED_READ_HEADERS } from '@/lib/server-env';
 
 /*
  * The public catalog as the store's server components read it (S09 rules SF1, SF4): the API's
@@ -18,7 +18,8 @@ class CatalogUnavailable extends Error {}
 
 async function readCatalog<T>(path: string): Promise<T | null> {
   const response = await fetch(`${apiInternalUrl()}${path}`, {
-    headers: { accept: 'application/json' },
+    headers: CACHED_READ_HEADERS,
+    signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new CatalogUnavailable(`GET ${path} answered ${response.status}`);

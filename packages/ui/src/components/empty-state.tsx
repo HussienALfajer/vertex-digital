@@ -8,10 +8,20 @@ interface EmptyStateProps extends Omit<ComponentProps<'div'>, 'title'> {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
+  /** The title's element: a heading when the state is the whole page (audit A10-60). */
+  titleAs?: 'p' | 'h1' | 'h2';
 }
 
 /** Nothing to show yet: a quiet panel with the 60° hairlines beside the message (§5). */
-function EmptyState({ icon, title, description, action, className, ...props }: EmptyStateProps) {
+function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  titleAs: Title = 'p',
+  className,
+  ...props
+}: EmptyStateProps) {
   return (
     <div
       data-slot="empty-state"
@@ -28,7 +38,7 @@ function EmptyState({ icon, title, description, action, className, ...props }: E
           {icon}
         </IconTile>
       )}
-      <p className="relative max-w-sm text-lg font-bold">{title}</p>
+      <Title className="relative max-w-sm text-lg font-bold">{title}</Title>
       {description && (
         <p className="relative max-w-sm text-base text-muted-foreground">{description}</p>
       )}

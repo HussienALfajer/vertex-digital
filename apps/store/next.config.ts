@@ -30,6 +30,10 @@ const buildId = process.env.STORE_BUILD_ID ?? `${Date.now().toString(36)}-${proc
 
 const config: NextConfig = {
   cacheComponents: true,
+  // Chosen, so Next stops warning at every start (audit A10-56): the store was built and its
+  // prefetch rules measured before Partial Prefetching (the account links' `prefetch={false}`,
+  // the first-load budgets of e2e/store.spec.ts); turning it on is its own change.
+  partialPrefetching: false,
   reactStrictMode: true,
   poweredByHeader: false,
   // nginx compresses (Brotli or gzip) in production.

@@ -15,7 +15,9 @@ const common = {
   max_restarts: 10,
   min_uptime: '20s',
   exp_backoff_restart_delay: 200,
-  // Nest shutdown hooks close the HTTP server, pg-boss and the database pool.
+  // Nest shutdown hooks close the HTTP server, pg-boss and the database pool. The worker waits
+  // longer: pg-boss lets its running jobs finish for up to 25 s (`pg-boss.service.ts`) before
+  // the pool closes, and PM2 killed it mid-job at 15 s on every deploy (audit A10-5).
   kill_timeout: 15000,
   time: true,
   merge_logs: true,
@@ -41,6 +43,7 @@ module.exports = {
       // A WDG sync (11,595 offers) peaks near 350 MB with the 256 MB heap (measured 2026-10-14).
       max_memory_restart: '512M',
       env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=256' },
+      kill_timeout: 35000,
       out_file: `${logs}/worker.out.log`,
       error_file: `${logs}/worker.err.log`,
     },

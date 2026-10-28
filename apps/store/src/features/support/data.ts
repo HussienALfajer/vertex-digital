@@ -2,7 +2,7 @@ import { type SupportChannels, telegramSupportUrlSchema } from '@vertex-digital/
 import { cacheLife, cacheTag } from 'next/cache';
 import { connection } from 'next/server';
 import { SUPPORT_TAG } from '@/lib/cache-tags';
-import { apiInternalUrl } from '@/lib/server-env';
+import { API_READ_TIMEOUT_MS, apiInternalUrl, CACHED_READ_HEADERS } from '@/lib/server-env';
 
 /*
  * The support channels as the store's server components read them (S12 SC2): the API's public
@@ -21,7 +21,8 @@ export async function getSupportChannels(): Promise<SupportChannels> {
   cacheTag(SUPPORT_TAG);
   cacheLife(SUPPORT_LIFE);
   const response = await fetch(`${apiInternalUrl()}/api/support/channels`, {
-    headers: { accept: 'application/json' },
+    headers: CACHED_READ_HEADERS,
+    signal: AbortSignal.timeout(API_READ_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new ChannelsUnavailable(`GET /api/support/channels answered ${response.status}`);

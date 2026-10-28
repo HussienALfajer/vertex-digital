@@ -16,10 +16,20 @@ NODE_DIR=/opt/node24
 install_node() {
   [ -x "$NODE_DIR/bin/node" ] && return 0
   local base=https://nodejs.org/dist/latest-v24.x
-  local archive
-  archive=$(curl -fsSL "$base/SHASUMS256.txt" | grep -oE 'node-v24\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | head -1)
+  local sums archive download
+  sums=$(curl -fsSL "$base/SHASUMS256.txt")
+  archive=$(echo "$sums" | grep -oE 'node-v24\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | head -1)
+  download=$(mktemp -d)
+  curl -fsSL -o "$download/$archive" "$base/$archive"
+  # The archive must match its published checksum before anything runs from it (audit A10-70).
+  (cd "$download" && echo "$sums" | grep " $archive\$" | sha256sum -c --quiet -) || {
+    echo "the Node archive does not match SHASUMS256.txt" >&2
+    rm -rf "$download"
+    return 1
+  }
   mkdir -p "$NODE_DIR"
-  curl -fsSL "$base/$archive" | tar -xJ -C "$NODE_DIR" --strip-components=1
+  tar -xJ -f "$download/$archive" -C "$NODE_DIR" --strip-components=1
+  rm -rf "$download"
   # pnpm comes from Corepack at the version in package.json ("packageManager").
   PATH="$NODE_DIR/bin:$PATH" corepack enable
 }

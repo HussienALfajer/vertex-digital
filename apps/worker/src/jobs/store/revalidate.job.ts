@@ -1,5 +1,10 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
-import { QUEUES, STORE_REVALIDATE_RETRIES } from '@vertex-digital/contracts';
+import {
+  QUEUES,
+  STORE_CACHE_TAGS,
+  STORE_REVALIDATE_RETRIES,
+  type StoreCacheTag,
+} from '@vertex-digital/contracts';
 import { ENV, type Env } from '../../core/config/env.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 
@@ -25,8 +30,9 @@ export class StoreRevalidateJob implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     await this.pgBoss.work(
       QUEUES.storeRevalidate,
-      async (_data, job) => {
-        await this.handle(job.retryCount);
+      async (data: { tag?: unknown }, job) => {
+        const tag = STORE_CACHE_TAGS.find((known) => known === data.tag);
+        await this.handle(job.retryCount, tag);
       },
       { alert: false },
     );
@@ -36,9 +42,9 @@ export class StoreRevalidateJob implements OnApplicationBootstrap {
    * One run: true when the store refreshed. A failure throws while retries are left (pg-boss
    * retries it), and on the last attempt is logged and dropped.
    */
-  async handle(retryCount: number): Promise<boolean> {
+  async handle(retryCount: number, tag?: StoreCacheTag): Promise<boolean> {
     try {
-      await this.revalidate();
+      await this.revalidate(tag);
       return true;
     } catch (error) {
       if (retryCount < STORE_REVALIDATE_RETRIES) throw error;
@@ -49,10 +55,15 @@ export class StoreRevalidateJob implements OnApplicationBootstrap {
     }
   }
 
-  private async revalidate(): Promise<void> {
+  /** The store expires `tag`, or both tags for a job that names none (audit A10-16). */
+  private async revalidate(tag?: StoreCacheTag): Promise<void> {
     const response = await fetch(`http://127.0.0.1:${this.env.STORE_PORT}/_internal/revalidate`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${this.env.STORE_REVALIDATE_SECRET}` },
+      headers: {
+        authorization: `Bearer ${this.env.STORE_REVALIDATE_SECRET}`,
+        ...(tag && { 'content-type': 'application/json' }),
+      },
+      ...(tag && { body: JSON.stringify({ tag }) }),
       signal: AbortSignal.timeout(STORE_REVALIDATE_TIMEOUT_MS),
     });
     await response.body?.cancel();

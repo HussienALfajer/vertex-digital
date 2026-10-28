@@ -235,6 +235,8 @@ export const merchantProfiles = pgTable(
     index('merchant_profiles_application_id_idx').on(table.applicationId),
     index('merchant_profiles_terms_version_id_idx').on(table.termsVersionId),
     index('merchant_profiles_level_id_idx').on(table.levelId),
+    // The merchants list's order (audit A10-43, A06-31).
+    index('merchant_profiles_granted_at_idx').on(table.grantedAt.desc(), table.customerId.desc()),
     check(
       'merchant_profiles_text_check',
       sql`char_length(${table.tradeName}) between 2 and 80 and char_length(${table.city}) between 2 and 60`,

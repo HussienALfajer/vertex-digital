@@ -28,11 +28,18 @@ const HINT_KEY = 'vd-signed-in';
 export const PRIVATE_PRICES_HINT_KEY = 'vd-private-prices';
 
 /**
+ * S22 QB6: this browser's last quick-buy read had cards (`1` only). SESSION_HINT_SCRIPT turns it
+ * into `data-quick-buy-hint`, and the home page reserves the row's height only then: a customer
+ * with no cards saw the page jump up by the row's height on every visit (audit A10-15).
+ */
+export const QUICK_BUY_HINT_KEY = 'vd-quick-buy';
+
+/**
  * Runs in <head> before the page paints: a browser that was signed in at its last read gets
  * `data-signed-in-hint` on <html>, so the header shows the signed-in placeholder instead of
  * flashing "sign in" while the session is read (pages stay static: the server never knows).
  */
-export const SESSION_HINT_SCRIPT = `try{if(localStorage.getItem('${HINT_KEY}'))document.documentElement.setAttribute('data-signed-in-hint','');if(localStorage.getItem('${PRIVATE_PRICES_HINT_KEY}'))document.documentElement.setAttribute('data-private-prices-hint','')}catch(e){}`;
+export const SESSION_HINT_SCRIPT = `try{if(localStorage.getItem('${HINT_KEY}'))document.documentElement.setAttribute('data-signed-in-hint','');if(localStorage.getItem('${PRIVATE_PRICES_HINT_KEY}'))document.documentElement.setAttribute('data-private-prices-hint','');if(localStorage.getItem('${QUICK_BUY_HINT_KEY}'))document.documentElement.setAttribute('data-quick-buy-hint','')}catch(e){}`;
 
 function rememberSession(signedIn: boolean) {
   try {
@@ -48,29 +55,42 @@ export const forgetSession = () => {
   rememberSession(false);
   try {
     localStorage.removeItem(PRIVATE_PRICES_HINT_KEY);
+    localStorage.removeItem(QUICK_BUY_HINT_KEY);
   } catch {
     // Storage can be unavailable (private mode): there is no hint to forget then.
   }
 };
 
-let inFlight: Promise<Session> | null = null;
+/** A session read: `known` is false when it failed (no network, a server fault, a limit). */
+export interface SessionRead {
+  session: Session;
+  known: boolean;
+}
 
-export function readSession(): Promise<Session> {
+let inFlight: Promise<SessionRead> | null = null;
+
+/** The session, and whether the read gave a clear answer (audit A10-17). */
+export function readSessionResult(): Promise<SessionRead> {
   if (!inFlight) {
     inFlight = fetch('/api/auth/get-session', { credentials: 'same-origin', cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) return null;
+      .then(async (response): Promise<SessionRead> => {
+        if (!response.ok) return { session: null, known: false };
         const session = (await response.json()) as Session;
         // Only a clear answer changes the hint; a failed read leaves it as it was.
         rememberSession(session !== null);
-        return session;
+        return { session, known: true };
       })
-      .catch(() => null)
+      .catch((): SessionRead => ({ session: null, known: false }))
       .finally(() => {
         inFlight = null;
       });
   }
   return inFlight;
+}
+
+/** The session, null when signed out or when the read failed. */
+export function readSession(): Promise<Session> {
+  return readSessionResult().then((read) => read.session);
 }
 
 /** Rule CF5: the account is frozen. */
