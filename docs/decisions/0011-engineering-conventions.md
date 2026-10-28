@@ -2,6 +2,12 @@
 
 Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles)
 
+> **Current state (2026-10-28), which wins where the text below differs.** The record keeps its original wording; these are the amendments it has had:
+> - Access (0016): routes declare `@Public()`, `@CustomerRoute()` or `@AdminRoute()` (`@AdminSetupRoute()` for the admin's first sign-in steps); there are no staff, roles or permission map. Admin routes stay under `/api/admin/`, in `<module>.admin.controller.ts`.
+> - Access tests: success; no session, and a session of the other kind (customer on an admin route, admin on a customer route) → `401`; another customer's record → `404`; plus the route's own `403`s (`EMAIL_NOT_VERIFIED`, `TWO_FACTOR_REQUIRED`, `REAUTHENTICATION_REQUIRED`). `apps/api/CLAUDE.md` holds the canonical wording.
+> - Lists: endless or live lists use cursors (`apps/api/src/core/lists/cursor.ts`, "load more"); bounded admin tables keep `page`/`pageSize`. A module copies the list shape it already uses.
+> - Store cache tags are per area (`catalog`, `content`, `support` in `apps/store/src/lib/cache-tags.ts`), not per entity.
+
 ## Context
 V1 has about twenty API modules, a worker with money-moving jobs and two front ends, built by AI coding agents across many sessions (ADR 0010). Without one written shape each session invents its own and the codebase drifts. Rules that live only in prose are followed unevenly, so every rule a machine can check is enforced by a test or lint rule. These conventions follow the ones proven in Vertex Hub, adapted to this system.
 

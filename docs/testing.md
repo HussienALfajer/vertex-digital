@@ -19,11 +19,11 @@ The whole E2E suite (about 750 tests over both front ends) never runs in a sessi
 
 `scripts/verify.mjs`, from the repository root:
 
-- `pnpm verify`: Biome over the repository; `turbo run typecheck test build` (with `--continue`, so one failure does not hide the others); for each front end, the E2E specs the branch changed and the specs that import a helper it changed in `e2e/` (a mock, `test.ts`), against its production build (the store starts its own Next.js servers); `drizzle-kit generate` when `packages/db/src`, the migrations or `packages/contracts/src` changed (the schema takes its enums from the contracts); `openapi:export` and `api:generate` when `apps/api/src` or `packages/contracts/src` changed. A migration that `drizzle-kit generate` writes, or an `apps/api/openapi.json` or `apps/admin/src/lib/api/schema.gen.ts` it regenerates, fails the run as it fails CI: commit the new files with the change.
+- `pnpm verify`: Biome over the repository through `scripts/lint.mjs`, as `pnpm lint` and CI run it (it also lints the tracked files a local `.git/info/exclude` hides from Biome, such as the `reports/` folders); `turbo run typecheck test build` (with `--continue`, so one failure does not hide the others); for each front end, the E2E specs the branch changed and the specs that import a helper it changed in `e2e/` (a mock, `test.ts`), against its production build (the store starts its own Next.js servers); `drizzle-kit generate` when `packages/db/src`, the migrations or `packages/contracts/src` changed (the schema takes its enums from the contracts); `openapi:export` and `api:generate` when `apps/api/src` or `packages/contracts/src` changed. A migration that `drizzle-kit generate` writes, or an `apps/api/openapi.json` or `apps/admin/src/lib/api/schema.gen.ts` it regenerates, fails the run as it fails CI: commit the new files with the change.
 - `pnpm verify <file>...`: only those test files, paths from the repository root. Vitest files run in their package after `turbo run build --filter=<package>^...` (a stale dependency `dist` gives failures that are not in the code); E2E specs run after their front end's build. `--grep "<title>"` picks tests of a spec.
 - Changed files are those that differ from the merge base with `origin/main` (committed, uncommitted or new); `--base <ref>` compares with another ref.
 - Output: the whole output of each step in `.verify/<step>.log` (git-ignored); the console and `.verify/summary.md` get only the summary: each step's result and time, the tasks Turborepo ran rather than replayed, each failure with its file and line, and the command that reruns only the failed files.
-- Exit code 0 when everything passed, 1 when a check failed, 3 when it refused to start: another `pnpm verify` is running on the machine (lock file `vertex-digital-verify.lock` in the temp folder; a lock left by a killed run expires after 45 minutes), `pnpm dev` is up (ports 3000, 3001 or 5173: the builds replace the `dist` folders its watchers run from; `--allow-dev` overrides), or a file does not exist.
+- Exit code 0 when everything passed, 1 when a check failed, 3 when it refused to start: another `pnpm verify` is running on the machine (lock file `vertex-digital-verify.lock` in the temp folder; a lock left by a killed run expires after 45 minutes), `pnpm dev` is up during a whole-branch run (ports 3000, 3001 or 5173: the builds replace the `dist` folders its watchers run from; `--allow-dev` overrides; a run of named files does not check), or a file does not exist.
 
 ## Rules, and what enforces them
 
@@ -35,7 +35,7 @@ The whole E2E suite (about 750 tests over both front ends) never runs in a sessi
 | No edits while a check runs | The result no longer describes the code | Instructions (`CLAUDE.md`) |
 | No whole E2E suite in a session | Minutes locally and timeouts under load; CI runs it on four shards | The `test-guard` hook (`pnpm verify --e2e-all` to run it on purpose) |
 | No `timeout` around a test run | A killed run proves nothing and gets run again | The `test-guard` hook |
-| No checks while `pnpm dev` runs | Its watchers load the machine, and the builds break the dev apps | `pnpm verify` refuses |
+| No whole-branch check while `pnpm dev` runs | Its watchers load the machine, and the builds break the dev apps | The whole-branch `pnpm verify` refuses |
 
 The hook is `.claude/hooks/test-guard.mjs` (PreToolUse on Bash and PowerShell). Commands that run no tests pass straight through, and the text of a heredoc counts as data; for a test command it reads the verify lock and the running Node processes of this repository and its checkouts.
 
@@ -68,26 +68,21 @@ The hook is `.claude/hooks/test-guard.mjs` (PreToolUse on Bash and PowerShell). 
 |---|---|
 | Lint, typecheck, build | Audit, Biome, typecheck, build, migration drift, OpenAPI drift, the built API and worker start, `nginx -t` on `deploy/nginx` in nginx 1.24 (`deploy/test/nginx-check.sh`, audit A10-2) |
 | Tests | Every package's tests (db, api and worker on 4 Vitest workers each, the runner's size) |
-| E2E shard 1–4 | The whole E2E suite of both front ends, split by file (`--shard`) |
-| Typecheck, lint, test, build · E2E | Gate jobs: the checks the `main` branch protection requires, with Secret scan |
+| E2E shard 1–4 | The whole E2E suite of both front ends, split by file (`--shard`). Only the Chromium browser is installed: the runner image already has its system libraries, and `--with-deps` once spent up to 13 minutes in apt |
+| Typecheck, lint, test, build · E2E | Gate jobs: the checks the `main` branch protection requires, with Secret scan. A run superseded by a newer push is cancelled whole and its gates are skipped, so they never report a failure for it |
 | Secret scan | gitleaks |
 
 Turborepo's cache is kept between runs with `actions/cache`, per job. A pull request reads its own runs' cache and `main`'s; `main` cannot read a pull request's (GitHub keeps caches per branch), so after a merge `main` runs what the pull request changed once more.
 
-### Remote cache
+### No remote cache (owner decision, 2026-10-28)
 
-The workflow is ready for Turborepo's remote cache, which removes that repeat: `main` replays what its pull request ran, and a session can read what CI ran. It is off until the repository has:
-
-1. A remote cache: Vercel's (prefer a token scoped to the cache over an account token; check Vercel's current terms) or a self-hosted server that implements the same API (for example `ducktors/turborepo-remote-cache`; then set the repository variable `TURBO_API` to its URL). No Cloudflare (blocked in Syria).
-2. Repository secrets `TURBO_TOKEN` and `TURBO_REMOTE_CACHE_SIGNATURE_KEY` (a long random string; `turbo.json` has `remoteCache.signature`, so artifacts are signed and checked), and the repository variable `TURBO_TEAM` (the team slug).
-
-Only the steps that run turbo get these values, never `pnpm install`, and turbo's strict environment mode keeps them from the tasks it runs. Pull requests only read the remote cache (`TURBO_REMOTE_CACHE_READ_ONLY`); pushes to `main` write it, so a pull request cannot put a result into the cache `main` replays. Pull requests from forks and from Dependabot get no secrets and keep the per-job cache.
+Turborepo's remote cache would let `main` replay what its pull request ran, but that repeat blocks nobody (the deploy follows the pull request's checks) and costs nothing on a public repository. Vercel's cache is not an option from Syria, and a self-hosted one would be another service on the shared server. Each job keeps its own cache (`actions/cache`).
 
 ## The local machine (Windows)
 
 - **Antivirus.** Microsoft Defender scans every file the tests read and write. A [Dev Drive](https://learn.microsoft.com/windows/dev-drive/) (ReFS, with Defender's performance mode, which scans after the file operation instead of during it) for the repository and the pnpm store removes most of that; excluding the folders is the weaker alternative. Both are the owner's choice, set by hand.
 - **PostgreSQL.** `max_connections = 100` bounds the number of workers.
-- **`pnpm dev`.** Stop it before `pnpm verify`.
+- **`pnpm dev`.** Stop it (and the preview servers) before a whole-branch `pnpm verify`.
 - **Old sessions.** Each Claude Code session starts its own connector processes; close the ones no longer used.
 
 ## Measurements (2026-10-26)

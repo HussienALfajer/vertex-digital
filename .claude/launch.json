@@ -19,22 +19,19 @@
       "name": "api",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@vertex-digital/api", "dev"],
-      "env": { "SUPPLIER_FAKE_ENABLED": "true" },
+      "env": {
+        "SUPPLIER_FAKE_ENABLED": "true"
+      },
       "port": 3000
     },
     {
       "name": "api-build",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@vertex-digital/api", "start"],
-      "env": { "SUPPLIER_FAKE_ENABLED": "true" },
+      "env": {
+        "SUPPLIER_FAKE_ENABLED": "true"
+      },
       "port": 3000
-    },
-    {
-      "name": "worker",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@vertex-digital/worker", "dev"],
-      "env": { "SUPPLIER_FAKE_ENABLED": "true", "TELEGRAM_TRANSPORT": "log" },
-      "port": 3999
     }
   ]
 }

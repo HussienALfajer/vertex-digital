@@ -2,11 +2,13 @@
 
 A full audit of the whole product before the pilot, one group of screens at a time. Each group is audited end to end, from the screen down to the database and the jobs behind it, every defect found is fixed in the same session, and the group ends with a merged PR and a production deploy. Then the next group starts.
 
+**Complete:** all ten groups were deployed by 2026-10-28. The cycle below stays for re-auditing a group. Audit group and finding IDs (`A01`, `A02-7`) are not the automations of `docs/product/v1-scope.md`, which also number from A01: write those as "automation A07".
+
 Planned with the owner on 2026-10-26. Production was on `26cac0b` (all of `main`) when the audit began.
 
 ## How to start a group
 
-In a new session (Opus, effort `high`), the owner writes one line, for example "ابدأ المجموعة A02" or `/audit-group A02`. The `audit-group` skill (`.claude/skills/audit-group/SKILL.md`) runs the whole cycle below from this file. With no group named, it takes the first group in the status table that is not `deployed`.
+In a new session (Opus, effort `high`), the owner writes one line, for example "ابدأ المجموعة A02" or `/audit-group A02`. The `audit-group` skill (`.claude/skills/audit-group/SKILL.md`) runs the whole cycle below from this file. With no group named, it takes the first group in the status table that is not `deployed`; when every group is deployed, it says so and asks which group to re-audit.
 
 ## Status
 
@@ -23,7 +25,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | A09 | Control, reconciliation and reports | deployed | [A09-control.md](A09-control.md) | [#196](https://github.com/HussienALfajer/vertex-digital/pull/196) | `ec5168e` (2026-10-28) |
 | A10 | Platform, performance and operations | deployed | [A10-platform.md](A10-platform.md) | [#198](https://github.com/HussienALfajer/vertex-digital/pull/198) | `c982286` (2026-10-28) |
 
-Statuses: `not started` → `in progress` → `merged` → `deployed`. The group's PR sets `merged` with its link; the deploy step sets `deployed` with the commit, in a follow-up commit on the next group's branch or a small docs PR.
+Statuses: `not started` → `in progress` → `merged` → `deployed`. The group's PR sets `merged`; after its merge the deploy step records the PR link, `deployed` and the commit here and in the deploy log of `docs/deployment.md`, in a small docs PR (no second push to the group's PR after it opens: it restarts CI).
 
 ## Why this order
 
@@ -158,15 +160,15 @@ Finding IDs are `A<group>-<n>` (A02-7), numbered in the order found, never reuse
 5. **Show the owner** the findings table in Arabic (counts by level, the P0/P1 list, and every item that needs a decision), then continue with the fixes without waiting unless an item needs a decision.
 6. **Fix:** P0 first, then P1, P2, P3. Each fix with its regression test; run only the tests touched (`pnpm verify <files>`). Business-rule or scope changes go to `docs/open-questions.md` and wait for the owner; never guess them.
 7. **Re-test live:** the changed screens again in the browser, with screenshots.
-8. **Close:** `pnpm verify` through the `checker` and the `reviewer` at the same time; fix, verify again; the report complete; `docs/ROADMAP.md` audit line updated; PR with auto-merge ("Finishing a task" in `AGENTS.md`).
-9. **Deploy:** once the PR is merged and CI is green, deploy `main` to production (`docs/deployment.md`), re-run `provision.sh` when `deploy/` changed, smoke-test the group's screens on production without real money, and set the status to `deployed`.
+8. **Close:** stop the dev servers, then `pnpm verify` through the `checker` and the `reviewer` at the same time; fix, verify again; the report complete; `docs/ROADMAP.md` audit line updated; the PR, then the wait for its merge ("Finishing a task" in `AGENTS.md`).
+9. **Deploy:** once the PR is merged, deploy `main` to production (`docs/deployment.md`), re-run `provision.sh` when `deploy/` changed, smoke-test the group's screens on production without real money, and set the status to `deployed`.
 10. **Report** in the `AGENTS.md` format, with the next group's first line under "Next step".
 
 A group too large for one reviewable PR is split into at most two (backend and data, then screens), each closed as above.
 
 ## Live browser test
 
-- Local stack: `bash scripts/pull-catalog-snapshot.sh` (read-only copy of the production catalog), `pnpm db:reset-local --yes` (after stopping `pnpm dev`; ask the owner the first time), `pnpm dev`, then `pnpm db:seed-local` (customers, wallets, deposits, orders in every state, merchants, tickets, content). Store `http://127.0.0.1:3001`, admin `http://127.0.0.1:5173`.
+- Local stack: `bash scripts/pull-catalog-snapshot.sh` (read-only copy of the production catalog), `pnpm db:reset-local --yes` (after stopping `pnpm dev`; no approval needed, `AGENTS.md`), `pnpm dev`, then `pnpm db:seed-local` (customers, wallets, deposits, orders in every state, merchants, tickets, content). Store `http://127.0.0.1:3001`, admin `http://127.0.0.1:5173`.
 - Drive states with the local tools in the `AGENTS.md` commands table: the fake supplier (`supplier:fake`), fake USDT transfers and balance, fake Telegram updates, `order:place`, `checkout:place`. Never a live supplier, chain or real money.
 - For every screen of the group: desktop and phone width (375 px), dark and light, each state (loading, empty, error, refusals, live updates), keyboard only, and the browser console and network panel free of errors. Screenshots of each screen go to the report's evidence list (kept under `.verify/` or the session's scratchpad, never committed with customer data).
 - Requests stay gentle: the production fail2ban rules do not apply locally, but the same habits keep the tests realistic.

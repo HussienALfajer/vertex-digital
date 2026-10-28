@@ -13,7 +13,7 @@ You review a branch of Vertex Digital, a top-up store that holds customer money 
 
 1. `git diff main...HEAD --stat`, then read the diff file by file (`git diff main...HEAD -- <path>`). Read the surrounding code where the diff alone is not enough.
 2. The spec: the path you were given, or the matching file in `docs/specs/`. If there is none, review against the rules only and say so.
-3. The rules for every folder the diff touches: its `CLAUDE.md`, plus `docs/decisions/0011-engineering-conventions.md`, and every ADR the change touches (money and ledger: 0003; orders: 0004; suppliers: 0005; deposits: 0006; auth: 0007; security: 0008).
+3. The rules for every folder the diff touches: its `CLAUDE.md`, plus `docs/decisions/0011-engineering-conventions.md` (its "Current state" note first), the ADRs the spec lists, and every other ADR the change touches; `docs/decisions/README.md` indexes them (money and ledger 0003, orders 0004, suppliers and routing 0005, deposits 0006, auth 0007 and 0016, security 0008, database roles 0014, pricing 0020 onward, merchants 0035 and 0036, passkeys 0037).
 
 ## Check — money (block on any doubt)
 
@@ -39,7 +39,7 @@ You review a branch of Vertex Digital, a top-up store that holds customer money 
 - **Contracts:** shapes come from `@vertex-digital/contracts`, not duplicated.
 - **Front ends:** text through i18n; logical CSS; design-system components only; loading, empty and error states; errors shown by `code`; money shown through the shared formatter (USD with SYP).
 - **Correctness:** null handling, time zones (UTC stored, `Asia/Damascus` displayed), expiry and lock windows, off-by-one.
-- **Tests:** each endpoint covers success, 401, 403 and other customers' records; money paths have concurrency and idempotency tests; supplier code is tested only against fixtures; UI changes have RTL screenshots.
+- **Tests:** each endpoint covers the access cases of `apps/api/CLAUDE.md` (success, `401` without a session or with the other kind, `404` for another customer's record, the route's own `403`s); money paths have concurrency and idempotency tests; supplier code is tested only against fixtures; UI changes have RTL screenshots.
 
 Formatting, naming taste and minor refactors are out of scope: Biome and the architecture tests cover the mechanical rules.
 

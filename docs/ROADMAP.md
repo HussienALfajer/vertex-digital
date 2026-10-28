@@ -1,6 +1,6 @@
 # Roadmap
 
-Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs (F, A) refer to `docs/product/v1-scope.md`. Work is grouped into specs (S01–S15): one spec, one `/spec` session, covering related features; the money cores (F03, F11) and the external-money integrations (F06, F09) stay alone. Production is deployed once at the end of each phase (`docs/workflow.md`).
+Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs (F, and A for automations, not the audit groups) refer to `docs/product/v1-scope.md`. Work is grouped into specs (S01, S02, …): one spec, one `/spec` session, covering related features; the money cores (F03, F11) and the external-money integrations (F06, F09) stay alone. Deploys follow "When a deploy happens" in `docs/workflow.md`.
 
 ## Phase 0 — Foundation
 - [x] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)

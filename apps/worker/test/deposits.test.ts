@@ -37,22 +37,32 @@ async function pendingDeposit(overdue = true): Promise<string> {
     phone: '+963900000000',
   });
   const id = newId();
-  const code = Array.from(
-    { length: 5 },
-    () => '23456789ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random() * 31)],
-  ).join('');
-  await db.insert(deposits).values({
-    id,
-    customerId,
-    method: 'sham_cash',
-    referenceCode: `VD-${code}`,
-    currency: 'USD',
-    declaredAmountUnits: 5_000_000,
-    declaredUsdUnits: 5_000_000,
-    expiresAt: overdue ? sql`now() - interval '1 minute'` : sql`now() + interval '1 hour'`,
-    idempotencyKey: newId(),
-  });
-  return id;
+  const code = () =>
+    Array.from(
+      { length: 5 },
+      () => '23456789ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random() * 31)],
+    ).join('');
+  // Deposits of earlier runs stay in the test database, so a drawn code can be taken: draw again,
+  // as the API does on the same constraint (`deposit-records.ts`).
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await db.insert(deposits).values({
+        id,
+        customerId,
+        method: 'sham_cash',
+        referenceCode: `VD-${code()}`,
+        currency: 'USD',
+        declaredAmountUnits: 5_000_000,
+        declaredUsdUnits: 5_000_000,
+        expiresAt: overdue ? sql`now() - interval '1 minute'` : sql`now() + interval '1 hour'`,
+        idempotencyKey: newId(),
+      });
+      return id;
+    } catch (error) {
+      const constraint = (error as { cause?: { constraint?: string } }).cause?.constraint;
+      if (attempt >= 5 || constraint !== 'deposits_reference_code_unique') throw error;
+    }
+  }
 }
 
 const statusOf = async (ids: string[]) =>
