@@ -86,12 +86,11 @@ async function verifyBranch() {
     `base ${base.slice(0, 7)}, ${changed.length} changed file${changed.length === 1 ? '' : 's'}`,
   );
 
+  // scripts/lint.mjs, as `pnpm lint` and CI run it (it also lints the tracked files a local
+  // `.git/info/exclude` hides from Biome).
   const lint = await run('lint', process.execPath, [
-    bin(root, '@biomejs/biome', 'biome'),
-    'check',
-    '--error-on-warnings',
+    join(root, 'scripts', 'lint.mjs'),
     '--colors=off',
-    '.',
   ]);
   section('lint', lint, lint.code === 0 ? [] : pick(read(lint.log), LINT_LINES, 20));
 

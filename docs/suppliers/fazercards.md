@@ -122,7 +122,7 @@ There is no health or status endpoint (`platformStatus` off) and no category tre
 
 | HTTP | Meaning (docs, SDK) | On an order |
 |---|---|---|
-| 400 | validation or business rule (`code` sometimes) | definitive, except unknown codes mapped after a funded test |
+| 400 | validation or business rule (`code` sometimes) | `unknown`: FazerCards publishes no code list, so only `subscription_inactive` is definitive (`FZR_DEFINITIVE_ORDER_CODES` in `packages/suppliers/src/fazercards/errors.ts`) until a funded test maps more |
 | 401 / 403 | missing or invalid key / account blocked or product not enabled for the key | `unknown` (as WDGZone) |
 | 404 | unknown product or route | definitive for a product, `unknown` for a route |
 | 409 | conflict, most often an idempotency key reused for another product type | `unknown` |

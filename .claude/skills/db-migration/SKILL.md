@@ -19,6 +19,6 @@ Schema change: **$ARGUMENTS**. Rules: `packages/db/CLAUDE.md` and ADR 0011 (Data
    Contract steps ship in a later release, once no deployed code uses the old shape. Data backfills go in a custom migration (`pnpm --filter @vertex-digital/db exec drizzle-kit generate --custom`); a backfill never touches ledger rows: money corrections are new journals.
 5. **Test:** `pnpm verify packages/db/src/conventions.test.ts` (runs the migrations and the conventions test) with the db test files of the tables you changed (`src/ledger/guards.test.ts` for a new append-only table), then the test files of the packages that use the tables, with `pnpm verify <files>`.
 6. **Confirm no drift:** running `pnpm db:generate` again reports nothing to migrate.
-7. **Dev database:** `pnpm db:migrate` changes the owner's local data, so ask before running it.
+7. **Dev database:** apply it with `pnpm db:migrate`. No approval is needed ("Standing approvals" in `AGENTS.md`).
 
 Never use `drizzle-kit push`, never edit a generated migration, and commit the schema and its migration together.

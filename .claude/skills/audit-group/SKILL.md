@@ -1,6 +1,6 @@
 ---
 name: audit-group
-description: Run one group of the comprehensive audit (A01–A10 in docs/audits/README.md) end to end - map the group's screens, endpoints, jobs and tables, audit every dimension (spec, backend, database, worker, frontend, UI/UX, security and fraud, performance, tests, observability, live browser test), fix every finding with a regression test, then the reviewer, the PR with auto-merge and the production deploy. Use when the owner says to start or continue an audit group, e.g. "ابدأ المجموعة A02", "ابدأ المجموعة الثانية", "start audit group 3", or "/audit-group A04".
+description: Run or re-run one group of the comprehensive audit (A01–A10 in docs/audits/README.md; all ten were deployed by 2026-10-28) end to end - map the group's screens, endpoints, jobs and tables, audit every dimension (spec, backend, database, worker, frontend, UI/UX, security and fraud, performance, tests, observability, live browser test), fix every finding with a regression test, then the reviewer, the PR, its merge and the production deploy. Use when the owner says to start or continue an audit group, e.g. "ابدأ المجموعة A02", "ابدأ المجموعة الثانية", "start audit group 3", or "/audit-group A04".
 argument-hint: <group, e.g. A02; empty for the next one>
 effort: high
 ---
@@ -8,12 +8,12 @@ effort: high
 Run audit group **$ARGUMENTS**. The plan, the groups' scope, the dimensions, the severity scale, the cycle and the report template are in [docs/audits/README.md](../../../docs/audits/README.md): read it first, whole. This skill only adds the order of work and the gates; when the two disagree, fix the README in the same PR.
 
 ## 0. Pick the group
-- A group ID (`A02`), a number ("الثانية", "2") or a name picks that group. Nothing named: the first group in the README's status table that is not `deployed`.
+- A group ID (`A02`), a number ("الثانية", "2") or a name picks that group. Nothing named: the first group in the README's status table that is not `deployed`; when every group is deployed, say so and ask which group to re-audit.
 - Check the groups before it: a group still `in progress` or `merged` (not deployed) is finished first; tell the owner in one line and do that instead, unless they say otherwise.
 - `TASKS.md` holding this group means a previous session stopped mid-way: continue from its first open item, on its branch.
 
 ## 1. Preconditions (stop and tell the owner if one fails)
-- `main` pulled, working tree clean, no open PR from an earlier group.
+- `main` pulled (pull it yourself), working tree clean, no open PR from an earlier group.
 - Production runs `main` (`ssh vertex "cat /srv/digital.vertexmedia.pro/current/REVISION"`); if not, deploy first (`docs/deployment.md`).
 - The session runs at effort `high` (the skill sets it) on Opus.
 
@@ -25,8 +25,8 @@ Run audit group **$ARGUMENTS**. The plan, the groups' scope, the dimensions, the
 - For the security and money dimensions, also read the API tests of the module (`apps/api/test/<module>.test.ts`) to see which abuse paths are already covered, and list the missing ones as findings.
 
 ## 3. Live browser test
-- Follow "Live browser test" in the README. Ask the owner once before `pnpm db:reset-local --yes` in the session (it empties the dev database).
-- Start the servers with `preview_start` (`.claude/launch.json`) or `pnpm dev`, never through Bash for long-running servers when the preview tools are there.
+- Follow "Live browser test" in the README. Resetting and seeding the dev database needs no approval ("Standing approvals" in `AGENTS.md`).
+- Start the API, store and panel with `preview_start` (`api`, `store`, `admin` in `.claude/launch.json`); the worker, which listens on no port, with `pnpm --filter @vertex-digital/worker dev` in a background shell. Stop them all before `pnpm verify`.
 - Test every screen of the group, every state, phone and desktop, dark and light, keyboard; read the console and network for errors. New problems go into the report as findings.
 
 ## 4. Show the owner, then fix
@@ -36,13 +36,13 @@ Run audit group **$ARGUMENTS**. The plan, the groups' scope, the dimensions, the
 
 ## 5. Re-test, close, deploy
 1. Re-run the live test on the changed screens, with screenshots.
-2. `pnpm verify` through the `checker` and the `reviewer` (with the group's specs) at the same time; edit nothing while they run. Fix everything they report, verify again.
-3. Complete the report (summary, findings, decisions, deferred, evidence, checks); set the README status to `merged` with the PR link in the PR itself; update the audit line in `docs/ROADMAP.md`.
-4. Finish the PR as "Finishing a task" in `AGENTS.md` says (secrets check, Conventional Commit naming the finding IDs, PR, `gh pr merge --auto --merge`). Turn on the PR's Auto-fix in the desktop app.
-5. When the PR is merged and CI is green: deploy `main` (`docs/deployment.md`, detached with `systemd-run`), re-run `provision.sh` if `deploy/` changed, smoke-test the group's screens on production without real money, record the deploy in `docs/deployment.md` and the README status `deployed` (carried by the next group's branch, or a small docs PR when it is the last group).
-6. Report in the `AGENTS.md` format, in Arabic. "Next step" names the next group and its first message: `ابدأ المجموعة A<nn+1>` (or `/audit-group A<nn+1>`), Opus, effort `high`, a new session.
+2. Stop the dev servers (`preview_stop`, `pnpm dev`): a whole-branch `pnpm verify` refuses while they run. Then `pnpm verify` through the `checker` and the `reviewer` (with the group's specs) at the same time; edit nothing while they run. Fix everything they report, verify again.
+3. Complete the report (summary, findings, decisions, deferred, evidence, checks); set the README status to `merged`; update the audit line in `docs/ROADMAP.md`. The PR link is recorded after the merge (step 5): a second push right after the PR opens only restarts CI.
+4. Finish the PR as "Finishing a task" in `AGENTS.md` says, without asking (secrets check, Conventional Commit naming the finding IDs, PR, `gh pr merge --auto --merge`, Auto-fix, then `bash scripts/wait-merge.sh <number>` in the background).
+5. When the wait reports the merge: deploy `main` (`docs/deployment.md`, detached with `systemd-run`), re-run `provision.sh` if `deploy/` changed, smoke-test the group's screens on production without real money, then record the deploy in the deploy log of `docs/deployment.md` and the README row (`deployed`, the PR link, the commit) in a small docs PR (`docs/audit-a<nn>-deployed`), opened and merged the same way (CI skips Markdown).
+6. Report in the `AGENTS.md` format, in Arabic. "Next step" names the next task: the next group not yet deployed (`ابدأ المجموعة A<nn>`, Opus, effort `high`, a new session), or else the next item of `docs/ROADMAP.md`.
 
 ## Stop and ask when
 - A finding needs a business decision, a scope change, or an answer from `docs/open-questions.md`.
-- A fix needs a destructive or non-backward-compatible migration, touches real money or a live supplier or chain, or would change production data beyond the deploy.
+- A fix needs a destructive or non-backward-compatible migration, touches real money or a live supplier or chain, or would change production ledger, order, deposit or customer records (catalog, settings and test fixtures need no approval).
 - A P0 is found in production data (not only in code): tell the owner at once, before fixing.

@@ -13,12 +13,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Turborepo's remote cache (docs/testing.md, "CI") is on once the repository has the TURBO_TOKEN and
-# TURBO_REMOTE_CACHE_SIGNATURE_KEY secrets and the TURBO_TEAM variable (TURBO_API for a cache other
-# than Vercel's). Only the steps that run turbo get them, never the install, and turbo's strict
-# environment mode keeps them from the tasks it runs; pull requests only read the remote cache,
-# pushes to main write it. Until then, and for pull requests without secrets, each job keeps its own
-# cache (actions/cache).
 # Third-party actions are pinned to full commit SHAs (the tag in the comment); Dependabot
 # proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject.
 jobs:
@@ -95,19 +89,7 @@ jobs:
         run: pnpm audit --prod --audit-level=high
       - run: pnpm lint
       - run: pnpm typecheck
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_API: ${{ vars.TURBO_API || 'https://vercel.com/api' }}
-          TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-          TURBO_REMOTE_CACHE_READ_ONLY: ${{ github.event_name != 'push' }}
       - run: pnpm build
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_API: ${{ vars.TURBO_API || 'https://vercel.com/api' }}
-          TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-          TURBO_REMOTE_CACHE_READ_ONLY: ${{ github.event_name != 'push' }}
       - name: Migrations match the schema
         run: |
           pnpm db:generate
@@ -201,12 +183,6 @@ jobs:
         env:
           PGPASSWORD: postgres
       - run: pnpm test
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_API: ${{ vars.TURBO_API || 'https://vercel.com/api' }}
-          TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-          TURBO_REMOTE_CACHE_READ_ONLY: ${{ github.event_name != 'push' }}
       # The cache only grows (each run adds its new task results): start over past 1.5 GB.
       - name: Keep the Turborepo cache small
         if: always()
@@ -245,16 +221,12 @@ jobs:
           path: .turbo/cache
           key: turbo-${{ github.job }}-${{ matrix.shard }}-${{ github.sha }}
           restore-keys: turbo-${{ github.job }}-${{ matrix.shard }}-
-      - run: pnpm --filter @vertex-digital/store exec playwright install --with-deps chromium
+      # The browser only: the runner image already has Chromium's system libraries (it ships
+      # Google Chrome), and `--with-deps` spent up to 13 minutes in apt on slow mirrors.
+      - run: pnpm --filter @vertex-digital/store exec playwright install chromium
       # Both apps run to the end: without it a failure in one cancels the other mid-test, and the
       # cancelled tests are reported as failures of their own ("Test was interrupted").
       - run: pnpm turbo run test:e2e --continue=dependencies-successful -- --shard=${{ matrix.shard }}/4
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_API: ${{ vars.TURBO_API || 'https://vercel.com/api' }}
-          TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-          TURBO_REMOTE_CACHE_READ_ONLY: ${{ github.event_name != 'push' }}
       # The reports and the RTL screenshots are the review evidence of each run.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -273,19 +245,36 @@ jobs:
           if [ -d .turbo/cache ] && [ "$(du -sm .turbo/cache | cut -f1)" -gt 1500 ]; then rm -rf .turbo/cache; fi
 
   # The checks branch protection requires: they pass when every job behind them passed or was
-  # skipped (documentation only), and fail otherwise.
+  # skipped (documentation only), and fail otherwise. A job cancelled because a newer push to the
+  # pull request superseded the commit passes the gate on that outdated commit (the new commit runs
+  # every check); any other cancellation fails it, so a cancelled run never lets a commit merge.
   checks:
     name: Typecheck, lint, test, build
     needs: [changes, static, test]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           echo "$NEEDS"
-          ! echo "$NEEDS" | grep -qE '"result": "(failure|cancelled)"'
+          if echo "$NEEDS" | grep -qE '"result": "failure"'; then exit 1; fi
+          if echo "$NEEDS" | grep -qE '"result": "cancelled"'; then
+            latest=""
+            if [ -n "$PR" ]; then latest=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha) || exit 1; fi
+            if [ -n "$latest" ] && [ "$latest" != "$HEAD_SHA" ]; then
+              echo "Cancelled because a newer push superseded $HEAD_SHA: nothing to report for it."
+              exit 0
+            fi
+            exit 1
+          fi
 
   e2e-gate:
     name: E2E
@@ -293,12 +282,27 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           echo "$NEEDS"
-          ! echo "$NEEDS" | grep -qE '"result": "(failure|cancelled)"'
+          if echo "$NEEDS" | grep -qE '"result": "failure"'; then exit 1; fi
+          if echo "$NEEDS" | grep -qE '"result": "cancelled"'; then
+            latest=""
+            if [ -n "$PR" ]; then latest=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha) || exit 1; fi
+            if [ -n "$latest" ] && [ "$latest" != "$HEAD_SHA" ]; then
+              echo "Cancelled because a newer push superseded $HEAD_SHA: nothing to report for it."
+              exit 0
+            fi
+            exit 1
+          fi
 
   gitleaks:
     name: Secret scan

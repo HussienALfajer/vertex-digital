@@ -1,24 +1,23 @@
 ---
 name: feature-slice
-description: Implement an approved feature spec end to end, layer by layer (contracts → db → api/worker → bridge → admin/store → E2E), with a check gate after each layer, the reviewer and the owner's acceptance steps, then open the PR with auto-merge. The implement step of the feature cycle, after /spec.
-argument-hint: <feature id or spec path, e.g. F03>
+description: Implement an approved feature spec end to end, layer by layer (contracts → db → api/worker → bridge → admin/store → E2E), with a check gate after each layer, the reviewer and a browser check, then the PR, its merge and, when the task includes it, the deploy. The implement step of the feature cycle, after /spec.
+argument-hint: <spec id or path, e.g. S23>
 disable-model-invocation: true
-effort: medium
 ---
 
 Implement **$ARGUMENTS**. This skill orders the work and names the gates; the rules for each folder stay in its `CLAUDE.md` and in ADR 0011. The wiring checklist and the files to copy from are in [wiring.md](wiring.md): read it before the first layer.
 
 ## 0. Preconditions (stop and tell the owner if one fails)
 - The spec (`docs/specs/<id>-*.md`) says `Status: Approved`, and its "Open questions" block nothing this work touches. Never answer an open question yourself.
-- The branch is not `main`. Name it `feat/<id>-<slice>`, e.g. `feat/f03-ledger-api`.
-- The working tree is clean, and `main` is pulled.
+- The branch is not `main`. Name it `feat/<id>-<slice>`, e.g. `feat/s22-quick-buy`.
+- The working tree is clean, and `main` is pulled (pull it yourself).
 
 ## 1. Plan (no code)
 - Read only: the spec, the ADRs it lists, `wiring.md`, and the `CLAUDE.md` of each folder you will touch. Open reference files by range, when you write the layer that needs them.
 - If `TASKS.md` already holds this feature, continue from its first open PR instead of planning again. Check that the earlier PRs are merged into `main`.
 - Split the feature into PRs. Default: PR 1 is contracts, db, api and worker with their tests; PR 2 is admin and/or store and E2E. Use a single PR when the whole feature is small. A PR never leaves `main` broken or half-wired, and never ships a money path without its concurrency and idempotency tests.
-- Write `TASKS.md` for this feature (replace the previous feature's file): a heading per PR, one item per layer below, the wiring items from `wiring.md` that apply, and "checks, reviewer, acceptance, PR with auto-merge" at the end of each PR.
-- Show the owner the PR split and the task list in a few lines, in Arabic, then **stop and wait for approval**.
+- Write `TASKS.md` for this feature (replace the previous task's file): a heading per PR, one item per layer below, the wiring items from `wiring.md` that apply, and "checks, reviewer, browser check, PR and merge" at the end of each PR.
+- Show the owner the PR split and the task list in a few lines, in Arabic, then **stop and wait for approval of the split**. This is the skill's only planned stop.
 
 ## 2. Build, one layer at a time
 Finish a layer, run its gate, fix root causes, tick the item in `TASKS.md`, then start the next layer. Never start a layer while the previous gate fails. A gate runs the layer's own tests with `pnpm verify <files>` (paths from the root) and typechecks with `pnpm typecheck` (Turborepo replays untouched packages); when one fails, fix it and rerun only the files its summary names. Never run a whole suite at a gate.
@@ -37,19 +36,18 @@ Layers a PR does not include are skipped. Helpers that ADR 0011 says arrive with
 
 ## 3. Close each PR
 1. Walk the wiring checklist in `wiring.md` against the diff (`git diff main...HEAD --stat`).
-2. Run `pnpm verify` once (lint, typecheck, test, build, the changed E2E specs, migration and OpenAPI drift), through the `checker` to keep its output out of the context, and the `reviewer` (next step) at the same time. Edit nothing until both are done.
-3. Run the `reviewer` subagent with the spec path. Fix every blocking finding and every failure of step 2 together, then run `pnpm verify` once more: Turborepo replays what the fixes did not touch.
-4. Owner acceptance, in Arabic:
-   - PR with screens: turn the spec's "Acceptance" section into numbered browser steps (`pnpm dev`, which account to sign in as, what to click, what they should see), using the fake supplier and test deposits. Ask before `pnpm db:migrate` on the dev database.
-   - PR without screens: summarize the endpoints and jobs and their rules; the owner may try them at `http://127.0.0.1:<api port>/api/docs`.
-   Fix what the owner reports in the same session, then run `pnpm verify` again (only what changed runs) and the reviewer on the fix.
-5. Tick the PR's items in `TASKS.md`, then, as soon as the owner accepts, finish the PR in the same turn: follow "Finishing a task" in `AGENTS.md` (docs and `docs/ROADMAP.md`, secrets check, checks, commit, push, `gh pr create`, `gh pr merge <number> --auto --merge`, report with the cleanup line and the next session's first message).
+2. Browser check, by you (the owner no longer runs acceptance steps, 2026-10-28):
+   - PR with screens: apply the migrations to the dev database (`pnpm db:migrate`), start the servers with `preview_start` (`api`, `store`, `admin` in `.claude/launch.json`; the worker, which listens on no port, with `pnpm --filter @vertex-digital/worker dev` in a background shell), and walk the spec's "Acceptance" section with the fake supplier and test deposits (commands in `AGENTS.md`): phone and desktop, dark and light, console and network free of errors, RTL screenshots of each new screen. Fix what fails, with a test where one can catch it.
+   - PR without screens: the endpoints and jobs are exercised by their tests; check the new endpoints once at `http://127.0.0.1:3000/api/docs`.
+3. Stop the servers (the worker too), then run `pnpm verify` once (lint, typecheck, test, build, the changed E2E specs, migration and OpenAPI drift), through the `checker` to keep its output out of the context, and the `reviewer` with the spec path at the same time. Edit nothing until both are done.
+4. Fix every blocking finding and every failure of step 3 together, then run `pnpm verify` once more: Turborepo replays what the fixes did not touch.
+5. Tick the PR's items in `TASKS.md`, then finish the PR in the same turn without asking: follow "Finishing a task" in `AGENTS.md` (docs and `docs/ROADMAP.md`, secrets check, checks, commit, push, `gh pr create`, `gh pr merge <number> --auto --merge`, Auto-fix, the wait for the merge, the deploy when the task includes one, the report with the cleanup line and the next session's first message).
 
 ## Stop and ask when
 - The spec is ambiguous in a way that changes the result, or the work needs an answer from `docs/open-questions.md`.
 - The migration review in `/db-migration` finds a destructive or non-backward-compatible change.
-- A command changes the owner's data (`pnpm db:migrate`), reaches the server (`ssh`), or would call a live supplier or blockchain service. Pushing the feature branch and opening its PR at the end is part of the skill and needs no extra question.
+- A command would call a live supplier or blockchain service, or move real money. Migrating the dev database, server commands, pushing the branch, the PR, its merge and the deploy need no question ("Standing approvals" in `AGENTS.md`).
 - The work would go beyond the spec. Record the idea as a follow-up instead.
 
 ## Keep this skill true
-If a step here or in `wiring.md` was missing, wrong or out of date, fix the file in the same PR and say so in the report under "Found". After the first feature ships, fill the "Patterns to copy" table in `wiring.md` with its files.
+If a step here or in `wiring.md` was missing, wrong or out of date, fix the file in the same PR and say so in the report under "Found".

@@ -2,7 +2,6 @@
 name: supplier-adapter
 description: Add or change a supplier adapter in packages/suppliers (WDGZone or a new supplier) behind the SupplierAdapter interface — documented endpoints, Zod response schemas, outcome and error classification, idempotency, webhook HMAC verification, sanitized fixtures and tests that never call the live service. Use when a supplier is added or its API changes.
 argument-hint: <supplier code, e.g. wdgzone>
-disable-model-invocation: true
 effort: high
 ---
 
@@ -32,9 +31,9 @@ Write or update `docs/suppliers/<code>.md`: base URL, authentication header form
 - If the fake supplier lacks a scenario this supplier can produce, add it to the `fake` adapter so the order engine is tested against it too.
 - Gates: `pnpm verify` on the adapter's `packages/suppliers` test files and `pnpm typecheck`, then `pnpm verify` on the `worker` test files that use the registry.
 
-## 4. Live smoke test (only with the owner)
-A live call costs money and uses real keys, so it never runs from tests or CI. When the owner asks, give them the CLI command to run themselves on the server or a trusted machine (`supplier:smoke <code>`: balance, list offers, validate a known test ID, and one smallest order only if the owner says so), and read back only the summary they share.
+## 4. Live check (only by the owner)
+A live call costs money and uses real keys, so it never runs from tests, CI or an agent. After the deploy, the owner enters the key on the admin panel's supplier page and checks the adapter there: "test" (one live balance read, `POST /api/admin/suppliers/:code/test`), a sync (`POST /api/admin/suppliers/:code/sync`, which queues `suppliers.sync`), and the webhook test for suppliers with the `account` capability; the worker's `suppliers.health` job then probes the supplier every minute. One smallest real order happens only when the owner places it. Read back only the summary they share.
 
 ## 5. Close
-- Update `docs/architecture.md` if capabilities changed and the "Patterns to copy" table in `.claude/skills/feature-slice/wiring.md` for the first adapter.
-- `reviewer` subagent, fix its blocking findings, then open the PR with auto-merge at once, following "Finishing a task" in `AGENTS.md`.
+- Update `docs/architecture.md` if capabilities changed, and the "Supplier adapter" row of the "Patterns to copy" table in `.claude/skills/feature-slice/wiring.md` if this adapter is the better pattern.
+- `reviewer` subagent, fix its blocking findings, then finish at once without asking, following "Finishing a task" in `AGENTS.md` (PR, merge, and the deploy when the task includes one).

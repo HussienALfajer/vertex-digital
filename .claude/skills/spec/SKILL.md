@@ -1,7 +1,7 @@
 ---
 name: spec
 description: Interview the owner about a V1 feature and write its spec to docs/specs/. First step of the feature cycle, before any plan or code.
-argument-hint: <feature id or name, e.g. F03>
+argument-hint: <spec id from docs/ROADMAP.md, or the feature's name>
 disable-model-invocation: true
 effort: high
 ---
@@ -9,7 +9,7 @@ effort: high
 Write the spec for **$ARGUMENTS**.
 
 ## 1. Read (only this)
-- The feature's section of `docs/product/v1-scope.md`: find its heading with a search, then read that section and every automation (A01–A15) that mentions it.
+- The feature's section of `docs/product/v1-scope.md`: find its heading with a search, then read that section and every automation (automation A01–A15 in that file, not the audit groups) that mentions it.
 - `docs/open-questions.md`, and the ADRs the feature touches (`docs/decisions/README.md` lists them; money features always read 0003, 0004 or 0006).
 - Specs it depends on in `docs/specs/`, and the relevant tables in `packages/db/src/schema/` and `packages/contracts/src/` (error codes, audit actions, money).
 - The template: `docs/specs/_template.md`.
@@ -27,4 +27,4 @@ Write the spec for **$ARGUMENTS**.
 - Mark the feature `[~]` in `docs/ROADMAP.md`.
 
 ## 4. Hand over
-Summarize the spec for the owner in Arabic, in a few lines: what V1 of the feature does, the main rules and money flows, what stays open. Revise it until the owner approves, then set `Status: Approved` and, in the same turn, open the spec's PR with auto-merge on branch `docs/<id>-spec`, following "Finishing a task" in `AGENTS.md`. The next session starts `/feature-slice <id>`.
+Summarize the spec for the owner in Arabic, in a few lines: what V1 of the feature does, the main rules and money flows, what stays open. Revise it until the owner approves, then set `Status: Approved` and, in the same turn and without asking, open the spec's PR on branch `docs/<id>-spec` and see it merged, following "Finishing a task" in `AGENTS.md`. The next session starts `/feature-slice <id>`.

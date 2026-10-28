@@ -198,7 +198,11 @@ describe('sign-ins and signals (CS5)', () => {
       await customer(),
       await customer(),
     ];
-    const ip = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.7`;
+    // Sign-ins of earlier runs stay in the test database: an address drawn from a small range
+    // (10.x.y.7) was eventually shared with one of them. A documentation IPv6 address from a fresh
+    // id is unique to this run.
+    const hex = newId().replaceAll('-', '');
+    const ip = `2001:db8:${hex.slice(16, 20)}:${hex.slice(20, 24)}:${hex.slice(24, 28)}:${hex.slice(28, 32)}::7`;
     const signIn = (customerId: string, ago: string) =>
       owner.pool.query(
         `insert into customer_sign_ins (id, customer_id, ip_address, created_at)

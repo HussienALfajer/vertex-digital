@@ -44,7 +44,7 @@ if (parts.some((part) => /^timeout\s/.test(part) && runsTests(afterTimeout(part)
 const testRuns = parts.filter(runsTests);
 if (testRuns.length === 0) process.exit(0);
 
-if (!/\bE2E_FULL=1\b/.test(command) && testRuns.some(isWholeE2E)) {
+if (testRuns.some(isWholeE2E)) {
   refuse(
     'The whole E2E suite runs in CI on four shards. Here, run the specs you changed: `pnpm verify` ' +
       'picks them, or `pnpm verify apps/<store or admin>/e2e/<file>.spec.ts [--grep <title>]`. To ' +

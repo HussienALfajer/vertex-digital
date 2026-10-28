@@ -12,21 +12,21 @@ How Vertex Digital is built with Claude Code (Opus 5.5). The method is the one t
 
 ## The feature cycle
 
-A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.md` (`S01`…`S15`), which may group related features; `<id>` below is that spec id. Each session ends with a merged PR (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
+A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.md` (`S01`, `S02`, …), which may group related features; `<id>` below is that spec id. Each session ends with its PR merged (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
 
 | # | Session | Model and effort | First message | The owner | Ends with |
 |---|---|---|---|---|---|
-| 1 | Spec | Opus 5.5, `high` | `/spec <id>` | Answers the interview; approves the spec | The spec's PR (`docs/<id>-spec`) opened with auto-merge |
-| 2 | Backend PR | Opus 5.5, `high` for money, orders, suppliers or new core tables, else `medium` | `/feature-slice <id>` | Approves the PR split and `TASKS.md`; may try the endpoints at `/api/docs` | PR 1 (contracts, db, api, worker) opened with auto-merge |
-| 3 | Front-end PR | Opus 5.5, `medium` | `/feature-slice <id>` | Runs the acceptance steps in the browser (store and/or admin) | PR 2 (store/admin, E2E) opened with auto-merge; `docs/ROADMAP.md` marks the feature done |
-| 4 | Phase deploy (once per phase) | Opus 5.5, `low` | `Deploy phase <n> to production` | Approves the deploy; checks the live site | Deploy done, the phase's deploy item ticked in `docs/ROADMAP.md` |
+| 1 | Spec | Opus 5.5, `high` | `/spec <id>` | Answers the interview; approves the spec | The spec's PR (`docs/<id>-spec`) merged |
+| 2 | Backend PR | Opus 5.5, `high` for money, orders, suppliers or new core tables, else `medium` | `/feature-slice <id>` | Approves the PR split and `TASKS.md`; may try the endpoints at `/api/docs` | PR 1 (contracts, db, api, worker) merged |
+| 3 | Front-end PR | Opus 5.5, `medium` | `/feature-slice <id>` | Nothing required; may try the screens once merged | PR 2 (store/admin, E2E) merged; `docs/ROADMAP.md` marks the feature done |
+| 4 | Phase deploy | Opus 5.5, `low` | `Deploy phase <n> to production` | May check the live site | Deploy done, the phase's deploy item ticked in `docs/ROADMAP.md` |
 
 - A grouped spec usually needs more than two PRs: `/feature-slice` splits it per feature or per layer so each PR stays reviewable; the spec is done when its last PR merges.
 - A small feature (about one table and one screen) does sessions 2 and 3 in one session and one PR.
 - A new supplier or a supplier API change runs `/supplier-adapter <code>` in its own session at `high`.
 - `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR.
 - After each merge the owner runs the cleanup line from the report, then `/clear`.
-- **Deploys happen at the end of a phase, not after each feature.** A hotfix for a bug in production is the exception, deployed when the owner asks.
+- **When a deploy happens:** when the task includes one: the owner asks for it, an audit group, a fix of a production bug, or the end of a phase. Other feature PRs wait for the next deploy. A deploy needs no approval (`AGENTS.md`, "How to work").
 - **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with admin-created test customers only, so nobody can deposit real money before there is something to buy.
 - Inside session 2 or 3, use `/compact` between layers if the context grows, never in the middle of one.
 - The "Next step" of every report names the next session: whether it needs `/clear`, its model and effort from this table, and its exact first message.
@@ -34,14 +34,14 @@ A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.
 Steps inside a session:
 
 1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: access, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
-2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves before any code.
+2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves the split before any code.
 3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate on the layer's own tests (`pnpm verify <files>`, `docs/testing.md`). The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.
-5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs `pnpm verify` again if anything changed since its last green run (Turbo's cache replays every task whose inputs did not change), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
+5. **Browser check, then the PR at once:** the agent walks the spec's "Acceptance" section in the browser itself (fake supplier, test deposits, RTL screenshots) and fixes what it finds; in the same turn it follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs `pnpm verify` again if anything changed since its last green run (Turbo's cache replays every task whose inputs did not change), commits, pushes, opens the PR with auto-merge and Auto-fix, and waits for the merge. Nothing in it waits for the owner (owner, 2026-10-28). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
 
 ## The audit cycle
 
-Before the pilot the whole product is audited in ten groups, A01 to A10 (`docs/audits/README.md`: scope, order, dimensions, severity, report template). One group per session, Opus 5.5 at `high`; the first message is `ابدأ المجموعة A<nn>` or `/audit-group A<nn>`. The `audit-group` skill maps the group, audits every dimension, tests it live in the browser, fixes every finding with a regression test, runs the `reviewer`, opens the PR with auto-merge, and deploys `main` to production once it is merged (an exception to the once-per-phase deploys, owner 2026-10-26). Each group's report is `docs/audits/A<nn>-<slug>.md`; decisions it raises go to `docs/open-questions.md`.
+Before the pilot the whole product was audited in ten groups, A01 to A10 (`docs/audits/README.md`: scope, order, dimensions, severity, report template); all ten were deployed by 2026-10-28, and the skill stays for re-auditing a group. One group per session, Opus 5.5 at `high`; the first message is `ابدأ المجموعة A<nn>` or `/audit-group A<nn>`. The `audit-group` skill maps the group, audits every dimension, tests it live in the browser, fixes every finding with a regression test, runs the `reviewer`, opens the PR with auto-merge, waits for the merge and deploys `main` to production. Each group's report is `docs/audits/A<nn>-<slug>.md`; decisions it raises go to `docs/open-questions.md`.
 
 ## How the instructions are layered
 
@@ -50,12 +50,12 @@ Each rule lives in one place and loads only when it is needed.
 | Layer | Files | Loaded |
 |---|---|---|
 | Project rules | `AGENTS.md` (shared with Codex), `CLAUDE.md` (Claude-specific, imports `AGENTS.md`) | Every session |
-| Folder rules | `<app or package>/CLAUDE.md` (created with the Phase 0 scaffold); the root `AGENTS.md` points other agents to them | When the agent reads a file in that folder |
+| Folder rules | `<app or package>/CLAUDE.md`: layout, local rules and the patterns to copy, short; the root `AGENTS.md` points other agents to them | When the agent reads a file in that folder |
 | Decisions and specs | `docs/decisions/`, `docs/specs/`, `docs/product/v1-scope.md` | On demand, the parts the task needs |
-| Workflows | `.claude/skills/`: `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (each ends by opening its PR) | When invoked (`db-migration` also when a schema change is detected) |
+| Workflows | `.claude/skills/`: `spec`, `feature-slice`, `db-migration`, `supplier-adapter`, `audit-group` (each ends with "Finishing a task": PR, merge, deploy when included) | When invoked (`db-migration` also when a schema change is detected) |
 | Subagents | `.claude/agents/`: `checker` (Haiku, runs `pnpm verify` and returns its summary), `reviewer` (Opus, fresh-context review) | In their own context; only their summary returns |
 | Enforcement | Biome hook on every edit and the test guard on every shell command (`.claude/hooks/`: one test run at a time, no whole E2E suite locally, no `timeout` around tests), architecture and conventions tests, CI, gitleaks | Always, without costing context |
-| Guard rails | `.claude/settings.json`: model and effort, permissions, reads of secrets and generated files denied | Always |
+| Guard rails | `.claude/settings.json`: model and effort, permissions, reads of `.env` files, keys and generated files denied | Always |
 
 A rule that a machine can check belongs in a test or lint rule, not in prose (ADR 0011). A rule that only applies to one folder belongs in that folder's `CLAUDE.md`, not the root.
 
@@ -78,7 +78,7 @@ Don't write "think hard" or "step by step": effort controls depth.
 | An audit group (`/audit-group`) | Opus 5.5 | `high` |
 | A supplier adapter | Opus 5.5 | `high` |
 | Implementing a clearly specified non-money feature | Opus 5.5 | `medium` |
-| Production deploy at the end of a phase | Opus 5.5 | `low` |
+| A production deploy in a session of its own | Opus 5.5 | `low` |
 | Mechanical edits (renames, translation keys, applying a pattern) | Opus 5.5 | `low` |
 | Searching code, reading logs and test output | Subagent on Haiku or Sonnet | — |
 | A problem that failed twice at `xhigh` | Fable 5.1, for that problem only | — |
@@ -87,7 +87,7 @@ Avoid `max` unless a gain is measured. Agent teams, fast mode and `opusplan` are
 
 ## Session habits
 
-1. Set model, effort and connectors at session start; don't change them mid-session.
+1. Set model, effort and connectors at session start; don't change the model mid-session (it drops the prompt cache). A skill may set the effort of its own work in its frontmatter.
 2. Avoid pauses longer than the cache lifetime (1 hour on a subscription). Finish or wrap up a task before a long break.
 3. `/clear` between unrelated tasks (`/rename` first if you may come back).
 4. `/compact <what to keep>` at natural breaks; `/rewind` to abandon a failed path.
@@ -123,14 +123,14 @@ The shared script also installs `vertex-session [repo-dir]`: it starts one Postg
 If the hook reports "Cloud session problems", fix the environment before running checks: a check that fails for environment reasons says nothing about the code. In a cloud session `/clear` does not exist (start a new session instead), the model and effort are set with `/model` and `/effort` before the first message, and the cleanup line after a merge is for the local checkout.
 
 Cloud limits:
-- `gh pr create` is refused in a cloud session: push the branch and open the PR with the **Create PR** button, then turn on auto-merge as in "Finishing a task".
+- `gh pr create` is refused in a cloud session: push the branch, the owner presses **Create PR**, then auto-merge is turned on as in "Finishing a task".
 - `pnpm db:seed-local` does not work in the cloud: it needs the production catalog snapshot, copied over SSH (`scripts/pull-catalog-snapshot.sh`).
 - The Claude GitHub App must be installed on the repository (needed to clone and push).
 
 What always stays local:
 - **Production deploys** (`ssh`): the server's SSH key never goes into a cloud environment.
-- **The owner's acceptance test in the browser:** pull the branch into the local checkout, migrate and run `pnpm dev`.
-- **Anything with real secrets:** live supplier smoke tests, real chain-reader keys, the Madani font files.
+- **A browser test against the full local store** (`pnpm db:seed-local` needs the production catalog snapshot over SSH).
+- **Anything with real secrets:** live supplier checks, real chain-reader keys, the Madani font files.
 
 ## References
 
