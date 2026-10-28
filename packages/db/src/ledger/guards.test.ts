@@ -237,6 +237,8 @@ describe('append-only trigger', () => {
       'reconciliation_results',
       'reconciliation_settings',
       'store_switch_changes',
+      // Their TRUNCATE triggers: rows are guarded by `stored_files_guard` and
+      // `supplier_logs_guard` (stored-files.test.ts, suppliers.test.ts; audit A10-45, A10-54).
       'stored_files',
       'supplier_balance_reads',
       'supplier_calls',

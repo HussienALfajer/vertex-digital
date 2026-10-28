@@ -40,6 +40,8 @@ import { SupportAutoCloseJob } from './jobs/support/auto-close.job.js';
 import { PurgeSignInsJob } from './jobs/support/purge-sign-ins.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 import { PurgeOutboxesJob } from './jobs/system/purge-outboxes.job.js';
+import { PurgeSupplierLogsJob } from './jobs/system/purge-supplier-logs.job.js';
+import { SweepFilesJob } from './jobs/system/sweep-files.job.js';
 import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
 import { ReviewReminderJob } from './jobs/telegram/review-reminder.job.js';
@@ -139,6 +141,8 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     SupportAutoCloseJob,
     PurgeSignInsJob,
     PurgeOutboxesJob,
+    PurgeSupplierLogsJob,
+    SweepFilesJob,
     PurgeExpiredJob,
     SendPushJob,
   ],

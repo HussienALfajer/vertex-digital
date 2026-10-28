@@ -12,6 +12,7 @@ import {
   catalogProducts,
   customers,
   damascusDate,
+  deposits,
   ensureCustomerWallet,
   ensureSystemAccount,
   fulfilmentAttempts,
@@ -59,6 +60,9 @@ const RULE = { percentBp: 1000, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.1) };
 const MAX_UNITS = MAX_QUANTITY_LIMIT;
 const state = { fake: '', gameId: '', productId: '', routeId: '', offerId: '', price: 0, cost: 0 };
 const today = damascusDate(new Date());
+const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const referenceCode = () =>
+  `VD-${Array.from(randomBytes(5), (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('')}`;
 
 async function json<T = Record<string, unknown>>(response: Response, status: number): Promise<T> {
   const payload = await response.json();
@@ -118,6 +122,11 @@ async function delivered(who: Buyer, quantity = 1) {
     }),
     201,
   );
+  return deliver(orderId, quantity);
+}
+
+/** Sends a paid order to the fake supplier and applies its delivery, as the worker does. */
+async function deliver(orderId: string, quantity: number) {
   const attemptId = await test.db.transaction(async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new Error('No order');
@@ -429,6 +438,99 @@ describe('figures', () => {
     expect(byMerchant.rows.find((row) => row.key === shop.id)).toBeUndefined();
   });
 
+  it('cuts days at midnight in Damascus, not UTC (edge case 15)', async () => {
+    // Damascus keeps UTC+3 all year: 21:30 UTC is 00:30 the next day there.
+    const expiredOn = async (date: string) =>
+      (
+        await json<{ rows: { method: string; expired: number }[] }>(
+          await adminGet(`/api/admin/reports/deposits?from=${date}&to=${date}`),
+          200,
+        )
+      ).rows.find((row) => row.method === 'sham_cash')?.expired ?? 0;
+    const before = { first: await expiredOn('2030-03-04'), second: await expiredOn('2030-03-05') };
+    const expired = async (customerId: string, expiresAt: string) =>
+      test.db.insert(deposits).values({
+        customerId,
+        method: 'sham_cash',
+        status: 'expired',
+        referenceCode: referenceCode(),
+        currency: 'USD',
+        declaredAmountUnits: usd(10),
+        declaredUsdUnits: usd(10),
+        expiresAt: new Date(expiresAt),
+        idempotencyKey: randomUUID(),
+      });
+    const real = await buyer({ funded: false });
+    const testCustomer = await buyer({ isTest: true, funded: false });
+    await expired(real.id, '2030-03-04T20:30:00Z');
+    await expired(real.id, '2030-03-04T21:30:00Z');
+    // R3 counts real customers only (RP2).
+    await expired(testCustomer.id, '2030-03-04T21:30:00Z');
+    expect(await expiredOn('2030-03-04')).toBe(before.first + 1);
+    expect(await expiredOn('2030-03-05')).toBe(before.second + 1);
+  });
+
+  it('counts R4 and R5 for real customers only (RP2, RP6, RP7)', async () => {
+    const finished = async () =>
+      (
+        await json<{ products: { productId: string; finished: number }[] }>(
+          await adminGet(`/api/admin/reports/refunds?${period}`),
+          200,
+        )
+      ).products.find((row) => row.productId === state.productId)?.finished ?? 0;
+    const before = await finished();
+    const real = await buyer();
+    await delivered(real);
+    const testCustomer = await buyer({ isTest: true });
+    await delivered(testCustomer, 3);
+    expect(await finished()).toBe(before + 1);
+    const top = await json<{ rows: { customerId: string }[] }>(
+      await adminGet(`/api/admin/reports/customers?${period}`),
+      200,
+    );
+    expect(top.rows.map((row) => row.customerId)).not.toContain(testCustomer.id);
+  });
+
+  it('reports owner-funded orders on their own line, out of the customers’ totals (AP14)', async () => {
+    type WithOwner = Sales & { ownerFunded: { delivered: number; salesUsdUnits: number } };
+    const before = await json<WithOwner>(await adminGet(`/api/admin/reports/sales?${period}`), 200);
+    await json(
+      await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: totp(admin.secret) },
+      }),
+      200,
+    );
+    const placed = await json<{ id: string; payer: string }>(
+      await client.post('/api/admin/orders', {
+        cookie: admin.cookie,
+        headers: { 'idempotency-key': randomUUID() },
+        body: {
+          purpose: 'walk_in',
+          productId: state.productId,
+          quantity: 1,
+          fields: { player_id: '5123456789' },
+          expectedUnitPriceUsdUnits: state.price,
+          confirmPlayer: true,
+          reason: 'Bought at the counter',
+        },
+      }),
+      201,
+    );
+    expect(placed.payer).toBe('owner');
+    await deliver(placed.id, 1);
+    const after = await json<WithOwner>(await adminGet(`/api/admin/reports/sales?${period}`), 200);
+    expect(after.ownerFunded.delivered - before.ownerFunded.delivered).toBe(1);
+    expect(after.ownerFunded.salesUsdUnits - before.ownerFunded.salesUsdUnits).toBe(state.price);
+    expect(after.totals.delivered).toBe(before.totals.delivered);
+    expect(after.totals.salesUsdUnits).toBe(before.totals.salesUsdUnits);
+    const ledger = await json<{ rows: { line: string }[] }>(
+      await adminGet(`/api/admin/reports/ledger?${period}`),
+      200,
+    );
+    expect(ledger.rows.map((row) => row.line)).toContain('owner_drawing');
+  });
+
   it('shows the ledger with test customers apart (RP8)', async () => {
     const ledger = await json<{
       rows: { line: string; usdUnits: number; testUsdUnits: number | null }[];
@@ -495,5 +597,23 @@ describe('Excel export (X1–X4)', () => {
       from: today,
       to: today,
     });
+  });
+
+  it('refuses exports past 10 a minute (X4)', async () => {
+    const statuses: number[] = [];
+    for (let index = 0; index < 11; index += 1) {
+      const response = await adminGet(
+        '/api/admin/reports/sales/export?from=2001-01-01&to=2001-01-01',
+      );
+      statuses.push(response.status);
+      if (response.status === 429) {
+        expect(await body(response)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+        break;
+      }
+      await response.arrayBuffer();
+    }
+    // Exports earlier in this file count in the same minute, so the refusal may come sooner.
+    expect(statuses.at(-1)).toBe(429);
+    expect(statuses.every((status) => status === 200 || status === 429)).toBe(true);
   });
 });

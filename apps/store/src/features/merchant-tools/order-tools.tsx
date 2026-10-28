@@ -43,15 +43,28 @@ export function OrderTools({ order, onChange }: { order: Order; onChange: () => 
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  /**
+   * The clipboard write starts inside the tap, fed by the release (audit A06-21): Safari refuses a
+   * write that starts after an awaited request, outside the user gesture. One release either way.
+   */
   async function copy() {
     setFailure(null);
     setCopied(false);
     setBusy(true);
-    const result = await releaseCodes(order.id, { purpose: 'copy' });
+    const release = releaseCodes(order.id, { purpose: 'copy' });
+    const text = release.then((result) =>
+      result.ok
+        ? result.data.codes.map((code) => code.code).join('\n')
+        : Promise.reject(new Error('Release refused')),
+    );
+    const written = writeClipboard(text);
+    // A refused release is shown from its answer below; the write's rejection is expected then.
+    written.catch(() => undefined);
+    const result = await release;
     setBusy(false);
     if (!result.ok) return setFailure(result.reason);
     try {
-      await navigator.clipboard.writeText(result.data.codes.map((code) => code.code).join('\n'));
+      await written;
       setCopied(true);
     } catch {
       setFailure('UNKNOWN');
@@ -158,6 +171,18 @@ export function OrderTools({ order, onChange }: { order: Order; onChange: () => 
       )}
     </Card>
   );
+}
+
+/**
+ * Writes text that is still on its way: a `ClipboardItem` holding the pending text, so the write
+ * belongs to the current gesture; `writeText` once it arrives where `ClipboardItem` is missing.
+ */
+function writeClipboard(text: Promise<string>): Promise<void> {
+  if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard.write !== 'function') {
+    return text.then((value) => navigator.clipboard.writeText(value));
+  }
+  const blob = text.then((value) => new Blob([value], { type: 'text/plain' }));
+  return navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
 }
 
 /** SP5: the order's selling price, set or changed later at the order's rate; no money moves. */

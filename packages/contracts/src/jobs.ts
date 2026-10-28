@@ -54,6 +54,10 @@ export const QUEUES = {
   customersPurgeSignIns: 'customers.purge-sign-ins',
   /** Clears settled emails' addresses and parameters, and Telegram messages' parameters, past the retention, daily at 04:30 `Asia/Damascus` (Q29). */
   systemPurgeOutboxes: 'system.purge-outboxes',
+  /** Deletes supplier calls and balance reads past 180 days, daily at 04:45 `Asia/Damascus` (A10-54). */
+  systemPurgeSupplierLogs: 'system.purge-supplier-logs',
+  /** Removes the files of catalog images, QR images and logos unused for 30 days, daily at 05:15 `Asia/Damascus` (A10-45). */
+  systemSweepFiles: 'system.sweep-files',
   /** Deletes ended sessions and expired codes and challenges of both auth instances, hourly (A01-1). */
   authPurgeExpired: 'auth.purge-expired',
   /** The nightly reconciliation at 00:30 `Asia/Damascus`, or a manual run (S13 RN1–RN5). */

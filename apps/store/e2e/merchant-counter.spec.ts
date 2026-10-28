@@ -719,6 +719,55 @@ test.describe('the order page, printing and verification (F34, F35)', () => {
       });
   });
 
+  test('copies the codes with one logged release, the write started in the tap (audit A06-21)', async ({
+    page,
+    api,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    signedIn(api)
+      .on(`GET /api/orders/${CODE_ORDER_ID}`, 200, codeOrder)
+      .on(`POST /api/orders/${CODE_ORDER_ID}/codes/release`, 200, {
+        codes: codeOrder.codes.map((code) => ({
+          id: code.id,
+          position: code.position,
+          code: `GPLAY-${code.position}A2B`,
+        })),
+      });
+    await page.goto(`/orders/${CODE_ORDER_ID}`);
+    const tools_ = page.getByTestId('order-tools');
+    await tools_.getByRole('button', { name: tools.order.copyCodes }).click();
+    await expect(tools_.getByRole('status')).toHaveText(tools.order.copied);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      codeOrder.codes.map((code) => `GPLAY-${code.position}A2B`).join('\n'),
+    );
+    expect(api.last(`POST /api/orders/${CODE_ORDER_ID}/codes/release`)?.body).toEqual({
+      purpose: 'copy',
+    });
+  });
+
+  test('a refused copy release shows its reason and copies nothing (audit A06-21)', async ({
+    page,
+    api,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    signedIn(api)
+      .on(`GET /api/orders/${CODE_ORDER_ID}`, 200, codeOrder)
+      .on(`POST /api/orders/${CODE_ORDER_ID}/codes/release`, 409, {
+        statusCode: 409,
+        code: 'CODES_NOT_DELIVERED',
+      });
+    await page.goto(`/orders/${CODE_ORDER_ID}`);
+    const tools_ = page.getByTestId('order-tools');
+    await expect(tools_.getByRole('button', { name: tools.order.copyCodes })).toBeVisible();
+    await page.evaluate(() => navigator.clipboard.writeText('before'));
+    await tools_.getByRole('button', { name: tools.order.copyCodes }).click();
+    await expect(tools_.getByText(ar.errors.CODES_NOT_DELIVERED)).toBeVisible();
+    await expect(tools_.getByRole('status')).toBeHidden();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('before');
+  });
+
   test('prints the 58 mm receipt with the shop and the QR, never the price paid (PR2, BR1)', async ({
     page,
     api,

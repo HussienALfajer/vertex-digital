@@ -364,6 +364,21 @@ describe('Sham Cash counts and explanations', () => {
   });
 });
 
+describe('a count key sent twice at once (A09-10)', () => {
+  it('records one count and answers both with it', async () => {
+    const key = randomUUID();
+    const answers = await Promise.all([count('SYP', 100_000, key), count('SYP', 100_000, key)]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([200, 201]);
+    const [first, second] = await Promise.all(answers.map((answer) => body(answer)));
+    expect(first?.id).toBe(second?.id);
+    const runs = await test.db
+      .select({ id: reconciliationRuns.id })
+      .from(reconciliationRuns)
+      .where(eq(reconciliationRuns.idempotencyKey, key));
+    expect(runs).toHaveLength(1);
+  });
+});
+
 describe('settings', () => {
   it('changes the settings with re-authentication and an audit entry', async () => {
     const changed = await client.put('/api/admin/reconciliation/settings', {

@@ -404,6 +404,104 @@ describe('append-only supplier tables', () => {
     }));
 });
 
+describe('supplier log retention (audit A10-54, migration 0103)', () => {
+  const call = (client: pg.PoolClient, supplier: string, daysAgo: number) => {
+    const id = newId();
+    return client
+      .query(
+        `insert into supplier_calls (id, supplier_id, operation, result, latency_ms, created_at)
+         values ($1, $2, 'get_balance', 'ok', 10, now() - make_interval(days => $3))`,
+        [id, supplier, daysAgo],
+      )
+      .then(() => id);
+  };
+  const read = (client: pg.PoolClient, supplier: string, currency: string, daysAgo: number) => {
+    const id = newId();
+    return client
+      .query(
+        `insert into supplier_balance_reads (id, supplier_id, currency, amount_units, created_at)
+         values ($1, $2, $3, 1000000, now() - make_interval(days => $4))`,
+        [id, supplier, currency, daysAgo],
+      )
+      .then(() => id);
+  };
+  const left = async (client: pg.PoolClient, table: string, ids: string[]) => {
+    const { rows } = await client.query<{ id: string }>(
+      `select id from ${table} where id = any($1::uuid[])`,
+      [ids],
+    );
+    return new Set(rows.map((row) => row.id));
+  };
+
+  it('purges calls and balance reads past 180 days, keeping what is still read', () =>
+    rolledBack(async (client) => {
+      const supplier = await supplierId(client, 'fazercards');
+      await client.query(
+        `insert into supplier_health_changes (id, supplier_id, state, reason, created_at)
+         values ($1, $2, 'degraded', 'retention test', now() - interval '190 days')`,
+        [newId(), supplier],
+      );
+      const old = await call(client, supplier, 200);
+      const sinceChange = await call(client, supplier, 185);
+      const recent = await call(client, supplier, 10);
+      const oldRead = await read(client, supplier, 'USD', 300);
+      const newestRead = await read(client, supplier, 'USD', 0);
+      const onlySyp = await read(client, supplier, 'SYP', 300);
+
+      const { rows } = await client.query<{ calls: number; balance_reads: number }>(
+        'select * from purge_supplier_logs(1000)',
+      );
+      expect(rows[0]?.calls).toBeGreaterThanOrEqual(1);
+      expect(rows[0]?.balance_reads).toBeGreaterThanOrEqual(1);
+      expect(await left(client, 'supplier_calls', [old, sinceChange, recent])).toEqual(
+        new Set([sinceChange, recent]),
+      );
+      expect(await left(client, 'supplier_balance_reads', [oldRead, newestRead, onlySyp])).toEqual(
+        new Set([newestRead, onlySyp]),
+      );
+    }));
+
+  it('refuses a batch out of range', () =>
+    rolledBack(async (client) => {
+      expect(await violation(client, 'select * from purge_supplier_logs(0)')).toMatch(
+        /batch must be between/,
+      );
+    }));
+
+  it('refuses the owner any other change, even with the purge flag set by hand', () =>
+    rolledBack(async (client) => {
+      const supplier = await supplierId(client, 'fazercards');
+      const young = await call(client, supplier, 10);
+      const old = await call(client, supplier, 200);
+      const readId = await read(client, supplier, 'USD', 200);
+      expect(await violation(client, 'delete from supplier_calls where id = $1', [old])).toMatch(
+        /supplier_calls is append-only: DELETE/,
+      );
+      expect(
+        await violation(client, 'update supplier_calls set latency_ms = 1 where id = $1', [old]),
+      ).toMatch(/supplier_calls is append-only: UPDATE/);
+      expect(
+        await violation(client, 'delete from supplier_balance_reads where id = $1', [readId]),
+      ).toMatch(/supplier_balance_reads is append-only: DELETE/);
+      await client.query(`select set_config('vertex.supplier_logs_purge', 'on', true)`);
+      expect(await violation(client, 'delete from supplier_calls where id = $1', [young])).toMatch(
+        /supplier_calls is append-only: DELETE/,
+      );
+      expect(
+        await violation(client, 'update supplier_calls set latency_ms = 1 where id = $1', [old]),
+      ).toMatch(/supplier_calls is append-only: UPDATE/);
+    }, owner.pool));
+
+  it('lets the app role run the purge but not delete itself', () =>
+    rolledBack(async (client) => {
+      const supplier = await supplierId(client, 'fazercards');
+      const old = await call(client, supplier, 200);
+      expect(await violation(client, 'delete from supplier_calls where id = $1', [old])).toMatch(
+        /permission denied/,
+      );
+    }));
+});
+
 describe('the supplier catalog (S16 SC1–SC3, SF1, SF2)', () => {
   it('seeds the low-stock threshold on the current policy', async () => {
     const { rows } = await connection.pool.query<{ low_stock_units: string }>(

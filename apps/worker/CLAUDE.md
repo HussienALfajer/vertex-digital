@@ -54,7 +54,7 @@ NestJS standalone application context (ADR 0001, 0002): a pg-boss consumer for f
 - Customer events: `notifyCustomer(tx, bossJobSender(boss), …)` from `@vertex-digital/db` (notification, email, live event at commit).
 - Email: `core/email/mailer.ts`, SMTP or `.eml` files under `EMAIL_LOG_DIR` with `EMAIL_TRANSPORT=log` (the default outside production). Templates in `jobs/email/email-templates.ts`.
 - Push: `PushSender` is the only holder of the VAPID private key (10 s, no redirects); `PUSH_TRANSPORT=log` writes JSON Lines to `PUSH_LOG_DIR`. Merchant emails and pushes carry no admin text and never name a price list; product alert pushes carry no price.
-- Files: the API's stored files are read-only (`FILES_ROOT`; a relative path resolves from `apps/api`). The worker never writes there.
+- Files: the API's stored files are read-only (`FILES_ROOT`; a relative path resolves from `apps/api`). The worker never writes there, except `system.sweep-files` removing swept and orphaned files (A10-45).
 - Logs through the Nest logger, never `console.log`; logs redact `codes`; never log a query's parameters.
 
 ## Tests
