@@ -1,6 +1,6 @@
 # A09 Control, reconciliation and reports
 
-Status: in progress
+Status: merged (PR [#196](https://github.com/HussienALfajer/vertex-digital/pull/196))
 Branch: fix/audit-a09-control · Started: 2026-10-28 · Specs: S05 (switches), S11 (dashboard), S13 · ADRs: 0019, 0025, 0027
 
 ## Scope
@@ -102,4 +102,5 @@ Local stack on a dev database emptied and seeded in this session (owner's author
   2. A TXID booked as an unclaimed receipt before the scanner recorded it made the credit throw, so the scan job failed on it for good. The worker's `txidClaimed` (scanner and verifier) now counts a standing unclaimed receipt as held: the transfer stays unmatched, a deposit claiming it bounces `txid_used` (worker `deposits-usdt.test.ts` "leaves a TXID booked as an unclaimed receipt unmatched and scans on").
   3. The nightly run failed stale runs (row locks) before taking the start lock, the API the other way round: a deadlock at 00:30 with a stale run. The night now takes its locks first.
   - Not blocking, noted: the merchant breakdown counts orders with a `merchant_order_sales` row; a merchant order placed before S21 PR 1 deployed has none and is left out (production had no merchant before the pilot). Rule T8 compares a reference per source place, so one Sham Cash number could be booked from `outside_syp` and from `outside_usd` (pre-existing, with A09-5).
-- **`pnpm verify` (whole branch, after the review fixes):** see the PR.
+- **`pnpm verify` (whole branch, final tree `0e64126`):** lint pass; typecheck, test and build pass (`packages/db/src/ledger/deposits.test.ts` failed once on a pre-existing random-amount collision of a unique open USDT amount, passed on rerun, recorded for A10); migrations and OpenAPI in step; store E2E 110 passed, admin E2E 329 passed.
+- **CI and deploy:** after the merge.
