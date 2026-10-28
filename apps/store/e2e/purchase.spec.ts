@@ -151,10 +151,13 @@ test.describe('buy box', () => {
     await page.goto('/games/pubg-mobile');
     await choose(page, '60 UC');
     await idField(page).fill('51234567');
+    const sessionReads = api.sessionReadsFromSignIn();
     await buyBox(page).getByRole('button', { name: p.signIn }).click();
     await expect(page).toHaveURL(
       `/sign-in?next=${encodeURIComponent(`/games/pubg-mobile?pack=${p60.id}`)}`,
     );
+    // The sign-in page's own session read answers signed out first (`sessionReadsFromSignIn`).
+    await expect.poll(() => api.sessionReadsFromSignIn()).toBeGreaterThan(sessionReads);
     // Signed in: the sign-in page sends the customer back to `next`.
     signedIn(api);
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);

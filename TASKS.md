@@ -1,15 +1,10 @@
-# TASKS — Agent workflow and CI (branch `chore/agent-workflow-and-ci`)
+# TASKS — Flaky E2E tests in CI (branch `fix/flaky-e2e`)
 
-From the owner's review of check times, CI failures, approval prompts and the instruction files (2026-10-28).
+CI fails a test that only passes on its retry (`failOnFlakyTests`). Failed CI runs since 2026-10-17, each checked against the current code.
 
-- [x] CI: Chromium without `--with-deps` (apt took up to 13 minutes); gates skipped, not failed, on a superseded run; remote-cache plumbing removed (owner decision)
-- [x] Lint: `scripts/lint.mjs` for `pnpm lint`, `lint:fix` and `pnpm verify`, so a local `.git/info/exclude` no longer hides tracked folders from Biome
-- [x] `scripts/wait-merge.sh`: wait for the merge, merge a green idle PR, update a branch behind `main`
-- [x] Standing approvals (owner, 2026-10-28) in `AGENTS.md` and `CLAUDE.md`; "Finishing a task" ends with the merge and the deploy
-- [x] Skills: feature-slice browser check by the agent (no owner acceptance), no asks for `db:migrate`, `db:reset-local`, `ssh`; audit-group stops the dev servers before verify and records the deploy without a PR of its own
-- [x] Folder `CLAUDE.md` files slimmed to rules and patterns; `pnpm verify <file>` everywhere
-- [x] The 26 consistency findings: deploy rule, effort source, ADR 0011 current state, reviewer ADRs, access-test wording, IDs, stale phase text, `.env` read denies, launch.json worker entry, `E2E_FULL` bypass, Turborepo block
-- [x] Found by verify: `customers.test.ts` drew its sign-in IP from 62,500 addresses that earlier runs' rows eventually shared; now a unique documentation IPv6 address
-- [x] Fresh-context consistency audit of every instruction file, and its findings: superseded-aware CI gates (a cancelled head run never passes), `wait-merge.sh` without `set -e` (retries, exit 5, status contexts), rules restored in the folder files, deploy records in a small docs PR, cloud and worker steps, `docs/deployment.md` deploy log, FazerCards 400 doc matched to the code
-- [x] Found by verify: the worker's `deposits.test.ts` drew reference codes that earlier runs' deposits held; it now draws again on `deposits_reference_code_unique`, as the API does
+- [x] Already fixed before this branch: admin deposits reject reason (`c808f66`), wallet entry pages (`88d85ae`), store frozen account buy box (`82f690a`), admin wrong TOTP code (`5f13f01`); the reconciliation reversal flow that failed was rewritten in audit A09
+- [x] Admin `accounts.spec.ts` idle session: waits for the code step before typing the code (the code went into the password form)
+- [x] Store sign-in races (`convenience.spec.ts` direct link, `accounts.spec.ts` email change, `purchase.spec.ts` id kept through sign-in): wait for the sign-in page's own session read (`sessionReadsFromSignIn` in `e2e/test.ts`) before signing in, or its redirect aborts the next `goto`
+- [x] Admin `suppliers.spec.ts` step 4: a four-screen tour ran out of the default 30 seconds; `test.setTimeout(90_000)` as `docs/testing.md` asks
+- [x] The fixed tests, three runs in a row
 - [x] `pnpm verify`, PR, merge

@@ -338,6 +338,9 @@ test.describe('suppliers', () => {
     page,
     admin,
   }) => {
+    // A tour of four screens (docs/testing.md): it ran out of the default 30 seconds on a loaded
+    // CI runner mid-step (2026-10-20), with every check on its way to passing.
+    test.setTimeout(90_000);
     const { game } = mapped(admin);
     // Under 10%: the price follows at once.
     admin.suppliers.script('fake-uc-60', { costUsdUnits: 920_000 });

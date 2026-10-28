@@ -896,10 +896,14 @@ test.describe('quick buy (S22 F40)', () => {
     const seen = await request.get(`http://127.0.0.1:${CATALOG_PORT}/_seen?token=${QUICK_CODE}`);
     expect((await seen.json()).forwardedFor).toContain(`${visitor}|whatsapp`);
     // Signed out: the sign-in comes back to the pack with the link's choice.
+    const sessionReads = api.sessionReadsFromSignIn();
     await buyBox(page).getByRole('button', { name: p.signIn }).click();
     await expect(page).toHaveURL(
       `/sign-in?next=${encodeURIComponent(`/games/pubg-mobile?pack=${p660.id}&via=q`)}`,
     );
+    // The sign-in page's own session read answers signed out first (`sessionReadsFromSignIn`):
+    // signed in sooner, its redirect cut the `goto` below short (net::ERR_ABORTED, CI, 2026-10-28).
+    await expect.poll(() => api.sessionReadsFromSignIn()).toBeGreaterThan(sessionReads);
     signedIn(api)
       .on('GET /api/saved-players', 200, { items: [BROTHER, MINE] })
       .on('POST /api/orders', 201, order(p660, { stage: 'processing' }))
