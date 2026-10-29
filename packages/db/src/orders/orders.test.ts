@@ -273,6 +273,16 @@ async function product(
 
 const hash = (value: object) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
+/** A product's current price on a list (its newest row, as the routing reads it). */
+async function listPriceOf(productId: string, priceListId: string): Promise<number> {
+  const { rows } = await pool.query<{ price: string }>(
+    `select price_usd_units::text as price from product_prices
+     where product_id = $1 and price_list_id = $2 order by created_at desc, id desc limit 1`,
+    [productId, priceListId],
+  );
+  return Number(rows[0]?.price);
+}
+
 function request(
   customerId: string,
   item: { id: string; price: number },
@@ -3172,6 +3182,7 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
       adminId,
       purpose: 'walk_in',
       customerId: null,
+      priceListId: null,
       productId: item.id,
       quantity: 1,
       fields: { player_id: '5123456789' },
@@ -3193,7 +3204,7 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
 
   const drawings = () => db.transaction(async (tx) => accountBalance(tx, await ownerDrawings(tx)));
 
-  it('charges a merchant on behalf at their list; owner-funded orders take retail (S20 PO4)', async () => {
+  it('charges a merchant on behalf at their list; gifts take the cost list, walk-in retail (S20 PO4, AP16)', async () => {
     const item = await product({ cost: usd(1) });
     const merchant = await customer({ funds: usd(10) });
     await db.update(customers).set({ accountType: 'merchant' }).where(eq(customers.id, merchant));
@@ -3209,18 +3220,68 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
       payer: 'customer',
     });
     expect(await balance(merchant)).toBe(usd(10) - usd(1.05));
+    const costPrice = await listPriceOf(item.id, ROOT_PRICE_LIST_IDS.cost);
+    expect(costPrice).toBeLessThan(item.price);
     for (const purpose of ['gift', 'compensation'] as const) {
+      // A gift or a compensation is booked at the cost list, whatever the customer pays.
+      expect(
+        await refusal(
+          adminBuy(
+            adminInput(item, { purpose, customerId: merchant, reason: 'A gift from owner' }),
+          ),
+        ),
+      ).toMatchObject({ code: 'PRICE_CHANGED', details: { unitPriceUsdUnits: costPrice } });
       const { order } = await adminBuy(
-        adminInput(item, { purpose, customerId: merchant, reason: 'A gift from the owner' }),
+        adminInput(
+          { id: item.id, price: costPrice },
+          { purpose, customerId: merchant, reason: 'A gift from the owner' },
+        ),
       );
       expect(order).toMatchObject({
-        priceListId: ROOT_PRICE_LIST_IDS.retail,
-        unitPriceUsdUnits: item.price,
+        priceListId: ROOT_PRICE_LIST_IDS.cost,
+        unitPriceUsdUnits: costPrice,
         payer: 'owner',
       });
     }
     const walkIn = await adminBuy(adminInput(item));
     expect(walkIn.order.priceListId).toBe(ROOT_PRICE_LIST_IDS.retail);
+  });
+
+  it('charges a walk-in order on the list the admin chose; an unknown or archived list is refused (AP16)', async () => {
+    const item = await product({ cost: usd(1) });
+    const wholesale = await listPriceOf(item.id, ROOT_PRICE_LIST_IDS.wholesale);
+    const { order } = await adminBuy(
+      adminInput({ id: item.id, price: wholesale }, { priceListId: ROOT_PRICE_LIST_IDS.wholesale }),
+    );
+    expect(order).toMatchObject({
+      priceListId: ROOT_PRICE_LIST_IDS.wholesale,
+      unitPriceUsdUnits: wholesale,
+      payer: 'owner',
+    });
+    expect(await refusal(adminBuy(adminInput(item, { priceListId: newId() })))).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { fields: { priceListId: 'not_found' } },
+    });
+    const archived = newId();
+    await pool.query(
+      `insert into price_lists (id, kind, name, parent_list_id, archived_at)
+       values ($1, 'custom', $2, $3, now())`,
+      [archived, `List ${unique()}`, ROOT_PRICE_LIST_IDS.retail],
+    );
+    expect(await refusal(adminBuy(adminInput(item, { priceListId: archived })))).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  it('gives a paused pack as a gift at the cost list (AP5, AP16)', async () => {
+    const item = await product({ cost: usd(1) });
+    const buyer = await customer();
+    await pool.query("update catalog_products set status = 'paused' where id = $1", [item.id]);
+    const costPrice = await listPriceOf(item.id, ROOT_PRICE_LIST_IDS.cost);
+    const { order } = await adminBuy(
+      adminInput({ id: item.id, price: costPrice }, { purpose: 'gift', customerId: buyer }),
+    );
+    expect(order).toMatchObject({ priceListId: ROOT_PRICE_LIST_IDS.cost, payer: 'owner' });
   });
 
   it('pays a walk-in order from owner drawings, without a customer or a notice (AP1, AM2, AP12, AP13)', async () => {
@@ -3339,7 +3400,8 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
   });
 
   it('gives a gift from owner funds, hides its price and refunds it to owner drawings (AM2, AM3, AP11, edge case 4)', async () => {
-    const item = await product();
+    const product0 = await product();
+    const item = { ...product0, price: await listPriceOf(product0.id, ROOT_PRICE_LIST_IDS.cost) };
     const buyer = await customer();
     const before = await drawings();
     const usedBefore = (await ownerSpentToday(db)).usedUsdUnits;
@@ -4180,16 +4242,18 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       shop,
     ]);
     const counted = (await buy(request(shop, { id: item.id, price }))).order;
+    const giftPrice = await listPriceOf(item.id, ROOT_PRICE_LIST_IDS.cost);
     const gift = (
       await db.transaction((tx) =>
         adminPurchaseOrder(tx, context(), {
           adminId: newId(),
           purpose: 'gift',
           customerId: shop,
+          priceListId: null,
           productId: item.id,
           quantity: 1,
           fields: { player_id: '5123456789' },
-          expectedUnitPriceUsdUnits: item.price,
+          expectedUnitPriceUsdUnits: giftPrice,
           confirmPlayer: false,
           reason: 'A gift from the owner',
           customerNote: null,

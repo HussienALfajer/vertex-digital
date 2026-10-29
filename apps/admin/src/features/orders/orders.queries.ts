@@ -254,13 +254,33 @@ export const purchaseGamesQuery = queryOptions({
   staleTime: 5 * 60_000,
 });
 
-export const purchaseContextQuery = (customerId: string | undefined, gameId?: string) =>
+/**
+ * S20 PO4: with a customer and a game, the customer's list prices; rule AP16: with a game and a
+ * list, that list's prices for an order the owner pays.
+ */
+export const purchaseContextQuery = (
+  customerId: string | undefined,
+  gameId?: string,
+  priceListId?: string,
+) =>
   queryOptions({
-    queryKey: ['orders', 'purchase-context', customerId ?? null, gameId ?? null],
+    queryKey: [
+      'orders',
+      'purchase-context',
+      customerId ?? null,
+      gameId ?? null,
+      priceListId ?? null,
+    ],
     queryFn: () =>
       call(
         api.GET('/api/admin/orders/purchase-context', {
-          params: { query: customerId ? { customerId, ...(gameId && { gameId }) } : {} },
+          params: {
+            query: {
+              ...(customerId && { customerId }),
+              ...(gameId && (customerId || priceListId) && { gameId }),
+              ...(gameId && priceListId && { priceListId }),
+            },
+          },
         }),
       ),
     staleTime: 0,

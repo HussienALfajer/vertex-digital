@@ -337,6 +337,14 @@ export class AdminApi {
       const row = this.customers.find(customerId);
       if (row) row.balanceUnits -= units;
     },
+    gamePrices: (gameId, priceListId) =>
+      this.catalog.products
+        .filter((item) => item.gameId === gameId && !item.archivedAt)
+        .map((item) => ({
+          productId: item.id,
+          priceUsdUnits: this.priceLists.priceOn(priceListId, item.id),
+        })),
+    priceOn: (priceListId, productId) => this.priceLists.priceOn(priceListId, productId),
     saleGames: () => ({
       categories: this.catalog.categories
         .filter((item) => !item.archivedAt)

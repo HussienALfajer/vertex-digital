@@ -755,6 +755,15 @@ describe('admin purchases (S16 AP1–AP11, RS1)', () => {
       createAdminOrderSchema.safeParse({ ...base, purpose: 'walk_in', customerId }).success,
     ).toBe(false);
     expect(createAdminOrderSchema.safeParse({ ...base, purpose: 'on_behalf' }).success).toBe(false);
+    // Rule AP16: only a walk-in order chooses its price list.
+    const priceListId = '01a15a8c-b312-75f3-92d2-65b29d838051';
+    expect(
+      createAdminOrderSchema.safeParse({ ...base, purpose: 'walk_in', priceListId }).success,
+    ).toBe(true);
+    expect(
+      createAdminOrderSchema.safeParse({ ...base, purpose: 'gift', customerId, priceListId })
+        .success,
+    ).toBe(false);
     expect(
       createAdminOrderSchema.parse({
         ...base,

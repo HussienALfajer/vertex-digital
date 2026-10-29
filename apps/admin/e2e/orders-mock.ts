@@ -23,6 +23,7 @@ import {
   type PlayerCheck,
   type Product,
   type RerouteOptions,
+  ROOT_PRICE_LIST_IDS,
   refundOrderSchema,
   rerouteOrderSchema,
   resolveAttemptSchema,
@@ -58,6 +59,9 @@ export interface PurchaseShop {
   } | null;
   /** Takes the total from the customer's wallet (`on_behalf`). */
   charge(customerId: string, units: number): void;
+  /** Rule AP16: the game's packs at a list now, and one pack's price there. */
+  gamePrices(gameId: string, priceListId: string): AdminPurchaseContext['listPrices'];
+  priceOn(priceListId: string, productId: string): number | null;
   /** The sale picker's categories and games, before the orders' counts. */
   saleGames(): {
     categories: AdminPurchaseGames['categories'];
@@ -69,6 +73,8 @@ const NO_SHOP: PurchaseShop = {
   product: () => null,
   customer: () => null,
   charge: () => {},
+  gamePrices: () => [],
+  priceOn: () => null,
   saleGames: () => ({ categories: [], games: [] }),
 };
 
@@ -561,13 +567,17 @@ export class OrdersMock {
   ) {}
 
   /** S16 rules AP4, AP7: the dialog's context. */
-  private purchaseContext(customerId: string | null): Answer {
+  private purchaseContext(url: URL): Answer {
+    const customerId = url.searchParams.get('customerId');
+    const gameId = url.searchParams.get('gameId');
+    const priceListId = url.searchParams.get('priceListId');
+    const listPrices = gameId && priceListId ? this.shop.gamePrices(gameId, priceListId) : null;
     const owner = {
       capUsdUnits: this.policy.ownerDailyCapUsdUnits,
       usedTodayUsdUnits: this.ownerUsedToday,
       remainingUsdUnits: Math.max(0, this.policy.ownerDailyCapUsdUnits - this.ownerUsedToday),
     };
-    if (!customerId) return { status: 200, json: { customer: null, owner } };
+    if (!customerId) return { status: 200, json: { customer: null, owner, listPrices } };
     const found = this.shop.customer(customerId);
     if (!found || found.archived) return error(404, 'NOT_FOUND');
     const context: AdminPurchaseContext = {
@@ -581,11 +591,13 @@ export class OrdersMock {
         balanceUsdUnits: found.balanceUnits,
         purchaseCapLeftUsdUnits: null,
         priceKind: 'retail',
+        priceListId: ROOT_PRICE_LIST_IDS.retail,
         merchantTermsRequired: false,
         listPrices: null,
         savedPlayers: [],
       },
       owner,
+      listPrices,
     };
     return { status: 200, json: context };
   }
@@ -626,13 +638,24 @@ export class OrdersMock {
     const buyable =
       product.availability === 'available' ||
       (product.availability === 'paused' && shape.payer === 'owner');
-    if (!buyable || product.priceUsdUnits === null) {
+    // Rule AP16: a walk-in order's chosen list, the cost list for a gift or a compensation.
+    const listId =
+      input.purpose === 'walk_in'
+        ? (input.priceListId ?? ROOT_PRICE_LIST_IDS.retail)
+        : shape.payer === 'owner'
+          ? ROOT_PRICE_LIST_IDS.cost
+          : ROOT_PRICE_LIST_IDS.retail;
+    const unitPrice =
+      listId === ROOT_PRICE_LIST_IDS.retail
+        ? product.priceUsdUnits
+        : this.shop.priceOn(listId, product.id);
+    if (!buyable || unitPrice === null) {
       return error(409, 'PRODUCT_UNAVAILABLE', { availability: product.availability });
     }
-    if (product.priceUsdUnits !== input.expectedUnitPriceUsdUnits) {
-      return error(409, 'PRICE_CHANGED', { unitPriceUsdUnits: product.priceUsdUnits });
+    if (unitPrice !== input.expectedUnitPriceUsdUnits) {
+      return error(409, 'PRICE_CHANGED', { unitPriceUsdUnits: unitPrice });
     }
-    const total = orderTotal(product.priceUsdUnits, input.quantity);
+    const total = orderTotal(unitPrice, input.quantity);
     if (shape.payer === 'owner') {
       const left = Math.max(0, this.policy.ownerDailyCapUsdUnits - this.ownerUsedToday);
       if (total > left) return error(409, 'OWNER_DAILY_CAP_EXCEEDED', { remainingUsdUnits: left });
@@ -663,7 +686,7 @@ export class OrdersMock {
         valueLabelAr: null,
       })),
       quantity: input.quantity,
-      unitPriceUsdUnits: product.priceUsdUnits,
+      unitPriceUsdUnits: unitPrice,
       totalUsdUnits: total,
       paidAt: now,
       createdAt: now,
@@ -787,7 +810,7 @@ export class OrdersMock {
 
     if (key === 'GET /api/admin/orders/live') return { status: 200, json: this.board(url) };
     if (key === 'GET /api/admin/orders/purchase-context') {
-      return this.purchaseContext(url.searchParams.get('customerId'));
+      return this.purchaseContext(url);
     }
     if (key === 'GET /api/admin/orders/purchase-games') return this.purchaseGames();
     if (key === 'POST /api/admin/orders') return this.purchase(body);

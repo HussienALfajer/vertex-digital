@@ -1,6 +1,11 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
-import { ORDER_POLICY_DEFAULTS, priceFromCost, QUEUES } from '@vertex-digital/contracts';
+import {
+  ORDER_POLICY_DEFAULTS,
+  priceFromCost,
+  QUEUES,
+  ROOT_PRICE_LIST_IDS,
+} from '@vertex-digital/contracts';
 import {
   catalogCategories,
   ensureCustomerWallet,
@@ -17,6 +22,7 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
+import { adminRequestHash } from '../src/modules/orders/admin-purchases.service.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
   api,
@@ -130,6 +136,19 @@ async function product(gameId: string, kind: 'direct' | 'code', cost: number): P
   );
   await test.db.execute(sql`update catalog_games set status = 'active' where id = ${gameId}`);
   return { id: created.id, price: priceFromCost(usd(cost), RULE) };
+}
+
+/** Rule AP16: the pack at the cost list, as the panel reads it for a gift or a compensation. */
+async function atCostList(item: Item, gameId: string): Promise<Item> {
+  const context = await json<{ listPrices: { productId: string; priceUsdUnits: number | null }[] }>(
+    await adminGet(
+      `/api/admin/orders/purchase-context?gameId=${gameId}&priceListId=${ROOT_PRICE_LIST_IDS.cost}`,
+    ),
+    200,
+  );
+  const price = context.listPrices.find((row) => row.productId === item.id)?.priceUsdUnits;
+  expect(price).toBeLessThan(item.price);
+  return { ...item, price: price as number };
 }
 
 async function customer(funds = 0) {
@@ -274,6 +293,10 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
       status: 409,
       code: 'IDEMPOTENCY_KEY_REUSED',
     });
+    // Rule AP16: the list is part of the request; absent, the hash is the one before AP16.
+    expect(
+      await body(await order(item, { priceListId: ROOT_PRICE_LIST_IDS.wholesale }, key)),
+    ).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
     const [audit] = await auditOf(test.db, created.id);
     expect(audit).toMatchObject({ action: 'order.paid', actorKind: 'admin', actorId: admin.id });
     const jobs = await test.db.execute<{ name: string }>(
@@ -381,7 +404,7 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
     const item = await product(ids.codeGameId, 'code', 1.8);
     const buyer = await customer();
     const gift = await json<{ id: string }>(
-      await order(item, {
+      await order(await atCostList(item, ids.codeGameId), {
         purpose: 'gift',
         customerId: buyer.id,
         reason: 'Loyal customer gift',
@@ -421,6 +444,44 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
     });
   });
 
+  it('charges a walk-in order on the chosen list; only a walk-in order chooses one (AP16)', async () => {
+    const item = await product(ids.codeGameId, 'code', 1.8);
+    const context = await json<{ listPrices: { productId: string; priceUsdUnits: number }[] }>(
+      await adminGet(
+        `/api/admin/orders/purchase-context?gameId=${ids.codeGameId}&priceListId=${ROOT_PRICE_LIST_IDS.wholesale}`,
+      ),
+      200,
+    );
+    const wholesale = context.listPrices.find((row) => row.productId === item.id)?.priceUsdUnits;
+    expect(wholesale).toBeLessThan(item.price);
+    const created = await json<{ totalUsdUnits: number }>(
+      await order(
+        { id: item.id, price: wholesale as number },
+        { priceListId: ROOT_PRICE_LIST_IDS.wholesale },
+      ),
+      201,
+    );
+    expect(created.totalUsdUnits).toBe(wholesale);
+    const buyer = await customer();
+    expect(
+      await body(
+        await order(item, {
+          purpose: 'gift',
+          customerId: buyer.id,
+          priceListId: ROOT_PRICE_LIST_IDS.retail,
+        }),
+      ),
+    ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+    expect(
+      (
+        await json<{ listPrices: unknown }>(
+          await adminGet('/api/admin/orders/purchase-context'),
+          200,
+        )
+      ).listPrices,
+    ).toBeNull();
+  });
+
   it('refuses beyond the owner cap with what is left (AP7)', async () => {
     const item = await product(ids.codeGameId, 'code', 1.8);
     const context = await json<{ owner: { usedTodayUsdUnits: number } }>(
@@ -444,7 +505,10 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
     const item = await product(ids.codeGameId, 'code', 1.8);
     const buyer = await customer();
     const created = await json<{ id: string }>(
-      await order(item, { purpose: 'compensation', customerId: buyer.id }),
+      await order(await atCostList(item, ids.codeGameId), {
+        purpose: 'compensation',
+        customerId: buyer.id,
+      }),
       201,
     );
     const page = await json<{ items: { id: string; purpose: string; payer: string }[] }>(
@@ -481,6 +545,40 @@ describe('GET /api/admin/orders/purchase-context (AP4, AP7, AP8)', () => {
     expect(
       (await client.get('/api/admin/orders/purchase-context', { cookie: buyer.cookie })).status,
     ).toBe(401);
+  });
+});
+
+describe('adminRequestHash (AP2, AP16)', () => {
+  it('keeps the hash of a body without a list as before AP16, and tells lists apart', () => {
+    const body = {
+      purpose: 'walk_in' as const,
+      productId: randomUUID(),
+      quantity: 1,
+      fields: { b: '2', a: '1' },
+      expectedUnitPriceUsdUnits: 1_000_000,
+      confirmPlayer: false,
+      reason: 'Bought at the counter',
+    };
+    const before = createHash('sha256')
+      .update(
+        JSON.stringify([
+          'admin',
+          body.purpose,
+          null,
+          body.productId,
+          body.quantity,
+          { a: '1', b: '2' },
+          body.expectedUnitPriceUsdUnits,
+          body.confirmPlayer,
+          body.reason,
+          null,
+        ]),
+      )
+      .digest('hex');
+    expect(adminRequestHash(body)).toBe(before);
+    expect(adminRequestHash({ ...body, priceListId: ROOT_PRICE_LIST_IDS.wholesale })).not.toBe(
+      before,
+    );
   });
 });
 

@@ -20,6 +20,7 @@ import {
   customers,
   ledgerAccounts,
   orders,
+  priceLists,
 } from '../schema/index.js';
 import { queueTelegramMessage } from '../telegram/index.js';
 import { OrderError } from './errors.js';
@@ -59,6 +60,8 @@ export interface AdminPurchaseInput
   > {
   adminId: string;
   purpose: AdminOrderPurpose;
+  /** Rule AP16: a walk-in order's chosen list; null takes retail. */
+  priceListId: string | null;
   /** Null exactly for `walk_in` (rule AP1). */
   customerId: string | null;
   productId: string;
@@ -128,6 +131,35 @@ export async function adminSaleRanks(
 }
 
 /**
+ * The list an admin order is charged on: the customer's own when the customer pays (S20 PO4), the
+ * chosen unarchived list (retail by default) for a walk-in order, the cost list for a gift or a
+ * compensation (rule AP16; owner, 2026-10-29).
+ */
+async function adminOrderList(
+  tx: Transaction,
+  input: Pick<AdminPurchaseInput, 'purpose' | 'priceListId'>,
+  customerListId: string | null,
+): Promise<string> {
+  const shape = adminOrderShape(input.purpose);
+  if (shape.payer === 'customer') {
+    if (customerListId === null) throw new OrderError('NOT_FOUND', 'No such customer');
+    return customerListId;
+  }
+  if (input.purpose !== 'walk_in') return ROOT_PRICE_LIST_IDS.cost;
+  if (input.priceListId === null) return ROOT_PRICE_LIST_IDS.retail;
+  const [list] = await tx
+    .select({ archivedAt: priceLists.archivedAt })
+    .from(priceLists)
+    .where(eq(priceLists.id, input.priceListId));
+  if (!list || list.archivedAt !== null) {
+    throw new OrderError('VALIDATION_FAILED', 'No such price list', {
+      fields: { priceListId: 'not_found' },
+    });
+  }
+  return input.priceListId;
+}
+
+/**
  * Rules AP3–AP7 in the caller's READ COMMITTED transaction, after the caller took the switches
  * lock shared and read the purchase stop (AP3): replays the same key and body (even while
  * stopped); refuses a new order while stopped; checks the customer (AP4: archived `NOT_FOUND`,
@@ -193,9 +225,7 @@ export async function adminPurchaseOrder(
       ...input,
       isTest,
       allowPaused: shape.payer === 'owner',
-      // S20 PO4: on behalf charges the customer's list; walk-in and owner-funded take retail.
-      priceListId:
-        customer && shape.payer === 'customer' ? customer.priceListId : ROOT_PRICE_LIST_IDS.retail,
+      priceListId: await adminOrderList(tx, input, customer?.priceListId ?? null),
       // S21 QT1: a merchant's own limits on their behalf; the store's otherwise.
       accountType: customer && shape.payer === 'customer' ? customer.accountType : 'customer',
     },
@@ -328,13 +358,15 @@ export async function adminPurchaseOrder(
 
 /**
  * S20 PO4: the purchase dialog's prices of a game's packs at a customer's list, for an order the
- * customer pays; null price where the pack is unavailable on that list (PO1).
+ * customer pays; null price where the pack is unavailable on that list (PO1). Rule AP16: an
+ * owner-funded order's list prices a paused pack too (`allowPaused`, AP5).
  */
 export async function gameListPrices(
   db: Database,
   gameId: string,
   priceListId: string,
   context: RoutingContext,
+  allowPaused = false,
 ): Promise<{ productId: string; priceUsdUnits: number | null }[]> {
   const products = await db
     .select({ id: catalogProducts.id })
@@ -351,7 +383,9 @@ export async function gameListPrices(
     return {
       productId: id,
       priceUsdUnits:
-        state?.availability === 'available' ? (state.current?.priceUsdUnits ?? null) : null,
+        state?.availability === 'available' || (allowPaused && state?.availability === 'paused')
+          ? (state.current?.priceUsdUnits ?? null)
+          : null,
     };
   });
 }

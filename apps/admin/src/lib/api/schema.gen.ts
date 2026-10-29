@@ -7839,6 +7839,8 @@ export interface components {
             purpose: components["schemas"]["AdminOrderPurpose"];
             /** Format: uuid */
             customerId?: string;
+            /** Format: uuid */
+            priceListId?: string;
             reason: string;
             customerNote?: string;
         };
@@ -8082,6 +8084,8 @@ export interface components {
             customerId?: string;
             /** Format: uuid */
             gameId?: string;
+            /** Format: uuid */
+            priceListId?: string;
         };
         AdminPurchaseContext: {
             customer: {
@@ -8095,6 +8099,8 @@ export interface components {
                 balanceUsdUnits: number;
                 purchaseCapLeftUsdUnits: number | null;
                 priceKind: components["schemas"]["PriceKind"];
+                /** Format: uuid */
+                priceListId: string;
                 merchantTermsRequired: boolean;
                 listPrices: {
                     /** Format: uuid */
@@ -8118,6 +8124,11 @@ export interface components {
                 usedTodayUsdUnits: number;
                 remainingUsdUnits: number;
             };
+            listPrices: {
+                /** Format: uuid */
+                productId: string;
+                priceUsdUnits: number | null;
+            }[] | null;
         };
         AdminPurchaseGames: {
             categories: {
@@ -14904,6 +14915,7 @@ export interface operations {
             query?: {
                 customerId?: string;
                 gameId?: string;
+                priceListId?: string;
             };
             header?: never;
             path?: never;
