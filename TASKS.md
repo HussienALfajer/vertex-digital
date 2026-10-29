@@ -2,7 +2,7 @@
 
 Spec PR 1 (decisions 1–5, 9, 10, 13, 14) is split in two PRs so neither is half-wired: 1a the server side, 1b the panel. PR 2 (identity and progress) and PR 3 (operations and reports) follow in their own sessions.
 
-Stopped at: PR 1a, all layers, docs and the reviewer's fixes done; the full `pnpm verify` after the fixes and the PR remain.
+Stopped at: PR 1a ready and pushed; the owner presses Create PR, then auto-merge and the wait for the merge.
 
 Owner decision (2026-10-29), not applied yet: PX3's half-step minimum margins are whole cents, rounded up: Silver $0.05 (was $0.045), Diamond $0.04 (was $0.035); Gold stays $0.04. Apply it in `TIER_RULE_DEFAULTS.half` (`packages/contracts/src/merchant-tiers.ts`) and in the spec's PX3 table, with a line naming the six production slugs read on 2026-10-29: `games`, `game-cards` (global rule), `apps`, `subscriptions` (half step), `gift-cards`, `shopping` (no step).
 
@@ -16,7 +16,7 @@ Owner decision (2026-10-29), not applied yet: PX3's half-step minimum margins ar
 - [x] worker: `merchants.level` passes the payload's `cause` to `recomputeMerchantLevel`; `merchants.level-schedule` recomputes each merchant then writes `recordTierMonth` for the month just ended; new `merchants.tier-grants` job every 10 minutes (`dueTierGrants` → `expireTierGrant` one per transaction, `remindEndingTierGrants`), registered in `worker.module.ts`; Telegram texts for `merchant_tier_changed`, `merchant_tier_grant_ending` and the summary line "فئات التجار: n تغيّرت اليوم" (counted from `merchant_tier_changes`); email and push texts of `merchant_level_changed` name the tier; tests (each job run twice). Was: `merchants.level` with TR6, `merchants.level-schedule` writing `merchant_tier_months`, `merchants.tier-grants` (MG4, MG5), Telegram texts (TR8, MG5, daily summary line); tests run twice
 - [x] bridge: `pnpm build`, OpenAPI export and admin client regenerated; the admin's S21 levels page removed (route, navigation, queries, i18n, E2E mock and spec for `/api/admin/merchant-levels`; the tiers page comes in PR 1b), route tree regenerated, admin typecheck
 - [x] reviewer (`docs/specs/S23-merchant-tiers.md`): fixed the 50-unit request cap (orders, releases, resolve, fulfil up to 100), the month row written before the recomputation, the setup refusing a same-named list off the chain, the Bronze seed's hourly checks clamped, and tests for TS3–TS5, MG7, edge case 9 and access
-- [ ] full `pnpm verify` again after the review fixes; check whether the db test "gives every order a fixed verification code … (VF1–VF3)" in `packages/db/src/orders/orders.test.ts` fails on `main` too when the file runs alone (it needs an exchange rate other files write)
+- [x] full `pnpm verify` again after the review fixes (pass, 2026-10-29: lint, typecheck, test, build, 340 admin E2E, migration and OpenAPI drift); the db test "gives every order a fixed verification code … (VF1–VF3)" in `packages/db/src/orders/orders.test.ts` passes when its file runs alone (148/148): nothing to fix
 - [x] docs: AGENTS.md commands table (`merchants:setup-tiers`), `docs/architecture.md` ownership (merchants owns the four tier tables), `apps/api/CLAUDE.md` and `packages/db/CLAUDE.md` notes (tiers, grants, parent cap, setup), ROADMAP line
 - [ ] note in the PR: migration 0104's SQL was rewritten to the generator's output without the early `merchant_levels_tier_check` (moved to 0105 after the archive; owner approved deleting the first generation); `pnpm db:generate` reports no drift
 - [ ] checks, reviewer, PR and merge
