@@ -138,7 +138,7 @@ Money is USD units (micro-dollars, ADR 0003). SYP is display only and never stor
 - PV2. **Route choice:** the first usable route in RT5–RT6 order whose supplier can validate and is under quota. The fields are mapped by that route's `field_map`, as an order would be. A test customer uses only `fake` routes (as S08 R4), otherwise `not_supported`.
 - PV3. **Cache:** the newest unexpired `player_checks` row for `(game, fields_hash)` answers without a supplier call, whichever customer created it. A `valid` result lasts 24 hours and an `invalid` one 1 hour (owner, 2026-10-09). A supplier `unknown` or error is not cached.
 - PV4. **Limits** (owner, 2026-10-09, "medium"), counting only requests that call a supplier (cache hits and `not_supported` answers are free):
-  - per customer 10 per hour and 30 per 24 hours (`customer_rate_limits`, as S01's counters);
+  - per customer 10 per hour (`customer_rate_limits`, as S01's counters); no day limit (owner, 2026-10-29: the 30 per 24 hours was dropped; a merchant keeps S21 BK4's day limit);
   - per IP 30 per hour;
   - nginx zone `vdplayercheck` (POST only).
   - Over a limit: `429 RATE_LIMITED`, which the store treats as "unavailable" (PV6).
@@ -290,7 +290,7 @@ Statuses: `409` for `PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER
 ## Abuse and fraud
 | Threat | Control |
 |---|---|
-| The store used as a free player-name lookup | Verified accounts only (and registration closed until the pilot); 10 an hour and 30 a day per customer and 30 an hour per IP for calls that reach a supplier; nginx `vdplayercheck`; the supplier quota; names returned only for the fields sent; `no-store`. Cache hits are free (owner): they only reveal accounts someone already checked in the last 24 hours |
+| The store used as a free player-name lookup | Verified accounts only (and registration closed until the pilot); 10 an hour per customer (no day limit, owner 2026-10-29) and 30 an hour per IP for calls that reach a supplier; nginx `vdplayercheck`; the supplier quota; names returned only for the fields sent; `no-store`. Cache hits are free (owner): they only reveal accounts someone already checked in the last 24 hours |
 | Exhausting the supplier's daily quota to break validation for everyone | Per-customer and per-IP limits, the cache, the Telegram alert; customers then confirm the ID themselves, so purchases never stop |
 | Wrong player ID burning money | Validation before paying with a required confirmation when it is not `valid`; the confirmation step shows the values large; an `inputRejected` order still refunds at once (S08) |
 | Double tap or retried slide paying twice | One `Idempotency-Key` per body, reused on retry; S08's unique key and wallet lock |

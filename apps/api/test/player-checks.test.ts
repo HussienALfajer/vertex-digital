@@ -5,6 +5,7 @@ import { priceFromCost, QUEUES } from '@vertex-digital/contracts';
 import {
   auditEntries,
   catalogCategories,
+  customerRateLimits,
   damascusDate,
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -520,6 +521,15 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
       code: 'RATE_LIMITED',
     });
     expect(await json(await check(limited, item, known), 200)).toMatchObject({ result: 'valid' });
+    // No day limit for a customer (owner, 2026-10-29): 30 calls in the last 24 hours refuse nothing.
+    const daily = await buyer();
+    await test.db.insert(customerRateLimits).values({
+      id: newId(),
+      key: `player-check:customer-day:${daily.id}`,
+      count: 30,
+      lastRequest: Date.now(),
+    });
+    expect((await check(daily, item, fresh())).status).toBe(200);
     // 30 an hour per address, whoever asks.
     const ip = `10.9.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
     for (const someone of [await buyer(), await buyer(), await buyer()]) {
