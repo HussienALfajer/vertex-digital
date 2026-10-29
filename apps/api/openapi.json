@@ -1568,6 +1568,27 @@
         ]
       }
     },
+    "/api/admin/wallets/highlights": {
+      "get": {
+        "operationId": "WalletAdminController_highlights",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The largest balances and the wallets that moved last",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletHighlights"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "wallets"
+        ]
+      }
+    },
     "/api/admin/wallets/{customerId}": {
       "get": {
         "operationId": "WalletAdminController_wallet",
@@ -16893,6 +16914,73 @@
           "phone",
           "isTest",
           "balanceUnits"
+        ],
+        "additionalProperties": false
+      },
+      "WalletHighlights": {
+        "type": "object",
+        "properties": {
+          "withBalance": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletHighlight"
+            }
+          },
+          "recentlyMoved": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletHighlight"
+            }
+          }
+        },
+        "required": [
+          "withBalance",
+          "recentlyMoved"
+        ],
+        "additionalProperties": false
+      },
+      "WalletHighlight": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "isTest": {
+            "type": "boolean"
+          },
+          "balanceUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastMovedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "isTest",
+          "balanceUnits",
+          "lastMovedAt"
         ],
         "additionalProperties": false
       },

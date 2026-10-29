@@ -13,8 +13,9 @@ import {
 } from './test';
 
 /*
- * Wallets (S02): the summary and search, a customer's wallet, adjustments with re-authentication,
- * the typed confirmation above $100, and reversals, against the mocked API.
+ * Wallets (S02): the books from the owner's side and the search with the wallet lists below it, a
+ * customer's wallet, adjustments with re-authentication, the typed confirmation above $100, and
+ * reversals, against the mocked API.
  */
 
 const field = (page: Page, label: string) =>
@@ -78,6 +79,35 @@ async function reauthenticate(page: Page) {
 
 const rows = (page: Page) => page.getByRole('table').getByRole('row');
 
+/** A row of the books' summary, by the account's name. */
+const ledgerRow = (page: Page, name: string) => page.getByRole('row').filter({ hasText: name });
+
+/** Production's books on 2026-10-29, which sum to zero with empty customer wallets. */
+const PRODUCTION_ACCOUNTS: LedgerSummary['systemAccounts'] = [
+  {
+    kind: 'supplier_prepaid',
+    code: 'supplier_prepaid:wdgzone',
+    currency: 'USD',
+    balanceUnits: -284_000,
+  },
+  { kind: 'sales_revenue', code: 'sales_revenue:USD', currency: 'USD', balanceUnits: 4_800_000 },
+  { kind: 'cost_of_goods', code: 'cost_of_goods:USD', currency: 'USD', balanceUnits: -4_568_000 },
+  {
+    kind: 'adjustments',
+    code: 'adjustments:compensation',
+    currency: 'USD',
+    balanceUnits: -1_800_000,
+  },
+  {
+    kind: 'adjustments',
+    code: 'adjustments:correction',
+    currency: 'USD',
+    balanceUnits: -3_000_000,
+  },
+  { kind: 'outside_funds', code: 'outside_funds:USD', currency: 'USD', balanceUnits: 4_860_000 },
+  { kind: 'transfer_fees', code: 'transfer_fees:USD', currency: 'USD', balanceUnits: -8_000 },
+];
+
 /** The books of three 700 ل.س deposits at 140 and two USDT deposits (S03 M2, S04 M1). */
 const DEPOSIT_ACCOUNTS: LedgerSummary['systemAccounts'] = [
   {
@@ -114,8 +144,12 @@ test.describe('wallets', () => {
   }) => {
     await open(page, admin, '/');
     await page.getByRole('link', { name: ar.nav.wallets }).first().click();
-    await expect(page.getByText(ar.wallets.summary.owedTest)).toBeVisible();
-    await expect(page.getByText('$0.00')).toHaveCount(2);
+    await expect(page.getByText(ar.wallets.summary.balanced)).toBeVisible();
+    await expect(ledgerRow(page, ar.wallets.ledger.accounts.customer_wallets)).toContainText(
+      '$0.00',
+    );
+    // No wallet moved yet: the search prompt stands in for the two lists.
+    await expect(page.getByText(ar.wallets.search.promptTitle, { exact: true })).toBeVisible();
 
     await page.getByRole('searchbox').fill('سا');
     await page.getByRole('button', { name: ar.wallets.search.submit }).click();
@@ -141,17 +175,103 @@ test.describe('wallets', () => {
     await expect(page.getByText(ar.wallets.detail.emptyTitle)).toBeVisible();
   });
 
-  test('system accounts show each balance in its own currency (F6-1)', async ({ page, admin }) => {
+  test('system accounts show each balance in its own currency, from the store side (F6-1)', async ({
+    page,
+    admin,
+  }) => {
+    admin.ledgerAccounts = DEPOSIT_ACCOUNTS;
+    // The customers the deposits credited: $15.00 for the pounds, $4.9944 for the USDT.
+    admin.owedToCustomersUnits = 19_994_400;
+    await open(page, admin, '/wallets');
+    await expect(page.getByText(ar.wallets.summary.balanced)).toBeVisible();
+    const accounts = ar.wallets.ledger.accounts;
+    await expect(ledgerRow(page, accounts.sham_cash_receipts_SYP)).toContainText('2,100 ل.س');
+    await expect(ledgerRow(page, accounts.sham_cash_receipts_SYP)).not.toContainText('−');
+    await expect(ledgerRow(page, accounts.currency_exchange_SYP)).toContainText('2,100 ل.س');
+    await expect(ledgerRow(page, accounts.currency_exchange_SYP)).not.toContainText('$');
+    await expect(ledgerRow(page, accounts.currency_exchange_USD)).toContainText('$15.00');
+    await expect(ledgerRow(page, accounts.currency_exchange_USD)).not.toContainText('-');
+    const usdt = accounts.usdt_receipts.replace('{{network}}', 'TRC20');
+    await expect(ledgerRow(page, usdt)).toContainText('$5.0037');
+    await expect(ledgerRow(page, accounts.deposit_rounding)).toContainText(ar.wallets.summary.add);
+    await expect(ledgerRow(page, accounts.deposit_rounding)).toContainText('$0.0093');
+    await expect(ledgerRow(page, accounts.customer_wallets)).toContainText('$19.9944');
+    // The raw code is only in the row's explanation.
+    await expect(page.getByText('usdt_receipts:usdt_trc20')).toBeHidden();
+    await page
+      .getByRole('button', { name: ar.wallets.summary.about.replace('{{name}}', usdt) })
+      .click();
+    await expect(
+      page.getByRole('dialog').getByText(ar.wallets.ledger.hints.usdt_receipts),
+    ).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('usdt_receipts:usdt_trc20')).toBeVisible();
+  });
+
+  test("production's books read in plain words, with the gross profit and the net", async ({
+    page,
+    admin,
+  }) => {
+    admin.ledgerAccounts = PRODUCTION_ACCOUNTS;
+    await open(page, admin, '/wallets');
+    await expect(page.getByText(ar.wallets.summary.balanced)).toBeVisible();
+    const accounts = ar.wallets.ledger.accounts;
+    const supplier = accounts.supplier_prepaid.replace('{{supplier}}', 'WDGZone');
+    await expect(ledgerRow(page, supplier)).toContainText('$0.284');
+    await expect(ledgerRow(page, supplier)).not.toContainText('-');
+    await expect(page.getByText('supplier_prepaid:wdgzone')).toBeHidden();
+    const { add, subtract } = ar.wallets.summary;
+    for (const [name, effect, amount] of [
+      [accounts.sales_revenue, add, '$4.80'],
+      [accounts.cost_of_goods, subtract, '$4.568'],
+      [accounts.adjustments_compensation, subtract, '$1.80'],
+      [accounts.adjustments_correction, subtract, '$3.00'],
+      [accounts.transfer_fees, subtract, '$0.008'],
+      [accounts.outside_funds, add, '$4.86'],
+    ] as const) {
+      await expect(ledgerRow(page, name), name).toContainText(effect);
+      await expect(ledgerRow(page, name), name).toContainText(amount);
+    }
+    await expect(ledgerRow(page, ar.wallets.ledger.grossProfit)).toContainText(
+      ar.wallets.ledger.profit,
+    );
+    await expect(ledgerRow(page, ar.wallets.ledger.grossProfit)).toContainText('$0.232');
+    await expect(ledgerRow(page, ar.wallets.ledger.net)).toContainText(ar.wallets.ledger.loss);
+    await expect(ledgerRow(page, ar.wallets.ledger.net)).toContainText('$4.576');
+    await expect(ledgerRow(page, ar.wallets.ledger.capitalNet)).toContainText('$4.86');
+    // The conversion pair has not moved: its group stays out.
+    await expect(
+      page.getByRole('heading', { name: ar.wallets.ledger.groups.exchange }),
+    ).toBeHidden();
+  });
+
+  test('books whose postings do not sum to zero say so, with the difference', async ({
+    page,
+    admin,
+  }) => {
     admin.ledgerAccounts = DEPOSIT_ACCOUNTS;
     await open(page, admin, '/wallets');
-    await page.getByRole('button', { name: ar.wallets.summary.systemAccounts }).click();
-    const row = (code: string) => page.getByRole('row').filter({ hasText: code });
-    await expect(row('sham_cash_receipts:SYP')).toContainText('−2,100 ل.س');
-    await expect(row('currency_exchange:SYP')).toContainText('2,100 ل.س');
-    await expect(row('currency_exchange:SYP')).not.toContainText('$');
-    await expect(row('currency_exchange:USD')).toContainText('-$15.00');
-    await expect(row('usdt_receipts:usdt_trc20')).toContainText('-$5.0037');
-    await expect(row('deposit_rounding:USD')).toContainText('$0.0093');
+    await expect(page.getByText(ar.wallets.summary.unbalanced)).toBeVisible();
+    await expect(page.getByText(ar.wallets.summary.balanced)).toBeHidden();
+    await expect(page.getByText(ar.wallets.summary.unbalancedTitle)).toBeVisible();
+    await expect(page.getByText('-$19.9944')).toBeVisible();
+  });
+
+  test('below the search, the wallets with a balance and the last to move open the wallet', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, `/wallets/${CUSTOMER_ID}`);
+    await adjust(page, { amount: '25', category: 'test_funds' });
+    await page.goto('/wallets');
+    const withBalance = page.getByRole('region', { name: ar.wallets.search.withBalance });
+    const moved = page.getByRole('region', { name: ar.wallets.search.recentlyMoved });
+    await expect(withBalance.getByRole('row').filter({ hasText: 'سارة الأحمد' })).toContainText(
+      '$25.00',
+    );
+    await expect(withBalance.getByText(ar.wallets.testBadge)).toBeVisible();
+    await expect(moved.getByRole('cell', { name: 'sara@example.com' })).toBeVisible();
+    await moved.getByRole('cell', { name: 'sara@example.com' }).click();
+    await expect(page).toHaveURL(`/wallets/${CUSTOMER_ID}`);
   });
 
   test('a test credit asks for re-authentication, then retries with the same key', async ({
@@ -372,12 +492,30 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await screenshot(page, testInfo, `wallet-adjust-${colorScheme}`);
       await page.keyboard.press('Escape');
 
-      admin.ledgerAccounts = DEPOSIT_ACCOUNTS;
+      // Production's books with the mock's compensations in place of its own, and $1.80 less
+      // brought in from outside to keep them balanced.
+      admin.ledgerAccounts = PRODUCTION_ACCOUNTS.filter(
+        (item) => item.code !== 'adjustments:compensation',
+      ).map((item) =>
+        item.kind === 'outside_funds' ? { ...item, balanceUnits: 3_060_000 } : item,
+      );
+      await page.goto('/wallets');
+      await expect(page.getByText(ar.wallets.summary.balanced)).toBeVisible();
+      await expect(
+        page.getByRole('region', { name: ar.wallets.search.recentlyMoved }).getByRole('row'),
+      ).toHaveCount(2);
+      await screenshot(page, testInfo, `wallets-${colorScheme}`);
+      const fees = ar.wallets.ledger.accounts.transfer_fees;
+      await page
+        .getByRole('button', { name: ar.wallets.summary.about.replace('{{name}}', fees) })
+        .click();
+      await expect(page.getByRole('dialog').getByText('transfer_fees:USD')).toBeVisible();
+      await screenshot(page, testInfo, `wallets-explanation-${colorScheme}`);
+      await page.keyboard.press('Escape');
+
       await page.goto('/wallets?q=%D8%B3%D8%A7%D8%B1%D8%A9');
       await expect(page.getByRole('cell', { name: 'sara@example.com' })).toBeVisible();
-      await page.getByRole('button', { name: ar.wallets.summary.systemAccounts }).click();
-      await expect(page.getByText('adjustments:compensation')).toBeVisible();
-      await screenshot(page, testInfo, `wallets-${colorScheme}`);
+      await screenshot(page, testInfo, `wallets-search-${colorScheme}`);
     });
   });
 }

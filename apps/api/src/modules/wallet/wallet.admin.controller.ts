@@ -21,6 +21,7 @@ import {
   type WalletEntryQuery,
   type WalletSearchQuery,
   walletEntryQuerySchema,
+  walletHighlightsSchema,
   walletSearchPageSchema,
   walletSearchQuerySchema,
 } from '@vertex-digital/contracts';
@@ -55,6 +56,19 @@ export class WalletAdminController {
   @ApiOkResponse({ description: 'Newest customers first', standardSchema: walletSearchPageSchema })
   search(@Query({ schema: walletSearchQuerySchema }) query: WalletSearchQuery) {
     return this.wallets.search(query.q, query);
+  }
+
+  // Declared before `wallets/:customerId`, which would otherwise take `highlights` as an id.
+  @Get('wallets/highlights')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: walletHighlightsSchema })
+  @ApiOkResponse({
+    description: 'The largest balances and the wallets that moved last',
+    standardSchema: walletHighlightsSchema,
+  })
+  highlights() {
+    return this.wallets.highlights();
   }
 
   @Get('wallets/:customerId')

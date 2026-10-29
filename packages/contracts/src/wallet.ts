@@ -387,6 +387,29 @@ export const walletSearchPageSchema = cursorPageSchema(
 
 export type WalletSearchPage = z.infer<typeof walletSearchPageSchema>;
 
+/** A wallet in the wallets page's lists, with when it last moved (null: never). */
+export const walletHighlightSchema = walletSearchResultSchema
+  .extend({ lastMovedAt: z.iso.datetime().nullable() })
+  .meta({ id: 'WalletHighlight' });
+
+export type WalletHighlight = z.infer<typeof walletHighlightSchema>;
+
+/** How many wallets each list of `GET /api/admin/wallets/highlights` holds. */
+export const WALLET_HIGHLIGHTS_LIMIT = 10;
+
+/**
+ * `GET /api/admin/wallets/highlights`: the wallets holding the most, largest first, and the
+ * wallets that moved last, newest first; test customers included and marked.
+ */
+export const walletHighlightsSchema = z
+  .object({
+    withBalance: z.array(walletHighlightSchema).max(WALLET_HIGHLIGHTS_LIMIT),
+    recentlyMoved: z.array(walletHighlightSchema).max(WALLET_HIGHLIGHTS_LIMIT),
+  })
+  .meta({ id: 'WalletHighlights' });
+
+export type WalletHighlights = z.infer<typeof walletHighlightsSchema>;
+
 /** `GET /api/admin/wallets/:customerId`. */
 export const adminWalletSchema = walletSchema
   .extend({ customer: walletCustomerSchema, adjustmentCount: z.int().nonnegative() })
