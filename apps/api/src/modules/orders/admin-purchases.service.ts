@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   type AdminOrder,
   type AdminPurchaseContext,
+  type AdminPurchaseGames,
   type createAdminOrderSchema,
   ownerCapRemaining,
   ROOT_PRICE_LIST_IDS,
@@ -13,6 +14,7 @@ import {
   accountPriceList,
   adminOrder,
   adminPurchaseOrder,
+  adminSaleRanks,
   currentOrderPolicy,
   customerLimitOverrides,
   customerSavedPlayers,
@@ -32,6 +34,7 @@ import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { AuthService } from '../auth/index.js';
+import { CatalogService } from '../catalog/index.js';
 import { SettingsService } from '../settings/index.js';
 import type { DecisionActor } from './order-decisions.service.js';
 import { asCodedException, orderRefusals } from './order-errors.js';
@@ -77,6 +80,7 @@ export class AdminPurchasesService {
     private readonly settings: SettingsService,
     private readonly playerChecks: PlayerChecksService,
     private readonly customers: AuthService,
+    private readonly catalog: CatalogService,
   ) {}
 
   /** Rules AP2–AP13: `created` is false when the key replayed an earlier order of this body. */
@@ -188,6 +192,22 @@ export class AdminPurchasesService {
         })),
       },
       owner,
+    };
+  }
+
+  /**
+   * `GET /api/admin/orders/purchase-games`: the sale picker's games with their 30-day sales and
+   * the game of the newest admin order (S16 "شراء من اللوحة").
+   */
+  async games(): Promise<AdminPurchaseGames> {
+    const [catalog, ranks] = await Promise.all([this.catalog.saleGames(), adminSaleRanks(this.db)]);
+    return {
+      categories: catalog.categories,
+      games: catalog.games.map((game) => ({
+        ...game,
+        soldLast30Days: ranks.sold.get(game.id) ?? 0,
+      })),
+      lastGameId: ranks.lastGameId,
     };
   }
 }

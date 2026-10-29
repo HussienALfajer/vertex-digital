@@ -4,7 +4,7 @@ import {
   ownerCapRemaining,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Database, Transaction } from '../client.js';
 import { checkPurchaseCap, lockActiveCustomer, requireMerchantTerms } from '../customers/guard.js';
@@ -92,6 +92,39 @@ export async function ownerSpentToday(
     .from(orders)
     .where(and(eq(orders.payer, 'owner'), gte(orders.paidAt, damascusMidnight)));
   return { count: Number(row?.count ?? 0), usedUsdUnits: Number(row?.used ?? 0) };
+}
+
+/**
+ * The sale picker's order of games (S16 "شراء من اللوحة"): paid orders per game in the last 30
+ * days, whoever placed them, and the game of the newest admin order.
+ */
+export async function adminSaleRanks(
+  db: Database,
+): Promise<{ sold: Map<string, number>; lastGameId: string | null }> {
+  const [rows, [last]] = await Promise.all([
+    db
+      .select({ gameId: orders.gameId, sold: sql<string>`count(*)::text` })
+      .from(orders)
+      // The creation bound lets `orders_created_at_idx` narrow the read; it changes nothing, as
+      // an order is paid at creation or, reserved, within 24 hours (S09).
+      .where(
+        and(
+          gte(orders.createdAt, sql`now() - interval '31 days'`),
+          gte(orders.paidAt, sql`now() - interval '30 days'`),
+        ),
+      )
+      .groupBy(orders.gameId),
+    db
+      .select({ gameId: orders.gameId })
+      .from(orders)
+      .where(eq(orders.placedBy, 'admin'))
+      .orderBy(desc(orders.createdAt))
+      .limit(1),
+  ]);
+  return {
+    sold: new Map(rows.map((row) => [row.gameId, Number(row.sold)])),
+    lastGameId: last?.gameId ?? null,
+  };
 }
 
 /**

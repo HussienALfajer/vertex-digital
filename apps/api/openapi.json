@@ -5937,6 +5937,27 @@
         ]
       }
     },
+    "/api/admin/orders/purchase-games": {
+      "get": {
+        "operationId": "OrdersAdminController_purchaseGames",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Unarchived games with covers, search terms and 30-day sales",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPurchaseGames"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
       "post": {
         "operationId": "OrdersAdminController_revokeShareLink",
@@ -26791,6 +26812,108 @@
         ],
         "additionalProperties": false
       },
+      "AdminPurchaseGames": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "nameAr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "nameAr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "games": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "categoryId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "nameEn": {
+                  "type": "string"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                },
+                "cover": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogImage"
+                    }
+                  ]
+                },
+                "searchTerms": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "soldLast30Days": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "id",
+                "categoryId",
+                "nameAr",
+                "nameEn",
+                "status",
+                "cover",
+                "searchTerms",
+                "soldLast30Days"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lastGameId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "categories",
+          "games",
+          "lastGameId"
+        ],
+        "additionalProperties": false
+      },
+      "CatalogStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "paused"
+        ]
+      },
       "RevokeShareLink": {
         "type": "object",
         "properties": {
@@ -29208,13 +29331,6 @@
           "productCount"
         ],
         "additionalProperties": false
-      },
-      "CatalogStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "paused"
-        ]
       },
       "GameListQuery": {
         "type": "object",

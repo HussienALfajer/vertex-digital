@@ -3,6 +3,7 @@ import { phoneSchema } from './auth.js';
 import {
   type AvailabilityFacts,
   catalogImageSchema,
+  catalogStatusSchema,
   type InputField,
   MAX_INPUT_FIELDS_PER_GAME,
   MAX_QUANTITY_LIMIT,
@@ -2166,6 +2167,32 @@ export const adminPurchaseContextSchema = z
   .meta({ id: 'AdminPurchaseContext' });
 
 export type AdminPurchaseContext = z.infer<typeof adminPurchaseContextSchema>;
+
+/**
+ * `GET /api/admin/orders/purchase-games` (S16 "شراء من اللوحة", the sale picker): the unarchived
+ * categories and games in catalog order, each game with its cover, search terms and paid orders in
+ * the last 30 days, and the game of the newest admin order.
+ */
+export const adminPurchaseGamesSchema = z
+  .object({
+    categories: z.array(z.object({ id: z.uuid(), nameAr: z.string() })),
+    games: z.array(
+      z.object({
+        id: z.uuid(),
+        categoryId: z.uuid(),
+        nameAr: z.string(),
+        nameEn: z.string(),
+        status: catalogStatusSchema,
+        cover: catalogImageSchema.nullable(),
+        searchTerms: z.array(z.string()),
+        soldLast30Days: z.int().nonnegative(),
+      }),
+    ),
+    lastGameId: z.uuid().nullable(),
+  })
+  .meta({ id: 'AdminPurchaseGames' });
+
+export type AdminPurchaseGames = z.infer<typeof adminPurchaseGamesSchema>;
 
 /** `POST /api/admin/player-checks` (rule AP8): S09's check with the admin as requester. */
 export const adminPlayerCheckSchema = playerCheckRequestSchema.meta({ id: 'AdminPlayerCheck' });

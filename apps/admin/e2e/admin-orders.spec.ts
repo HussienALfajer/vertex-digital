@@ -18,7 +18,10 @@ const fill = (text: string, values: Record<string, string | number>) =>
     text,
   );
 
-/** ببجي موبايل with its player id field, "60 UC" routed to the fake, "325 UC" paused. */
+/**
+ * ببجي موبايل with its player id field, "60 UC" routed to the fake, "325 UC" paused; PUBG New State
+ * and an app for the sale picker.
+ */
 function seed(admin: AdminApi) {
   const game = admin.catalog.addGame({
     categorySlug: 'games',
@@ -29,6 +32,21 @@ function seed(admin: AdminApi) {
     cover: true,
   });
   admin.catalog.addField(game.id, { key: 'player_id', labelAr: 'معرّف اللاعب' });
+  admin.catalog.addGame({
+    categorySlug: 'games',
+    slug: 'pubg-new-state',
+    nameAr: 'ببجي نيو ستيت',
+    nameEn: 'PUBG New State',
+    status: 'paused',
+  });
+  admin.catalog.addGame({
+    categorySlug: 'apps',
+    slug: 'tiktok',
+    nameAr: 'تيك توك',
+    nameEn: 'TikTok',
+    status: 'active',
+    cover: true,
+  });
   const uc60 = admin.catalog.addProduct(game.id, { nameAr: '60 UC', gameAmount: 60 });
   const uc325 = admin.catalog.addProduct(game.id, {
     nameAr: '325 UC',
@@ -51,10 +69,11 @@ async function reauthenticate(page: Page) {
   await page.getByRole('button', { name: ar.reauth.submit }).click();
 }
 
-/** The pack step: the game, then the pack by name. */
+/** The pack step: the game typed in the search and taken with Enter, then the pack by name. */
 async function pickPack(page: Page, pack: string) {
-  await page.getByRole('combobox', { name: b.game }).click();
-  await page.getByRole('option', { name: 'ببجي موبايل' }).click();
+  await page.getByRole('combobox', { name: b.picker.search }).fill('pubg');
+  await page.getByRole('combobox', { name: b.picker.search }).press('Enter');
+  await expect(page.getByRole('button', { name: b.picker.change, exact: true })).toBeVisible();
   await page.getByRole('radio', { name: pack }).check();
 }
 
@@ -103,6 +122,59 @@ test('a walk-in order: the player check, re-authentication, then the order page 
   await page.goto('/orders?purpose=walk_in');
   await expect(page.getByText(o.purposes.walk_in).last()).toBeVisible();
   expect(admin.calls).toContain('POST /api/admin/orders');
+});
+
+test('the sale picker: search with arrows, covers by category, the bar, the pack filter', async ({
+  page,
+  admin,
+}) => {
+  seed(admin);
+  await page.goto('/orders/new?purpose=walk_in');
+  const search = page.getByRole('combobox', { name: b.picker.search });
+  // A walk-in sale starts in the search.
+  await expect(search).toBeFocused();
+  await expect(page.getByRole('heading', { name: b.picker.topSold })).toBeVisible();
+  // Arabic, English or a search term, live; the arrows move the highlight, Enter takes it.
+  await search.fill('تيك');
+  await expect(page.getByRole('option')).toHaveText([/TikTok/]);
+  await search.fill('zzz');
+  await expect(page.getByText(b.picker.noGames)).toBeVisible();
+  await search.fill('PUBG');
+  await expect(page.getByRole('option')).toHaveCount(2);
+  await search.press('ArrowDown');
+  await expect(page.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Enter');
+  const bar = page.getByRole('button', { name: b.picker.change, exact: true });
+  await expect(bar).toBeVisible();
+  await expect(page.getByText('PUBG New State')).toBeVisible();
+  // "تغيير" opens the picker again; Escape keeps the game chosen before.
+  await bar.click();
+  await expect(search).toBeFocused();
+  await search.press('Escape');
+  await expect(bar).toBeVisible();
+  // The category chips browse covers.
+  await bar.click();
+  await page.getByRole('button', { name: 'تطبيقات', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'تطبيقات' }).getByRole('button')).toHaveText([
+    /تيك توك/,
+  ]);
+  await page.getByRole('button', { name: 'ألعاب', exact: true }).click();
+  await page
+    .getByRole('list', { name: 'ألعاب' })
+    .getByRole('button', { name: /ببجي موبايل/ })
+    .click();
+  // The packs by quantity, the filter's Enter picks the first one the mode may buy.
+  const filter = page.getByRole('searchbox', { name: b.picker.packFilter });
+  await expect(filter).toBeFocused();
+  const packs = page.getByRole('group', { name: b.pack }).locator('label');
+  await expect(packs).toHaveText([/60 UC/, /325 UC/, /بطاقة 10\$/]);
+  await expect(page.getByText(b.picker.cost).first()).toBeVisible();
+  await filter.fill('325');
+  await expect(packs).toHaveCount(1);
+  await filter.press('Enter');
+  await expect(page.getByRole('radio', { name: '325 UC' })).toBeChecked();
+  // Then the account fields.
+  await expect(page.getByRole('textbox', { name: 'معرّف اللاعب' })).toBeFocused();
 });
 
 test("a code pack still takes the game's fields, without the player check (S08 O5, AP8)", async ({
@@ -265,6 +337,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('S16 admin purchase screenshots', async ({ page, admin }, testInfo) => {
       seed(admin);
       await page.goto(`/orders/new?purpose=gift&customerId=${CUSTOMER_IDS.sara}`);
+      await expect(page.getByRole('heading', { name: b.picker.topSold })).toBeVisible();
+      await screenshot(page, testInfo, `orders-new-picker-${colorScheme}`, { fullPage: true });
       await pickPack(page, '60 UC');
       await page.getByRole('textbox', { name: 'معرّف اللاعب' }).fill('5123456789');
       await page.getByRole('button', { name: b.check }).click();

@@ -246,6 +246,14 @@ export const useRevokeShareLink = (orderId: string) =>
 /* S16 purchases from the panel ------------------------------------------------------------- */
 
 /** Rules AP4, AP7, AP8: the customer's wallet, caps and saved ids, and the owner cap today. */
+/** The sale picker's games, categories and 30-day sales ("شراء من اللوحة"). */
+export const purchaseGamesQuery = queryOptions({
+  queryKey: ['orders', 'purchase-games'],
+  queryFn: () => call(api.GET('/api/admin/orders/purchase-games')),
+  // "تغيير" opens the picker again without a new read; the next visit of the page reads anew.
+  staleTime: 5 * 60_000,
+});
+
 export const purchaseContextQuery = (customerId: string | undefined, gameId?: string) =>
   queryOptions({
     queryKey: ['orders', 'purchase-context', customerId ?? null, gameId ?? null],

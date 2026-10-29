@@ -322,6 +322,48 @@ export class CatalogService {
     };
   }
 
+  /**
+   * The panel's sale picker (S16 "شراء من اللوحة"): unarchived categories and unarchived games in
+   * catalog order, each game with its cover and search terms.
+   */
+  async saleGames() {
+    const [categories, rows] = await readAll(this.db, [
+      () =>
+        this.db
+          .select({ id: catalogCategories.id, nameAr: catalogCategories.nameAr })
+          .from(catalogCategories)
+          .where(isNull(catalogCategories.archivedAt))
+          .orderBy(asc(catalogCategories.sortOrder), asc(catalogCategories.createdAt)),
+      () =>
+        this.db
+          .select({ row: catalogGames })
+          .from(catalogGames)
+          .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
+          .where(isNull(catalogGames.archivedAt))
+          .orderBy(
+            asc(catalogCategories.sortOrder),
+            asc(catalogGames.sortOrder),
+            asc(catalogGames.createdAt),
+          ),
+    ] as const);
+    const images = await this.images(rows.map(({ row }) => row));
+    return {
+      categories,
+      games: rows.map(({ row }) => {
+        const size = row.coverFileId ? images.get(row.coverFileId) : undefined;
+        return {
+          id: row.id,
+          categoryId: row.categoryId,
+          nameAr: row.nameAr,
+          nameEn: row.nameEn,
+          status: row.status,
+          cover: row.coverFileId && size ? toImage(row.coverFileId, size) : null,
+          searchTerms: row.searchTerms,
+        };
+      }),
+    };
+  }
+
   /** A game with every field and product, archived ones included. */
   async game(id: string, executor: Database | Transaction = this.db): Promise<GameDetail> {
     const [found] = isUuid(id)

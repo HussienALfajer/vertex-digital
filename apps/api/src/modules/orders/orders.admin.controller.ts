@@ -33,6 +33,7 @@ import {
   adminOrderSchema,
   adminPurchaseContextQuerySchema,
   adminPurchaseContextSchema,
+  adminPurchaseGamesSchema,
   adminRevealedCodeSchema,
   createAdminOrderSchema,
   DELIVERY_PROOF_MAX_BYTES,
@@ -131,6 +132,19 @@ export class OrdersAdminController {
     @Query({ schema: adminPurchaseContextQuerySchema }) query: AdminPurchaseContextQuery,
   ) {
     return this.purchases.context(query.customerId, query.gameId);
+  }
+
+  /** S16 "شراء من اللوحة": the sale picker's games, categories and sales. */
+  @Get('purchase-games')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: adminPurchaseGamesSchema })
+  @ApiOkResponse({
+    description: 'Unarchived games with covers, search terms and 30-day sales',
+    standardSchema: adminPurchaseGamesSchema,
+  })
+  purchaseGames() {
+    return this.purchases.games();
   }
 
   /** S10 rule AD1: removes exposure only, so no re-authentication; audited with the reason. */

@@ -335,6 +335,25 @@ export class AdminApi {
       const row = this.customers.find(customerId);
       if (row) row.balanceUnits -= units;
     },
+    saleGames: () => ({
+      categories: this.catalog.categories
+        .filter((item) => !item.archivedAt)
+        .map((item) => ({ id: item.id, nameAr: item.nameAr })),
+      games: this.catalog.games
+        .filter((item) => !item.archivedAt)
+        .map((item) => {
+          const detail = this.catalog.detail(item);
+          return {
+            id: item.id,
+            categoryId: item.categoryId,
+            nameAr: item.nameAr,
+            nameEn: item.nameEn,
+            status: item.status,
+            cover: detail.cover,
+            searchTerms: detail.searchTerms,
+          };
+        }),
+    }),
   });
   /** S20 PR 3: applications, merchants, grants and revocations, the merchant settings. */
   readonly merchants: MerchantsMock = new MerchantsMock(
