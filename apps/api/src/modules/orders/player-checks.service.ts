@@ -398,9 +398,9 @@ export class PlayerChecksService {
       }),
     );
     if (!sendable) return { result: 'not_supported' };
-    // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own).
-    // S21 BK4: a merchant's hour and day come from the merchant settings, and so does the
-    // address's hour.
+    // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own);
+    // a customer has no day limit (owner, 2026-10-29). S21 BK4: a merchant's hour and day come
+    // from the merchant settings, and so does the address's hour.
     const quota = requester.kind === 'customer' ? await this.merchantQuota(requester.id) : null;
     const allowed = await withinLimits(
       this.db,
@@ -412,11 +412,15 @@ export class PlayerChecksService {
               max: quota?.perHour ?? 10,
               windowMs: HOUR,
             },
-            {
-              key: `player-check:customer-day:${requester.id}`,
-              max: quota?.perDay ?? 30,
-              windowMs: 24 * HOUR,
-            },
+            ...(quota
+              ? [
+                  {
+                    key: `player-check:customer-day:${requester.id}`,
+                    max: quota.perDay,
+                    windowMs: 24 * HOUR,
+                  },
+                ]
+              : []),
             {
               key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`,
               max: quota?.perHour ?? 30,
