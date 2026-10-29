@@ -52,6 +52,7 @@ Drizzle schema, migrations, the database client and the shared write paths for m
 - `telegram_messages`: `queueTelegramMessage` (a used dedupe key writes nothing). Deposit cards: `queueDepositCard`, queued by every deposit change a card shows.
 - `treasury_movements`: `recordMovement` and `reverseMovement` (key advisory lock and replay, the two places' advisory locks in id order, the opening rule T6 and the reference rule T8 of S13, one reversal).
 - Merchant application status: `moveApplication` on the contracts' `applicationTransition`. Grant and revoke: `grantMerchant` / `revokeMerchant` on a customer the caller locked `FOR NO KEY UPDATE`.
+- Merchant tiers (S23): the profile's levels, `merchant_tier_changes` and the tier notifications only through `recomputeMerchantLevel` (customer locked; the same state writes nothing); grants through `grantTier` / `endTierGrant` / `expireTierGrant`; the month's row through `recordTierMonth` (once); the one-off setup through `setupMerchantTiers`.
 - Every merchant purchase, checkout, reservation and customer-paid admin order writes its sale row with `recordMerchantSale` in its transaction, and every merchant wallet debit calls `afterMerchantPurchase`.
 - Store cache: `queueStoreRevalidate(tag)`, one job per 10-second slot per tag (`catalog`, `content`). Rate limits: `withinLimits` / `countHit` on `customer_rate_limits` (ADR 0008).
 - Jobs in a transaction: `boss.send(queue, data, { db: transactionExecutor(tx) })`.
@@ -72,7 +73,7 @@ Drizzle schema, migrations, the database client and the shared write paths for m
 - The guards patch pg and drizzle once per process and record per test file (`concurrentQueries`, `poolReadsInTransactions` in `src/testing.ts`); the concurrent check runs on the client under the condition pg warns on.
 
 ## Pricing
-- `repriceProducts` decides retail first (review rule, fixed prices via the contracts' `resolveListEntry` / `listPrice`), then `repriceListsAfterRetail` prices every other unarchived list from the same basis, capped at the retail row, appending only changed rows.
+- `repriceProducts` decides retail first (review rule, fixed prices via the contracts' `resolveListEntry` / `listPrice`), then `repriceListsAfterRetail` prices every other unarchived list from the same basis, capped at the retail row, appending only changed rows. Lists are priced parents before children; a list a live level names is also capped at its parent's row (source `parent_cap`, S23 PX2).
 - `listPricingFacts` / `listIsPriced` / `listTarget` (`pricing/reprice.ts`) are the one computation of a list row; `priceMatrix` reuses them.
 - A product under review keeps every list's price; a decided review reprices with its cause. A basis switch that moves the price beyond the threshold opens a review unless the new basis is `manual`.
 - A list whose root has no live global rule is not priced. Prices are whole cents above cost; never sell below cost.
