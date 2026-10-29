@@ -1,5 +1,7 @@
-import type { Page } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
+import type { Download, Locator, Page } from '@playwright/test';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
+import { type BusyCover, busyCover, decodePng } from './qr-decode';
 import { type AdminApi, expect, screenshot, test } from './test';
 
 /*
@@ -15,7 +17,7 @@ async function scene(admin: AdminApi) {
     nameAr: 'ببجي موبايل',
     nameEn: 'PUBG Mobile',
     status: 'active',
-    cover: true,
+    cover: busyCover('blocks'),
   });
   admin.catalog.addField(game.id, { key: 'player_id', labelAr: 'معرّف اللاعب' });
   const small = admin.catalog.addProduct(game.id, { nameAr: '60 شدة', gameAmount: 60 });
@@ -48,6 +50,28 @@ async function scene(admin: AdminApi) {
 const productRow = (page: Page, name: string) =>
   page.getByRole('row').filter({ has: page.getByRole('cell', { name, exact: true }) });
 
+async function downloaded(page: Page, button: Locator): Promise<{ name: string; bytes: Buffer }> {
+  const download: Promise<Download> = page.waitForEvent('download');
+  await button.click();
+  const file = await download;
+  return { name: file.suggestedFilename(), bytes: await readFile((await file.path()) as string) };
+}
+
+/** The downloaded SVG drawn by the browser alone, as a PNG: it must need nothing but itself. */
+async function svgAsPng(page: Page, svg: string): Promise<Buffer> {
+  const url = await page.evaluate(async (markup) => {
+    const image = new Image();
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 1024;
+    canvas.getContext('2d')?.drawImage(image, 0, 0, 1024, 1024);
+    return canvas.toDataURL('image/png');
+  }, svg);
+  return Buffer.from(url.split(',')[1] as string, 'base64');
+}
+
 test.describe('direct buy links (S22 DL5)', () => {
   test('shows a pack’s link, tags it with a campaign and offers its QR', async ({
     page,
@@ -79,6 +103,82 @@ test.describe('direct buy links (S22 DL5)', () => {
     await dialog.getByRole('link', { name: ar.catalog.quickLink.stats }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/quick-links\\?productId=${large.id}`));
     await expect(page.getByRole('row')).toHaveCount(3);
+  });
+
+  test('puts the game’s cover in the QR, and every download still scans to the exact link', async ({
+    page,
+    admin,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    admin.signedIn = true;
+    const covers: (BusyCover | null)[] = ['blocks', 'modules', 'stripes', null];
+    for (const [index, kind] of covers.entries()) {
+      const game = admin.catalog.addGame({
+        categorySlug: 'games',
+        slug: `game-${index}`,
+        nameAr: `لعبة ${index}`,
+        nameEn: `Game ${index}`,
+        status: 'active',
+        cover: kind === null ? false : busyCover(kind, index + 1),
+      });
+      const pack = admin.catalog.addProduct(game.id, { nameAr: '660 شدة', gameAmount: 660 });
+      admin.catalog.pricing = () => ({
+        price: { priceUsdUnits: 9_990_000, minMarginUsdUnits: 100_000 },
+        usableRouteCostsUsdUnits: [9_000_000],
+        basisSupplierNameAr: 'WDGZone',
+        basisCostUsdUnits: 9_000_000,
+        basisStockLevel: null,
+        priceHeld: false,
+        routed: true,
+        reviewOpen: false,
+      });
+      const link = `${pack.quickLinkUrl}?c=sticker_${index}`;
+
+      await page.goto(`/catalog/games/${game.id}?tab=products`);
+      await productRow(page, '660 شدة')
+        .getByRole('button', { name: ar.catalog.quickLink.open })
+        .click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel(ar.catalog.quickLink.campaign).fill(`sticker_${index}`);
+      const qr = dialog.getByRole('img', { name: ar.catalog.quickLink.qr });
+      await expect(qr).toHaveAttribute('aria-busy', 'false');
+      // A game without a cover keeps the plain QR.
+      await expect(qr.locator('image')).toHaveCount(kind === null ? 0 : 1);
+      if (kind !== null) {
+        await expect(qr.locator('image')).toHaveAttribute('href', /^data:image\/png;base64,/);
+      }
+
+      const png = await downloaded(
+        page,
+        dialog.getByRole('button', { name: ar.catalog.quickLink.png }),
+      );
+      expect(png.name).toBe(`${pack.quickCode}-sticker_${index}.png`);
+      expect(decodePng(png.bytes)).toEqual({ width: 1024, height: 1024, text: link });
+
+      const svg = await downloaded(
+        page,
+        dialog.getByRole('button', { name: ar.catalog.quickLink.svg }),
+      );
+      const markup = svg.bytes.toString('utf8');
+      expect(markup).not.toMatch(/\/api\/catalog\/images|blob:/);
+      expect(decodePng(await svgAsPng(page, markup)).text).toBe(link);
+
+      // The card leaves the price off unless asked: the link outlives prices.
+      const price = dialog.getByRole('checkbox', { name: ar.catalog.quickLink.cardPrice });
+      await expect(price).not.toBeChecked();
+      const cardButton = dialog.getByRole('button', { name: ar.catalog.quickLink.card });
+      const card = await downloaded(page, cardButton);
+      expect(card.name).toBe(`${pack.quickCode}-sticker_${index}-card.png`);
+      expect(decodePng(card.bytes)).toEqual({ width: 1240, height: 1748, text: link });
+      await price.click();
+      const priced = await downloaded(page, cardButton);
+      expect(decodePng(priced.bytes).text).toBe(link);
+      expect(priced.bytes.equals(card.bytes)).toBe(false);
+      // The cards are the print review's evidence, beside the screenshots.
+      const path = testInfo.outputPath(`card-${kind ?? 'no-cover'}.png`);
+      await writeFile(path, priced.bytes);
+      await testInfo.attach(`card-${kind ?? 'no-cover'}`, { path, contentType: 'image/png' });
+    }
   });
 
   test('turns the best-value badge off for a game', async ({ page, admin }) => {
