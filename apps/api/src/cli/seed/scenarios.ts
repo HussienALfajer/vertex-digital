@@ -1118,12 +1118,17 @@ export class Scenarios {
     ] as const) {
       const product = adminProduct(at);
       if (!product) continue;
+      // Rule AP16: a gift or a compensation is charged at the cost list.
+      const price =
+        purpose === 'gift' || purpose === 'compensation'
+          ? await this.costListPrice(product.id)
+          : product.priceUnits;
       await this.step(`admin purchase ${purpose}`, () =>
         purchases.create(this.admin, randomUUID(), {
           productId: product.id,
           quantity: 1,
           fields: this.fieldsFor(product, 1400 + at),
-          expectedUnitPriceUsdUnits: product.priceUnits,
+          expectedUnitPriceUsdUnits: price,
           confirmPlayer: true,
           purpose,
           ...(customer && { customerId: this.person(customer) }),
@@ -1138,6 +1143,15 @@ export class Scenarios {
     this.input.log('  waiting for the worker to fulfil the orders');
     await this.waitForWorker();
     await this.input.fakeState.setScripts({});
+  }
+
+  /** A product's current price on the cost list (its newest row). */
+  private async costListPrice(productId: string): Promise<number> {
+    const { rows } = await this.db.execute<{ price: string }>(sql`
+      SELECT price_usd_units::text AS price FROM product_prices
+      WHERE product_id = ${productId} AND price_list_id = ${ROOT_PRICE_LIST_IDS.cost}
+      ORDER BY created_at DESC, id DESC LIMIT 1`);
+    return Number(rows[0]?.price);
   }
 
   /** Waits until no order is paid but not yet sent and no attempt is still being sent. */

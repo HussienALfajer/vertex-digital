@@ -1,10 +1,10 @@
-# TASKS — Admin sale picker on "شراء من اللوحة" (owner, 2026-10-29)
+# TASKS — Price lists on "شراء من اللوحة" (owner, 2026-10-29)
 
-- [x] `GET /api/admin/orders/purchase-games`: games, categories, 30-day sales, last admin game (contract, db read, API test)
-- [x] Game step: live search with arrows and Enter, the most-sold row, category chips over covers, the chosen-game bar with "تغيير"
-- [x] Pack step: cards by quantity with cost, margin and availability, quick filter; focus moves to the account fields
-- [x] E2E and RTL screenshots; S16 screens and API table amended; reviewer's finding fixed (indexed 30-day count)
-- [x] Browser check on the local stack
+- [x] Rule AP16: walk-in on a chosen list, gifts and compensations on the cost list, customer-paid on the customer's list (contract, db, API, tests)
+- [x] Pack cards: the supplier's price (or estimate), the margin and every list's price, the charged list marked
+- [x] The price list select (walk-in) and the charged-list line (gift, compensation, on behalf)
+- [x] E2E with RTL screenshots; S16 amended
+- [x] Reviewer (hash test added), `pnpm verify`
 
 ## Carried over (Close V1)
 

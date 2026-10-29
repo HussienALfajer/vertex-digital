@@ -61,6 +61,8 @@ export function adminRequestHash(body: AdminPurchaseBody) {
     body.confirmPlayer,
     body.reason,
     body.customerNote ?? null,
+    // Rule AP16, added after the first admin orders: absent keeps their hash.
+    ...(body.priceListId === undefined ? [] : [body.priceListId]),
   ]);
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -113,6 +115,7 @@ export class AdminPurchasesService {
             adminId: actor.adminId,
             purpose: body.purpose,
             customerId: body.customerId ?? null,
+            priceListId: body.priceListId ?? null,
             productId: body.productId,
             quantity: body.quantity,
             fields: body.fields,
@@ -138,22 +141,27 @@ export class AdminPurchasesService {
 
   /**
    * `GET /api/admin/orders/purchase-context` (rules AP4, AP7, AP8); S20 PO4, MT2: the customer's
-   * price kind, terms state and, with a game, its packs at the customer's list.
+   * price kind, terms state and, with a game, its packs at the customer's list; rule AP16: with a
+   * game and a list, that list's prices for an owner-funded order, paused packs priced (AP5).
    */
   async context(
     customerId: string | undefined,
     gameId?: string | undefined,
+    priceListId?: string | undefined,
   ): Promise<AdminPurchaseContext> {
-    const [policy, spent] = await Promise.all([
+    const [policy, spent, listPrices] = await Promise.all([
       currentOrderPolicy(this.db),
       ownerSpentToday(this.db),
+      gameId === undefined || priceListId === undefined
+        ? null
+        : gameListPrices(this.db, gameId, priceListId, routingContext(this.env), true),
     ]);
     const owner = {
       capUsdUnits: policy.ownerDailyCapUsdUnits,
       usedTodayUsdUnits: spent.usedUsdUnits,
       remainingUsdUnits: ownerCapRemaining(policy.ownerDailyCapUsdUnits, spent.usedUsdUnits),
     };
-    if (customerId === undefined) return { customer: null, owner };
+    if (customerId === undefined) return { customer: null, owner, listPrices };
     const row = await this.customers.purchaseCustomer(customerId);
     if (!row || row.archived) throw orderRefusals.notFound();
     const [wallet, overrides, used, saved, pricing, merchant] = await Promise.all([
@@ -166,7 +174,7 @@ export class AdminPurchasesService {
     ]);
     const cap = overrides.dailyPurchaseUsdUnits;
     const listId = pricing?.effectiveList.id ?? ROOT_PRICE_LIST_IDS.retail;
-    const listPrices =
+    const customerPrices =
       gameId === undefined || listId === ROOT_PRICE_LIST_IDS.retail
         ? null
         : await gameListPrices(this.db, gameId, listId, routingContext(this.env));
@@ -181,8 +189,9 @@ export class AdminPurchasesService {
         balanceUsdUnits: wallet ? await accountBalance(this.db, wallet) : 0,
         purchaseCapLeftUsdUnits: cap === null ? null : Math.max(0, cap - used),
         priceKind: pricing?.priceKind ?? 'retail',
+        priceListId: listId,
         merchantTermsRequired: merchant !== null && !merchant.termsAccepted,
-        listPrices,
+        listPrices: customerPrices,
         savedPlayers: saved.map((player) => ({
           id: player.id,
           gameId: player.gameId,
@@ -192,6 +201,7 @@ export class AdminPurchasesService {
         })),
       },
       owner,
+      listPrices,
     };
   }
 
