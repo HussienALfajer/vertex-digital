@@ -8,7 +8,7 @@ import {
   type ManualDepositMethod,
   rateFromNumeric,
 } from '@vertex-digital/contracts';
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { type Database, readAll, type Transaction } from '../client.js';
 import {
@@ -427,6 +427,65 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
       balanceUnits: toUnits(balance),
     })),
   };
+}
+
+export interface WalletHighlight {
+  customer: { id: string; name: string; email: string; phone: string; isTest: boolean };
+  balanceUnits: number;
+  /** When the wallet's last journal was written; null for a wallet without postings. */
+  lastMovedAt: Date | null;
+}
+
+/**
+ * The wallets page's two lists: the wallets holding the most, and the wallets that moved last (in
+ * write order, rule W3), `limit` each. Balances are sums of postings at read time.
+ */
+export async function walletHighlights(
+  db: Executor,
+  limit: number,
+): Promise<{ withBalance: WalletHighlight[]; recentlyMoved: WalletHighlight[] }> {
+  const wallets = db
+    .select({
+      customerId: ledgerAccounts.customerId,
+      balance: sql<string>`coalesce(sum(${ledgerPostings.amountUnits}), 0)`.as('balance'),
+      lastPosition: sql<number | null>`max(${ledgerPostings.position})`.as('last_position'),
+      lastMovedAt: sql<Date | null>`max(${ledgerJournals.createdAt})`.as('last_moved_at'),
+    })
+    .from(ledgerAccounts)
+    .leftJoin(ledgerPostings, eq(ledgerPostings.accountId, ledgerAccounts.id))
+    .leftJoin(ledgerJournals, eq(ledgerJournals.id, ledgerPostings.journalId))
+    .where(eq(ledgerAccounts.kind, 'customer_wallet'))
+    .groupBy(ledgerAccounts.id)
+    .as('wallets');
+  const list = (where: SQL, orderBy: SQL[]) =>
+    db
+      .select({
+        customer: {
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+          phone: customers.phone,
+          isTest: customers.isTest,
+        },
+        // Its own name: `ORDER BY "balance"` would otherwise sort this text column.
+        balance: sql<string>`${wallets.balance}::text`.as('balance_text'),
+        lastMovedAt: wallets.lastMovedAt,
+      })
+      .from(wallets)
+      .innerJoin(customers, eq(customers.id, wallets.customerId))
+      .where(where)
+      .orderBy(...orderBy)
+      .limit(limit);
+  const [withBalance, recentlyMoved] = await readAll(db, [
+    () => list(sql`${wallets.balance} > 0`, [desc(wallets.balance), asc(customers.id)]),
+    () => list(sql`${wallets.lastPosition} is not null`, [desc(wallets.lastPosition)]),
+  ]);
+  const highlight = (row: (typeof withBalance)[number]): WalletHighlight => ({
+    customer: row.customer,
+    balanceUnits: toUnits(row.balance),
+    lastMovedAt: row.lastMovedAt === null ? null : new Date(row.lastMovedAt),
+  });
+  return { withBalance: withBalance.map(highlight), recentlyMoved: recentlyMoved.map(highlight) };
 }
 
 /** Balances of customers' wallets by customer id; a customer without a wallet holds 0 (rule W1). */

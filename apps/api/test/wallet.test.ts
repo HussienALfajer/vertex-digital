@@ -108,6 +108,7 @@ describe('access', () => {
       client.get('/api/wallet'),
       client.get('/api/wallet/entries'),
       client.get('/api/admin/wallets?q=abc'),
+      client.get('/api/admin/wallets/highlights'),
       client.get(`/api/admin/wallets/${id}`),
       client.get(`/api/admin/wallets/${id}/entries`),
       client.get('/api/admin/ledger/summary'),
@@ -124,6 +125,7 @@ describe('access', () => {
     expect((await client.get('/api/wallet/entries', { cookie: admin.cookie })).status).toBe(401);
     for (const path of [
       '/api/admin/wallets?q=abc',
+      '/api/admin/wallets/highlights',
       `/api/admin/wallets/${customer.id}`,
       `/api/admin/wallets/${customer.id}/entries`,
       '/api/admin/ledger/summary',
@@ -334,6 +336,30 @@ describe('the admin wallet screens', () => {
       balanceUnits: 0,
       adjustmentCount: 2,
     });
+  });
+
+  it('list the largest balances and the wallets that moved last', async () => {
+    const customer = await newCustomer();
+    await credit(customer.id, 3);
+    const response = await adminGet('/api/admin/wallets/highlights');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const lists = await json<{
+      withBalance: { balanceUnits: number }[];
+      recentlyMoved: { id: string; balanceUnits: number; lastMovedAt: string | null }[];
+    }>(response);
+    expect(lists.recentlyMoved[0]).toEqual({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      isTest: false,
+      balanceUnits: 3 * DOLLAR,
+      lastMovedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(lists.withBalance.length).toBeGreaterThan(0);
+    expect(lists.withBalance.length).toBeLessThanOrEqual(10);
+    expect(lists.withBalance.every((wallet) => wallet.balanceUnits > 0)).toBe(true);
   });
 
   it('summarise what is owed, real and test customers apart (rule L1)', async () => {

@@ -4,8 +4,10 @@ import {
   type AdminWalletEntryPage,
   type CursorQuery,
   type LedgerSummary,
+  WALLET_HIGHLIGHTS_LIMIT,
   type Wallet,
   type WalletEntryPage,
+  type WalletHighlights,
   type WalletSearchPage,
   walletSypValue,
 } from '@vertex-digital/contracts';
@@ -17,6 +19,7 @@ import {
   ledgerSummary,
   reservedUsdUnits,
   walletAdjustments,
+  walletHighlights,
   walletTimeline,
 } from '@vertex-digital/db';
 import { count, eq } from 'drizzle-orm';
@@ -120,6 +123,20 @@ export class WalletService {
         balanceUnits: balances.get(customer.id) ?? 0,
       })),
       nextCursor: page.nextCursor,
+    };
+  }
+
+  /** The wallets page's lists below the search. */
+  async highlights(): Promise<WalletHighlights> {
+    const lists = await walletHighlights(this.db, WALLET_HIGHLIGHTS_LIMIT);
+    const item = ({ customer, balanceUnits, lastMovedAt }: (typeof lists.withBalance)[number]) => ({
+      ...customer,
+      balanceUnits,
+      lastMovedAt: lastMovedAt?.toISOString() ?? null,
+    });
+    return {
+      withBalance: lists.withBalance.map(item),
+      recentlyMoved: lists.recentlyMoved.map(item),
     };
   }
 

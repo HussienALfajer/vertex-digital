@@ -596,6 +596,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/wallets/highlights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletAdminController_highlights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/wallets/{customerId}": {
         parameters: {
             query?: never;
@@ -5848,6 +5864,21 @@ export interface components {
             phone: string;
             isTest: boolean;
             balanceUnits: number;
+        };
+        WalletHighlights: {
+            withBalance: components["schemas"]["WalletHighlight"][];
+            recentlyMoved: components["schemas"]["WalletHighlight"][];
+        };
+        WalletHighlight: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string;
+            phone: string;
+            isTest: boolean;
+            balanceUnits: number;
+            /** Format: date-time */
+            lastMovedAt: string | null;
         };
         AdminWallet: {
             balanceUnits: number;
@@ -12117,6 +12148,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WalletSearchPage"];
+                };
+            };
+        };
+    };
+    WalletAdminController_highlights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The largest balances and the wallets that moved last */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletHighlights"];
                 };
             };
         };

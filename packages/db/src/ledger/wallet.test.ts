@@ -14,6 +14,7 @@ import {
   findCustomerWallet,
   ledgerSummary,
   walletBalanceAfter,
+  walletHighlights,
   walletTimeline,
 } from './wallet.js';
 
@@ -462,5 +463,39 @@ describe('the ledger summary (rule L1)', () => {
   it('gives no balance for customers without a wallet', async () => {
     expect(await customerWalletBalances(db, [])).toEqual(new Map());
     expect(await customerWalletBalances(db, [await customer()])).toEqual(new Map());
+  });
+});
+
+describe('the wallets page highlights', () => {
+  it('lists the largest balances and the wallets that moved last, without empty wallets', async () => {
+    // Rolled back, like the summary above: the large credit must not stay at the top for others.
+    const [rich, moved, empty] = [await customer(), await customer(), await customer()];
+    const rollback = new Error('rollback');
+    const run = db.transaction(async (tx) => {
+      await adjustmentJournal(tx, rich, 'correction', 10_000_000 * DOLLAR);
+      await adjustmentJournal(tx, moved, 'correction', 2 * DOLLAR);
+      await adjustmentJournal(tx, moved, 'correction', -2 * DOLLAR);
+      await ensureCustomerWallet(tx, empty);
+      const { withBalance, recentlyMoved } = await walletHighlights(tx, 50);
+      expect(withBalance[0]).toMatchObject({
+        customer: { id: rich, isTest: false },
+        balanceUnits: 10_000_000 * DOLLAR,
+      });
+      expect(withBalance.every((row) => row.balanceUnits > 0)).toBe(true);
+      const balances = withBalance.map((row) => row.balanceUnits);
+      expect(balances).toEqual([...balances].sort((a, b) => b - a));
+      // Other test files post meanwhile: only the order of these two wallets is certain.
+      const order = recentlyMoved.map((row) => row.customer.id);
+      expect(order).toContain(rich);
+      expect(order.indexOf(moved)).toBeLessThan(order.indexOf(rich));
+      expect(recentlyMoved[order.indexOf(moved)]).toMatchObject({
+        balanceUnits: 0,
+        lastMovedAt: expect.any(Date),
+      });
+      const ids = [...withBalance, ...recentlyMoved].map((row) => row.customer.id);
+      expect(ids).not.toContain(empty);
+      throw rollback;
+    });
+    await expect(run).rejects.toBe(rollback);
   });
 });

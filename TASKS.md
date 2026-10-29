@@ -1,10 +1,11 @@
-# TASKS — Admin sale picker on "شراء من اللوحة" (owner, 2026-10-29)
+# TASKS — Wallets page in the owner's words (owner, 2026-10-29)
 
-- [x] `GET /api/admin/orders/purchase-games`: games, categories, 30-day sales, last admin game (contract, db read, API test)
-- [x] Game step: live search with arrows and Enter, the most-sold row, category chips over covers, the chosen-game bar with "تغيير"
-- [x] Pack step: cards by quantity with cost, margin and availability, quick filter; focus moves to the account fields
-- [x] E2E and RTL screenshots; S16 screens and API table amended; reviewer's finding fixed (indexed 30-day count)
-- [x] Browser check on the local stack
+- [x] One pure function places every system account kind in a group (held, owed, result, owner money, conversion pair) with its shown amount; unit tests
+- [x] Plain names with the supplier's name, the code only in the row's explanation; compensations and corrections apart
+- [x] Gross profit and net in the result, the balance badge per currency with the difference when not zero
+- [x] `GET /api/admin/wallets/highlights`: largest balances and the last wallets to move (contract, db read, API test), shown below the search
+- [x] E2E and RTL screenshots in light and dark
+- [x] Reviewer (five findings fixed), `pnpm verify`, browser check on the local stack
 
 ## Carried over (Close V1)
 
