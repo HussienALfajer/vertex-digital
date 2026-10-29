@@ -228,6 +228,7 @@ export async function adminPurchaseOrder(
       priceListId: await adminOrderList(tx, input, customer?.priceListId ?? null),
       // S21 QT1: a merchant's own limits on their behalf; the store's otherwise.
       accountType: customer && shape.payer === 'customer' ? customer.accountType : 'customer',
+      tierQuantities: customer && shape.payer === 'customer' ? customer.tierQuantities : null,
     },
     { ...input, savePlayer: undefined, gift: undefined },
     product,

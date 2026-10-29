@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import type { ProductKind } from './catalog.js';
-import { zoneMonthStart, zoneYearMonth } from './deposits.js';
+import { zoneDate, zoneDayStart, zoneMonthStart, zoneYearMonth } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING } from './merchant-tiers.js';
 import { merchantLevelRefSchema } from './merchants.js';
 import {
   amountUnitsSchema,
@@ -16,14 +17,13 @@ import {
 } from './money.js';
 import {
   CART_LINES_MAX,
-  CHECKOUT_LINES_MAX,
   type PlayerCheck,
   playerCheckSchema,
   SAVED_PLAYERS_MAX,
   SAVED_PLAYERS_PER_GAME,
   type SaleCurrency,
 } from './orders.js';
-import { type AccountType, priceKindSchema } from './price-kinds.js';
+import type { AccountType } from './price-kinds.js';
 
 /*
  * The merchant area (S21, F30–F39, ADR 0036), owned by the api `merchant-tools` module; the volume
@@ -232,6 +232,18 @@ export const monthSchema = z
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
   .meta({ id: 'Month' });
 
+/**
+ * S23 MG1: the end of a manual tier grant ending on the Damascus day `endsOn` (`YYYY-MM-DD`): the
+ * start of the next Damascus day. Null unless `endsOn` is 1 to 90 days after today in Damascus.
+ */
+export function tierGrantEndsAt(endsOn: string, now: Date): Date | null {
+  const day = (date: string) =>
+    Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+  const days = (day(endsOn) - day(zoneDate(now))) / 86_400_000;
+  if (days < 1 || days > TIER_GRANT_MAX_DAYS) return null;
+  return zoneDayStart(now, -(days + 1));
+}
+
 /** The `Asia/Damascus` calendar month of `instant`, `YYYY-MM`. */
 export function damascusMonth(instant: Date): string {
   const { year, month } = zoneYearMonth(instant);
@@ -252,8 +264,8 @@ export function previousMonth(month: string): string {
 
 /* Volume levels (F39, LV1–LV7) --------------------------------------------------------------- */
 
-/** LV1: at most 10 live levels. */
-export const MERCHANT_LEVELS_MAX = 10;
+/** LV1, amended by S23: one live level per tier above Bronze. */
+export const MERCHANT_LEVELS_MAX = 3;
 
 export interface LevelThreshold {
   id: string;
@@ -280,7 +292,10 @@ export function levelFor<Level extends LevelThreshold>(
   return best;
 }
 
-/** `POST /api/admin/merchant-levels` and `PATCH /:id` (LV1): a whole-dollar threshold. */
+/**
+ * S21 LV1: a level's values as the `merchant_level.*` audit entries of S21 recorded them (S23
+ * replaced the routes with the tiers' own, `merchant-tiers.ts`).
+ */
 export const merchantLevelInputSchema = z
   .object({
     nameAr: z.string().trim().min(2).max(30),
@@ -294,27 +309,6 @@ export const merchantLevelInputSchema = z
   .meta({ id: 'MerchantLevelInput' });
 
 export type MerchantLevelInput = z.infer<typeof merchantLevelInputSchema>;
-
-export const merchantLevelSchema = z
-  .object({
-    id: z.uuid(),
-    nameAr: z.string(),
-    monthlyThresholdUsdUnits: amountUnitsSchema,
-    priceList: z.object({ id: z.uuid(), name: z.string(), priceKind: priceKindSchema }),
-    /** Merchants on this level now. */
-    merchantCount: z.int().nonnegative(),
-    createdAt: z.iso.datetime(),
-    archivedAt: z.iso.datetime().nullable(),
-  })
-  .meta({ id: 'MerchantLevel' });
-
-export type MerchantLevel = z.infer<typeof merchantLevelSchema>;
-
-export const merchantLevelListSchema = z
-  .object({ items: z.array(merchantLevelSchema) })
-  .meta({ id: 'MerchantLevelList' });
-
-export type MerchantLevelList = z.infer<typeof merchantLevelListSchema>;
 
 /* Dashboard (F30, DB1–DB6) ------------------------------------------------------------------- */
 
@@ -543,11 +537,20 @@ export function alertCounts(kinds: readonly AlertKind[]): Record<AlertKind, numb
 
 /* Counter tools (F32–F35, PR 2) -------------------------------------------------------------- */
 
-/** QT1: a merchant's order of a code pack may carry up to 50 units, whatever the pack's limit. */
+/**
+ * QT1: a merchant's order of a code pack may carry up to 50 units, whatever the pack's limit;
+ * S23 TS5: the merchant's tier sets it (Bronze's default), at most `TIER_QUANTITY_CEILING`.
+ */
 export const MERCHANT_CODE_QUANTITY_MAX = 50;
 
-/** BK1, BK3: a bulk list (and a merchant's checkout) holds at most 50 lines. */
-export const BULK_LINES_MAX = CHECKOUT_LINES_MAX;
+/** BK1, BK3: a bulk list (and a merchant's checkout) holds at most 50 lines; S23 TS5: per tier. */
+export const BULK_LINES_MAX = 50;
+
+/** S23 TS5: a merchant tier's quantities, from its settings in force. */
+export interface TierQuantities {
+  orderUnitsMax: number;
+  bulkLinesMax: number;
+}
 
 /** BK1: a pasted list or CSV file is at most 100 KB. */
 export const BULK_TEXT_MAX_BYTES = 100 * 1024;
@@ -707,7 +710,8 @@ export function parseBulkLines(text: string, game: BulkGame): ParsedBulkLine[] {
     else parsed.errors.push(pack.error);
     const quantityCell = latinDigits(cells[count + 1] ?? '1');
     const quantity = /^\d{1,3}$/.test(quantityCell) ? Number(quantityCell) : 0;
-    if (quantity >= 1 && quantity <= MERCHANT_CODE_QUANTITY_MAX) parsed.quantity = quantity;
+    // The tier's own limit is checked with the pack (QT1, TS5).
+    if (quantity >= 1 && quantity <= TIER_QUANTITY_CEILING) parsed.quantity = quantity;
     else parsed.errors.push('quantity_invalid');
   }
   return lines;
@@ -730,15 +734,17 @@ export const bulkCheckRequestSchema = z
 export type BulkCheckRequest = z.infer<typeof bulkCheckRequestSchema>;
 
 /**
- * QT1, QT2: the most units one order (or cart line) of a pack may carry: 50 for a merchant's code
- * pack, the pack's own limit otherwise (direct top-ups, and every pack for customers).
+ * QT1, QT2, S23 TS5: the most units one order (or cart line) of a pack may carry: the merchant
+ * tier's code quantity for a merchant's code pack, the pack's own limit otherwise (direct top-ups,
+ * and every pack for customers). `tier` is the merchant's tier quantities, null for a customer.
  */
 export function orderQuantityMax(
   product: { kind: ProductKind; maxQuantity: number },
   accountType: AccountType,
+  tier: TierQuantities | null,
 ): number {
   return accountType === 'merchant' && product.kind === 'code'
-    ? MERCHANT_CODE_QUANTITY_MAX
+    ? (tier?.orderUnitsMax ?? MERCHANT_CODE_QUANTITY_MAX)
     : product.maxQuantity;
 }
 
@@ -749,9 +755,9 @@ export function savedPlayerLimits(accountType: AccountType): { perGame: number; 
     : { perGame: SAVED_PLAYERS_PER_GAME, total: SAVED_PLAYERS_MAX };
 }
 
-/** BK3, edge case 21: 50 checkout lines for a merchant, 10 for a customer. */
-export function checkoutLinesMax(accountType: AccountType): number {
-  return accountType === 'merchant' ? BULK_LINES_MAX : CART_LINES_MAX;
+/** BK3, edge case 21, S23 TS5: the tier's lines for a merchant's checkout, 10 for a customer. */
+export function checkoutLinesMax(accountType: AccountType, tier: TierQuantities | null): number {
+  return accountType === 'merchant' ? (tier?.bulkLinesMax ?? BULK_LINES_MAX) : CART_LINES_MAX;
 }
 
 /**

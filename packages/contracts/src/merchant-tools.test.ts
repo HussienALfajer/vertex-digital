@@ -24,6 +24,7 @@ import {
   sellingPriceInputSchema,
   sellingPriceTooHigh,
   sellingSettingsSchema,
+  tierGrantEndsAt,
   updateReceiptSettingsSchema,
   updateWatchesSchema,
   watchChanges,
@@ -144,6 +145,22 @@ describe('Damascus months', () => {
   });
 });
 
+describe('tierGrantEndsAt (S23 MG1)', () => {
+  // 10:00 in Damascus (UTC+3) on 2026-10-29.
+  const now = new Date('2026-10-29T07:00:00Z');
+
+  it('ends at the end of the chosen Damascus day, 1 to 90 days ahead', () => {
+    expect(tierGrantEndsAt('2026-10-30', now)?.toISOString()).toBe('2026-10-30T21:00:00.000Z');
+    expect(tierGrantEndsAt('2027-01-27', now)?.toISOString()).toBe('2027-01-27T21:00:00.000Z');
+  });
+
+  it('refuses today, the past and beyond 90 days', () => {
+    expect(tierGrantEndsAt('2026-10-29', now)).toBeNull();
+    expect(tierGrantEndsAt('2026-10-01', now)).toBeNull();
+    expect(tierGrantEndsAt('2027-01-28', now)).toBeNull();
+  });
+});
+
 describe('levelFor (LV3)', () => {
   const levels = [
     { id: 'silver', monthlyThresholdUsdUnits: 50 * USD },
@@ -238,17 +255,21 @@ describe('alerts (AL1–AL6)', () => {
 });
 
 describe('counter limits (QT1, QT2, decision 10, BK3)', () => {
-  it('lets a merchant buy 50 codes, keeps the pack limit otherwise', () => {
-    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'merchant')).toBe(50);
-    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'customer')).toBe(5);
-    expect(orderQuantityMax({ kind: 'direct', maxQuantity: 3 }, 'merchant')).toBe(3);
+  const gold = { orderUnitsMax: 100, bulkLinesMax: 100 };
+
+  it("lets a merchant buy their tier's codes, keeps the pack limit otherwise (TS5)", () => {
+    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'merchant', null)).toBe(50);
+    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'merchant', gold)).toBe(100);
+    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'customer', null)).toBe(5);
+    expect(orderQuantityMax({ kind: 'direct', maxQuantity: 3 }, 'merchant', gold)).toBe(3);
   });
 
   it('raises saved ids and checkout lines for merchants only', () => {
     expect(savedPlayerLimits('merchant')).toEqual({ perGame: 50, total: 300 });
     expect(savedPlayerLimits('customer')).toEqual({ perGame: 10, total: 50 });
-    expect(checkoutLinesMax('merchant')).toBe(50);
-    expect(checkoutLinesMax('customer')).toBe(10);
+    expect(checkoutLinesMax('merchant', null)).toBe(50);
+    expect(checkoutLinesMax('merchant', gold)).toBe(100);
+    expect(checkoutLinesMax('customer', null)).toBe(10);
   });
 });
 
@@ -282,7 +303,7 @@ describe('parseBulkLines (BK1)', () => {
       packs: [...game.packs, { id: OTHER, nameAr: 'أخرى', gameAmount: 60 }],
     };
     expect(
-      parseBulkLines('1\n1,2,3,4\n1,999\n1,60,0\n1,60,x\n1,60,51', game).map((l) => l.errors),
+      parseBulkLines('1\n1,2,3,4\n1,999\n1,60,0\n1,60,x\n1,60,101', game).map((l) => l.errors),
     ).toEqual([
       ['columns'],
       ['columns'],

@@ -117,6 +117,11 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
     'A notification log (S21 AL2): never changed, deleted after 90 days, not a business record',
   merchant_alert_settings: "The merchant's own preferences (S21 AL4–AL6)",
   merchant_receipt_settings: "The merchant's own preferences (S21 BR3)",
+  merchant_tier_settings: "Append-only (S23 TS1): a save is a new version of a tier's privileges",
+  merchant_tier_grants:
+    'Never archived (S23 MG1–MG7): a grant is closed by its end, which is its record',
+  merchant_tier_changes: "Append-only (S23 TR6): a merchant's tier changes",
+  merchant_tier_months: "Append-only (S23 PG5): a merchant's month as it ended",
   quick_link_events:
     'A counting log (S22 DL2, DL4): never changed, deleted after 90 days, not a business record',
   product_alerts:
@@ -143,6 +148,7 @@ const NATURAL_KEYS: Record<string, string> = {
   merchant_selling_prices: 'Keyed by customer and product: one own price per product (S21 SP2)',
   merchant_order_sales: 'Keyed by its order: one sale row per merchant order (S21 SP4)',
   merchant_watch_states: 'Keyed by customer and product: the last state told (S21 AL2)',
+  merchant_tier_months: 'Keyed by customer and month: one row per merchant month (S23 PG5)',
   merchant_alert_settings: 'Keyed by its customer: one row of alert settings (S21 AL4)',
   merchant_receipt_settings: 'Keyed by its customer: one row of receipt settings (S21 BR3)',
 };
@@ -186,6 +192,9 @@ const APPEND_ONLY_TABLES = [
   'merchant_shop_photos',
   'merchant_application_events',
   'merchant_settings',
+  'merchant_tier_settings',
+  'merchant_tier_changes',
+  'merchant_tier_months',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

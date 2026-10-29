@@ -492,6 +492,13 @@ export function zoneDayStart(at: Date, daysBack = 0): Date {
   return zoneInstant(clock.year, clock.month, clock.day - daysBack, 0);
 }
 
+/** The review zone's calendar day of `at` (S23), `YYYY-MM-DD`. */
+export function zoneDate(at: Date): string {
+  const clock = zoneClock(at);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${clock.year}-${pad(clock.month)}-${pad(clock.day)}`;
+}
+
 /** The review zone's calendar month of `at` (S21): its year and month (1–12). */
 export function zoneYearMonth(at: Date): { year: number; month: number } {
   const clock = zoneClock(at);

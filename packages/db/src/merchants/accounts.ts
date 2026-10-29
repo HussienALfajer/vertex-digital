@@ -13,8 +13,10 @@ import type { Executor, Transaction } from '../client.js';
 import { cancelAccountReservations, usableList } from '../customers/price-lists.js';
 import { type AdminActor, CustomerError, type CustomerRow } from '../customers/state.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
-import { customers, merchantProfiles, merchantSettings } from '../schema/index.js';
+import { customers, merchantLevels, merchantProfiles, merchantSettings } from '../schema/index.js';
+import { endTierGrant } from './grants.js';
 import { queueMerchantLevel } from './levels.js';
+import { levelTier, merchantPrivileges, recordTierChange } from './tiers.js';
 
 /*
  * Merchant accounts (S20 MA5–MA7, MD1): the grant (an approval or the admin's direct grant) and
@@ -36,20 +38,19 @@ export async function currentMerchantSettings(db: Executor): Promise<MerchantSet
   return row;
 }
 
-/** MD1, MD3: the merchant tier of a merchant's deposits; null for a customer. */
+/**
+ * MD1, MD3, S23 TS3: the deposit limits of a merchant's deposits, their effective tier's; null for
+ * a customer.
+ */
 export async function merchantDepositTier(
   db: Executor,
   customerId: string,
 ): Promise<MerchantDepositTier | null> {
-  const [customer] = await db
-    .select({ accountType: customers.accountType })
-    .from(customers)
-    .where(eq(customers.id, customerId));
-  if (customer?.accountType !== 'merchant') return null;
-  const settings = await currentMerchantSettings(db);
+  const privileges = await merchantPrivileges(db, customerId);
+  if (privileges === null) return null;
   return {
-    perDepositUsdUnits: settings.perDepositUsdUnits,
-    dailyDepositUsdUnits: settings.dailyDepositUsdUnits,
+    perDepositUsdUnits: privileges.settings.perDepositUsdUnits,
+    dailyDepositUsdUnits: privileges.settings.dailyDepositUsdUnits,
   };
 }
 
@@ -170,11 +171,37 @@ export async function revokeMerchant(
     .update(customers)
     .set({ accountType: 'customer', priceListId: null })
     .where(eq(customers.id, customer.id));
+  const [profile] = await tx
+    .select({ tier: merchantLevels.tier })
+    .from(merchantProfiles)
+    .leftJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
+    .where(eq(merchantProfiles.customerId, customer.id));
   await tx
     .update(merchantProfiles)
-    // S21 LV7: a revocation clears the level; a new grant recomputes it.
-    .set({ revokedAt: sql`now()`, levelId: null, levelChangedAt: sql`now()` })
+    // S21 LV7, S23 TR9: a revocation clears the levels; a new grant recomputes them.
+    .set({
+      revokedAt: sql`now()`,
+      levelId: null,
+      earnedLevelId: null,
+      levelSource: null,
+      levelChangedAt: sql`now()`,
+    })
     .where(eq(merchantProfiles.customerId, customer.id));
+  // TR9: an open grant ends with the revocation, and a tier above Bronze is left.
+  await endTierGrant(tx, { ...context, now: new Date() }, customer.id, 'merchant_revoked', {
+    kind: 'admin',
+    actor: input.actor,
+    reason: input.reason,
+  });
+  const tierBefore = levelTier(profile);
+  if (tierBefore !== 'bronze') {
+    await recordTierChange(tx, {
+      customerId: customer.id,
+      from: tierBefore,
+      to: 'bronze',
+      source: 'revoked',
+    });
+  }
   // AT3, decision 11: a revocation cancels the reservations, whatever the list.
   const cancelledOrderIds = await cancelAccountReservations(tx, context, customer.id);
   await recordAudit(tx, {

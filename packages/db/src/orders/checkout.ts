@@ -98,10 +98,12 @@ export async function checkoutOrders(
   // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused as a whole.
   const customer = await lockActiveCustomer(tx, input.customerId);
   requireMerchantTerms(customer);
-  // S21 BK3, edge case 21: up to 50 lines for a merchant, 10 for a customer.
-  if (input.lines.length > checkoutLinesMax(customer.accountType)) {
+  // S21 BK3, edge case 21, S23 TS5: up to the tier's lines for a merchant (read under the lock,
+  // so a list checked under a higher tier is refused after a fall), 10 for a customer.
+  const linesMax = checkoutLinesMax(customer.accountType, customer.tierQuantities);
+  if (input.lines.length > linesMax) {
     throw new OrderError('VALIDATION_FAILED', 'Too many checkout lines', {
-      lines: { max: checkoutLinesMax(customer.accountType) },
+      lines: { max: linesMax },
     });
   }
   const productIds = [...new Set(input.lines.map((line) => line.productId))];
@@ -128,6 +130,7 @@ export async function checkoutOrders(
             isTest: customer.isTest,
             priceListId: customer.priceListId,
             accountType: customer.accountType,
+            tierQuantities: customer.tierQuantities,
           },
           line,
           product,

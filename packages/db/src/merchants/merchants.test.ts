@@ -361,6 +361,7 @@ describe('merchant profiles', () => {
       q: null,
       listId: null,
       levelId: null,
+      tier: null,
       after: null,
       limit: 500,
     });

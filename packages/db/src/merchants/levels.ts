@@ -1,11 +1,19 @@
 import {
+  accountPriceKind,
   damascusMonth,
+  effectiveLevel,
   effectivePriceListId,
+  isImportantTierChange,
+  type LevelTier,
   levelFor,
+  type MerchantTier,
   monthRange,
   previousMonth,
-  priceKindOf,
   QUEUES,
+  TIER_NAMES_AR,
+  type TierChangeSource,
+  tierOf,
+  tierRank,
 } from '@vertex-digital/contracts';
 import { and, asc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -21,9 +29,12 @@ import {
   ledgerPostings,
   merchantLevels,
   merchantProfiles,
+  merchantTierMonths,
   orders,
   priceLists,
 } from '../schema/index.js';
+import { queueTelegramMessage } from '../telegram/queue-telegram-message.js';
+import { levelTier, liveTierLevels, openTierGrant, recordTierChange } from './tiers.js';
 
 /*
  * Volume levels (S21 F39, LV1–LV7, ADR 0036): a merchant's level follows their net wallet purchases
@@ -118,12 +129,20 @@ export async function monthsPurchases(
   };
 }
 
-/** LV4: queues the merchant's recomputation in the caller's transaction (one at a time). */
-export async function queueMerchantLevel(tx: Transaction, jobs: JobSender, customerId: string) {
+/**
+ * LV4: queues the merchant's recomputation in the caller's transaction (one at a time); S23 TR6:
+ * `tiers_changed` names a change of the tiers' thresholds or lists as its cause.
+ */
+export async function queueMerchantLevel(
+  tx: Transaction,
+  jobs: JobSender,
+  customerId: string,
+  cause?: 'tiers_changed',
+) {
   await jobs.send(
     tx,
     QUEUES.merchantsLevel,
-    { customerId },
+    cause === undefined ? { customerId } : { customerId, cause },
     { singletonKey: customerId, retryLimit: 3, retryDelay: 30, retryBackoff: true },
   );
 }
@@ -141,14 +160,18 @@ export async function queueMerchantLevelIfMerchant(
   if (row?.accountType === 'merchant') await queueMerchantLevel(tx, jobs, customerId);
 }
 
-/** LV4, LV6: every merchant's recomputation (the monthly cron, a level change in the panel). */
-export async function queueAllMerchantLevels(tx: Transaction, jobs: JobSender): Promise<number> {
+/** LV4, LV6: every merchant's recomputation (the monthly cron, a tier change in the panel). */
+export async function queueAllMerchantLevels(
+  tx: Transaction,
+  jobs: JobSender,
+  cause?: 'tiers_changed',
+): Promise<number> {
   const rows = await tx
     .select({ id: customers.id })
     .from(customers)
     .where(and(eq(customers.accountType, 'merchant'), isNull(customers.archivedAt)))
     .orderBy(asc(customers.id));
-  for (const row of rows) await queueMerchantLevel(tx, jobs, row.id);
+  for (const row of rows) await queueMerchantLevel(tx, jobs, row.id, cause);
   return rows.length;
 }
 
@@ -158,53 +181,93 @@ export type LevelChange =
       changed: true;
       levelIdBefore: string | null;
       levelIdAfter: string | null;
+      tierBefore: MerchantTier;
+      tierAfter: MerchantTier;
       listChanged: boolean;
       cancelledOrderIds: string[];
     };
 
+/** What a recomputation is told about its cause (S23 TR6); by default the purchases or the grant. */
+export interface RecomputeContext {
+  jobs: JobSender;
+  now: Date;
+  /** The change row's source when the tier changes; `earned` or `granted` by default. */
+  cause?: TierChangeSource;
+}
+
 /**
- * LV3, LV4: recomputes one merchant's level in the caller's transaction. The customer is locked
- * `FOR NO KEY UPDATE`; a customer who is not a merchant, or a revoked profile, has no level. When
- * the level differs: the profile's level and time, the audit entry (system actor) and the
- * `merchant_level_changed` notification. Every run cancels the reservations on a list the account
- * no longer pays (S20 AT3), so an archived level or a level's new list moves them too (LV6). The
- * same state twice writes nothing.
+ * LV3, LV4, S23 TR6: recomputes one merchant's earned and effective level in the caller's
+ * transaction. The customer is locked `FOR NO KEY UPDATE`; a customer who is not a merchant, or a
+ * revoked profile, has none. The effective level is the higher of the earned level and the open
+ * grant's tier (TR3). When either differs: the profile's levels and source (and the time, when the
+ * effective level changed) and the audit entry (system actor); when the effective tier changed, the
+ * change row, the `merchant_level_changed` notification and, for a change into or out of Gold or
+ * Diamond, the Telegram alert (TR8). Every run cancels the reservations on a list the account no
+ * longer pays (S20 AT3), so an archived level or a level's new list moves them too (LV6). The same
+ * state twice writes nothing.
  */
 export async function recomputeMerchantLevel(
   tx: Transaction,
-  context: { jobs: JobSender; now: Date },
+  context: RecomputeContext,
   customerId: string,
 ): Promise<LevelChange> {
   const customer = await lockCustomer(tx, customerId);
   const [profile] = await tx
-    .select({ levelId: merchantProfiles.levelId, revokedAt: merchantProfiles.revokedAt })
+    .select({
+      levelId: merchantProfiles.levelId,
+      earnedLevelId: merchantProfiles.earnedLevelId,
+      levelSource: merchantProfiles.levelSource,
+      revokedAt: merchantProfiles.revokedAt,
+      tradeName: merchantProfiles.tradeName,
+    })
     .from(merchantProfiles)
     .where(eq(merchantProfiles.customerId, customerId));
   if (!profile) return { changed: false };
   const merchant = customer.accountType === 'merchant' && profile.revokedAt === null;
-  const levels = await liveLevels(tx);
+  const levels = await liveTierLevels(tx);
   const months = await monthsPurchases(tx, customerId, context.now);
-  const level = merchant
+  const grant = merchant ? await openTierGrant(tx, customerId) : null;
+  const earned = merchant
     ? levelFor(levels, months.previousMonthUsdUnits, months.thisMonthUsdUnits)
     : null;
-  const levelIdAfter = level?.id ?? null;
-  // The profile's level as it was, archived or not: its list and threshold are what changes.
+  // A grant never carries Bronze (`merchant_tier_grants_check`).
+  const effective = effectiveLevel(earned, (grant?.tier ?? null) as LevelTier | null, levels);
+  const levelIdAfter = effective.level?.id ?? null;
+  const earnedLevelIdAfter = earned?.id ?? null;
+  // The profile's level as it was, archived or not: its list and tier are what changes.
   const [before] =
     profile.levelId === null
       ? []
       : await tx.select().from(merchantLevels).where(eq(merchantLevels.id, profile.levelId));
-  const listAfter = effectivePriceListId({ ...customer, levelListId: level?.priceListId });
+  const listAfter = effectivePriceListId({
+    ...customer,
+    levelListId: effective.level?.priceListId,
+  });
   // AT3: a reservation is never left on a list the account no longer pays, whether the level
   // changed or the level's list did (LV6: an archive, an edit of the list).
   const cancelledOrderIds = await cancelReservationsOffList(tx, context, customerId, listAfter);
-  if (levelIdAfter === profile.levelId) return { changed: false };
+  if (
+    levelIdAfter === profile.levelId &&
+    earnedLevelIdAfter === profile.earnedLevelId &&
+    effective.source === profile.levelSource
+  ) {
+    return { changed: false };
+  }
 
+  const levelChanged = levelIdAfter !== profile.levelId;
   await tx
     .update(merchantProfiles)
-    .set({ levelId: levelIdAfter, levelChangedAt: context.now })
+    .set({
+      levelId: levelIdAfter,
+      earnedLevelId: earnedLevelIdAfter,
+      levelSource: effective.source,
+      ...(levelChanged ? { levelChangedAt: context.now } : {}),
+    })
     .where(eq(merchantProfiles.customerId, customerId));
   const listBefore = effectivePriceListId({ ...customer, levelListId: before?.priceListId });
   const listChanged = listBefore !== listAfter;
+  const tierBefore = levelTier(before);
+  const tierAfter = tierOf(effective.level);
   await recordAudit(tx, {
     action: 'merchant.level_changed',
     actorKind: 'system',
@@ -219,35 +282,111 @@ export async function recomputeMerchantLevel(
       thisMonthUsdUnits: months.thisMonthUsdUnits,
       listChanged,
       cancelledOrderIds,
+      tierBefore,
+      tierAfter,
+      earnedLevelIdAfter,
+      source: effective.source,
     },
   });
-  if (merchant) {
-    const [list] = await tx
-      .select({ kind: priceLists.kind })
-      .from(priceLists)
-      .where(eq(priceLists.id, listAfter));
-    if (!list) throw new Error(`Price list ${listAfter} does not exist`);
-    const rank = (threshold: number | undefined) => threshold ?? 0;
-    await notifyCustomer(tx, context.jobs, {
+  if (tierBefore !== tierAfter) {
+    const source = context.cause ?? (effective.source === 'granted' ? 'granted' : 'earned');
+    const changeId = await recordTierChange(tx, {
       customerId,
-      event: 'merchant_level_changed',
-      params: {
-        levelNameAr: level?.nameAr ?? null,
-        priceKind: priceKindOf(list.kind),
-        direction:
-          rank(level?.monthlyThresholdUsdUnits) > rank(before?.monthlyThresholdUsdUnits)
-            ? 'up'
-            : 'down',
-      },
+      from: tierBefore,
+      to: tierAfter,
+      source,
     });
+    // A revocation tells the customer and the admin itself (TR9).
+    if (merchant) {
+      const [list] = await tx
+        .select({ kind: priceLists.kind })
+        .from(priceLists)
+        .where(eq(priceLists.id, listAfter));
+      if (!list) throw new Error(`Price list ${listAfter} does not exist`);
+      await notifyCustomer(tx, context.jobs, {
+        customerId,
+        event: 'merchant_level_changed',
+        params: {
+          levelNameAr: tierAfter === 'bronze' ? null : TIER_NAMES_AR[tierAfter],
+          priceKind: accountPriceKind(
+            list.kind,
+            customer.priceListId === null && effective.level !== null,
+          ),
+          direction: tierRank(tierAfter) > tierRank(tierBefore) ? 'up' : 'down',
+          tier: tierAfter,
+        },
+      });
+      if (isImportantTierChange(tierBefore, tierAfter)) {
+        await queueTelegramMessage(tx, context.jobs, {
+          kind: 'merchant_tier_changed',
+          params: {
+            customerId,
+            tradeName: profile.tradeName,
+            from: tierBefore,
+            to: tierAfter,
+            source,
+            thisMonthUsdUnits: months.thisMonthUsdUnits,
+            previousMonthUsdUnits: months.previousMonthUsdUnits,
+          },
+          dedupeKey: `tier-change:${customerId}:${changeId}`,
+        });
+      }
+    }
   }
   return {
     changed: true,
     levelIdBefore: profile.levelId,
     levelIdAfter,
+    tierBefore,
+    tierAfter,
     listChanged,
     cancelledOrderIds,
   };
+}
+
+/**
+ * S23 PG5: the merchant's row for `month` (`YYYY-MM`, the month just ended), written by the monthly
+ * schedule before the merchant's recomputation: the month's net purchases, the tier they earned at
+ * its end (LV3 on it and the month before) and the tier held at its end (the profile, not yet
+ * moved to the new month). Once: a second run writes
+ * nothing. Returns whether it wrote.
+ */
+export async function recordTierMonth(
+  tx: Transaction,
+  customerId: string,
+  month: string,
+): Promise<boolean> {
+  const range = monthRange(month);
+  const before = monthRange(previousMonth(month));
+  const net = await netPurchases(tx, customerId, range.start, range.end);
+  const previousNet = await netPurchases(tx, customerId, before.start, before.end);
+  const levels = await liveTierLevels(tx);
+  const [profile] = await tx
+    .select({
+      revokedAt: merchantProfiles.revokedAt,
+      levelSource: merchantProfiles.levelSource,
+      tier: merchantLevels.tier,
+      archivedAt: merchantLevels.archivedAt,
+    })
+    .from(merchantProfiles)
+    .leftJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
+    .where(eq(merchantProfiles.customerId, customerId));
+  if (!profile) return false;
+  const held =
+    profile.revokedAt === null && profile.archivedAt === null ? levelTier(profile) : 'bronze';
+  const rows = await tx
+    .insert(merchantTierMonths)
+    .values({
+      customerId,
+      month: `${month}-01`,
+      netPurchasesUsdUnits: net,
+      earnedTier: tierOf(levelFor(levels, previousNet, net)),
+      heldTier: held,
+      heldSource: held === 'bronze' ? 'earned' : (profile.levelSource ?? 'earned'),
+    })
+    .onConflictDoNothing()
+    .returning({ customerId: merchantTierMonths.customerId });
+  return rows.length > 0;
 }
 
 /** AT3: the account's reservations on any list but `priceListId`, cancelled in id order. */

@@ -652,6 +652,59 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
     expect(newest.get(cost)).toMatchObject({ priceUsdUnits: usd(1.01), source: 'rule' });
   });
 
+  it('caps a tier list at its parent, parents priced first, under parallel rule changes (S23 PX2)', async () => {
+    const p = await product();
+    const silver = await customList(wholesale);
+    const diamond = await customList(silver);
+    const silverRule = await listRule(silver, 'global', null, {
+      percentBp: 400,
+      minMarginUsdUnits: usd(0.04),
+    });
+    // Its own rule is dearer than its parent's: only a tier list is capped.
+    await listRule(diamond, 'global', null, { percentBp: 1000, minMarginUsdUnits: usd(0.02) });
+    const level = newId();
+    await pool.query(
+      `insert into merchant_levels (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)
+       values ($1, 'diamond', 'ماسي', 987654000000, $2)`,
+      [level, diamond],
+    );
+    try {
+      await route(p.id, 'fake', await offer('fake', usd(1)));
+      await repriceAll([p.id], 'route_change');
+      let { newest } = await listRows(p.id);
+      expect(newest.get(silver)).toMatchObject({ priceUsdUnits: usd(1.04), source: 'rule' });
+      expect(newest.get(diamond)).toMatchObject({
+        priceUsdUnits: usd(1.04),
+        source: 'parent_cap',
+        ruleId: silverRule,
+        percentBp: 400,
+        minMarginUsdUnits: usd(0.04),
+      });
+
+      // The parent's rule falls in parallel with another repricing: the child follows the parent
+      // priced in the same pass, never above it.
+      await pool.query('update margin_rules set percent_bp = 300 where id = $1', [silverRule]);
+      await Promise.all([repriceAll([p.id], 'list_change'), repriceAll([p.id], 'list_change')]);
+      ({ newest } = await listRows(p.id));
+      expect(newest.get(silver)).toMatchObject({ priceUsdUnits: usd(1.04) });
+      expect(newest.get(diamond)?.priceUsdUnits).toBeLessThanOrEqual(
+        newest.get(silver)?.priceUsdUnits as number,
+      );
+      expect(newest.get(diamond)?.source).toBe('parent_cap');
+
+      // Without a live level the list is priced by its own rules (S20 LP1 unchanged).
+      await pool.query('update merchant_levels set archived_at = now() where id = $1', [level]);
+      await repriceAll([p.id], 'list_change');
+      ({ newest } = await listRows(p.id));
+      expect(newest.get(diamond)).toMatchObject({ priceUsdUnits: usd(1.1), source: 'rule' });
+    } finally {
+      await pool.query(
+        'update merchant_levels set archived_at = now() where id = $1 and archived_at is null',
+        [level],
+      );
+    }
+  });
+
   it('resolves a custom list list-first, with fixed prices and their fallback (LS4, LP1)', async () => {
     const p = await product();
     const vip = await customList(wholesale);

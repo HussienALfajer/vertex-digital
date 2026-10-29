@@ -74,6 +74,8 @@ export const QUEUES = {
   merchantsLevel: 'merchants.level',
   /** Queues `merchants.level` for every merchant, the 1st at 00:10 `Asia/Damascus` (S21 LV4). */
   merchantsLevelSchedule: 'merchants.level-schedule',
+  /** Ends the manual tier grants past their end and reminds the admin of the ending ones, every 10 minutes (S23 MG4, MG5). */
+  merchantsTierGrants: 'merchants.tier-grants',
   /** Compares followed products with what each merchant was told, at :05 every hour (S21 AL2). */
   merchantsWatchAlerts: 'merchants.watch-alerts',
   /** The daily alert email at 09:00 `Asia/Damascus` (S21 AL4). */
@@ -208,7 +210,11 @@ export const pushSendPayloadSchema = z.object({
 export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;
 
 /** `singletonKey` is the customer id: one level recomputation queued and one active (S21 LV4). */
-export const merchantsLevelPayloadSchema = z.object({ customerId: z.uuid() });
+export const merchantsLevelPayloadSchema = z.object({
+  customerId: z.uuid(),
+  /** S23 TR6: a recomputation queued by a change of the tiers' thresholds or lists. */
+  cause: z.literal('tiers_changed').optional(),
+});
 
 export type MerchantsLevelPayload = z.infer<typeof merchantsLevelPayloadSchema>;
 

@@ -11,6 +11,7 @@ import {
   type ReviewHours,
   rejectDepositSchema,
 } from './deposits.js';
+import { levelTierSchema, merchantTierSchema, tierChangeSourceSchema } from './merchant-tiers.js';
 import { currencySchema } from './money.js';
 import { adminOrderPurposeSchema } from './orders.js';
 import {
@@ -110,6 +111,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'fixed_price_fallback',
   /** S20: a merchant application submitted or resubmitted, waiting for review. */
   'merchant_application',
+  /** S23 TR8: a merchant's effective tier went into or out of Gold or Diamond. */
+  'merchant_tier_changed',
+  /** S23 MG5: a manual tier grant ends within 3 days (once per grant). */
+  'merchant_tier_grant_ending',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -332,7 +337,7 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     fixedPriceFallbacks: z.int().nonnegative().default(0),
     /** S20: merchant applications waiting for review now. */
     merchantApplicationsWaiting: z.int().nonnegative().default(0),
-    /** S21 LV4: merchants whose volume level changed today. */
+    /** S21 LV4, S23 AD6: merchants whose effective tier changed today. */
     merchantLevelsChanged: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
@@ -393,6 +398,24 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     applicationId: z.uuid(),
     resubmitted: z.boolean(),
     waiting: z.int().positive(),
+  }),
+  /** S23 TR8: the trade name, the tiers, the cause and the months' net purchases. */
+  merchant_tier_changed: z.object({
+    customerId: z.uuid(),
+    tradeName: z.string(),
+    from: merchantTierSchema,
+    to: merchantTierSchema,
+    source: tierChangeSourceSchema,
+    thisMonthUsdUnits: z.int(),
+    previousMonthUsdUnits: z.int(),
+  }),
+  /** S23 MG5: the grant's tier and end, and the tier the merchant returns to. */
+  merchant_tier_grant_ending: z.object({
+    customerId: z.uuid(),
+    tradeName: z.string(),
+    tier: levelTierSchema,
+    endsAt: z.iso.datetime(),
+    earnedTier: merchantTierSchema,
   }),
   /** S07: syncs failing in a row, then once when costs go stale and products become unavailable. */
   supplier_sync_failing: z.discriminatedUnion('reason', [

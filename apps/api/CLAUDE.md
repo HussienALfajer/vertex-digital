@@ -73,7 +73,7 @@ NestJS 12 HTTP API, a modular monolith (ADR 0001, 0002). Code shape: ADR 0011. A
 - `pricing`: only write routes refresh the store, not the preview; only the retail list's changes queue `store.revalidate`; archiving a price list a live merchant level names is refused.
 - `orders`: purchases through `purchaseOrder` (per-customer and per-address counters; a checkout counts as one request), panel purchases through `adminPurchaseOrder`. Player-check limits count supplier calls only.
 - `support`: an admin reply on an archived customer's ticket is refused.
-- `merchants`: level changes run under one advisory lock, re-authenticated and audited, and requeue every merchant. The `merchant_application` Telegram notice carries no personal data.
+- `merchants`: tier level and settings changes run under one advisory lock, re-authenticated and audited, and requeue every merchant (`tiers_changed`); a tier's list must be the child of the tier below's. A grant and its end lock the customer and recompute inline; a revocation ends the open grant. Per-tier privileges (deposit limits, player checks, quantities) come from `merchantPrivileges` in `packages/db`. The `merchant_application` Telegram notice carries no personal data.
 - `notifications`: push endpoints pass the contracts' `pushEndpointAllowed`; upsert by endpoint, 10 devices, under a per-customer advisory lock.
 - `treasury`: a typed confirmation above $100 (SYP at today's rate).
 - `catalog` quick links: internal targets only; an open is counted after the answer.

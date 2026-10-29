@@ -248,9 +248,10 @@ const SOURCE_TONES = {
   fixed: 'info',
   fixed_fallback: 'warning',
   retail_cap: 'gold',
+  parent_cap: 'gold',
 } as const;
 
-/** Where a list's price comes from (LP1, LP2): قاعدة، ثابت، احتياطي، سقف التجزئة. */
+/** Where a list's price comes from (LP1, LP2, S23 PX2): قاعدة، ثابت، احتياطي، سقف التجزئة، سقف الفئة الأدنى. */
 export function SourceBadge({ source }: { source: keyof typeof SOURCE_TONES }) {
   const { t } = useTranslation();
   return <Badge tone={SOURCE_TONES[source]}>{t(`pricing.priceSources.${source}`)}</Badge>;

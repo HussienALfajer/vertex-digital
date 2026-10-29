@@ -8,6 +8,7 @@ import {
   QUEUES,
   ROOT_PRICE_LIST_IDS,
   statementBalances,
+  TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -50,7 +51,13 @@ import {
   orderRate,
   revokeMerchant,
 } from '../merchants/accounts.js';
-import { netPurchases, recomputeMerchantLevel } from '../merchants/levels.js';
+import {
+  endTierGrant,
+  expireTierGrant,
+  grantTier,
+  remindEndingTierGrants,
+} from '../merchants/grants.js';
+import { netPurchases, recomputeMerchantLevel, recordTierMonth } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import {
@@ -4104,17 +4111,25 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     db.transaction((tx) =>
       recomputeMerchantLevel(tx, { jobs: context().jobs, now: new Date() }, customerId),
     );
-  const level = async (threshold: number, priceListId: string) => {
+  // S23: one live level per tier; these tests use Silver and Gold (the repricing tests Diamond).
+  const level = async (
+    threshold: number,
+    priceListId: string,
+    tier: 'silver' | 'gold' = 'silver',
+  ) => {
     const id = newId();
     await pool.query(
-      `insert into merchant_levels (id, name_ar, monthly_threshold_usd_units, price_list_id)
-       values ($1, $2, $3, $4)`,
-      [id, `مستوى ${unique()}`, threshold, priceListId],
+      `insert into merchant_levels (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)
+       values ($1, $2, $3, $4, $5)`,
+      [id, tier, TIER_NAMES_AR[tier], threshold, priceListId],
     );
     return id;
   };
   const archiveLevels = () =>
-    pool.query('update merchant_levels set archived_at = now() where archived_at is null');
+    pool.query(
+      `update merchant_levels set archived_at = now()
+       where archived_at is null and tier in ('silver', 'gold')`,
+    );
   const notifications = async (customerId: string, event: string) =>
     (
       await pool.query(
@@ -4347,12 +4362,15 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
         changed: true,
         levelIdBefore: null,
         levelIdAfter: silver,
+        tierBefore: 'bronze',
+        tierAfter: 'silver',
         listChanged: true,
         cancelledOrderIds: [],
       });
       expect(await recompute(shop)).toEqual({ changed: false });
+      // S23 PX6: a tier list reads as wholesale, with the tier.
       expect(await notifications(shop, 'merchant_level_changed')).toEqual([
-        { levelNameAr: expect.any(String), priceKind: 'special', direction: 'up' },
+        { levelNameAr: 'فضي', priceKind: 'wholesale', direction: 'up', tier: 'silver' },
       ]);
       const { rows: audits } = await pool.query(
         `select actor_kind, details from audit_entries
@@ -4392,6 +4410,269 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     } finally {
       await archiveLevels();
     }
+  });
+
+  describe('tiers (S23 TR3–TR9, MG1–MG7, PG5)', () => {
+    const actor = { adminId: newId(), ipAddress: null, userAgent: null };
+    const DAY = 86_400_000;
+    const grant = (shop: string, tier: 'silver' | 'gold' | 'diamond', days = 2, now = new Date()) =>
+      db.transaction((tx) =>
+        grantTier(tx, { jobs: context().jobs, now }, shop, {
+          tier,
+          endsAt: new Date(now.getTime() + days * DAY),
+          reason: 'شريك جديد في المدينة',
+          actor,
+        }),
+      );
+    const profile = async (shop: string) =>
+      (
+        await pool.query(
+          `select level_id, earned_level_id, level_source from merchant_profiles
+           where customer_id = $1`,
+          [shop],
+        )
+      ).rows[0];
+    const changes = async (shop: string) =>
+      (
+        await pool.query(
+          `select from_tier, to_tier, source from merchant_tier_changes
+           where customer_id = $1 order by created_at, id`,
+          [shop],
+        )
+      ).rows;
+    const telegram = async (shop: string, kind: string) =>
+      (
+        await pool.query(
+          `select params, dedupe_key from telegram_messages
+           where kind = $1 and params->>'customerId' = $2 order by id`,
+          [kind, shop],
+        )
+      ).rows;
+
+    it('grants a tier above the earned one, ends it early and lets the earned tier win (MG1–MG3, MG6, TR8)', async () => {
+      await archiveLevels();
+      const item = await product({ cost: usd(1) });
+      const shop = await merchant(usd(20));
+      try {
+        const silver = await level(usd(1), cost, 'silver');
+        const gold = await level(usd(1_000_000), retail, 'gold');
+        await expect(grant(shop, 'diamond')).rejects.toMatchObject({
+          code: 'MERCHANT_TIER_UNAVAILABLE',
+        });
+        const customerOnly = await customer({ funds: 0 });
+        await expect(grant(customerOnly, 'gold')).rejects.toMatchObject({ code: 'NOT_MERCHANT' });
+
+        const granted = await grant(shop, 'gold');
+        expect(await profile(shop)).toEqual({
+          level_id: gold,
+          earned_level_id: null,
+          level_source: 'granted',
+        });
+        expect((await accountPriceList(db, shop))?.effectiveList.id).toBe(retail);
+        await expect(grant(shop, 'gold')).rejects.toMatchObject({
+          code: 'MERCHANT_TIER_GRANT_OPEN',
+          details: { grantId: granted.id },
+        });
+        // The merchant earns Silver meanwhile: the grant still wins (MG6).
+        await buy(request(shop, { id: item.id, price: await listPriceOf(item.id, retail) }));
+        await recompute(shop);
+        expect(await profile(shop)).toEqual({
+          level_id: gold,
+          earned_level_id: silver,
+          level_source: 'granted',
+        });
+
+        // MG3: ended early, back to the earned tier with a notification and a Telegram alert.
+        const ended = await db.transaction((tx) =>
+          endTierGrant(tx, { jobs: context().jobs, now: new Date() }, shop, 'ended_by_admin', {
+            kind: 'admin',
+            actor,
+            reason: 'انتهت الشراكة',
+          }),
+        );
+        expect(ended).toMatchObject({ id: granted.id, endReason: 'ended_by_admin' });
+        expect(await profile(shop)).toEqual({
+          level_id: silver,
+          earned_level_id: silver,
+          level_source: 'earned',
+        });
+        expect(await changes(shop)).toEqual([
+          { from_tier: 'bronze', to_tier: 'gold', source: 'granted' },
+          { from_tier: 'gold', to_tier: 'silver', source: 'grant_ended' },
+        ]);
+        const alerts = await telegram(shop, 'merchant_tier_changed');
+        expect(alerts.map((row) => [row.params.from, row.params.to, row.params.source])).toEqual([
+          ['bronze', 'gold', 'granted'],
+          ['gold', 'silver', 'grant_ended'],
+        ]);
+        expect(alerts[0]?.dedupe_key).toMatch(new RegExp(`^tier-change:${shop}:`));
+        expect((await notifications(shop, 'merchant_level_changed')).at(-1)).toMatchObject({
+          tier: 'silver',
+          direction: 'down',
+        });
+        // Not above the earned Silver now (MG1).
+        await expect(grant(shop, 'silver')).rejects.toMatchObject({
+          code: 'MERCHANT_TIER_GRANT_NOT_HIGHER',
+          details: { earnedTier: 'silver' },
+        });
+        // A grant is closed once, never deleted, and only its end changes.
+        await expect(
+          pool.query(`update merchant_tier_grants set ended_at = now() where id = $1`, [
+            granted.id,
+          ]),
+        ).rejects.toThrow(/ended already/);
+        await expect(
+          pool.query(`update merchant_tier_grants set reason = 'سبب آخر هنا' where id = $1`, [
+            granted.id,
+          ]),
+        ).rejects.toThrow(/only its end changes/);
+        await expect(
+          pool.query('delete from merchant_tier_grants where id = $1', [granted.id]),
+        ).rejects.toThrow(/permission denied/);
+      } finally {
+        await archiveLevels();
+      }
+    });
+
+    it('reminds once, then expires a grant at its end, idempotently (MG4, MG5)', async () => {
+      await archiveLevels();
+      const shop = await merchant(usd(20));
+      try {
+        await level(usd(1_000_000), cost, 'silver');
+        await level(usd(2_000_000), retail, 'gold');
+        const now = new Date();
+        const granted = await grant(shop, 'gold', 1, now);
+        const remind = (at: Date) =>
+          db.transaction((tx) => remindEndingTierGrants(tx, { jobs: context().jobs, now: at }));
+        expect(await remind(now)).toBeGreaterThanOrEqual(1);
+        expect(await telegram(shop, 'merchant_tier_grant_ending')).toEqual([
+          {
+            params: expect.objectContaining({ tier: 'gold', earnedTier: 'bronze' }),
+            dedupe_key: `grant-ending:${granted.id}`,
+          },
+        ]);
+        await remind(now);
+        expect(await telegram(shop, 'merchant_tier_grant_ending')).toHaveLength(1);
+
+        const expire = (at: Date) =>
+          db.transaction((tx) => expireTierGrant(tx, { jobs: context().jobs, now: at }, granted));
+        expect(await expire(now)).toBe(false);
+        const later = new Date(now.getTime() + 2 * DAY);
+        const [first, second] = await Promise.all([expire(later), expire(later)]);
+        expect([first, second].sort()).toEqual([false, true]);
+        expect(await profile(shop)).toEqual({
+          level_id: null,
+          earned_level_id: null,
+          level_source: null,
+        });
+        expect((await changes(shop)).at(-1)).toEqual({
+          from_tier: 'gold',
+          to_tier: 'bronze',
+          source: 'grant_ended',
+        });
+        const { rows } = await pool.query(
+          `select action, actor_kind, details->>'endReason' as end_reason from audit_entries
+           where entity_id = $1 and action like 'merchant.tier_%' order by occurred_at, id`,
+          [shop],
+        );
+        expect(rows).toEqual([
+          { action: 'merchant.tier_granted', actor_kind: 'admin', end_reason: null },
+          { action: 'merchant.tier_grant_ended', actor_kind: 'system', end_reason: 'expired' },
+        ]);
+      } finally {
+        await archiveLevels();
+      }
+    });
+
+    it('ends the grant and leaves the tier on a revocation, without a tier notice (TR9)', async () => {
+      await archiveLevels();
+      const shop = await merchant(usd(20));
+      try {
+        await level(usd(1_000_000), cost, 'silver');
+        await grant(shop, 'silver');
+        const notices = (await notifications(shop, 'merchant_level_changed')).length;
+        await db.transaction(async (tx) =>
+          revokeMerchant(tx, context(), await lockCustomer(tx, shop), {
+            reason: 'مخالفة الشروط',
+            actor,
+          }),
+        );
+        expect(await profile(shop)).toEqual({
+          level_id: null,
+          earned_level_id: null,
+          level_source: null,
+        });
+        expect((await changes(shop)).at(-1)).toEqual({
+          from_tier: 'silver',
+          to_tier: 'bronze',
+          source: 'revoked',
+        });
+        const { rows } = await pool.query(
+          `select end_reason from merchant_tier_grants where customer_id = $1`,
+          [shop],
+        );
+        expect(rows).toEqual([{ end_reason: 'merchant_revoked' }]);
+        expect(await notifications(shop, 'merchant_level_changed')).toHaveLength(notices);
+        expect(await recompute(shop)).toEqual({ changed: false });
+      } finally {
+        await archiveLevels();
+      }
+    });
+
+    it("writes a merchant's month once, with the tiers earned and held (PG5)", async () => {
+      await archiveLevels();
+      const item = await product({ cost: usd(1) });
+      const shop = await merchant(usd(20));
+      try {
+        await level(usd(1), cost, 'silver');
+        await buy(request(shop, { id: item.id, price: await wholesalePrice(item.id) }));
+        await recompute(shop);
+        const month = damascusMonth(new Date());
+        expect(await db.transaction((tx) => recordTierMonth(tx, shop, month))).toBe(true);
+        expect(await db.transaction((tx) => recordTierMonth(tx, shop, month))).toBe(false);
+        const { rows } = await pool.query(
+          `select month::text, earned_tier, held_tier, held_source from merchant_tier_months
+           where customer_id = $1`,
+          [shop],
+        );
+        expect(rows).toEqual([
+          {
+            month: `${month}-01`,
+            earned_tier: 'silver',
+            held_tier: 'silver',
+            held_source: 'earned',
+          },
+        ]);
+        await expect(
+          pool.query('update merchant_tier_months set held_tier = $2 where customer_id = $1', [
+            shop,
+            'gold',
+          ]),
+        ).rejects.toThrow(/permission denied/);
+      } finally {
+        await archiveLevels();
+      }
+    });
+
+    it("reads a merchant's tier quantities under the purchase lock (TS5)", async () => {
+      await archiveLevels();
+      const shop = await merchant(usd(20));
+      try {
+        const quantities = async () =>
+          (await db.transaction((tx) => lockActiveCustomer(tx, shop))).tierQuantities;
+        expect(await quantities()).toEqual({ orderUnitsMax: 50, bulkLinesMax: 50 });
+        await level(usd(1_000_000), cost, 'silver');
+        await level(usd(2_000_000), retail, 'gold');
+        await grant(shop, 'gold');
+        expect(await quantities()).toEqual({ orderUnitsMax: 100, bulkLinesMax: 100 });
+        const buyer = await customer({ funds: 0 });
+        expect((await db.transaction((tx) => lockActiveCustomer(tx, buyer))).tierQuantities).toBe(
+          null,
+        );
+      } finally {
+        await archiveLevels();
+      }
+    });
   });
 
   it('serializes a level change and a purchase on the customer (LV4, AT3)', async () => {

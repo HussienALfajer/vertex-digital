@@ -2,6 +2,7 @@ import {
   NOTIFICATION_PARAMS,
   type NotificationParams,
   type PushNotificationEvent,
+  TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 
 /**
@@ -131,9 +132,11 @@ const RENDERERS: Renderers = {
   // S21: the level's name, never the list's; no amount (PT2).
   merchant_level_changed: (params) => ({
     body:
-      params.levelNameAr === null
-        ? 'تغيّر مستوى حساب التاجر'
-        : `مستوى حسابك الآن: ${params.levelNameAr}`,
+      params.tier !== undefined
+        ? `فئة حسابك الآن: تاجر ${TIER_NAMES_AR[params.tier]}`
+        : params.levelNameAr === null
+          ? 'تغيّر مستوى حساب التاجر'
+          : `مستوى حسابك الآن: ${params.levelNameAr}`,
     url: '/merchant',
     tag: 'merchant-level',
   }),
