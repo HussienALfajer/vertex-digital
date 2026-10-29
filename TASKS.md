@@ -1,11 +1,12 @@
-# TASKS — Close V1 (owner, 2026-10-29)
+# TASKS — Admin sale picker on "شراء من اللوحة" (owner, 2026-10-29)
 
-- [x] Field bounds and help texts on production (227 of 239 fields; Telegram's username field; chat apps' labels)
-- [x] Names, covers, region notes and search terms reviewed for every active game (113 games' terms, 28 generic pack names in Arabic)
-- [x] LOTR Rise to War left out: shut down at the end of 2025
-- [x] FazerCards player check on PUBG Mobile, Free Fire (both), Mobile Legends (both) and Magic Chess
-- [x] Official prices and accent colors dropped (owner); Phase 4 removed from the docs (owner: no V2 plan)
-- [x] Launch checklist, pilot limits and V1 closed in `docs/ROADMAP.md`
-- [x] Deferred audit findings A10-51, A10-54, A10-45, A06-21: PR #217, deployed on 2026-10-29 (`7449ad3`)
+- [x] `GET /api/admin/orders/purchase-games`: games, categories, 30-day sales, last admin game (contract, db read, API test)
+- [x] Game step: live search with arrows and Enter, the most-sold row, category chips over covers, the chosen-game bar with "تغيير"
+- [x] Pack step: cards by quantity with cost, margin and availability, quick filter; focus moves to the account fields
+- [x] E2E and RTL screenshots; S16 screens and API table amended; reviewer's finding fixed (indexed 30-day count)
+- [x] Browser check on the local stack
+
+## Carried over (Close V1)
+
 - [ ] After the owner funds WDGZone and FazerCards: run "activate all" on every game once
 - [ ] Steam top-up (paused): confirm with WDGZone what its `player_id` expects before activating

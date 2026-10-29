@@ -484,6 +484,27 @@ describe('GET /api/admin/orders/purchase-context (AP4, AP7, AP8)', () => {
   });
 });
 
+describe('GET /api/admin/orders/purchase-games (the sale picker)', () => {
+  it('answers the games with their 30-day sales and the last game an admin sold', async () => {
+    const item = await product(ids.codeGameId, 'code', 1.8);
+    await json(await order(item), 201);
+    const answer = await json<{
+      categories: { id: string }[];
+      games: { id: string; categoryId: string; soldLast30Days: number; searchTerms: string[] }[];
+      lastGameId: string | null;
+    }>(await adminGet('/api/admin/orders/purchase-games'), 200);
+    expect(answer.lastGameId).toBe(ids.codeGameId);
+    const sold = answer.games.find((row) => row.id === ids.codeGameId);
+    expect(sold?.soldLast30Days).toBeGreaterThan(0);
+    expect(answer.categories.map((row) => row.id)).toContain(sold?.categoryId);
+    expect((await client.get('/api/admin/orders/purchase-games')).status).toBe(401);
+    const buyer = await customer();
+    expect(
+      (await client.get('/api/admin/orders/purchase-games', { cookie: buyer.cookie })).status,
+    ).toBe(401);
+  });
+});
+
 describe('POST /api/admin/player-checks (AP8)', () => {
   it('checks with the admin as requester, a paused pack too, and caches the answer', async () => {
     const item = await product(ids.gameId, 'direct', 0.88);

@@ -4,6 +4,7 @@ import {
   type AdminOrderSummary,
   type AdminOrderTab,
   type AdminPurchaseContext,
+  type AdminPurchaseGames,
   adminOrderShape,
   type CheckCategory,
   createAdminOrderSchema,
@@ -57,12 +58,18 @@ export interface PurchaseShop {
   } | null;
   /** Takes the total from the customer's wallet (`on_behalf`). */
   charge(customerId: string, units: number): void;
+  /** The sale picker's categories and games, before the orders' counts. */
+  saleGames(): {
+    categories: AdminPurchaseGames['categories'];
+    games: Omit<AdminPurchaseGames['games'][number], 'soldLast30Days'>[];
+  };
 }
 
 const NO_SHOP: PurchaseShop = {
   product: () => null,
   customer: () => null,
   charge: () => {},
+  saleGames: () => ({ categories: [], games: [] }),
 };
 
 const error = (status: number, code: string, details?: unknown): Answer => ({
@@ -583,6 +590,20 @@ export class OrdersMock {
     return { status: 200, json: context };
   }
 
+  /** The sale picker: the mock's orders count as sold in the last 30 days. */
+  private purchaseGames(): Answer {
+    const { categories, games } = this.shop.saleGames();
+    const json: AdminPurchaseGames = {
+      categories,
+      games: games.map((game) => ({
+        ...game,
+        soldLast30Days: this.orders.filter((row) => row.game.id === game.id).length,
+      })),
+      lastGameId: this.orders.find((row) => row.placedBy === 'admin')?.game.id ?? null,
+    };
+    return { status: 200, json };
+  }
+
   /** S16 rules AP2–AP9 as the write path decides them, for the mock's catalog and customers. */
   private purchase(body: Body): Answer {
     if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
@@ -768,6 +789,7 @@ export class OrdersMock {
     if (key === 'GET /api/admin/orders/purchase-context') {
       return this.purchaseContext(url.searchParams.get('customerId'));
     }
+    if (key === 'GET /api/admin/orders/purchase-games') return this.purchaseGames();
     if (key === 'POST /api/admin/orders') return this.purchase(body);
 
     const one = path.match(/^\/api\/admin\/orders\/([^/]+)$/);

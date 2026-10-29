@@ -7,12 +7,10 @@ import {
   adminOrderShape,
   type CreateAdminOrder,
   createAdminOrderSchema,
-  formatSyp,
   formatUsd,
   type GameDetail,
   orderTotal,
   type PlayerCheck,
-  type Product,
 } from '@vertex-digital/contracts';
 import {
   Badge,
@@ -37,7 +35,7 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, SearchIcon, UserXIcon } from 'lucide-react';
-import { type FormEvent, type ReactNode, useId, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
@@ -45,12 +43,12 @@ import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
-import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
+import { gameQuery } from '../catalog/catalog.queries';
 import { customerListQuery } from '../customers/customers.queries';
-import { StockChip } from '../suppliers/offer-cells';
 import type { NewOrderSearch } from './new-order-search';
 import { purchaseContextQuery, useAdminPlayerCheck, useCreateAdminOrder } from './orders.queries';
 import { PlayerCheckAnswer } from './player-check-answer';
+import { ChosenGame, GamePicker, PackCards } from './sale-picker';
 
 /** The fields of the form a refusal may name. */
 type FieldKey = 'customerId' | 'productId' | 'quantity' | 'reason' | 'customerNote' | 'fields';
@@ -86,13 +84,6 @@ function atListPrices(
   };
 }
 
-/** A pack the mode may buy (rule AP5): available, or paused by the admin for an owner-funded one. */
-function packChoice(product: Product, ownerFunded: boolean): 'buyable' | 'trial' | 'unavailable' {
-  if (product.archivedAt !== null || product.priceUsdUnits === null) return 'unavailable';
-  if (product.availability === 'available') return 'buyable';
-  return product.availability === 'paused' && ownerFunded ? 'trial' : 'unavailable';
-}
-
 /**
  * "/orders/new" "شراء من اللوحة" (S16 rules AP1–AP13): the mode, the customer, the pack, the
  * account fields with the player check, the reason and note, then one order at the store's
@@ -105,6 +96,11 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const [customerId, setCustomerId] = useState<string | null>(preset.customerId ?? null);
   const [gameId, setGameId] = useState<string | null>(preset.gameId ?? null);
   const [productId, setProductId] = useState<string | null>(preset.productId ?? null);
+  /** "تغيير" on the chosen game opens the picker again; the choice stays until another pick. */
+  const [changingGame, setChangingGame] = useState(false);
+  /** After a pick the next control takes the focus: the pack filter, then the account fields. */
+  const [moveOn, setMoveOn] = useState<'packs' | 'account' | null>(null);
+  const nextSteps = useRef<HTMLDivElement>(null);
   const [quantity, setQuantity] = useState('1');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [check, setCheck] = useState<PlayerCheck | null>(null);
@@ -138,7 +134,6 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === (customerId ?? null) ? previous : undefined,
   });
-  const games = useQuery(allGamesQuery);
   const loaded = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
   const gameData = atListPrices(loaded.data, context.data?.customer?.listPrices);
   const product = gameData?.products.find((item) => item.id === productId) ?? null;
@@ -166,6 +161,31 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     enableBeforeUnload: () => !placed.current && dirty.current,
     withResolver: true,
   });
+
+  // A pack picked moves on to its account fields, or to the reason without any (S16 screens).
+  useEffect(() => {
+    if (moveOn !== 'account' || productId === null) return;
+    nextSteps.current
+      ?.querySelector<HTMLElement>('input:not([type="radio"]), textarea, [role="combobox"]')
+      ?.focus();
+    setMoveOn(null);
+  }, [moveOn, productId]);
+
+  // The filter took the focus once the packs showed; a later remount leaves it alone.
+  const packsShown = !!gameData && !pricesPending && !changingGame;
+  useEffect(() => {
+    if (moveOn === 'packs' && packsShown) setMoveOn(null);
+  }, [moveOn, packsShown]);
+
+  function pickGame(id: string) {
+    setChangingGame(false);
+    setMoveOn('packs');
+    if (id === gameId) return;
+    setGameId(id);
+    setProductId(null);
+    setFields({});
+    resetCheck();
+  }
 
   /** A change of what is bought clears the checks made for the earlier choice. */
   function resetCheck() {
@@ -323,37 +343,16 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
 
         {shape && (
           <Step title={t('orders.buy.steps.pack')}>
-            <Field>
-              <FieldLabel>{t('orders.buy.game')}</FieldLabel>
-              <Select
-                items={(games.data?.items ?? []).map((item) => ({
-                  value: item.id,
-                  label: item.nameAr,
-                }))}
-                value={gameId}
-                onValueChange={(value) => {
-                  setGameId(value ?? null);
-                  setProductId(null);
-                  setFields({});
-                  resetCheck();
-                }}
-              >
-                <SelectTrigger aria-label={t('orders.buy.game')}>
-                  <SelectValue placeholder={t('orders.buy.pickGame')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(games.data?.items ?? []).map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.nameAr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {/* The games' read: a skeleton, then a retry when it fails (audit A04-11). */}
-            {games.isPending && <Skeleton className="h-10 w-full" aria-hidden="true" />}
-            {games.isError && (
-              <Retry message={errorMessage(t, games.error)} onRetry={() => void games.refetch()} />
+            {gameId === null || changingGame ? (
+              <GamePicker
+                focus={!shape.hasCustomer || customerId !== null}
+                onPick={pickGame}
+                onCancel={gameId !== null ? () => setChangingGame(false) : undefined}
+              />
+            ) : (
+              loaded.data && (
+                <ChosenGame game={loaded.data} onChange={() => setChangingGame(true)} />
+              )
             )}
             {loaded.isPending && gameId && <Skeleton className="h-32 w-full" aria-hidden="true" />}
             {loaded.isError && (
@@ -363,16 +362,19 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
               />
             )}
             {gameData && pricesPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-            {gameData && !pricesPending && (
-              <Packs
+            {gameData && !pricesPending && !changingGame && (
+              <PackCards
+                key={gameData.id}
                 game={gameData}
                 ownerFunded={ownerFunded}
                 productId={productId}
                 invalid={!!errors.productId}
+                focus={moveOn === 'packs'}
                 onPick={(id) => {
                   setProductId(id);
                   setQuantity('1');
                   resetCheck();
+                  setMoveOn('account');
                 }}
               />
             )}
@@ -397,85 +399,87 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
           </Step>
         )}
 
-        {product && gameData && (product.kind === 'direct' || hasFields) && (
-          <Step title={t('orders.buy.steps.account')}>
-            <AccountFields
-              game={gameData}
-              values={fields}
-              invalid={!!errors.fields}
-              // Saved IDs and the player check are a top-up's (S10 SP1, S16 AP8).
-              saved={
-                product.kind === 'direct'
-                  ? (context.data?.customer?.savedPlayers ?? []).filter(
-                      (player) => player.gameId === gameData.id,
-                    )
-                  : []
-              }
-              onChange={(next) => {
-                setFields(next);
-                resetCheck();
-              }}
-            />
-            {errors.fields && <FormAlert>{errors.fields}</FormAlert>}
-            {product.kind === 'direct' && (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={runCheck}
-                  disabled={playerCheck.isPending}
-                >
-                  <SearchIcon />
-                  {playerCheck.isPending ? t('orders.buy.checking') : t('orders.buy.check')}
-                </Button>
-                {check && <PlayerCheckAnswer check={check} />}
-              </div>
-            )}
-            {product.kind === 'direct' && check?.result === 'invalid' && (
-              <ConfirmLine checked={confirmPlayer} onChange={setConfirmPlayer}>
-                {t('orders.buy.confirmPlayer')}
-              </ConfirmLine>
-            )}
-          </Step>
-        )}
-
-        {product && shape && (
-          <Step title={t('orders.buy.steps.confirm')}>
-            <Field invalid={!!errors.reason}>
-              <FieldLabel>{t('orders.buy.reason')}</FieldLabel>
-              <Textarea
-                name="reason"
-                rows={2}
-                maxLength={500}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
+        <div ref={nextSteps} className="contents">
+          {product && gameData && (product.kind === 'direct' || hasFields) && (
+            <Step title={t('orders.buy.steps.account')}>
+              <AccountFields
+                game={gameData}
+                values={fields}
+                invalid={!!errors.fields}
+                // Saved IDs and the player check are a top-up's (S10 SP1, S16 AP8).
+                saved={
+                  product.kind === 'direct'
+                    ? (context.data?.customer?.savedPlayers ?? []).filter(
+                        (player) => player.gameId === gameData.id,
+                      )
+                    : []
+                }
+                onChange={(next) => {
+                  setFields(next);
+                  resetCheck();
+                }}
               />
-              <FieldDescription>{t('orders.buy.reasonHelp')}</FieldDescription>
-              <FieldError match={!!errors.reason}>{errors.reason}</FieldError>
-            </Field>
-            {(purpose === 'gift' || purpose === 'compensation') && (
-              <Field invalid={!!errors.customerNote}>
-                <FieldLabel>{t('orders.buy.note')}</FieldLabel>
+              {errors.fields && <FormAlert>{errors.fields}</FormAlert>}
+              {product.kind === 'direct' && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={runCheck}
+                    disabled={playerCheck.isPending}
+                  >
+                    <SearchIcon />
+                    {playerCheck.isPending ? t('orders.buy.checking') : t('orders.buy.check')}
+                  </Button>
+                  {check && <PlayerCheckAnswer check={check} />}
+                </div>
+              )}
+              {product.kind === 'direct' && check?.result === 'invalid' && (
+                <ConfirmLine checked={confirmPlayer} onChange={setConfirmPlayer}>
+                  {t('orders.buy.confirmPlayer')}
+                </ConfirmLine>
+              )}
+            </Step>
+          )}
+
+          {product && shape && (
+            <Step title={t('orders.buy.steps.confirm')}>
+              <Field invalid={!!errors.reason}>
+                <FieldLabel>{t('orders.buy.reason')}</FieldLabel>
                 <Textarea
-                  name="customerNote"
+                  name="reason"
                   rows={2}
-                  maxLength={300}
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
+                  maxLength={500}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
                 />
-                <FieldDescription>{t('orders.buy.noteHelp')}</FieldDescription>
-                <FieldError match={!!errors.customerNote}>{errors.customerNote}</FieldError>
+                <FieldDescription>{t('orders.buy.reasonHelp')}</FieldDescription>
+                <FieldError match={!!errors.reason}>{errors.reason}</FieldError>
               </Field>
-            )}
-            <Summary
-              total={total}
-              ownerFunded={ownerFunded}
-              context={context.data ?? null}
-              failed={context.isError && !context.data}
-              onRetry={() => void context.refetch()}
-            />
-          </Step>
-        )}
+              {(purpose === 'gift' || purpose === 'compensation') && (
+                <Field invalid={!!errors.customerNote}>
+                  <FieldLabel>{t('orders.buy.note')}</FieldLabel>
+                  <Textarea
+                    name="customerNote"
+                    rows={2}
+                    maxLength={300}
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                  />
+                  <FieldDescription>{t('orders.buy.noteHelp')}</FieldDescription>
+                  <FieldError match={!!errors.customerNote}>{errors.customerNote}</FieldError>
+                </Field>
+              )}
+              <Summary
+                total={total}
+                ownerFunded={ownerFunded}
+                context={context.data ?? null}
+                failed={context.isError && !context.data}
+                onRetry={() => void context.refetch()}
+              />
+            </Step>
+          )}
+        </div>
 
         {failure && <FormAlert>{failure}</FormAlert>}
         <InvalidAlert show={Object.values(errors).some(Boolean)} />
@@ -724,81 +728,6 @@ function CustomerPicker({
         </ul>
       )}
     </div>
-  );
-}
-
-/** Rule AP5: the game's packs with their price; paused packs only for owner-funded modes. */
-function Packs({
-  game,
-  ownerFunded,
-  productId,
-  invalid,
-  onPick,
-}: {
-  game: GameDetail;
-  ownerFunded: boolean;
-  productId: string | null;
-  invalid: boolean;
-  onPick: (id: string) => void;
-}) {
-  const { t } = useTranslation();
-  const products = game.products.filter((item) => item.archivedAt === null);
-  if (products.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t('orders.buy.noPacks')}</p>;
-  }
-  return (
-    <fieldset
-      className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
-      data-invalid={invalid ? '' : undefined}
-    >
-      <legend className="sr-only">{t('orders.buy.pack')}</legend>
-      {products.map((item) => {
-        const choice = packChoice(item, ownerFunded);
-        return (
-          <label
-            key={item.id}
-            className="flex cursor-pointer flex-col gap-1 rounded-lg border border-border p-3 has-checked:border-primary has-checked:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-60"
-          >
-            <span className="flex items-center gap-2 font-medium">
-              <input
-                type="radio"
-                name="product"
-                className="size-4 accent-primary"
-                value={item.id}
-                disabled={choice === 'unavailable'}
-                checked={productId === item.id}
-                onChange={() => onPick(item.id)}
-              />
-              <bdi>{item.nameAr}</bdi>
-            </span>
-            <span className="text-sm tabular-nums">
-              {item.priceUsdUnits === null ? (
-                t('orders.buy.noPrice')
-              ) : (
-                <>
-                  <bdi dir="ltr">{formatUsd(item.priceUsdUnits)}</bdi>
-                  {item.priceSypUnits !== null && (
-                    <span className="text-muted-foreground">
-                      {' · '}
-                      {t('catalog.products.syp', { amount: formatSyp(item.priceSypUnits) })}
-                    </span>
-                  )}
-                </>
-              )}
-            </span>
-            <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-              {choice === 'trial' && <Badge tone="gold">{t('orders.buy.trial')}</Badge>}
-              {choice === 'unavailable' && (
-                <Badge tone="neutral">{t(`catalog.availability.${item.availability}`)}</Badge>
-              )}
-              {item.basisSupplierNameAr &&
-                t('orders.buy.basis', { supplier: item.basisSupplierNameAr })}
-              {item.basisStockLevel && <StockChip level={item.basisStockLevel} quiet />}
-            </span>
-          </label>
-        );
-      })}
-    </fieldset>
   );
 }
 

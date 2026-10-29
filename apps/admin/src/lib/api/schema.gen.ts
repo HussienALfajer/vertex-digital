@@ -2212,6 +2212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orders/purchase-games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_purchaseGames"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
         parameters: {
             query?: never;
@@ -8072,6 +8088,29 @@ export interface components {
                 remainingUsdUnits: number;
             };
         };
+        AdminPurchaseGames: {
+            categories: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+            }[];
+            games: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                categoryId: string;
+                nameAr: string;
+                nameEn: string;
+                status: components["schemas"]["CatalogStatus"];
+                cover: components["schemas"]["CatalogImage"] | null;
+                searchTerms: string[];
+                soldLast30Days: number;
+            }[];
+            /** Format: uuid */
+            lastGameId: string | null;
+        };
+        /** @enum {string} */
+        CatalogStatus: "active" | "paused";
         RevokeShareLink: {
             reason: string;
         };
@@ -8603,8 +8642,6 @@ export interface components {
             bestValueEnabled: boolean;
             productCount: number;
         };
-        /** @enum {string} */
-        CatalogStatus: "active" | "paused";
         GameListQuery: {
             /** @default 1 */
             page?: number;
@@ -14830,6 +14867,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminPurchaseContext"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_purchaseGames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unarchived games with covers, search terms and 30-day sales */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPurchaseGames"];
                 };
             };
         };
