@@ -1,11 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
+  DEPOSIT_SETTINGS_DEFAULTS,
   ROOT_PRICE_LIST_IDS,
   TIER_LIST_NAMES,
   TIER_SETTINGS_DEFAULTS,
 } from '@vertex-digital/contracts';
 import {
   catalogCategories,
+  customerRateLimits,
   customers,
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -22,8 +24,10 @@ import {
   supplierSyncRuns,
   suppliers,
 } from '@vertex-digital/db';
+import { FakeSupplierAdapter } from '@vertex-digital/suppliers';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
   api,
   auditOf,
@@ -294,6 +298,12 @@ describe('access (S23 Access)', () => {
         await json(await adminSend(method, route, body, plainAdmin), 403),
         route,
       ).toMatchObject({ code: 'REAUTHENTICATION_REQUIRED' });
+      // No session, and a customer's session: unauthorized like none.
+      expect((await client.request(method, route, { body })).status, route).toBe(401);
+      expect(
+        (await client.request(method, route, { cookie: shop.cookie, body })).status,
+        route,
+      ).toBe(401);
     }
     expect(await json(await setLevel('bronze', null), 404)).toMatchObject({ code: 'NOT_FOUND' });
     expect(
@@ -619,7 +629,218 @@ describe('grants, the merchants list and privileges (S23 MG1, MG3, AD1, AD3, AD5
   });
 });
 
+describe('privileges at purchase and a tier archived (S23 TS3, TS4, TS5, MG7, edge case 9)', () => {
+  /** A code pack of a game without account fields, routed to a fake code offer at $1. */
+  async function codePack() {
+    const game = await json<{ id: string; slug: string }>(
+      await adminSend('POST', '/api/admin/catalog/games', {
+        categoryId: ids.categoryId,
+        slug: `tiers-codes-${randomBytes(3).toString('hex')}`,
+        nameAr: `بطاقات ${randomBytes(3).toString('hex')}`,
+        nameEn: 'Cards',
+      }),
+      201,
+    );
+    const created = await json<{ id: string }>(
+      await adminSend('POST', `/api/admin/catalog/games/${game.id}/products`, {
+        kind: 'code',
+        nameAr: 'بطاقة $1',
+        redemptionAr: 'افتح المتجر والصق الكود.',
+      }),
+      201,
+    );
+    const now = new Date();
+    const [offer] = await test.db
+      .insert(supplierOffers)
+      .values({
+        supplierId: ids.fake,
+        offerId: `o-${randomBytes(4).toString('hex')}`,
+        name: 'Fake card',
+        kind: 'code',
+        requiredFields: [],
+        costUsdUnits: usd(1),
+        inStock: true,
+        costConfirmedAt: now,
+        lastSeenAt: now,
+      })
+      .returning({ id: supplierOffers.id });
+    await json(
+      await adminSend('POST', `/api/admin/catalog/products/${created.id}/routes`, {
+        offerId: offer?.id,
+        fieldMap: {},
+      }),
+      201,
+    );
+    await test.db.execute(sql`update catalog_games set status = 'active' where id = ${game.id}`);
+    return { id: created.id, slug: game.slug };
+  }
+
+  it('gives each tier its code quantity, check quota and deposit limits, and ends grants on an archive', async () => {
+    await archiveLevels();
+    const silverList = await customList(wholesale);
+    const goldList = await customList(silverList.id);
+    await json(
+      await setLevel('silver', {
+        monthlyThresholdUsdUnits: usd(100_000),
+        priceListId: silverList.id,
+      }),
+      200,
+    );
+    await json(
+      await setLevel('gold', { monthlyThresholdUsdUnits: usd(200_000), priceListId: goldList.id }),
+      200,
+    );
+    // The deposit settings in force (both methods off), so the options carry the limits.
+    await json(
+      await adminSend('PUT', '/api/admin/deposit-settings', {
+        ...DEPOSIT_SETTINGS_DEFAULTS,
+        shamCashAccountName: 'Vertex Digital',
+        shamCashAccountNumber: '0933000000',
+      }),
+      200,
+    );
+    const pack = await codePack();
+    const shop = await merchant(usd(300));
+    const unitPrice = async () =>
+      (
+        await json<{ products: { id: string; priceUsdUnits: number | null }[] }>(
+          await client.get(`/api/catalog/games/${pack.slug}/prices`, { cookie: shop.cookie }),
+          200,
+        )
+      ).products.find((row) => row.id === pack.id)?.priceUsdUnits as number;
+    const buy = async (quantity: number) =>
+      client.post('/api/orders', {
+        cookie: shop.cookie,
+        headers: { 'idempotency-key': randomUUID() },
+        body: {
+          productId: pack.id,
+          quantity,
+          fields: {},
+          expectedUnitPriceUsdUnits: await unitPrice(),
+        },
+      });
+    const check = () =>
+      client.post('/api/player-checks', {
+        cookie: shop.cookie,
+        body: { productId: item.id, fields: { player_id: '7300000001' } },
+      });
+    const perDeposit = async () =>
+      (
+        await json<{ limits: { perDepositUnits: number } | null }>(
+          await client.get('/api/deposits/sham-cash/options', { cookie: shop.cookie }),
+          200,
+        )
+      ).limits?.perDepositUnits;
+    const lines = (count: number, unit: number) =>
+      Array.from({ length: count }, () => ({
+        productId: pack.id,
+        quantity: 1,
+        fields: {},
+        expectedUnitPriceUsdUnits: unit,
+      }));
+    const checkout = async (count: number) =>
+      client.post('/api/checkouts', {
+        cookie: shop.cookie,
+        headers: { 'idempotency-key': randomUUID() },
+        body: { lines: lines(count, await unitPrice()) },
+      });
+
+    // Bronze: 50 code units an order (TS5), the Bronze hourly checks used up (TS4), its limits (TS3).
+    expect(await json(await buy(51), 400)).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { fields: { quantity: 'too_big' } },
+    });
+    await test.db.insert(customerRateLimits).values({
+      id: newId(),
+      key: `player-check:customer:${shop.id}`,
+      count: TIER_SETTINGS_DEFAULTS.bronze.playerChecksPerHour,
+      lastRequest: Date.now(),
+    });
+    expect(await json(await check(), 429)).toMatchObject({ code: 'PLAYER_CHECK_QUOTA_EXCEEDED' });
+    expect(await perDeposit()).toBe(TIER_SETTINGS_DEFAULTS.bronze.perDepositUsdUnits);
+
+    const grantPath = `/api/admin/customers/${shop.id}/merchant/tier-grant`;
+    const endsOn = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+    const granted = await json<{ id: string }>(
+      await adminSend('POST', grantPath, { tier: 'gold', endsOn, reason: 'شريك جديد في المدينة' }),
+      200,
+    );
+
+    // Gold: 80 code units in one order, the same used checks are below Gold's hourly limit.
+    const order = await json<{ quantity: number }>(await buy(80), 201);
+    expect(order.quantity).toBe(80);
+    vi.spyOn(SupplierAdaptersService.prototype, 'recordCall').mockImplementation(async () => {});
+    const validate = vi
+      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
+      .mockResolvedValue({ valid: true, playerName: 'Nour' });
+    expect((await check()).status).toBe(200);
+    expect(validate).toHaveBeenCalledTimes(1);
+    expect(await perDeposit()).toBe(TIER_SETTINGS_DEFAULTS.gold.perDepositUsdUnits);
+    expect((await (await checkout(60)).json()) as { details?: unknown }).not.toMatchObject({
+      details: { lines: { max: 50 } },
+    });
+
+    // MG7: archiving Gold's level ends its open grant and moves the merchant back to Bronze; a
+    // list of 60 lines checked as Gold is then refused naming the 50-line limit (edge case 9).
+    await json(await setLevel('gold', null), 200);
+    const ended = await test.db.execute<{ end_reason: string | null }>(
+      sql`select end_reason from merchant_tier_grants where id = ${granted.id}`,
+    );
+    expect(ended.rows).toEqual([{ end_reason: 'tier_archived' }]);
+    const profile = await json<{ merchant: { tier: { tier: string; openGrant: unknown } } }>(
+      await adminGet(`/api/admin/customers/${shop.id}`),
+      200,
+    );
+    expect(profile.merchant.tier).toMatchObject({ tier: 'bronze', openGrant: null });
+    expect(await json(await checkout(60), 400)).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { lines: { max: 50 } },
+    });
+    expect(await json(await buy(51), 400)).toMatchObject({ code: 'VALIDATION_FAILED' });
+    await archiveLevels();
+  });
+});
+
 describe('the setup command (S23 PX1)', () => {
+  const setupContext = {
+    jobs: { send: async () => newId() },
+    routing: { now: new Date(), fakeEnabled: true },
+  };
+
+  it('creates no level on a same-named list off the tier chain', async () => {
+    await archiveLevels();
+    const [before] = await test.db
+      .select({ name: priceLists.name })
+      .from(priceLists)
+      .where(eq(priceLists.id, wholesale));
+    const offChain = newId();
+    await test.db.insert(priceLists).values({
+      id: offChain,
+      kind: 'custom',
+      name: TIER_LIST_NAMES.silver,
+      parentListId: retail,
+    });
+    try {
+      const report = await setupMerchantTiers(test.db, setupContext);
+      expect(report.lines).toEqual(
+        expect.arrayContaining([
+          `Warning: the list "${TIER_LIST_NAMES.silver}" exists off the tier chain: left as it is.`,
+          expect.stringMatching(/^Warning: no silver level or above created/),
+        ]),
+      );
+      expect((await tiers()).map((tier) => tier.level)).toEqual([null, null, null, null]);
+    } finally {
+      await test.db
+        .update(priceLists)
+        .set({ archivedAt: new Date() })
+        .where(eq(priceLists.id, offChain));
+      await test.db
+        .update(priceLists)
+        .set({ name: before?.name as string })
+        .where(eq(priceLists.id, wholesale));
+    }
+  });
+
   it('creates the chained lists, their rules and the levels once, then leaves them', async () => {
     await archiveLevels();
     const [before] = await test.db

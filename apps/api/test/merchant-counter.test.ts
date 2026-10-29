@@ -365,7 +365,7 @@ describe('the bulk check (S21 BK1–BK4)', () => {
       `7000000002\t${item.nameAr}`,
       `7000000003,باقة لا توجد`,
       `12,${item.nameAr}`,
-      `7000000004,${item.nameAr},99`,
+      `7000000004,${item.nameAr},101`,
     ].join('\n');
     const result = await json<{
       lines: {

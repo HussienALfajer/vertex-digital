@@ -6,7 +6,6 @@ import {
   catalogStatusSchema,
   type InputField,
   MAX_INPUT_FIELDS_PER_GAME,
-  MAX_QUANTITY_LIMIT,
   type ProductAvailability,
   productAvailability,
   productKindSchema,
@@ -16,6 +15,7 @@ import {
 import { customerMarksSchema } from './customer-status.js';
 import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
+import { TIER_QUANTITY_CEILING } from './merchant-tiers.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
 import { priceKindSchema } from './price-kinds.js';
 import {
@@ -1216,7 +1216,8 @@ export function orderFieldValuesSchema(
 export const createOrderSchema = z
   .object({
     productId: z.uuid(),
-    quantity: z.int().min(1).max(MAX_QUANTITY_LIMIT),
+    /** The account's own limit (the pack's, a merchant tier's for codes) is checked at purchase (TS5). */
+    quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
     fields: z
       .record(z.string().max(32), typedValue)
       .refine((fields) => Object.keys(fields).length <= MAX_INPUT_FIELDS_PER_GAME, {
@@ -1603,7 +1604,7 @@ export type RevealedCode = z.infer<typeof revealedCodeSchema>;
 export const codeReleaseRequestSchema = z
   .object({
     purpose: codeReleasePurposeSchema.exclude(['reveal']),
-    codeIds: z.array(z.uuid()).min(1).max(MAX_QUANTITY_LIMIT).optional(),
+    codeIds: z.array(z.uuid()).min(1).max(TIER_QUANTITY_CEILING).optional(),
   })
   .meta({ id: 'CodeReleaseRequest' });
 
@@ -2238,9 +2239,9 @@ export const resolveAttemptSchema = z
   .discriminatedUnion('outcome', [
     z.object({
       outcome: z.literal('delivered'),
-      quantity: z.int().min(1).max(MAX_QUANTITY_LIMIT),
+      quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
       /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
-      codes: z.array(deliveredCodeSchema).max(MAX_QUANTITY_LIMIT).default([]),
+      codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
       reason: decisionReason,
     }),
     z.object({ outcome: z.literal('failed'), reason: decisionReason }),
@@ -2448,9 +2449,9 @@ export const deliveryReferenceSchema = z
 /** `POST /api/admin/orders/:id/fulfil` (rules MF1–MF4). */
 export const fulfilOrderSchema = z
   .object({
-    quantity: z.int().min(1).max(MAX_QUANTITY_LIMIT),
+    quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
     /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
-    codes: z.array(deliveredCodeSchema).max(MAX_QUANTITY_LIMIT).default([]),
+    codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
     unitCostUsdUnits: usdCentsSchema.max(FULFIL_COST_MAX_USD_UNITS),
     /** Required when the cost is above the order's unit price (`LOSS_NOT_CONFIRMED`). */
     acceptLoss: z.boolean().default(false),

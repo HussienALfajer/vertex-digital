@@ -36,7 +36,8 @@ export class LevelScheduleFailed extends Error {
  * merchant's purchase, checkout or refund, after a grant and after every tier change in the panel
  * (`stately` by customer), the payload's `cause` naming a tiers change. `merchants.level-schedule`
  * runs on the 1st, when the previous month is the one that counts: each merchant in a transaction
- * of its own, recomputed then given its row of the month just ended (`recordTierMonth`, S23 PG5).
+ * of its own, given its row of the month just ended (`recordTierMonth`, S23 PG5: the tier held at
+ * the month's end) and then recomputed.
  * Safe twice: the same state writes nothing and the month's row is written once.
  */
 @Injectable()
@@ -79,8 +80,8 @@ export class MerchantLevelJob implements OnApplicationBootstrap {
   }
 
   /**
-   * LV4, S23 PG5: every live merchant, in id order, recomputed then given the row of the month
-   * before `now`'s; a merchant that fails does not stop the others, and the run then fails naming
+   * LV4, S23 PG5: every live merchant, in id order, given the row of the month before `now`'s
+   * (before the recomputation, which moves the profile to the new month), then recomputed; a merchant that fails does not stop the others, and the run then fails naming
    * them (pg-boss retries it; the merchants done already write nothing again). Returns how many
    * merchants were done.
    */
@@ -95,8 +96,9 @@ export class MerchantLevelJob implements OnApplicationBootstrap {
     for (const { id } of merchants) {
       try {
         await this.db.transaction(async (tx) => {
-          await recomputeMerchantLevel(tx, { jobs: bossJobSender(this.pgBoss.boss), now }, id);
+          // The month's row first: its held tier is the one at the month's end (PG5).
           await recordTierMonth(tx, id, month);
+          await recomputeMerchantLevel(tx, { jobs: bossJobSender(this.pgBoss.boss), now }, id);
         });
       } catch (error) {
         this.logger.error(`Merchant ${id} level schedule failed`, error);

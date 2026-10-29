@@ -319,9 +319,11 @@ describe('merchant tiers in the worker (S23 TR6, MG4, MG5, PG5)', () => {
         sql`select id from price_lists where kind = 'wholesale' and archived_at is null limit 1`,
       )
     ).rows;
+    const id = newId();
     await tx.execute(sql`insert into merchant_levels
       (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)
-      values (${newId()}, 'gold', ${TIER_NAMES_AR.gold}, 1000000000000, ${list?.id})`);
+      values (${id}, 'gold', ${TIER_NAMES_AR.gold}, 1000000000000, ${list?.id})`);
+    return id;
   };
   /** An open Gold grant of `shop` ending at `endsAt`. */
   const goldGrant = async (tx: Transaction, shop: string, endsAt: Date) => {
@@ -407,6 +409,23 @@ describe('merchant tiers in the worker (S23 TR6, MG4, MG5, PG5)', () => {
     expect(await job.monthly(nextFirst)).toBeGreaterThanOrEqual(1);
     expect(await job.monthly(nextFirst)).toBeGreaterThanOrEqual(1);
     expect(await months()).toEqual([{ month, earned_tier: 'bronze', held_tier: 'bronze' }]);
+
+    // The month's row keeps the tier held at its end, before the recomputation moves it (PG5).
+    const held = await merchant();
+    await inRollback(async (tx) => {
+      const gold = await goldLevel(tx);
+      await tx.execute(sql`update merchant_profiles set level_id = ${gold},
+        earned_level_id = ${gold}, level_source = 'earned' where customer_id = ${held}`);
+      await new MerchantLevelJob(pgBoss, tx as unknown as Database).monthly(nextFirst);
+      const rows = await tx.execute(sql`select earned_tier, held_tier, held_source
+        from merchant_tier_months where customer_id = ${held}`);
+      expect(rows.rows).toEqual([
+        { earned_tier: 'bronze', held_tier: 'gold', held_source: 'earned' },
+      ]);
+      expect(await changes(tx, held)).toEqual([
+        { from_tier: 'gold', to_tier: 'bronze', source: 'earned' },
+      ]);
+    });
 
     // A failing merchant does not stop the others; the run then fails naming them.
     const { db: failing, state } = poisoned(0);

@@ -346,8 +346,9 @@ export async function recomputeMerchantLevel(
 
 /**
  * S23 PG5: the merchant's row for `month` (`YYYY-MM`, the month just ended), written by the monthly
- * schedule after the merchant's recomputation: the month's net purchases, the tier they earned at
- * its end (LV3 on it and the month before) and the tier held now. Once: a second run writes
+ * schedule before the merchant's recomputation: the month's net purchases, the tier they earned at
+ * its end (LV3 on it and the month before) and the tier held at its end (the profile, not yet
+ * moved to the new month). Once: a second run writes
  * nothing. Returns whether it wrote.
  */
 export async function recordTierMonth(

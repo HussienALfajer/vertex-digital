@@ -11,13 +11,15 @@ ALTER TABLE merchant_levels ADD CONSTRAINT merchant_levels_tier_check
 --> statement-breakpoint
 
 -- TS2: the seeded privileges per tier, fixed ids. Bronze's deposit limits and player checks are the
--- newest merchant settings' (S20 MD1, S21 BK4), so nothing changes for today's merchants.
+-- newest merchant settings' (S20 MD1, S21 BK4), so nothing changes for today's merchants. Those
+-- never had to keep the hourly checks within the daily ones: the hourly value is clamped to it.
 INSERT INTO merchant_tier_settings (id, tier, per_deposit_usd_units, daily_deposit_usd_units,
   player_checks_per_hour, player_checks_per_day, bulk_lines_max, order_units_max, deposit_priority,
   support_priority, support_reply_minutes, direct_contact, early_access, fast_alerts,
   receipt_welcome, receipt_large_logo, admin_id)
 SELECT '01a3b2c4-5d6e-7f80-9a1b-2c3d4e5f6a01', 'bronze', per_deposit_usd_units,
-  daily_deposit_usd_units, player_checks_per_hour, player_checks_per_day, 50, 50, false, false,
+  daily_deposit_usd_units, least(player_checks_per_hour, player_checks_per_day),
+  player_checks_per_day, 50, 50, false, false,
   NULL, false, false, false, false, false, NULL
 FROM (
   SELECT * FROM merchant_settings ORDER BY created_at DESC, id DESC LIMIT 1

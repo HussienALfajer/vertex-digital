@@ -24340,7 +24340,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50
+            "maximum": 100
           },
           "fields": {
             "default": {},
@@ -25168,7 +25168,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50
+            "maximum": 100
           },
           "fields": {
             "default": {},
@@ -26216,7 +26216,7 @@
           },
           "codeIds": {
             "minItems": 1,
-            "maxItems": 50,
+            "maxItems": 100,
             "type": "array",
             "items": {
               "type": "string",
@@ -26316,7 +26316,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50
+            "maximum": 100
           },
           "fields": {
             "default": {},
@@ -28569,11 +28569,11 @@
               "quantity": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 50
+                "maximum": 100
               },
               "codes": {
                 "default": [],
-                "maxItems": 50,
+                "maxItems": 100,
                 "type": "array",
                 "items": {
                   "type": "string",
@@ -28795,11 +28795,11 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50
+            "maximum": 100
           },
           "codes": {
             "default": [],
-            "maxItems": 50,
+            "maxItems": 100,
             "type": "array",
             "items": {
               "type": "string",

@@ -55,10 +55,16 @@ export async function setupMerchantTiers(
     let parentListId: string = ROOT_PRICE_LIST_IDS.wholesale;
     const levels = await liveTierLevels(tx);
     for (const tier of LEVEL_TIERS) {
-      const listId = await tierList(tx, tier, parentListId, slugs, lines);
+      const { id: listId, fits } = await tierList(tx, tier, parentListId, slugs, lines);
       const level = levels.find((candidate) => candidate.tier === tier);
       if (level) {
         lines.push(`The ${tier} level exists: left as it is.`);
+      } else if (!fits) {
+        // The panel's rule (MERCHANT_TIER_LIST_INVALID): a level never sits on a list off the chain.
+        lines.push(
+          `Warning: no ${tier} level or above created: the list "${TIER_LIST_NAMES[tier]}" is not a custom list under the tier below's list; set them in the panel.`,
+        );
+        break;
       } else {
         const id = newId();
         const values = {
@@ -132,26 +138,30 @@ async function categoryIds(tx: Transaction, lines: string[]): Promise<Map<string
   return found;
 }
 
-/** The tier's list by name, or created under `parentListId` with its rules (PX3). */
+/**
+ * The tier's list by name, or created under `parentListId` with its rules (PX3). `fits`: the list
+ * can carry the tier's level (a custom list under `parentListId`, the panel's rule).
+ */
 async function tierList(
   tx: Transaction,
   tier: LevelTier,
   parentListId: string,
   categories: Map<string, string>,
   lines: string[],
-): Promise<string> {
+): Promise<{ id: string; fits: boolean }> {
   const name = TIER_LIST_NAMES[tier];
   const [existing] = await tx
-    .select({ id: priceLists.id, parentListId: priceLists.parentListId })
+    .select({ id: priceLists.id, kind: priceLists.kind, parentListId: priceLists.parentListId })
     .from(priceLists)
     .where(and(sql`lower(${priceLists.name}) = lower(${name})`, isNull(priceLists.archivedAt)));
   if (existing) {
+    const fits = existing.kind === 'custom' && existing.parentListId === parentListId;
     lines.push(
-      existing.parentListId === parentListId
+      fits
         ? `The list "${name}" exists: left as it is.`
-        : `Warning: the list "${name}" exists under another parent: left as it is.`,
+        : `Warning: the list "${name}" exists off the tier chain: left as it is.`,
     );
-    return existing.id;
+    return { id: existing.id, fits };
   }
   const id = newId();
   await tx.insert(priceLists).values({ id, kind: 'custom', name, parentListId });
@@ -169,7 +179,7 @@ async function tierList(
     }
   }
   lines.push(`Created the list "${name}" with its rules.`);
-  return id;
+  return { id, fits: true };
 }
 
 async function rule(

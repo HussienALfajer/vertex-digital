@@ -618,7 +618,9 @@ describe('order field values (rule O5, S06 CT7)', () => {
       whenBalanceShort: 'refuse',
       confirmPlayer: false,
     });
-    expect(createOrderSchema.safeParse({ ...request, quantity: 51 }).success).toBe(false);
+    // S23 TS5: up to the highest tier's limit; the account's own limit is the purchase's check.
+    expect(createOrderSchema.safeParse({ ...request, quantity: 100 }).success).toBe(true);
+    expect(createOrderSchema.safeParse({ ...request, quantity: 101 }).success).toBe(false);
     expect(createOrderSchema.safeParse({ ...request, expectedUnitPriceUsdUnits: 1 }).success).toBe(
       false,
     );
