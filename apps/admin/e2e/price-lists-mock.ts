@@ -282,6 +282,11 @@ export class PriceListsMock {
   }
 
   /** LP1–LP4 now: the list's entry at the basis cost, capped at the retail price. */
+  /** A product's price on a list now, as an order would be charged (null: none there). */
+  priceOn(priceListId: string, productId: string): number | null {
+    return this.cell(priceListId, productId).priceUsdUnits;
+  }
+
   private cell(priceListId: string, productId: string): ListPriceCell {
     const pricing = this.catalog.pricing?.(productId);
     const cost = pricing?.basisCostUsdUnits ?? null;

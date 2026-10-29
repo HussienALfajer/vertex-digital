@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import { CUSTOMER_IDS } from './customers-mock';
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './test';
@@ -168,13 +169,55 @@ test('the sale picker: search with arrows, covers by category, the bar, the pack
   await expect(filter).toBeFocused();
   const packs = page.getByRole('group', { name: b.pack }).locator('label');
   await expect(packs).toHaveText([/60 UC/, /325 UC/, /بطاقة 10\$/]);
-  await expect(page.getByText(b.picker.cost).first()).toBeVisible();
+  await expect(page.getByText(b.picker.supplierPrice).first()).toBeVisible();
   await filter.fill('325');
   await expect(packs).toHaveCount(1);
   await filter.press('Enter');
   await expect(page.getByRole('radio', { name: '325 UC' })).toBeChecked();
   // Then the account fields.
   await expect(page.getByRole('textbox', { name: 'معرّف اللاعب' })).toBeFocused();
+});
+
+test('a walk-in order on the chosen list; gifts at the cost list; the card shows every list (AP16)', async ({
+  page,
+  admin,
+}) => {
+  const { uc60 } = seed(admin);
+  const wholesale = admin.priceLists.priceOn(ROOT_PRICE_LIST_IDS.wholesale, uc60.id) as number;
+  const cost = admin.priceLists.priceOn(ROOT_PRICE_LIST_IDS.cost, uc60.id) as number;
+  await page.goto('/orders/new?purpose=walk_in');
+  await pickPack(page, '60 UC');
+  // The card: the supplier's price, the margin and every list, the charged one marked.
+  const card = page.getByRole('group', { name: b.pack }).locator('label').first();
+  await expect(card.getByText(b.picker.supplierPrice)).toBeVisible();
+  await expect(card.getByText('الجملة')).toBeVisible();
+  await expect(card.getByText(b.picker.charged)).toHaveCount(1);
+  // Another list prices the packs anew and asks for the pack again.
+  await page.getByRole('combobox', { name: b.picker.priceList }).click();
+  await page.getByRole('option', { name: 'الجملة' }).click();
+  await expect(page.getByRole('radio', { name: '60 UC' })).not.toBeChecked();
+  await expect(card.getByText(`$${(wholesale / 1_000_000).toFixed(2)}`).first()).toBeVisible();
+  await page.getByRole('radio', { name: '60 UC' }).check();
+  await page.getByRole('textbox', { name: 'معرّف اللاعب' }).fill('5123456789');
+  await page.getByRole('textbox', { name: b.reason }).fill('Shop price at the counter');
+  await pay(page);
+  await expect(page).toHaveURL(/\/orders\/0199b000-/);
+  expect(admin.lastBody('POST /api/admin/orders')).toMatchObject({
+    priceListId: ROOT_PRICE_LIST_IDS.wholesale,
+    expectedUnitPriceUsdUnits: wholesale,
+  });
+  // A gift says it takes the cost list, and is charged there.
+  await page.goto(`/orders/new?purpose=gift&customerId=${CUSTOMER_IDS.sara}`);
+  await expect(page.getByText(b.picker.chargedCost)).toHaveCount(0);
+  await pickPack(page, '60 UC');
+  await expect(page.getByText(b.picker.chargedCost)).toBeVisible();
+  await page.getByRole('textbox', { name: 'معرّف اللاعب' }).fill('5123456789');
+  await page.getByRole('textbox', { name: b.reason }).fill('Loyal customer gift');
+  await pay(page);
+  await expect(page).toHaveURL(/\/orders\/0199b000-/);
+  const body = admin.lastBody('POST /api/admin/orders') as Record<string, unknown>;
+  expect(body.expectedUnitPriceUsdUnits).toBe(cost);
+  expect(body.priceListId).toBeUndefined();
 });
 
 test("a code pack still takes the game's fields, without the player check (S08 O5, AP8)", async ({

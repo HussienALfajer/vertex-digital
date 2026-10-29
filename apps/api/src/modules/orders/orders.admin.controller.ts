@@ -131,7 +131,7 @@ export class OrdersAdminController {
   purchaseContext(
     @Query({ schema: adminPurchaseContextQuerySchema }) query: AdminPurchaseContextQuery,
   ) {
-    return this.purchases.context(query.customerId, query.gameId);
+    return this.purchases.context(query.customerId, query.gameId, query.priceListId);
   }
 
   /** S16 "شراء من اللوحة": the sale picker's games, categories and sales. */

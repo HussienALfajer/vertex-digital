@@ -11,6 +11,7 @@ import {
   type GameDetail,
   orderTotal,
   type PlayerCheck,
+  ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import {
   Badge,
@@ -48,7 +49,7 @@ import { customerListQuery } from '../customers/customers.queries';
 import type { NewOrderSearch } from './new-order-search';
 import { purchaseContextQuery, useAdminPlayerCheck, useCreateAdminOrder } from './orders.queries';
 import { PlayerCheckAnswer } from './player-check-answer';
-import { ChosenGame, GamePicker, PackCards } from './sale-picker';
+import { ChosenGame, GamePicker, PackCards, PriceListLine } from './sale-picker';
 
 /** The fields of the form a refusal may name. */
 type FieldKey = 'customerId' | 'productId' | 'quantity' | 'reason' | 'customerNote' | 'fields';
@@ -96,6 +97,8 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const [customerId, setCustomerId] = useState<string | null>(preset.customerId ?? null);
   const [gameId, setGameId] = useState<string | null>(preset.gameId ?? null);
   const [productId, setProductId] = useState<string | null>(preset.productId ?? null);
+  /** Rule AP16: the list a walk-in order is charged on. */
+  const [walkInList, setWalkInList] = useState<string>(ROOT_PRICE_LIST_IDS.retail);
   /** "تغيير" on the chosen game opens the picker again; the choice stays until another pick. */
   const [changingGame, setChangingGame] = useState(false);
   /** After a pick the next control takes the focus: the pack filter, then the account fields. */
@@ -122,20 +125,31 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
 
   const shape = purpose ? adminOrderShape(purpose) : null;
   const ownerFunded = shape?.payer === 'owner';
+  // Rule AP16: a walk-in order is charged on the chosen list, a gift or a compensation on the
+  // cost list; null for an order the customer pays (their own list, S20 PO4).
+  const ownerList =
+    purpose === 'walk_in' ? walkInList : ownerFunded ? ROOT_PRICE_LIST_IDS.cost : null;
+  const listToRead = ownerList === ROOT_PRICE_LIST_IDS.retail ? null : ownerList;
   const context = useQuery({
     ...purchaseContextQuery(
       shape?.hasCustomer ? (customerId ?? undefined) : undefined,
       // S20 PO4: an order the customer pays is charged at the customer's list.
-      shape?.payer === 'customer' ? (gameId ?? undefined) : undefined,
+      shape?.payer === 'customer' || listToRead !== null ? (gameId ?? undefined) : undefined,
+      listToRead ?? undefined,
     ),
-    enabled: shape !== null && (!shape.hasCustomer || customerId !== null),
+    enabled: shape !== null && (!shape.hasCustomer || customerId !== null || listToRead !== null),
     // Another game keeps the same customer on screen while its list prices are read (audit
     // A04-50); another customer never shows the one before.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === (customerId ?? null) ? previous : undefined,
   });
   const loaded = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
-  const gameData = atListPrices(loaded.data, context.data?.customer?.listPrices);
+  const gameData = atListPrices(
+    loaded.data,
+    listToRead === null ? context.data?.customer?.listPrices : context.data?.listPrices,
+  );
+  /** The list the order is charged on, for the pack cards; null until the customer's is read. */
+  const chargedList = ownerList ?? context.data?.customer?.priceListId ?? null;
   const product = gameData?.products.find((item) => item.id === productId) ?? null;
   const hasFields = (gameData?.fields ?? []).some((field) => field.archivedAt === null);
   const units = /^\d{1,2}$/.test(quantity) ? Number(quantity) : 0;
@@ -143,8 +157,8 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     product?.priceUsdUnits && units > 0 ? orderTotal(product.priceUsdUnits, units) : null;
   // A customer-paid pack waits for the customer's own list prices (S20 PO4, audit A04-50).
   const pricesPending =
-    shape?.payer === 'customer' &&
-    customerId !== null &&
+    ((shape?.payer === 'customer' && customerId !== null) ||
+      (listToRead !== null && gameId !== null)) &&
     (context.isPending || context.isPlaceholderData);
   // The page's own callout already says why such a customer cannot be charged (audit A04-12).
   const customerRefused =
@@ -210,6 +224,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     const body = {
       purpose,
       ...(shape?.hasCustomer && customerId && { customerId }),
+      ...(purpose === 'walk_in' && { priceListId: walkInList }),
       productId,
       quantity: units,
       // S08 rule O5: every unarchived field of the game, whatever the pack's kind.
@@ -361,12 +376,25 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                 onRetry={() => void loaded.refetch()}
               />
             )}
+            {gameData && !changingGame && (
+              <PriceListLine
+                mode={purpose === 'walk_in' ? 'choose' : ownerFunded ? 'cost' : 'customer'}
+                value={chargedList}
+                onChange={(id) => {
+                  setWalkInList(id);
+                  // Another list prices every pack anew: the pack is chosen again.
+                  setProductId(null);
+                  resetCheck();
+                }}
+              />
+            )}
             {gameData && pricesPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
             {gameData && !pricesPending && !changingGame && (
               <PackCards
                 key={gameData.id}
                 game={gameData}
                 ownerFunded={ownerFunded}
+                chargedList={chargedList}
                 productId={productId}
                 invalid={!!errors.productId}
                 focus={moveOn === 'packs'}

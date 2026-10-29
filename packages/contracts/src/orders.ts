@@ -2079,6 +2079,11 @@ export const createAdminOrderSchema = createOrderSchema
   .extend({
     purpose: adminOrderPurposeSchema,
     customerId: z.uuid().optional(),
+    /**
+     * Rule AP16: the list a walk-in order is charged on (retail when absent); any other mode's
+     * list is the server's (the customer's own, or cost for a gift or a compensation).
+     */
+    priceListId: z.uuid().optional(),
     /** Internal (rule AP9): never shown to the customer. */
     reason: decisionReason,
     customerNote: z
@@ -2098,6 +2103,13 @@ export const createAdminOrderSchema = createOrderSchema
         message: hasCustomer ? 'This mode needs a customer' : 'A walk-in order has no customer',
       });
     }
+    if (order.priceListId !== undefined && order.purpose !== 'walk_in') {
+      context.addIssue({
+        code: 'custom',
+        path: ['priceListId'],
+        message: 'Only a walk-in order chooses its price list',
+      });
+    }
     if (order.customerNote !== undefined && !['gift', 'compensation'].includes(order.purpose)) {
       context.addIssue({
         code: 'custom',
@@ -2112,10 +2124,15 @@ export type CreateAdminOrder = z.input<typeof createAdminOrderSchema>;
 
 /**
  * `GET /api/admin/orders/purchase-context`; S20 PO4: `gameId` reads the customer's list prices of
- * that game.
+ * that game; rule AP16: with `priceListId`, that list's prices of the game for an order the owner
+ * pays (`listPrices`).
  */
 export const adminPurchaseContextQuerySchema = z
-  .object({ customerId: z.uuid().optional(), gameId: z.uuid().optional() })
+  .object({
+    customerId: z.uuid().optional(),
+    gameId: z.uuid().optional(),
+    priceListId: z.uuid().optional(),
+  })
   .meta({ id: 'AdminPurchaseContextQuery' });
 
 export type AdminPurchaseContextQuery = z.infer<typeof adminPurchaseContextQuerySchema>;
@@ -2138,6 +2155,8 @@ export const adminPurchaseContextSchema = z
         purchaseCapLeftUsdUnits: z.int().nonnegative().nullable(),
         /** S20 AT4: what the customer pays. */
         priceKind: priceKindSchema,
+        /** S20 PO4: the customer's effective list, the one an order they pay is charged on. */
+        priceListId: z.uuid(),
         /** S20 MT2: a merchant who has not accepted the merchant terms cannot be charged. */
         merchantTermsRequired: z.boolean(),
         /**
@@ -2163,6 +2182,13 @@ export const adminPurchaseContextSchema = z
       usedTodayUsdUnits: z.int(),
       remainingUsdUnits: z.int().nonnegative(),
     }),
+    /**
+     * Rule AP16: the game's packs on `priceListId` for an owner-funded order (a paused pack
+     * priced, AP5; null price: unavailable on that list); null without a game and a list.
+     */
+    listPrices: z
+      .array(z.object({ productId: z.uuid(), priceUsdUnits: z.int().positive().nullable() }))
+      .nullable(),
   })
   .meta({ id: 'AdminPurchaseContext' });
 
