@@ -1,10 +1,10 @@
 import {
   type AccountType,
+  accountPriceKind,
   customerStatus,
   effectivePriceListId,
   type PriceKind,
   type PriceListKind,
-  accountPriceKind,
 } from '@vertex-digital/contracts';
 import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -43,8 +43,7 @@ export async function accountPriceList(
     .where(eq(customers.id, customerId));
   if (!customer) return null;
   // S21 LV5: a merchant's level picks the list below an assigned one.
-  const levelList =
-    customer.accountType === 'merchant' ? await levelListId(db, customerId) : null;
+  const levelList = customer.accountType === 'merchant' ? await levelListId(db, customerId) : null;
   const id = effectivePriceListId({ ...customer, levelListId: levelList });
   const [list] = await db
     .select({ id: priceLists.id, kind: priceLists.kind, name: priceLists.name })

@@ -466,7 +466,13 @@ export function accountPriceKind(kind: PriceListKind, tierList: boolean): PriceK
 }
 
 /** Where a list's price comes from (S20 LP1, LP2; S23 PX2). */
-export const PRICE_SOURCES = ['rule', 'fixed', 'fixed_fallback', 'retail_cap', 'parent_cap'] as const;
+export const PRICE_SOURCES = [
+  'rule',
+  'fixed',
+  'fixed_fallback',
+  'retail_cap',
+  'parent_cap',
+] as const;
 
 export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' });
 

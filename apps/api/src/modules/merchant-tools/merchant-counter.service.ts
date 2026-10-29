@@ -145,7 +145,11 @@ export class MerchantCounterService {
       const unit = pack ? (prices.get(pack.id)?.priceUsdUnits ?? null) : null;
       const errors: BulkCheckLine['errors'] = line.errors.map((code) => ({ code, field: null }));
       let fields = line.fields;
-      if (pack && line.quantity !== null && line.quantity > orderQuantityMax(pack, 'merchant', tier)) {
+      if (
+        pack &&
+        line.quantity !== null &&
+        line.quantity > orderQuantityMax(pack, 'merchant', tier)
+      ) {
         errors.push({ code: 'quantity_above_max', field: null });
       }
       if (pack && unit === null) errors.push({ code: 'pack_unavailable', field: null });

@@ -1,9 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  type AdminMerchantTier,
-  type LevelTier,
   type AdminCustomer,
   type AdminCustomerPage,
+  type AdminMerchantTier,
   type AuditPage,
   type CursorQuery,
   type CustomerLimitOverrides,
@@ -18,6 +17,7 @@ import {
   customerLimits as customerLimitsOf,
   customerStatus,
   DEPOSIT_SETTINGS_DEFAULTS,
+  type LevelTier,
   type Passkey,
   type SetCustomerPriceList,
   type UpdateCustomerLimits,

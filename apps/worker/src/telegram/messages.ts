@@ -16,11 +16,23 @@ import {
   type TelegramBotReply,
   type TelegramMessageKind,
   type TelegramMessageParams,
+  TIER_NAMES_AR,
   type TicketCategory,
+  type TierChangeSource,
   telegramCallbackData,
+  tierRank,
   USDT_NETWORKS,
   type UsdtMethod,
 } from '@vertex-digital/contracts';
+
+/** S23 TR8: why a merchant's tier changed. */
+const TIER_CHANGE_SOURCES_AR: Record<TierChangeSource, string> = {
+  earned: 'بحسب المشتريات',
+  granted: 'منح يدوي',
+  grant_ended: 'انتهاء المنح',
+  revoked: 'إلغاء صفة التاجر',
+  tiers_changed: 'تعديل الفئات',
+};
 
 export interface TelegramButton {
   text: string;
@@ -566,7 +578,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       ? [`🏪 طلبات تاجر بانتظار المراجعة: ${summary.merchantApplicationsWaiting}`]
       : []),
     ...(summary.merchantLevelsChanged > 0
-      ? [`🏅 مستويات التجار: ${summary.merchantLevelsChanged} تغيّرت اليوم`]
+      ? [`🏅 فئات التجار: ${summary.merchantLevelsChanged} تغيّرت اليوم`]
       : []),
     `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
     `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
@@ -807,6 +819,29 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
             : '🏪 طلب تاجر جديد بانتظار المراجعة',
           `بانتظار المراجعة: ${application.waiting}`,
           `${links.admin}/merchants/applications/${application.applicationId}`,
+        ].join('\n'),
+      };
+    }
+    case 'merchant_tier_changed': {
+      // S23 TR8: the trade name, the tiers, the cause and the months' net purchases.
+      const change = params as TelegramMessageParams<'merchant_tier_changed'>;
+      const up = tierRank(change.to) > tierRank(change.from);
+      return {
+        text: [
+          `${up ? '⬆️' : '⬇️'} ${change.tradeName}: تاجر ${TIER_NAMES_AR[change.from]} ← تاجر ${TIER_NAMES_AR[change.to]} (${TIER_CHANGE_SOURCES_AR[change.source]})`,
+          `صافي المشتريات: هذا الشهر ${formatUsd(change.thisMonthUsdUnits)} · الشهر الماضي ${formatUsd(change.previousMonthUsdUnits)}`,
+          `${links.admin}/customers/${change.customerId}`,
+        ].join('\n'),
+      };
+    }
+    case 'merchant_tier_grant_ending': {
+      // S23 MG5: once per grant, within 3 days of its end.
+      const grant = params as TelegramMessageParams<'merchant_tier_grant_ending'>;
+      return {
+        text: [
+          `⏳ تنتهي فئة تاجر ${TIER_NAMES_AR[grant.tier]} الممنوحة لـ ${grant.tradeName} في ${atDamascus(new Date(grant.endsAt))}`,
+          `يعود بعدها إلى فئة تاجر ${TIER_NAMES_AR[grant.earnedTier]} بحسب مشترياته.`,
+          `${links.admin}/customers/${grant.customerId}`,
         ].join('\n'),
       };
     }

@@ -641,9 +641,9 @@ describe('the setup command (S23 PX1)', () => {
       expect(first.lines).toEqual(
         expect.arrayContaining([
           'Created the list "الفضية" with its rules.',
-          'Created the level silver at 300 USD.',
-          'Created the level gold at 1000 USD.',
-          'Created the level diamond at 3000 USD.',
+          'Created the silver level at 300 USD.',
+          'Created the gold level at 1000 USD.',
+          'Created the diamond level at 3000 USD.',
         ]),
       );
       const page = await tiers();

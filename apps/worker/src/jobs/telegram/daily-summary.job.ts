@@ -10,7 +10,6 @@ import {
   type TelegramMessageParams,
 } from '@vertex-digital/contracts';
 import {
-  auditEntries,
   bossJobSender,
   checkouts,
   currentOrderPolicy,
@@ -24,6 +23,7 @@ import {
   ledgerSummary,
   lowStockCounts,
   merchantApplications,
+  merchantTierChanges,
   newOfferCounts,
   openMismatchCount,
   orders,
@@ -258,17 +258,12 @@ export class DailySummaryJob implements OnApplicationBootstrap {
     };
   }
 
-  /** S21 LV4: merchants whose volume level changed today (the recomputation's audit entries). */
+  /** S23 AD6: merchants whose effective tier changed today (`merchant_tier_changes`). */
   private async merchantLevelsLine(db: Database | Transaction, dayStart: SQL) {
     const [row] = await db
-      .select({ count: sql<number>`count(distinct ${auditEntries.entityId})::int` })
-      .from(auditEntries)
-      .where(
-        and(
-          eq(auditEntries.action, 'merchant.level_changed'),
-          gte(auditEntries.occurredAt, dayStart),
-        ),
-      );
+      .select({ count: sql<number>`count(distinct ${merchantTierChanges.customerId})::int` })
+      .from(merchantTierChanges)
+      .where(gte(merchantTierChanges.createdAt, dayStart));
     return row?.count ?? 0;
   }
 

@@ -5,18 +5,7 @@ import {
   type PriceListKind,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import {
-  type AnyColumn,
-  and,
-  asc,
-  desc,
-  eq,
-  ilike,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { type AnyColumn, and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { Executor } from '../client.js';
 import { receiptSettingsOf } from '../merchant-tools/counter.js';
 import {

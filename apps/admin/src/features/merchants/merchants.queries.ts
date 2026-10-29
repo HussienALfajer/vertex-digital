@@ -7,7 +7,6 @@ import {
 } from '@tanstack/react-query';
 import type {
   GrantMerchant,
-  MerchantLevelInput,
   MerchantSettingsInput,
   RemoveMerchantLogo,
   RevokeMerchant,
@@ -81,10 +80,10 @@ export const merchantsQuery = (search: MerchantsSearch) =>
     placeholderData: keepPreviousData,
   });
 
-/** S21 LV1: the levels with their merchants, live first by threshold. */
-export const merchantLevelsQuery = queryOptions({
-  queryKey: ['merchants', 'levels'],
-  queryFn: () => call(api.GET('/api/admin/merchant-levels')),
+/** S23: the four tiers with their live levels, settings and merchants, Bronze first. */
+export const merchantTiersQuery = queryOptions({
+  queryKey: ['merchants', 'tiers'],
+  queryFn: () => call(api.GET('/api/admin/merchant-tiers')),
 });
 
 export const merchantSettingsQuery = queryOptions({
@@ -174,22 +173,6 @@ export const useRevokeMerchant = (customerId: string) =>
         body,
       }),
     ),
-  );
-
-/** S21 LV1, LV6: a level's change requeues every merchant; re-authenticated. */
-export const useCreateMerchantLevel = () =>
-  useMerchantsMutation((body: MerchantLevelInput) =>
-    call(api.POST('/api/admin/merchant-levels', { body })),
-  );
-
-export const useUpdateMerchantLevel = (id: string) =>
-  useMerchantsMutation((body: MerchantLevelInput) =>
-    call(api.PATCH('/api/admin/merchant-levels/{id}', { params: { path: { id } }, body })),
-  );
-
-export const useArchiveMerchantLevel = () =>
-  useMerchantsMutation((id: string) =>
-    call(api.POST('/api/admin/merchant-levels/{id}/archive', { params: { path: { id } } })),
   );
 
 export const useSaveMerchantSettings = () =>

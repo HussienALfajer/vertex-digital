@@ -1,7 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
   type AccountType,
-  type TierQuantities,
   type AuditChannel,
   availabilityForCustomer,
   ORDER_NUMBER_ALPHABET,
@@ -16,6 +15,7 @@ import {
   RESERVATIONS_MAX,
   rateFromNumeric,
   sypDisplayPrice,
+  type TierQuantities,
 } from '@vertex-digital/contracts';
 import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { PgInsertValue } from 'drizzle-orm/pg-core';

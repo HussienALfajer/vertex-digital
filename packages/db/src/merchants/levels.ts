@@ -23,8 +23,6 @@ import { lockCustomer } from '../customers/state.js';
 import { findCustomerWallet } from '../ledger/wallet.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { cancelReservation } from '../orders/reservations.js';
-import { queueTelegramMessage } from '../telegram/queue-telegram-message.js';
-import { levelTier, liveTierLevels, openTierGrant, recordTierChange } from './tiers.js';
 import {
   customers,
   ledgerJournals,
@@ -35,6 +33,8 @@ import {
   orders,
   priceLists,
 } from '../schema/index.js';
+import { queueTelegramMessage } from '../telegram/queue-telegram-message.js';
+import { levelTier, liveTierLevels, openTierGrant, recordTierChange } from './tiers.js';
 
 /*
  * Volume levels (S21 F39, LV1–LV7, ADR 0036): a merchant's level follows their net wallet purchases

@@ -17,14 +17,7 @@ import {
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RatesService } from '../src/modules/rates/index.js';
-import {
-  api,
-  PASSWORD,
-  removeAccounts,
-  seedCustomer,
-  setSwitches,
-  totp,
-} from './helpers.js';
+import { api, PASSWORD, removeAccounts, seedCustomer, setSwitches, totp } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
 /*

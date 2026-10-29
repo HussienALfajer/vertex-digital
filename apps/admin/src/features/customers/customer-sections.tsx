@@ -679,9 +679,7 @@ function MerchantFacts({
         <Fact label={t('merchants.profile.level')}>
           {merchant.level ? (
             <span className="flex flex-col gap-0.5">
-              <Link to="/merchants/levels" className="underline-offset-4 hover:underline">
-                {merchant.level.nameAr}
-              </Link>
+              <span>{merchant.level.nameAr}</span>
               {merchant.levelChangedAt && (
                 <span className="text-muted-foreground text-xs">
                   {t('merchants.profile.levelSince', { date: formatDate(merchant.levelChangedAt) })}

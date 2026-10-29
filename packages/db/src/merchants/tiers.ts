@@ -192,7 +192,12 @@ export async function tierMerchantCounts(
 export async function tierListRefs(
   db: Executor,
   ids: readonly string[],
-): Promise<Map<string, { id: string; name: string; parentListId: string | null; archived: boolean; kind: string }>> {
+): Promise<
+  Map<
+    string,
+    { id: string; name: string; parentListId: string | null; archived: boolean; kind: string }
+  >
+> {
   if (ids.length === 0) return new Map();
   const rows = await db
     .select({

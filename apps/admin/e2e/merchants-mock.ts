@@ -3,15 +3,16 @@ import {
   type AdminMerchantApplication,
   type AdminMerchantApplicationRow,
   type AdminMerchantRow,
+  type AdminMerchantTier,
   type ApplicationAction,
   applicationTransition,
   type Governorate,
   grantMerchantSchema,
   MERCHANT_SETTINGS_DEFAULTS,
+  MERCHANT_TIERS,
   type MerchantApplicationEventKind,
-  type MerchantLevel,
   type MerchantSettings,
-  merchantLevelInputSchema,
+  type MerchantTierView,
   merchantLimitsBelowMinimum,
   merchantMessageSchema,
   merchantSettingsInputSchema,
@@ -19,6 +20,7 @@ import {
   ROOT_PRICE_LIST_IDS,
   removeMerchantLogoSchema,
   revokeMerchantSchema,
+  TIER_SETTINGS_DEFAULTS,
 } from '@vertex-digital/contracts';
 import { type Answer, nextId } from './catalog-mock';
 import type { PriceListsMock } from './price-lists-mock';
@@ -59,9 +61,11 @@ interface StoredProfile {
   termsVersion: number | null;
   grantedAt: string;
   revokedAt: string | null;
-  /** S21 LV4: the level, set by a test (`setLevel`). */
+  /** S21 LV4: the level; S23 PR 1b sets it with the tier. */
   level: { id: string; nameAr: string } | null;
   levelChangedAt: string | null;
+  /** S23 AD5: the tier, Bronze by default. */
+  tier: AdminMerchantTier;
   thisMonthUsdUnits: number;
   previousMonthUsdUnits: number;
   watchCount: number;
@@ -82,8 +86,6 @@ const EVENTS: Record<ApplicationAction, MerchantApplicationEventKind> = {
 export class MerchantsMock {
   applications: AdminMerchantApplication[] = [];
   readonly profiles = new Map<string, StoredProfile>();
-  /** S21 LV1: the levels, live and archived. */
-  levels: Omit<MerchantLevel, 'merchantCount'>[] = [];
   settings: MerchantSettings = {
     ...MERCHANT_SETTINGS_DEFAULTS,
     minDepositUsdUnits: MIN_DEPOSIT,
@@ -282,14 +284,8 @@ export class MerchantsMock {
       if (open) this.move(open, 'grant', null);
       return { status: 200, json: this.profile(customerId) };
     }
-    if (key === 'GET /api/admin/merchant-levels') {
-      return { status: 200, json: { items: this.levelRows() } };
-    }
-    const level = path.match(/^\/api\/admin\/merchant-levels(?:\/([^/]+))?(\/archive)?$/);
-    if (level && (method === 'POST' || method === 'PATCH')) {
-      const refused = sensitive();
-      if (refused) return refused;
-      return this.changeLevel(method, level[1] ?? null, Boolean(level[2]), body);
+    if (key === 'GET /api/admin/merchant-tiers') {
+      return { status: 200, json: { items: this.tierRows() } };
     }
     if (key === 'GET /api/admin/merchant-settings') return { status: 200, json: this.settings };
     if (key === 'PUT /api/admin/merchant-settings') {
@@ -331,6 +327,14 @@ export class MerchantsMock {
       revokedAt: null,
       level: null,
       levelChangedAt: null,
+      tier: {
+        tier: 'bronze',
+        earnedTier: 'bronze',
+        source: null,
+        since: null,
+        openGrant: null,
+        grants: [],
+      },
       thisMonthUsdUnits: 180 * USD,
       previousMonthUsdUnits: 95 * USD,
       watchCount: 0,
@@ -402,67 +406,24 @@ export class MerchantsMock {
     };
   }
 
-  /** A test's level for a merchant (the worker's recomputation, LV4). */
-  setLevel(customerId: string, levelId: string | null): void {
-    const profile = this.profiles.get(customerId);
-    if (!profile) return;
-    const found = this.levels.find((row) => row.id === levelId);
-    profile.level = found ? { id: found.id, nameAr: found.nameAr } : null;
-    profile.levelChangedAt = NOW();
-  }
-
-  private levelRows(): MerchantLevel[] {
-    return [...this.levels]
-      .sort(
-        (a, b) =>
-          Number(a.archivedAt !== null) - Number(b.archivedAt !== null) ||
-          a.monthlyThresholdUsdUnits - b.monthlyThresholdUsdUnits,
-      )
-      .map((row) => ({
-        ...row,
-        merchantCount: [...this.profiles.values()].filter(
-          (profile) => profile.revokedAt === null && profile.level?.id === row.id,
+  /** S23: the four tiers with their seeded settings and no live level (PR 1b scripts them). */
+  private tierRows(): MerchantTierView[] {
+    const wholesale = this.priceLists.lists.find((list) => list.kind === 'wholesale');
+    return MERCHANT_TIERS.map((tier) => ({
+      tier,
+      level: null,
+      priceList:
+        tier === 'bronze' && wholesale
+          ? { id: wholesale.id, name: wholesale.name, parentListId: null, archived: false }
+          : null,
+      settings: { ...TIER_SETTINGS_DEFAULTS[tier], updatedAt: '2026-10-20T09:00:00.000Z' },
+      merchants: {
+        earned: [...this.profiles.values()].filter(
+          (profile) => profile.revokedAt === null && profile.tier.tier === tier,
         ).length,
-      }));
-  }
-
-  /** LV1, LV6: create, edit or archive under the contracts' schema and the live uniqueness. */
-  private changeLevel(method: string, id: string | null, archive: boolean, body: Body): Answer {
-    const current = id ? this.levels.find((row) => row.id === id && row.archivedAt === null) : null;
-    if (id && !current) return error(404, 'NOT_FOUND');
-    if (archive && current) {
-      current.archivedAt = NOW();
-      for (const profile of this.profiles.values()) {
-        if (profile.level?.id === current.id) profile.level = null;
-      }
-      return { status: 200, json: { ...current, merchantCount: 0 } };
-    }
-    const parsed = merchantLevelInputSchema.safeParse(body);
-    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
-    const list = this.priceLists.lists.find((row) => row.id === parsed.data.priceListId);
-    if (!list || (list.kind !== 'wholesale' && list.kind !== 'custom')) {
-      return error(400, 'VALIDATION_FAILED');
-    }
-    const live = this.levels.filter((row) => row.archivedAt === null && row.id !== id);
-    if (!id && live.length >= 10) return error(409, 'MERCHANT_LEVELS_LIMIT_REACHED');
-    if (live.some((row) => row.nameAr === parsed.data.nameAr)) {
-      return error(409, 'MERCHANT_LEVEL_NAME_TAKEN');
-    }
-    if (live.some((row) => row.monthlyThresholdUsdUnits === parsed.data.monthlyThresholdUsdUnits)) {
-      return error(409, 'MERCHANT_LEVEL_THRESHOLD_TAKEN');
-    }
-    const values = {
-      nameAr: parsed.data.nameAr,
-      monthlyThresholdUsdUnits: parsed.data.monthlyThresholdUsdUnits,
-      priceList: { id: list.id, name: list.name, priceKind: priceKindOf(list.kind) },
-    };
-    if (current) {
-      Object.assign(current, values);
-      return { status: 200, json: this.levelRows().find((row) => row.id === current.id) };
-    }
-    const created = { id: nextId(), ...values, createdAt: NOW(), archivedAt: null };
-    this.levels.push(created);
-    return { status: method === 'POST' ? 201 : 200, json: { ...created, merchantCount: 0 } };
+        granted: 0,
+      },
+    }));
   }
 
   private merchantRow(customerId: string, profile: StoredProfile): AdminMerchantRow {
@@ -478,6 +439,8 @@ export class MerchantsMock {
       priceList: { id: pricing.effectiveList.id, name: pricing.effectiveList.name },
       priceKind: priceKindOf(pricing.effectiveList.kind),
       level: profile.level,
+      tier: profile.tier.tier,
+      tierGranted: profile.tier.source === 'granted',
       termsAccepted: profile.termsVersion !== null,
       frozen: !!person?.frozenAt,
       grantedAt: profile.grantedAt,

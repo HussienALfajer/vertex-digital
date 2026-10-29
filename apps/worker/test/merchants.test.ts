@@ -1,4 +1,4 @@
-import { damascusMonth, monthRange } from '@vertex-digital/contracts';
+import { damascusMonth, monthRange, TIER_NAMES_AR } from '@vertex-digital/contracts';
 import {
   createDatabase,
   customers,
@@ -10,6 +10,7 @@ import {
   newId,
   postJournal,
   statementEmailMerchants,
+  type Transaction,
 } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -19,7 +20,9 @@ import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { ExpireApplicationsJob } from '../src/jobs/merchants/expire-applications.job.js';
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
 import { MerchantStatementEmailsJob } from '../src/jobs/merchants/statement-emails.job.js';
+import { MerchantTierGrantsJob } from '../src/jobs/merchants/tier-grants.job.js';
 import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
+import { renderPush } from '../src/jobs/push/push-texts.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
 
 /*
@@ -291,6 +294,163 @@ describe('one failing merchant in the merchant jobs (audit A06-33)', () => {
   });
 });
 
+class Rollback extends Error {}
+
+/** `work` on a transaction that is rolled back, with the live tier levels moved aside in it. */
+async function inRollback(work: (tx: Transaction) => Promise<void>): Promise<void> {
+  await db
+    .transaction(async (tx) => {
+      await tx.execute(sql`update merchant_levels set archived_at = now()
+        where archived_at is null`);
+      await work(tx);
+      throw new Rollback();
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof Rollback)) throw error;
+    });
+}
+
+describe('merchant tiers in the worker (S23 TR6, MG4, MG5, PG5)', () => {
+  const DAY = 86_400_000;
+  /** A live Gold level out of reach, on the wholesale list. */
+  const goldLevel = async (tx: Transaction) => {
+    const [list] = (
+      await tx.execute<{ id: string }>(
+        sql`select id from price_lists where kind = 'wholesale' and archived_at is null limit 1`,
+      )
+    ).rows;
+    await tx.execute(sql`insert into merchant_levels
+      (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)
+      values (${newId()}, 'gold', ${TIER_NAMES_AR.gold}, 1000000000000, ${list?.id})`);
+  };
+  /** An open Gold grant of `shop` ending at `endsAt`. */
+  const goldGrant = async (tx: Transaction, shop: string, endsAt: Date) => {
+    const id = newId();
+    await tx.execute(sql`insert into merchant_tier_grants
+      (id, customer_id, tier, starts_at, ends_at, reason, admin_id)
+      values (${id}, ${shop}, 'gold', ${new Date(endsAt.getTime() - 5 * DAY).toISOString()},
+        ${endsAt.toISOString()}, 'شريك جديد في المدينة', ${newId()})`);
+    return id;
+  };
+  const changes = async (tx: Transaction, shop: string) =>
+    (
+      await tx.execute(sql`select from_tier, to_tier, source from merchant_tier_changes
+        where customer_id = ${shop} order by created_at, id`)
+    ).rows;
+  const telegram = async (tx: Transaction, kind: string, shop: string) =>
+    (
+      await tx.execute(sql`select dedupe_key from telegram_messages
+        where kind = ${kind} and params->>'customerId' = ${shop}`)
+    ).rows;
+
+  it("merchants.level records the payload's cause on the change row (TR6)", async () => {
+    const shop = await merchant();
+    await inRollback(async (tx) => {
+      await goldLevel(tx);
+      await goldGrant(tx, shop, new Date(Date.now() + 10 * DAY));
+      const job = new MerchantLevelJob(pgBoss, tx as unknown as Database);
+      expect(await job.recompute(shop, new Date(), 'tiers_changed')).toMatchObject({
+        changed: true,
+        tierAfter: 'gold',
+      });
+      expect(await job.recompute(shop, new Date(), 'tiers_changed')).toEqual({ changed: false });
+      expect(await changes(tx, shop)).toEqual([
+        { from_tier: 'bronze', to_tier: 'gold', source: 'tiers_changed' },
+      ]);
+    });
+  });
+
+  it('merchants.tier-grants ends a due grant and reminds an ending one, once each (MG4, MG5)', async () => {
+    const [due, ending] = [await merchant(), await merchant()];
+    await inRollback(async (tx) => {
+      const now = new Date();
+      await goldLevel(tx);
+      const dueGrant = await goldGrant(tx, due, new Date(now.getTime() - 60_000));
+      const endingGrant = await goldGrant(tx, ending, new Date(now.getTime() + 2 * DAY));
+      const levels = new MerchantLevelJob(pgBoss, tx as unknown as Database);
+      await levels.recompute(due, new Date(now.getTime() - 2 * 60_000));
+      await levels.recompute(ending, now);
+      const job = new MerchantTierGrantsJob(pgBoss, tx as unknown as Database);
+      const first = await job.run(now);
+      expect(first.expired).toEqual([dueGrant]);
+      expect(first.reminded).toBeGreaterThanOrEqual(1);
+      expect(await job.run(now)).toEqual({ expired: [], reminded: 0 });
+
+      expect(await changes(tx, due)).toEqual([
+        { from_tier: 'bronze', to_tier: 'gold', source: 'granted' },
+        { from_tier: 'gold', to_tier: 'bronze', source: 'grant_ended' },
+      ]);
+      const [grant] = (
+        await tx.execute(sql`select end_reason from merchant_tier_grants where id = ${dueGrant}`)
+      ).rows;
+      expect(grant).toEqual({ end_reason: 'expired' });
+      expect(await telegram(tx, 'merchant_tier_changed', due)).toHaveLength(2);
+      expect(await telegram(tx, 'merchant_tier_grant_ending', ending)).toEqual([
+        { dedupe_key: `grant-ending:${endingGrant}` },
+      ]);
+      expect(await changes(tx, ending)).toEqual([
+        { from_tier: 'bronze', to_tier: 'gold', source: 'granted' },
+      ]);
+    });
+  });
+
+  it('merchants.level-schedule recomputes each merchant and records the month once (PG5)', async () => {
+    const shop = await merchant();
+    const month = damascusMonth(new Date());
+    const nextFirst = new Date(monthRange(month).end.getTime() + 10 * 60 * 1000);
+    const months = async () =>
+      (
+        await db.execute(sql`select to_char(month, 'YYYY-MM') as month, earned_tier, held_tier
+          from merchant_tier_months where customer_id = ${shop}`)
+      ).rows;
+    const job = new MerchantLevelJob(pgBoss, db);
+    expect(await job.monthly(nextFirst)).toBeGreaterThanOrEqual(1);
+    expect(await job.monthly(nextFirst)).toBeGreaterThanOrEqual(1);
+    expect(await months()).toEqual([{ month, earned_tier: 'bronze', held_tier: 'bronze' }]);
+
+    // A failing merchant does not stop the others; the run then fails naming them.
+    const { db: failing, state } = poisoned(0);
+    const merchants = await new MerchantLevelJob(pgBoss, db).monthly(nextFirst);
+    await expect(new MerchantLevelJob(pgBoss, failing).monthly(nextFirst)).rejects.toThrow(
+      'Merchant level schedule failed for 1 merchants',
+    );
+    expect(state.calls).toBeGreaterThanOrEqual(merchants);
+  });
+
+  it('names the tier in the Telegram messages and the summary line (TR8, MG5, AD6)', () => {
+    const customerId = newId();
+    const changed = renderTelegramMessage(
+      'merchant_tier_changed',
+      {
+        customerId,
+        tradeName: 'محل النور',
+        from: 'silver',
+        to: 'gold',
+        source: 'earned',
+        thisMonthUsdUnits: 1_250_000_000,
+        previousMonthUsdUnits: 400_000_000,
+      },
+      LINKS,
+    ).text;
+    expect(changed).toContain('محل النور: تاجر فضي ← تاجر ذهبي (بحسب المشتريات)');
+    expect(changed).toContain('$1,250.00');
+    expect(changed).toContain(`https://admin.example/customers/${customerId}`);
+    const ending = renderTelegramMessage(
+      'merchant_tier_grant_ending',
+      {
+        customerId,
+        tradeName: 'محل النور',
+        tier: 'diamond',
+        endsAt: '2030-01-10T21:59:59.000Z',
+        earnedTier: 'bronze',
+      },
+      LINKS,
+    ).text;
+    expect(ending).toContain('تنتهي فئة تاجر ماسي الممنوحة لـ محل النور');
+    expect(ending).toContain('فئة تاجر برونزي');
+  });
+});
+
 describe('merchants.statement-emails (S21 ST4)', () => {
   it('tells a merchant with entries of the month once, and no one without', async () => {
     const job = new MerchantStatementEmailsJob(pgBoss, db);
@@ -353,6 +513,32 @@ describe('the merchant tools emails (S21)', () => {
         store,
       ).text,
     ).toContain('لم يعد حسابك ضمن أي مستوى');
+  });
+
+  it('names the tier when the notification carries it (S23 TR6)', () => {
+    const up = renderEmail(
+      'customer_merchant_level_changed',
+      { levelNameAr: 'ذهبي', priceKind: 'wholesale', direction: 'up', tier: 'gold' },
+      store,
+    );
+    expect(up.subject).toContain('تاجر ذهبي');
+    expect(up.text).toContain('ارتقت فئة حسابك إلى');
+    expect(up.text).toContain('أسعار الجملة');
+    const down = renderEmail(
+      'customer_merchant_level_changed',
+      { levelNameAr: null, priceKind: 'wholesale', direction: 'down', tier: 'bronze' },
+      store,
+    );
+    expect(down.text).toContain('أصبحت فئة حسابك');
+    expect(down.text).toContain('تاجر برونزي');
+    expect(
+      renderPush('merchant_level_changed', {
+        levelNameAr: null,
+        priceKind: 'wholesale',
+        direction: 'down',
+        tier: 'bronze',
+      }).body,
+    ).toBe('فئة حسابك الآن: تاجر برونزي');
   });
 
   it('gives the balance and the threshold, and lists a day of changes', () => {

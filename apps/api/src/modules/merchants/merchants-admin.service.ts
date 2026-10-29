@@ -4,6 +4,7 @@ import {
   type AdminMerchantApplication,
   type AdminMerchantApplicationPage,
   type AdminMerchantPage,
+  accountPriceKind,
   applicationTransition,
   DEPOSIT_SETTINGS_DEFAULTS,
   type GrantMerchant,
@@ -11,7 +12,6 @@ import {
   type MerchantListQuery,
   type MerchantSettings,
   type MerchantSettingsInput,
-  accountPriceKind,
   merchantLimitsBelowMinimum,
 } from '@vertex-digital/contracts';
 import {

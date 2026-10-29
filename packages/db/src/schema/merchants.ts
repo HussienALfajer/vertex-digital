@@ -216,9 +216,7 @@ export const merchantLevels = pgTable(
     uniqueIndex('merchant_levels_threshold_idx')
       .on(table.monthlyThresholdUsdUnits)
       .where(sql`${table.archivedAt} is null`),
-    uniqueIndex('merchant_levels_tier_idx')
-      .on(table.tier)
-      .where(sql`${table.archivedAt} is null`),
+    uniqueIndex('merchant_levels_tier_idx').on(table.tier).where(sql`${table.archivedAt} is null`),
     index('merchant_levels_price_list_id_idx').on(table.priceListId),
     check(
       'merchant_levels_check',
@@ -439,9 +437,6 @@ export const merchantTierMonths = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.customerId, table.month] }),
-    check(
-      'merchant_tier_months_check',
-      sql`extract(day from ${table.month}) = 1`,
-    ),
+    check('merchant_tier_months_check', sql`extract(day from ${table.month}) = 1`),
   ],
 );

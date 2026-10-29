@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  accountPriceKind,
   costChangeBasisPoints,
   createPriceListSchema,
   decideReviewsSchema,
   effectivePriceListId,
   isProfitable,
   listChain,
-  accountPriceKind,
   listPrice,
-  parentCappedPrice,
   type MarginRuleValues,
   marginBasisPoints,
   marginRuleListQuerySchema,
   matrixCellWarnings,
   needsReview,
   PRICE_LIST_MAX_DEPTH,
+  parentCappedPrice,
   priceFromCost,
   priceKindOf,
   priceMatrixQuerySchema,
@@ -474,12 +474,9 @@ describe('the parent cap (S23 PX2)', () => {
 
   it('prices the ladder a cent apart on 60 UC (acceptance 1)', () => {
     const cost = 887_000;
-    const prices = [
-      rule(500, 50_000),
-      rule(400, 40_000),
-      rule(300, 30_000),
-      rule(200, 20_000),
-    ].map((values) => listPrice(cost, { fixedPriceUsdUnits: null, rule: values }, retail));
+    const prices = [rule(500, 50_000), rule(400, 40_000), rule(300, 30_000), rule(200, 20_000)].map(
+      (values) => listPrice(cost, { fixedPriceUsdUnits: null, rule: values }, retail),
+    );
     expect(prices.map((price) => price.priceUsdUnits)).toEqual([
       usd(0.94),
       usd(0.93),

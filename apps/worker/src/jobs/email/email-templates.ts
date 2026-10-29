@@ -11,6 +11,7 @@ import {
   type PriceKind,
   type RefundReason,
   type StorePlacedPurpose,
+  TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 
 /*
@@ -407,18 +408,35 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: { label: 'عرض حسابي', path: '/account' },
   }),
-  customer_merchant_level_changed: ({ levelNameAr, priceKind, direction }) => ({
-    subject: levelNameAr === null ? 'تغيّر مستوى حساب التاجر' : `مستواك الآن: ${named(levelNameAr)}`,
-    lines: [
-      levelNameAr === null
-        ? 'لم يعد حسابك ضمن أي مستوى لهذا الشهر.'
-        : direction === 'up'
-          ? `بلغت مشترياتك مستوى ${named(levelNameAr)}.`
-          : `أصبح مستوى حسابك ${named(levelNameAr)} بحسب مشتريات الشهر الماضي.`,
-      `تظهر لك ${PRICE_KIND_LABELS[priceKind]} في صفحات الألعاب من الآن.`,
-    ],
-    link: { label: 'لوحة التاجر', path: '/merchant' },
-  }),
+  customer_merchant_level_changed: ({ levelNameAr, priceKind, direction, tier }) => {
+    const kind = `تظهر لك ${PRICE_KIND_LABELS[priceKind]} في صفحات الألعاب من الآن.`;
+    const link = { label: 'لوحة التاجر', path: '/merchant' };
+    // S23 TR6: the tier; a notification written before S23 carries only the level's name.
+    if (tier !== undefined) {
+      const name = named(`تاجر ${TIER_NAMES_AR[tier]}`);
+      return {
+        subject: `فئة حسابك الآن: ${name}`,
+        lines: [
+          direction === 'up' ? `ارتقت فئة حسابك إلى ${name}.` : `أصبحت فئة حسابك ${name}.`,
+          kind,
+        ],
+        link,
+      };
+    }
+    return {
+      subject:
+        levelNameAr === null ? 'تغيّر مستوى حساب التاجر' : `مستواك الآن: ${named(levelNameAr)}`,
+      lines: [
+        levelNameAr === null
+          ? 'لم يعد حسابك ضمن أي مستوى لهذا الشهر.'
+          : direction === 'up'
+            ? `بلغت مشترياتك مستوى ${named(levelNameAr)}.`
+            : `أصبح مستوى حسابك ${named(levelNameAr)} بحسب مشتريات الشهر الماضي.`,
+        kind,
+      ],
+      link,
+    };
+  },
   customer_merchant_low_balance: ({ balanceUsdUnits, thresholdUsdUnits, at }) => ({
     subject: 'رصيدك أقل من الحد الذي حددته',
     lines: [

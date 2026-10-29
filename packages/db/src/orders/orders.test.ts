@@ -7,8 +7,8 @@ import {
   priceFromCost,
   QUEUES,
   ROOT_PRICE_LIST_IDS,
-  TIER_NAMES_AR,
   statementBalances,
+  TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -4112,7 +4112,11 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       recomputeMerchantLevel(tx, { jobs: context().jobs, now: new Date() }, customerId),
     );
   // S23: one live level per tier; these tests use Silver and Gold (the repricing tests Diamond).
-  const level = async (threshold: number, priceListId: string, tier: 'silver' | 'gold' = 'silver') => {
+  const level = async (
+    threshold: number,
+    priceListId: string,
+    tier: 'silver' | 'gold' = 'silver',
+  ) => {
     const id = newId();
     await pool.query(
       `insert into merchant_levels (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)

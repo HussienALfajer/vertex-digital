@@ -26,7 +26,7 @@ import { errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import { Picker } from '../pricing/picker';
 import { RevokeMerchantDialog, useListItems } from './merchant-dialogs';
-import { merchantLevelsQuery, merchantsQuery } from './merchants.queries';
+import { merchantsQuery, merchantTiersQuery } from './merchants.queries';
 import type { MerchantsSearch } from './merchants-search';
 
 const ALL = 'all';
@@ -46,14 +46,14 @@ export function MerchantsPage({
   const list = useInfiniteQuery(merchantsQuery(search));
   const { items: listItems, lists: listsRead } = useListItems();
   const lists = [{ value: ALL, label: t('merchants.list.allLists') }, ...listItems];
-  // S21: the live levels, and the merchants without one.
-  const levels = useQuery(merchantLevelsQuery);
+  // S23: the tiers' live levels, and the merchants without one (Bronze).
+  const levels = useQuery(merchantTiersQuery);
   const levelItems = [
     { value: ALL, label: t('merchants.list.allLevels') },
     { value: 'none', label: t('merchants.list.noLevel') },
-    ...(levels.data?.items ?? [])
-      .filter((level) => level.archivedAt === null)
-      .map((level) => ({ value: level.id, label: level.nameAr })),
+    ...(levels.data?.items ?? []).flatMap((row) =>
+      row.level ? [{ value: row.level.id, label: t(`merchants.tierNames.${row.tier}`) }] : [],
+    ),
   ];
   const rows = list.data?.pages.flatMap((page) => page.items) ?? [];
   const [revoking, setRevoking] = useState<AdminMerchantRow | null>(null);

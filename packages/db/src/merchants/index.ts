@@ -56,6 +56,7 @@ export {
   merchantPage,
   merchantProfileOf,
 } from './reads.js';
+export { setupMerchantTiers, type TierSetupReport } from './setup.js';
 export {
   currentTierSettings,
   type LiveTierLevel,
@@ -74,4 +75,3 @@ export {
   tierMerchants,
   tierQuantities,
 } from './tiers.js';
-export { setupMerchantTiers, type TierSetupReport } from './setup.js';

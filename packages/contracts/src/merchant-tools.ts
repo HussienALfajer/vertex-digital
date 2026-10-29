@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import type { ProductKind } from './catalog.js';
 import { zoneDate, zoneDayStart, zoneMonthStart, zoneYearMonth } from './deposits.js';
-import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING } from './merchant-tiers.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING } from './merchant-tiers.js';
 import { merchantLevelRefSchema } from './merchants.js';
 import {
   amountUnitsSchema,
