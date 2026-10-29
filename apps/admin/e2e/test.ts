@@ -1138,7 +1138,8 @@ export class AdminApi {
     ) {
       const answer = this.catalog.answer(request.method(), url, body);
       if (answer && 'image' in answer) {
-        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+        const bytes = answer.image === true ? PNG : answer.image;
+        return route.fulfill({ status: 200, contentType: 'image/png', body: bytes });
       }
       if (answer && 'json' in answer) return json(answer.status, answer.json);
       if (answer) return route.fulfill({ status: answer.status });

@@ -38,7 +38,7 @@ type Body = Record<string, unknown> | null;
 /** What a route answers: a status and a JSON body, an image, or nothing. */
 export type Answer =
   | { status: number; json?: unknown }
-  | { status: 200; image: true }
+  | { status: 200; image: true | Buffer }
   | { status: 204 };
 
 /** What the API derives rather than stores (S06 counts; S07 a product's price and availability). */
@@ -132,6 +132,8 @@ export class CatalogMock {
   fields: Row<InputField>[] = [];
   products: Row<Product>[] = [];
   images = new Map<string, CatalogImage>();
+  /** An image's bytes (a PNG) when a test needs a real picture; others answer a 1×1 PNG. */
+  readonly imageBodies = new Map<string, Buffer>();
   /** S06's global rule, and S20's wholesale and cost rules (`seedRootListRules`). */
   rules: StoredRule[] = [
     [ROOT_PRICE_LIST_IDS.retail, 1000, 100_000],
@@ -194,11 +196,13 @@ export class CatalogMock {
     nameAr: string;
     nameEn: string;
     status?: 'active' | 'paused';
-    cover?: boolean;
+    /** A cover, with its PNG bytes when the test needs a real picture. */
+    cover?: boolean | Buffer;
   }): StoredGame {
     const category = this.categories.find((item) => item.slug === values.categorySlug);
     if (!category) throw new Error(`No category ${values.categorySlug}`);
     const cover = values.cover ? this.upload() : null;
+    if (cover && Buffer.isBuffer(values.cover)) this.imageBodies.set(cover.id, values.cover);
     const game: StoredGame = {
       id: nextId(),
       categoryId: category.id,
@@ -460,8 +464,9 @@ export class CatalogMock {
     const match = (pattern: RegExp) => path.match(pattern)?.[1];
 
     if (method === 'GET' && match(/^\/api\/catalog\/images\/([^/]+)$/)) {
-      return this.images.has(match(/^\/api\/catalog\/images\/([^/]+)$/) as string)
-        ? { status: 200, image: true }
+      const id = match(/^\/api\/catalog\/images\/([^/]+)$/) as string;
+      return this.images.has(id)
+        ? { status: 200, image: this.imageBodies.get(id) ?? true }
         : notFound();
     }
     if (key === 'POST /api/admin/catalog/images') return { status: 201, json: this.upload() };

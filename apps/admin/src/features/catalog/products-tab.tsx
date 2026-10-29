@@ -344,7 +344,9 @@ export function ProductsTab({ game }: { game: GameDetail }) {
         onClose={() => setRouting(null)}
       />
       <Dialog open={linking !== null} onOpenChange={(open) => !open && setLinking(null)}>
-        {linking !== null && <QuickLinkDialog product={linking} />}
+        {linking !== null && (
+          <QuickLinkDialog product={linking} gameName={game.nameAr} cover={game.cover} />
+        )}
       </Dialog>
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         {editing !== null && (

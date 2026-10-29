@@ -1,5 +1,6 @@
 export { AscentLines } from './brand/ascent-lines';
 export { VertexLogo, VertexMark } from './brand/logo';
+export { logoShape } from './brand/logo-shapes';
 export { SuccessMark } from './brand/success-mark';
 export * from './components/activity-feed';
 export * from './components/alert-dialog';
