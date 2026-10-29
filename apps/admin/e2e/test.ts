@@ -255,6 +255,8 @@ export class AdminApi {
   adjustments: Adjustment[] = [];
   /** System accounts beside the adjustments' (deposits' receipts, exchange, rounding), set per test. */
   ledgerAccounts: LedgerSummary['systemAccounts'] = [];
+  /** What real customers' wallets hold beside `ledgerAccounts`, set per test with them. */
+  owedToCustomersUnits = 0;
   private readonly adjustmentKeys = new Map<string, Adjustment>();
   private pendingTwoFactor = false;
   /** The exchange rates, newest first: one set an hour ago, so the stale banner stays hidden. */
@@ -916,7 +918,7 @@ export class AdminApi {
       return json(200, { password: GENERATED_PASSWORD });
     }
     const walletPath = path.match(WALLET_PATH);
-    if (request.method() === 'GET' && walletPath) {
+    if (request.method() === 'GET' && walletPath && walletPath[1] !== 'highlights') {
       if (walletPath[1] !== CUSTOMER_ID) return apiError(404, 'NOT_FOUND');
       return json(200, {
         customer: WALLET_CUSTOMER,
@@ -1239,7 +1241,7 @@ export class AdminApi {
       case 'GET /api/admin/ledger/summary': {
         const owed = this.balanceUnits;
         return json(200, {
-          owedToCustomersUnits: 0,
+          owedToCustomersUnits: this.owedToCustomersUnits,
           owedToTestCustomersUnits: owed,
           walletsWithBalance: owed > 0 ? 1 : 0,
           systemAccounts: [...new Set(this.adjustments.map((item) => item.category))]
@@ -1256,6 +1258,18 @@ export class AdminApi {
                 ),
             }))
             .concat(this.ledgerAccounts),
+        });
+      }
+      case 'GET /api/admin/wallets/highlights': {
+        const last = this.adjustments.at(-1);
+        const wallet = {
+          ...WALLET_CUSTOMER,
+          balanceUnits: this.balanceUnits,
+          lastMovedAt: last?.createdAt ?? null,
+        };
+        return json(200, {
+          withBalance: wallet.balanceUnits > 0 ? [wallet] : [],
+          recentlyMoved: last ? [wallet] : [],
         });
       }
       case 'GET /api/admin/wallets': {

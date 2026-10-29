@@ -18,6 +18,12 @@ export const ledgerSummaryQuery = queryOptions({
   queryFn: () => call(api.GET('/api/admin/ledger/summary')),
 });
 
+/** The wallets page's lists below the search: the largest balances and the last to move. */
+export const walletHighlightsQuery = queryOptions({
+  queryKey: ['wallet', 'highlights'],
+  queryFn: () => call(api.GET('/api/admin/wallets/highlights')),
+});
+
 /** Email or phone prefix, or part of the name; 3 characters at least. */
 export const walletSearchQuery = (q: string) =>
   infiniteQueryOptions({

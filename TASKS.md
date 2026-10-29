@@ -1,10 +1,11 @@
-# TASKS — Price lists on "شراء من اللوحة" (owner, 2026-10-29)
+# TASKS — Wallets page in the owner's words (owner, 2026-10-29)
 
-- [x] Rule AP16: walk-in on a chosen list, gifts and compensations on the cost list, customer-paid on the customer's list (contract, db, API, tests)
-- [x] Pack cards: the supplier's price (or estimate), the margin and every list's price, the charged list marked
-- [x] The price list select (walk-in) and the charged-list line (gift, compensation, on behalf)
-- [x] E2E with RTL screenshots; S16 amended
-- [x] Reviewer (hash test added), `pnpm verify`
+- [x] One pure function places every system account kind in a group (held, owed, result, owner money, conversion pair) with its shown amount; unit tests
+- [x] Plain names with the supplier's name, the code only in the row's explanation; compensations and corrections apart
+- [x] Gross profit and net in the result, the balance badge per currency with the difference when not zero
+- [x] `GET /api/admin/wallets/highlights`: largest balances and the last wallets to move (contract, db read, API test), shown below the search
+- [x] E2E and RTL screenshots in light and dark
+- [x] Reviewer (five findings fixed), `pnpm verify`, browser check on the local stack
 
 ## Carried over (Close V1)
 
