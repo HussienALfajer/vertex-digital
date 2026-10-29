@@ -9,7 +9,7 @@ import {
   refundReasonSchema,
   STORE_PLACED_PURPOSES,
 } from './orders.js';
-import { priceKindSchema } from './price-kinds.js';
+import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -253,6 +253,8 @@ export const NOTIFICATION_PARAMS = {
     levelNameAr: z.string().nullable(),
     priceKind: priceKindSchema,
     direction: z.enum(['up', 'down']),
+    /** S23 TR6: the effective tier now (missing on notifications sent before S23). */
+    tier: merchantTierSchema.optional(),
   }),
   // S21 AL3: the counts of the hour's changes and up to five of them.
   merchant_watch_digest: z.object({

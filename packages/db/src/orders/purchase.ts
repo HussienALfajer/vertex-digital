@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import {
   type AccountType,
+  type TierQuantities,
   type AuditChannel,
   availabilityForCustomer,
   ORDER_NUMBER_ALPHABET,
@@ -263,6 +264,8 @@ export async function prepareLine(
     allowPaused?: boolean;
     /** S21 QT1: a merchant buys up to 50 codes of a code pack. */
     accountType: AccountType;
+    /** S23 TS5: the merchant's tier quantities (null for a customer). */
+    tierQuantities: TierQuantities | null;
   },
   line: LineInput,
   product: ProductRow,
@@ -287,7 +290,7 @@ export async function prepareLine(
       unitPriceUsdUnits: current.priceUsdUnits,
     });
   }
-  if (line.quantity > orderQuantityMax(product, common.accountType)) {
+  if (line.quantity > orderQuantityMax(product, common.accountType, common.tierQuantities)) {
     throw new OrderError('VALIDATION_FAILED', 'Quantity above the product maximum', {
       fields: { quantity: 'too_big' },
     });
@@ -448,6 +451,7 @@ export async function purchaseOrder(
       isTest: customer.isTest,
       priceListId: customer.priceListId,
       accountType: customer.accountType,
+      tierQuantities: customer.tierQuantities,
     },
     input,
     product,

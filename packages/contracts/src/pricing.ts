@@ -457,8 +457,16 @@ export function priceKindOf(kind: PriceListKind): PriceKind {
   return kind === 'cost' || kind === 'custom' ? 'special' : kind;
 }
 
-/** Where a list's price comes from (S20 LP1, LP2). */
-export const PRICE_SOURCES = ['rule', 'fixed', 'fixed_fallback', 'retail_cap'] as const;
+/**
+ * S23 PX6 (amends AT4): an account whose effective list is a live level's list (a tier list) reads
+ * "سعر الجملة"; every other list reads its kind's.
+ */
+export function accountPriceKind(kind: PriceListKind, tierList: boolean): PriceKind {
+  return tierList ? 'wholesale' : priceKindOf(kind);
+}
+
+/** Where a list's price comes from (S20 LP1, LP2; S23 PX2). */
+export const PRICE_SOURCES = ['rule', 'fixed', 'fixed_fallback', 'retail_cap', 'parent_cap'] as const;
 
 export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' });
 
@@ -560,8 +568,29 @@ export function resolveListEntry<
 export interface ListPrice {
   priceUsdUnits: number;
   source: PriceSource;
-  /** The minimum margin guarding the price: the rule's, or retail's when capped. */
+  /** The minimum margin guarding the price: the rule's, or the capping list's when capped. */
   minMarginUsdUnits: number;
+}
+
+/** A price another list caps at: its price and the minimum margin guarding it. */
+export interface CappingPrice {
+  priceUsdUnits: number;
+  minMarginUsdUnits: number;
+}
+
+/**
+ * S23 PX2: on a tier list, a price above the parent list's current price takes the parent's,
+ * source `parent_cap`, guarded by the parent's minimum margin. Without a parent price the list's own.
+ */
+export function parentCappedPrice(own: ListPrice, parent: CappingPrice | null): ListPrice {
+  if (parent && own.priceUsdUnits > parent.priceUsdUnits) {
+    return {
+      priceUsdUnits: parent.priceUsdUnits,
+      source: 'parent_cap',
+      minMarginUsdUnits: parent.minMarginUsdUnits,
+    };
+  }
+  return own;
 }
 
 /**
@@ -569,13 +598,16 @@ export interface ListPrice {
  * - a rule: `priceFromCost` (PR3), source `rule`;
  * - a fixed price covering cost plus its guarding rule's minimum margin: the fixed price, source
  *   `fixed`; otherwise the guarding rule's price, source `fixed_fallback` (decision 6);
+ * - a tier list (`parent` given, S23 PX2): above the parent list's price, the parent's, source
+ *   `parent_cap`;
  * - every list but retail (`retail` given): above the retail price, the retail price, source
  *   `retail_cap`, guarded by retail's minimum margin (decision 3).
  */
 export function listPrice(
   costUsdUnits: number,
   entry: { fixedPriceUsdUnits: number | null; rule: MarginRuleValues },
-  retail: { priceUsdUnits: number; minMarginUsdUnits: number } | null,
+  retail: CappingPrice | null,
+  parent: CappingPrice | null = null,
 ): ListPrice {
   let own: ListPrice;
   if (entry.fixedPriceUsdUnits === null) {
@@ -592,6 +624,7 @@ export function listPrice(
       minMarginUsdUnits: entry.rule.minMarginUsdUnits,
     };
   }
+  own = parentCappedPrice(own, parent);
   if (retail && own.priceUsdUnits > retail.priceUsdUnits) {
     return {
       priceUsdUnits: retail.priceUsdUnits,
@@ -820,7 +853,7 @@ export function matrixCellWarnings(cell: {
 }): PriceMatrixWarning[] {
   const warnings: PriceMatrixWarning[] = [];
   if (cell.source === 'fixed_fallback') warnings.push('fallback');
-  if (cell.source === 'retail_cap') warnings.push('capped');
+  if (cell.source === 'retail_cap' || cell.source === 'parent_cap') warnings.push('capped');
   if (
     cell.priceUsdUnits !== null &&
     cell.parentPriceUsdUnits !== null &&

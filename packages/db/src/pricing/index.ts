@@ -7,6 +7,7 @@ export {
   listIsPriced,
   listPricingFacts,
   listTarget,
+  listTargets,
   lockProductsForPricing,
   type RepriceResult,
   type RetailFigures,

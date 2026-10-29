@@ -359,9 +359,12 @@
       "ALREADY_MERCHANT": "الحساب تاجر بالفعل.",
       "NOT_MERCHANT": "الحساب ليس حساب تاجر.",
       "APPLICATION_STATE_INVALID": "حالة الطلب لا تسمح بهذا الإجراء، حدّث الصفحة.",
-      "MERCHANT_LEVELS_LIMIT_REACHED": "بلغت 10 مستويات غير مؤرشفة. أرشف مستوى أولاً.",
-      "MERCHANT_LEVEL_THRESHOLD_TAKEN": "لمستوى آخر الحدّ الشهري نفسه.",
-      "MERCHANT_LEVEL_NAME_TAKEN": "لمستوى آخر هذا الاسم.",
+      "MERCHANT_TIER_TAKEN": "لهذه الفئة مستوى آخر الآن. حدّث الصفحة.",
+      "MERCHANT_TIER_ORDER_INVALID": "يجب أن يرتفع الحدّ الشهري مع الفئة: الفضية أقل من الذهبية، والذهبية أقل من الماسية.",
+      "MERCHANT_TIER_LIST_INVALID": "قائمة الفئة يجب أن تكون قائمة مخصّصة غير مؤرشفة وترث من قائمة الفئة الأدنى.",
+      "MERCHANT_TIER_UNAVAILABLE": "لا مستوى فعّالاً لهذه الفئة.",
+      "MERCHANT_TIER_GRANT_NOT_HIGHER": "الفئة الممنوحة يجب أن تكون أعلى من الفئة التي يستحقها التاجر.",
+      "MERCHANT_TIER_GRANT_OPEN": "لدى التاجر فئة ممنوحة سارية. أنهِها أولاً.",
       "WATCHES_LIMIT_REACHED": "لا يمكن متابعة أكثر من 200 لعبة وباقة.",
       "BULK_LINES_INVALID": "قائمة الطلبات فارغة أو تتجاوز 50 سطراً.",
       "PLAYER_CHECK_QUOTA_EXCEEDED": "استُنفدت فحوص المعرّفات المسموحة حالياً. حاول لاحقاً.",
@@ -536,6 +539,7 @@
       "price_list": "قائمة أسعار",
       "merchant_application": "طلب تاجر",
       "merchant_settings": "إعدادات التجّار",
+      "merchant_tier_settings": "امتيازات فئة التجّار",
       "merchant_level": "مستوى تاجر"
     },
     "fields": {
@@ -821,6 +825,8 @@
       "merchant.terms_accepted": "موافقة التاجر على الشروط",
       "merchant.level_changed": "تغيّر مستوى تاجر",
       "merchant.logo_removed": "حذف شعار تاجر",
+      "merchant.tier_granted": "منح فئة لتاجر",
+      "merchant.tier_grant_ended": "انتهاء فئة ممنوحة لتاجر",
       "merchant_application.submitted": "تقديم طلب تاجر",
       "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
       "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
@@ -831,7 +837,9 @@
       "merchant_settings.changed": "تعديل إعدادات التجّار",
       "merchant_level.created": "إضافة مستوى تاجر",
       "merchant_level.updated": "تعديل مستوى تاجر",
-      "merchant_level.archived": "أرشفة مستوى تاجر"
+      "merchant_level.archived": "أرشفة مستوى تاجر",
+      "merchant_tier.level_changed": "تعديل حدّ أو قائمة فئة تجّار",
+      "merchant_tier.settings_changed": "تعديل امتيازات فئة تجّار"
     }
   },
   "testCustomers": {

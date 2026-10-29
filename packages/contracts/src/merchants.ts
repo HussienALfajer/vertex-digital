@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { amountUnitsSchema, isWholeCents, USD_CENT } from './money.js';
-import { priceKindSchema } from './price-kinds.js';
+import { adminMerchantTierSchema } from './merchant-tiers.js';
+import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
 
 /*
  * Merchant accounts (S20 F28, ADR 0035), owned by the api `merchants` module: the application and
@@ -520,6 +521,8 @@ export const adminMerchantProfileSchema = z
     /** S21 LV4: the volume level and since when; null for none. */
     level: merchantLevelRefSchema.nullable(),
     levelChangedAt: z.iso.datetime().nullable(),
+    /** S23 AD5: the effective and earned tiers, the source and the grants. */
+    tier: adminMerchantTierSchema,
     /** S21 LV2: net wallet purchases of this and the previous Damascus month. */
     thisMonthUsdUnits: z.int(),
     previousMonthUsdUnits: z.int(),
@@ -543,6 +546,8 @@ export const merchantListQuerySchema = cursorQuerySchema
     listId: z.uuid().optional(),
     /** S21: a level's merchants, or `none` for merchants without a level. */
     levelId: z.union([z.uuid(), z.literal('none')]).optional(),
+    /** S23 AD1: the merchants holding a tier now, or `granted` for a granted tier. */
+    tier: z.union([merchantTierSchema, z.literal('granted')]).optional(),
   })
   .meta({ id: 'MerchantListQuery' });
 
@@ -561,6 +566,9 @@ export const adminMerchantRowSchema = z
     priceKind: priceKindSchema,
     /** S21 LV4. */
     level: merchantLevelRefSchema.nullable(),
+    /** S23 AD1: the effective tier and whether it is granted. */
+    tier: merchantTierSchema,
+    tierGranted: z.boolean(),
     termsAccepted: z.boolean(),
     frozen: z.boolean(),
     grantedAt: z.iso.datetime(),

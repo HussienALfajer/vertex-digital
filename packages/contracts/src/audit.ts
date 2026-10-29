@@ -16,6 +16,14 @@ import {
   usdtTxidSourceSchema,
 } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import {
+  levelSourceSchema,
+  levelTierSchema,
+  merchantTierSchema,
+  tierGrantEndReasonSchema,
+  tierLevelValuesSchema,
+  tierSettingsInputSchema,
+} from './merchant-tiers.js';
 import { merchantLevelInputSchema } from './merchant-tools.js';
 import { merchantSettingsInputSchema } from './merchants.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
@@ -85,6 +93,7 @@ export const AUDIT_ENTITY_TYPES = [
   'merchant_application',
   'merchant_settings',
   'merchant_level',
+  'merchant_tier_settings',
   'supplier',
   'supplier_policy',
   'supplier_offer',
@@ -386,6 +395,23 @@ export const AUDIT_DETAILS = {
     thisMonthUsdUnits: z.int(),
     listChanged: z.boolean(),
     cancelledOrderIds: z.array(z.uuid()),
+    /** S23 TR6: the effective tiers, the earned level after and where the effective one comes from. */
+    tierBefore: merchantTierSchema,
+    tierAfter: merchantTierSchema,
+    earnedLevelIdAfter: z.uuid().nullable(),
+    source: levelSourceSchema.nullable(),
+  }),
+  /** S23 MG1: the grant; the admin's reason is the entry's `reason`. */
+  'merchant.tier_granted': z.strictObject({
+    grantId: z.uuid(),
+    tier: levelTierSchema,
+    endsAt: z.iso.datetime(),
+  }),
+  /** S23 MG3, MG4, MG7, TR9: the admin's reason (MG3) is the entry's `reason`. */
+  'merchant.tier_grant_ended': z.strictObject({
+    grantId: z.uuid(),
+    tier: levelTierSchema,
+    endReason: tierGrantEndReasonSchema,
   }),
   /** S21 BR3: the admin removed a merchant's receipt logo, with the reason. */
   'merchant.logo_removed': z.strictObject({ fileId: z.uuid(), reason: z.string() }),
@@ -624,6 +650,18 @@ export const AUDIT_DETAILS = {
     after: z.strictObject(merchantLevelInputSchema.shape),
   }),
   'merchant_level.archived': z.strictObject(merchantLevelInputSchema.shape),
+  /** S23 TS1: a tier's level created, changed or archived (null: none). */
+  'merchant_tier.level_changed': z.strictObject({
+    tier: levelTierSchema,
+    before: z.strictObject(tierLevelValuesSchema.shape).nullable(),
+    after: z.strictObject(tierLevelValuesSchema.shape).nullable(),
+  }),
+  /** S23 TS1: a tier's privileges before and after. */
+  'merchant_tier.settings_changed': z.strictObject({
+    tier: merchantTierSchema,
+    before: z.strictObject(tierSettingsInputSchema.shape),
+    after: z.strictObject(tierSettingsInputSchema.shape),
+  }),
   'merchant_settings.changed': z.strictObject({
     before: z.strictObject(merchantSettingsInputSchema.shape),
     after: z.strictObject(merchantSettingsInputSchema.shape),

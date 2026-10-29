@@ -6,7 +6,9 @@ import {
   effectivePriceListId,
   isProfitable,
   listChain,
+  accountPriceKind,
   listPrice,
+  parentCappedPrice,
   type MarginRuleValues,
   marginBasisPoints,
   marginRuleListQuerySchema,
@@ -459,6 +461,72 @@ describe('listPrice (S20 LP1–LP4)', () => {
     expect(
       listPrice(usd(1), { fixedPriceUsdUnits: usd(2), rule: wholesale }, retail),
     ).toMatchObject({ priceUsdUnits: usd(1.1), source: 'retail_cap' });
+  });
+});
+
+describe('the parent cap (S23 PX2)', () => {
+  const rule = (percentBp: number, minMarginUsdUnits: number): MarginRuleValues => ({
+    percentBp,
+    fixedUsdUnits: 0,
+    minMarginUsdUnits,
+  });
+  const retail = { priceUsdUnits: usd(0.97), minMarginUsdUnits: 50_000 };
+
+  it('prices the ladder a cent apart on 60 UC (acceptance 1)', () => {
+    const cost = 887_000;
+    const prices = [
+      rule(500, 50_000),
+      rule(400, 40_000),
+      rule(300, 30_000),
+      rule(200, 20_000),
+    ].map((values) => listPrice(cost, { fixedPriceUsdUnits: null, rule: values }, retail));
+    expect(prices.map((price) => price.priceUsdUnits)).toEqual([
+      usd(0.94),
+      usd(0.93),
+      usd(0.92),
+      usd(0.91),
+    ]);
+  });
+
+  it('takes the parent price when its own is above it, guarded by the parent minimum', () => {
+    const parent = { priceUsdUnits: usd(1.03), minMarginUsdUnits: 30_000 };
+    expect(
+      listPrice(usd(1), { fixedPriceUsdUnits: usd(1.06), rule: rule(200, 20_000) }, retail, parent),
+    ).toEqual({ priceUsdUnits: usd(0.97), source: 'retail_cap', minMarginUsdUnits: 50_000 });
+    expect(
+      listPrice(
+        usd(1),
+        { fixedPriceUsdUnits: usd(1.06), rule: rule(200, 20_000) },
+        { priceUsdUnits: usd(2), minMarginUsdUnits: 10_000 },
+        parent,
+      ),
+    ).toEqual({ priceUsdUnits: usd(1.03), source: 'parent_cap', minMarginUsdUnits: 30_000 });
+  });
+
+  it('keeps its own price at or below the parent, and with no parent price', () => {
+    const own = { priceUsdUnits: usd(1.02), source: 'rule' as const, minMarginUsdUnits: 20_000 };
+    expect(parentCappedPrice(own, { priceUsdUnits: usd(1.02), minMarginUsdUnits: 30_000 })).toBe(
+      own,
+    );
+    expect(parentCappedPrice(own, null)).toBe(own);
+  });
+
+  it('reads a tier list as wholesale (PX6)', () => {
+    expect(accountPriceKind('custom', true)).toBe('wholesale');
+    expect(accountPriceKind('custom', false)).toBe('special');
+    expect(accountPriceKind('retail', false)).toBe('retail');
+  });
+
+  it('warns on a parent-capped cell', () => {
+    expect(
+      matrixCellWarnings({
+        source: 'parent_cap',
+        priceUsdUnits: usd(1),
+        parentPriceUsdUnits: usd(1),
+        held: false,
+        available: true,
+      }),
+    ).toEqual(['capped']);
   });
 });
 

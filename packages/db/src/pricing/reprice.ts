@@ -16,6 +16,7 @@ import {
   marginRules,
   priceListFixedPrices,
   priceLists,
+  merchantLevels,
   priceReviews,
   productPrices,
   productRoutes,
@@ -135,22 +136,25 @@ type FixedPriceRow = typeof priceListFixedPrices.$inferSelect;
 
 /** What every list's price of some products is decided from (S20 LS3, LS4). */
 export interface ListPricingFacts {
-  /** Unarchived lists, with their chains (LS3). */
-  lists: { id: string; parentListId: string | null; chain: string[] }[];
+  /**
+   * Unarchived lists, with their chains (LS3), parents before children (by chain depth, S23 PX2);
+   * `capped` for a list named by a live merchant level, priced at most its parent's price (PX2).
+   */
+  lists: { id: string; parentListId: string | null; chain: string[]; capped: boolean }[];
   rules: RuleRow[];
   fixedPrices: FixedPriceRow[];
 }
 
 /**
- * The unarchived lists with their chains, every live rule and the products' live fixed prices,
- * for `listTarget`.
+ * The unarchived lists with their chains and caps, every live rule and the products' live fixed
+ * prices, for `listTarget`.
  */
 export async function listPricingFacts(
   db: Executor,
   productIds: readonly string[],
 ): Promise<ListPricingFacts> {
   const ids = [...new Set(productIds)];
-  const [lists, rules, fixedPrices] = await readAll(db, [
+  const [lists, rules, fixedPrices, levels] = await readAll(db, [
     () =>
       db
         .select({ id: priceLists.id, parentListId: priceLists.parentListId })
@@ -170,9 +174,21 @@ export async function listPricingFacts(
                 isNull(priceListFixedPrices.archivedAt),
               ),
             ),
+    () =>
+      db
+        .select({ priceListId: merchantLevels.priceListId })
+        .from(merchantLevels)
+        .where(isNull(merchantLevels.archivedAt)),
   ]);
+  const capped = new Set(levels.map((level) => level.priceListId));
   return {
-    lists: lists.map((list) => ({ ...list, chain: listChain(lists, list.id) })),
+    lists: lists
+      .map((list) => ({
+        ...list,
+        chain: listChain(lists, list.id),
+        capped: capped.has(list.id) && list.parentListId !== null,
+      }))
+      .sort((a, b) => a.chain.length - b.chain.length || a.id.localeCompare(b.id)),
     rules,
     fixedPrices,
   };
@@ -208,13 +224,15 @@ export type ListTargetRow = Pick<
 
 /**
  * S20 LP1–LP4 for one list but retail: the list's entry (LS4) at the basis cost, capped at the
- * retail figures. Null with no usable basis.
+ * parent list's figures on a tier list (S23 PX2, `parent`) and at the retail figures. Null with no
+ * usable basis.
  */
 export function listTarget(
   facts: Pick<ListPricingFacts, 'rules' | 'fixedPrices'>,
   chain: readonly string[],
   state: Pick<ProductRoutingState, 'productId' | 'gameId' | 'categoryId' | 'basis'>,
   retail: RetailFigures,
+  parent: RetailFigures | null = null,
 ): ListTargetRow | null {
   const { basis } = state;
   if (!basis) return null;
@@ -228,18 +246,45 @@ export function listTarget(
     basis.costUsdUnits as number,
     { fixedPriceUsdUnits: entry.fixed?.priceUsdUnits ?? null, rule: values },
     { priceUsdUnits: retail.priceUsdUnits, minMarginUsdUnits: retail.minMarginUsdUnits },
+    parent && {
+      priceUsdUnits: parent.priceUsdUnits,
+      minMarginUsdUnits: parent.minMarginUsdUnits,
+    },
   );
-  const capped = price.source === 'retail_cap';
+  // A capped row names the capping row's rule and values, as `retail_cap` names retail's.
+  const cap =
+    price.source === 'retail_cap' ? retail : price.source === 'parent_cap' ? parent : null;
   return {
     source: price.source,
-    fixedPriceId: price.source === 'rule' || capped ? null : (entry.fixed?.id ?? null),
+    fixedPriceId: price.source === 'rule' || cap ? null : (entry.fixed?.id ?? null),
     priceUsdUnits: price.priceUsdUnits,
     routeId: basis.id,
-    ruleId: capped ? retail.ruleId : entry.rule.id,
-    percentBp: capped ? retail.percentBp : values.percentBp,
-    fixedUsdUnits: capped ? retail.fixedUsdUnits : values.fixedUsdUnits,
+    ruleId: cap ? cap.ruleId : entry.rule.id,
+    percentBp: cap ? cap.percentBp : values.percentBp,
+    fixedUsdUnits: cap ? cap.fixedUsdUnits : values.fixedUsdUnits,
     minMarginUsdUnits: price.minMarginUsdUnits,
   };
+}
+
+/**
+ * S20 RP1, S23 PX2: every priced list's row but retail's for one product at the basis, parents
+ * before children, each tier list capped at its parent's row as decided here. Empty with no usable
+ * basis.
+ */
+export function listTargets(
+  facts: ListPricingFacts,
+  state: Pick<ProductRoutingState, 'productId' | 'gameId' | 'categoryId' | 'basis'>,
+  retail: RetailFigures,
+): Map<string, ListTargetRow> {
+  const decided = new Map<string, ListTargetRow>();
+  for (const list of facts.lists) {
+    if (list.id === ROOT_PRICE_LIST_IDS.retail || !listIsPriced(facts, list.chain)) continue;
+    const parent =
+      list.capped && list.parentListId !== null ? (decided.get(list.parentListId) ?? null) : null;
+    const row = listTarget(facts, list.chain, state, retail, parent);
+    if (row) decided.set(list.id, row);
+  }
+  return decided;
 }
 
 /** List rows per insert statement, well under PostgreSQL's 65,535 parameters. */
@@ -261,8 +306,9 @@ function sameListRow(current: PriceRow, row: ListTargetRow): boolean {
 
 /**
  * S20 RP1, LP1–LP4: prices every unarchived list but retail for products whose retail price is
- * settled (none under review), from the same basis route and cost, capped at the retail row. A
- * list's row is appended only when its price, source, basis route, rule id, rule values or fixed
+ * settled (none under review), from the same basis route and cost, capped at the retail row; S23
+ * PX2: parents before children, each tier list capped at its parent's row as this pass leaves it.
+ * A list's row is appended only when its price, source, basis route, rule id, rule values or fixed
  * price differ from its current row (Q21 per list). Lists not priced yet (`listIsPriced`) are
  * skipped. The caller holds the product locks.
  */
@@ -289,20 +335,16 @@ export async function repriceListsAfterRetail(
           desc(productPrices.id),
         ),
   ]);
-  const others = facts.lists.filter(
-    (list) => list.id !== ROOT_PRICE_LIST_IDS.retail && listIsPriced(facts, list.chain),
-  );
   const currentOf = new Map(currentRows.map((row) => [`${row.productId}:${row.priceListId}`, row]));
   const rows: (typeof productPrices.$inferInsert)[] = [];
   for (const { state, retailRow } of priced) {
-    for (const list of others) {
-      const row = listTarget(facts, list.chain, state, retailRow) as ListTargetRow;
-      const current = currentOf.get(`${state.productId}:${list.id}`);
+    for (const [listId, row] of listTargets(facts, state, retailRow)) {
+      const current = currentOf.get(`${state.productId}:${listId}`);
       if (current && sameListRow(current, row)) continue;
       rows.push({
         id: newId(),
         productId: state.productId,
-        priceListId: list.id,
+        priceListId: listId,
         costUsdUnits: (state.basis as NonNullable<ProductRoutingState['basis']>)
           .costUsdUnits as number,
         ...row,

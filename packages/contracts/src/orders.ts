@@ -327,8 +327,11 @@ export type SaleSource = z.infer<typeof saleSourceSchema>;
 export const SAVED_PLAYERS_PER_GAME = 10;
 export const SAVED_PLAYERS_MAX = 50;
 export const CART_LINES_MAX = 10;
-/** S21 BK3: a merchant's checkout (a bulk list) holds up to 50 lines; customers keep 10. */
-export const CHECKOUT_LINES_MAX = 50;
+/**
+ * S21 BK3: a merchant's checkout (a bulk list) holds up to its tier's lines; customers keep 10.
+ * S23 TS5: the schema's ceiling is the highest a tier may allow (`TIER_QUANTITY_CEILING`).
+ */
+export const CHECKOUT_LINES_MAX = 100;
 
 /** A saved id's label ("حسابي"): 1–30 printable characters, trimmed, no bidi or format controls. */
 export const savedPlayerLabelSchema = z

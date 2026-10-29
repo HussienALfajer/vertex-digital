@@ -67,7 +67,7 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
   - `tierReminder(levels, previousMonth, thisMonth, earnedTier)`: `reach` with the amount, `keep` with the amount, or null (PG3).
   - `parentCappedPrice(own, parent)` (PX2).
   - `welcomeTextSchema` rules (RC1).
-- `MERCHANT_LEVELS_MAX` becomes 3; `MERCHANT_CODE_QUANTITY_MAX` and `BULK_LINES_MAX` become per-tier settings with a hard ceiling `TIER_QUANTITY_CEILING = 100`.
+- `MERCHANT_LEVELS_MAX` becomes 3; `MERCHANT_CODE_QUANTITY_MAX` and `BULK_LINES_MAX` become per-tier settings (`orderUnitsMax`, `bulkLinesMax`) with a hard ceiling `TIER_QUANTITY_CEILING = 100`.
 - `PRICE_SOURCES` gains `parent_cap`.
 - Notification events: `merchant_tier_reminder` (center, email, push), `merchant_early_access` (center, push). `merchant_level_changed` carries the tier and what it grants.
 - Telegram events: `merchant_tier_changed` (important changes, TR8), `merchant_tier_grant_ending` (MG5), `ticket_overdue` (OP6). The daily summary line "مستويات التجار" becomes "فئات التجار: n تغيّرت اليوم".
@@ -80,7 +80,7 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
 - Migration: every live level is archived (production has none on 2026-10-29; the local seed runs the setup command instead, PX1), then the column is added as required.
 
 ### `merchant_tier_settings` (new; append-only versions per tier; the newest row per tier is in force)
-- `id`, `tier` (`merchant_tier`), `per_deposit_usd_units`, `daily_deposit_usd_units` (whole cents, per deposit ≤ daily, both ≥ the deposit minimums as S20), `player_checks_per_hour` (10–1,000), `player_checks_per_day` (30–5,000, ≥ per hour), `bulk_lines_max` (10–100), `code_quantity_max` (1–100), `deposit_priority`, `support_priority` booleans, `support_reply_minutes` (15–1,440, nullable: no promise), `direct_contact`, `early_access`, `fast_alerts`, `receipt_welcome`, `receipt_large_logo` booleans, `admin_id` (nullable for the seed), `created_at`. Index `(tier, created_at desc)`. `append_only_guard`.
+- `id`, `tier` (`merchant_tier`), `per_deposit_usd_units`, `daily_deposit_usd_units` (whole cents, per deposit ≤ daily, both ≥ the deposit minimums as S20), `player_checks_per_hour` (10–1,000), `player_checks_per_day` (30–5,000, ≥ per hour), `bulk_lines_max` (10–100), `order_units_max` (1–100, the units of a code pack per order), `deposit_priority`, `support_priority` booleans, `support_reply_minutes` (15–1,440, nullable: no promise), `direct_contact`, `early_access`, `fast_alerts`, `receipt_welcome`, `receipt_large_logo` booleans, `admin_id` (nullable for the seed), `created_at`. Index `(tier, created_at desc)`. `append_only_guard`.
 - Seeded by the migration with TS2's values; Bronze's deposit and check values are copied from the newest `merchant_settings` row so nothing changes for today's merchants.
 
 ### `merchant_settings` (S20; changed, still append-only versions)
@@ -139,7 +139,7 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
 
 - TS3. **Deposit limits** (amends S20 MD1): a merchant's per-deposit and 24-hour limits are their effective tier's; S12 per-customer overrides still replace them; the profile's limit source reads "الافتراضي: تاجر ذهبي" (the tier's name). Telegram approval keeps its $100 ceiling (MD4). Limits apply at a deposit's creation (S03 SC3): a fall does not touch deposits already created.
 - TS4. **Player checks** (amends S21 BK4): the effective tier's hourly and daily numbers; the per-IP limit for a merchant's request is the hourly number; the supplier's daily quota still caps everything.
-- TS5. **Quantities** (amends S21 QT1, BK1, BK3): a merchant's code order may carry up to the tier's `code_quantity_max`, a bulk list and a merchant checkout up to `bulk_lines_max`. The database checks widen to 1–100 (`orders.quantity`, `checkouts.line_count`); customers keep the product's `max_quantity` and 10 lines. QT3 (a supplier offer's own limit) is unchanged. A bulk list checked under a higher tier and paid after a fall is refused with `VALIDATION_FAILED` naming the limit.
+- TS5. **Quantities** (amends S21 QT1, BK1, BK3): a merchant's code order may carry up to the tier's `order_units_max`, a bulk list and a merchant checkout up to `bulk_lines_max`. The database checks widen to 1–100 (`orders.quantity`, `checkouts.line_count`); customers keep the product's `max_quantity` and 10 lines. QT3 (a supplier offer's own limit) is unchanged. A bulk list checked under a higher tier and paid after a fall is refused with `VALIDATION_FAILED` naming the limit.
 
 ### Price ladder
 - PX1. **Setup** (`pnpm --filter @vertex-digital/api merchants:setup-tiers`, idempotent, after `pnpm build`; run once in production after the deploy): renames the wholesale list "البرونزية"; creates the three custom lists "الفضية" (parent wholesale), "الذهبية" (parent Silver's), "الماسية" (parent Gold's) with their global and category rules (PX3); creates the three levels at $300, $1,000 and $3,000 on them. Anything that already exists by name is left untouched and reported; it never changes a rule the admin edited. Creating each list prices it (S20 RP3). `pnpm db:seed-local` runs it too.

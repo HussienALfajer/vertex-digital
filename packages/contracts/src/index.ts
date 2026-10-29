@@ -11,6 +11,7 @@ export * from './errors.js';
 export * from './jobs.js';
 export * from './lists.js';
 export * from './merchant-documents.js';
+export * from './merchant-tiers.js';
 export * from './merchant-tools.js';
 export * from './merchants.js';
 export * from './money.js';

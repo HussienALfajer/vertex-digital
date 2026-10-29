@@ -5,10 +5,12 @@ import {
   NO_LIMIT_OVERRIDES,
   type PurchaseCapBreach,
   purchaseCapBreach,
+  type TierQuantities,
 } from '@vertex-digital/contracts';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { levelListId } from '../merchants/levels.js';
+import { merchantPrivileges, tierQuantities } from '../merchants/tiers.js';
 import { OrderError } from '../orders/errors.js';
 import { customerLimits, customers, merchantProfiles, orders } from '../schema/index.js';
 
@@ -31,6 +33,8 @@ export interface PurchasingCustomer {
   capUnits: number | null;
   /** S20 MT2: a merchant who has not accepted the merchant terms yet (a direct grant). */
   merchantTermsRequired: boolean;
+  /** S23 TS5: a merchant's tier quantities, read under the lock; null for a customer. */
+  tierQuantities: TierQuantities | null;
 }
 
 /** The customer's overrides; a missing row is all null (S12 data). */
@@ -76,8 +80,11 @@ export async function lockActiveCustomer(
   const overrides = await customerLimitOverrides(tx, customerId);
   let merchantTermsRequired = false;
   let merchantLevelListId: string | null = null;
+  let quantities: TierQuantities | null = null;
   if (customer.accountType === 'merchant') {
     merchantLevelListId = await levelListId(tx, customerId);
+    const privileges = await merchantPrivileges(tx, customerId);
+    quantities = privileges && tierQuantities(privileges.settings);
     const [profile] = await tx
       .select({ termsVersionId: merchantProfiles.termsVersionId })
       .from(merchantProfiles)
@@ -92,6 +99,7 @@ export async function lockActiveCustomer(
     accountType: customer.accountType,
     capUnits: overrides.dailyPurchaseUsdUnits,
     merchantTermsRequired,
+    tierQuantities: quantities,
   };
 }
 

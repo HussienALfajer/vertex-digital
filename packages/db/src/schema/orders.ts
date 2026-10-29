@@ -255,7 +255,7 @@ export const orders = pgTable(
         and char_length(${table.customerNote}) between 1 and 300`,
     ),
     check('orders_number_check', sql`${table.number} ~ '^VO-[2-9A-HJKMNP-Z]{6}$'`),
-    check('orders_quantity_check', sql`${table.quantity} between 1 and 50`),
+    check('orders_quantity_check', sql`${table.quantity} between 1 and 100`),
     check(
       'orders_unit_price_check',
       sql`${table.unitPriceUsdUnits} > 0 and ${table.unitPriceUsdUnits} % 10000 = 0`,
@@ -321,7 +321,7 @@ export const orders = pgTable(
     check(
       'orders_checkout_check',
       sql`(${table.checkoutId} is null) = (${table.checkoutLine} is null)
-        and ${table.checkoutLine} between 1 and 50
+        and ${table.checkoutLine} between 1 and 100
         and (${table.checkoutId} is null or ${table.reservedAt} is null)`,
     ),
     check(
@@ -368,7 +368,7 @@ export const checkouts = pgTable(
   (table) => [
     index('checkouts_customer_id_created_at_idx').on(table.customerId, table.createdAt.desc()),
     index('checkouts_display_rate_id_idx').on(table.displayRateId),
-    check('checkouts_line_count_check', sql`${table.lineCount} between 1 and 50`),
+    check('checkouts_line_count_check', sql`${table.lineCount} between 1 and 100`),
     check(
       'checkouts_total_check',
       sql`${table.totalUsdUnits} > 0 and ${table.totalUsdUnits} % 10000 = 0`,
@@ -624,7 +624,7 @@ export const fulfilmentAttempts = pgTable(
     index('fulfilment_attempts_resolved_at_idx').on(table.resolvedAt),
     /** S13 R2 by supplier: attempts sent in the period (audit A09-16). */
     index('fulfilment_attempts_sent_at_idx').on(table.sentAt),
-    check('fulfilment_attempts_quantity_check', sql`${table.quantity} between 1 and 50`),
+    check('fulfilment_attempts_quantity_check', sql`${table.quantity} between 1 and 100`),
     check(
       'fulfilment_attempts_delivered_check',
       sql`${table.deliveredQuantity} between 0 and ${table.quantity}
@@ -698,7 +698,7 @@ export const orderCodes = pgTable(
   (table) => [
     uniqueIndex('order_codes_attempt_id_position_idx').on(table.attemptId, table.position),
     index('order_codes_order_id_idx').on(table.orderId),
-    check('order_codes_position_check', sql`${table.position} between 1 and 50`),
+    check('order_codes_position_check', sql`${table.position} between 1 and 100`),
     check('order_codes_hint_check', sql`char_length(${table.hint}) = 4`),
   ],
 );

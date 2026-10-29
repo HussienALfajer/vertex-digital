@@ -14,9 +14,8 @@ import { type Executor, readAll } from '../client.js';
 import { catalogGames, catalogProducts, priceLists, productPrices } from '../schema/index.js';
 import {
   type ListPricingFacts,
-  listIsPriced,
   listPricingFacts,
-  listTarget,
+  listTargets,
   type RetailFigures,
 } from './reprice.js';
 import {
@@ -122,6 +121,21 @@ export async function priceMatrix(
     const held = state.openReview !== null;
     const retailRow = currentOf.get(`${product.id}:${ROOT_PRICE_LIST_IDS.retail}`) ?? null;
     const retailEstimate = estimate ? estimatedRetail(state, facts, estimate) : null;
+    // Every list's target while a review holds the product (RP2), and the price a list without a
+    // row would take, each with the tier lists' parent cap (S23 PX2).
+    const heldTargets =
+      held && state.targetPriceUsdUnits !== null
+        ? listTargets(facts, state, {
+            priceUsdUnits: state.targetPriceUsdUnits,
+            minMarginUsdUnits: state.rule.values.minMarginUsdUnits,
+            ruleId: state.rule.id,
+            percentBp: state.rule.values.percentBp,
+            fixedUsdUnits: state.rule.values.fixedUsdUnits,
+          })
+        : null;
+    const figures = retailRow ?? retailEstimate;
+    const basis = state.basis ?? estimate;
+    const estimates = figures && basis ? listTargets(facts, { ...state, basis }, figures) : null;
     const cells = lists.map((list): PriceMatrixCell => {
       const retail = list.id === ROOT_PRICE_LIST_IDS.retail;
       const current = currentOf.get(`${product.id}:${list.id}`) ?? null;
@@ -133,30 +147,16 @@ export async function priceMatrix(
         : (availabilityOf.get(list.id)?.get(product.id)?.availability ?? 'out_of_stock');
       let target: number | null = null;
       if (held && state.targetPriceUsdUnits !== null) {
-        if (retail) target = state.targetPriceUsdUnits;
-        else if (known && listIsPriced(facts, known.chain)) {
-          target =
-            listTarget(facts, known.chain, state, {
-              priceUsdUnits: state.targetPriceUsdUnits,
-              minMarginUsdUnits: state.rule.values.minMarginUsdUnits,
-              ruleId: state.rule.id,
-              percentBp: state.rule.values.percentBp,
-              fixedUsdUnits: state.rule.values.fixedUsdUnits,
-            })?.priceUsdUnits ?? null;
-        }
+        target = retail
+          ? state.targetPriceUsdUnits
+          : (heldTargets?.get(list.id)?.priceUsdUnits ?? null);
       }
       const price = current?.priceUsdUnits ?? null;
       let estimated: number | null = null;
       if (price === null) {
-        if (retail) estimated = state.targetPriceUsdUnits ?? retailEstimate?.priceUsdUnits ?? null;
-        else if (known && listIsPriced(facts, known.chain)) {
-          const figures = retailRow ?? retailEstimate;
-          const basis = state.basis ?? estimate;
-          if (figures && basis) {
-            estimated =
-              listTarget(facts, known.chain, { ...state, basis }, figures)?.priceUsdUnits ?? null;
-          }
-        }
+        estimated = retail
+          ? (state.targetPriceUsdUnits ?? retailEstimate?.priceUsdUnits ?? null)
+          : (estimates?.get(list.id)?.priceUsdUnits ?? null);
       }
       const marginCost = cost ?? current?.costUsdUnits ?? null;
       const fixed = facts.fixedPrices.find(

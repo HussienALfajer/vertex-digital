@@ -729,6 +729,20 @@
       "when": 1793227004119,
       "tag": "0103_a10_retention_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1793311163730,
+      "tag": "0104_classy_silver_samurai",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1793311169442,
+      "tag": "0105_s23_merchant_tiers_guards",
+      "breakpoints": true
     }
   ]
 }

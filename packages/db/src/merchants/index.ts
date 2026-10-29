@@ -22,6 +22,15 @@ export {
   termsVersionNumber,
 } from './applications.js';
 export {
+  dueTierGrants,
+  endTierGrant,
+  expireTierGrant,
+  type GrantEnder,
+  type GrantTierInput,
+  grantTier,
+  remindEndingTierGrants,
+} from './grants.js';
+export {
   type LevelChange,
   levelListId,
   levelRows,
@@ -34,7 +43,9 @@ export {
   queueAllMerchantLevels,
   queueMerchantLevel,
   queueMerchantLevelIfMerchant,
+  type RecomputeContext,
   recomputeMerchantLevel,
+  recordTierMonth,
 } from './levels.js';
 export {
   accountMerchant,
@@ -45,3 +56,16 @@ export {
   merchantPage,
   merchantProfileOf,
 } from './reads.js';
+export {
+  currentTierSettings,
+  type LiveTierLevel,
+  levelTier,
+  liveTierLevels,
+  merchantPrivileges,
+  merchantTier,
+  openTierGrant,
+  recordTierChange,
+  type TierGrantRow,
+  type TierSettingsRow,
+  tierQuantities,
+} from './tiers.js';

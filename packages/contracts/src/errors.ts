@@ -279,12 +279,21 @@ export const ERROR_CODES = [
   'NOT_MERCHANT',
   /** S20 MA4: the application's status does not allow this; `details.status`. */
   'APPLICATION_STATE_INVALID',
-  /** S21 LV1: 10 live merchant levels already. */
-  'MERCHANT_LEVELS_LIMIT_REACHED',
-  /** S21 LV1: another live level has this monthly threshold. */
-  'MERCHANT_LEVEL_THRESHOLD_TAKEN',
-  /** S21 LV1: another live level has this name. */
-  'MERCHANT_LEVEL_NAME_TAKEN',
+  /** S23: another live level has the tier (a concurrent change). */
+  'MERCHANT_TIER_TAKEN',
+  /** S23: thresholds must rise with the tier among the live levels. */
+  'MERCHANT_TIER_ORDER_INVALID',
+  /**
+   * S23: a tier's list must be an unarchived custom list whose parent is the next lower live
+   * tier's list (wholesale for the lowest); `details.expectedParentListId`.
+   */
+  'MERCHANT_TIER_LIST_INVALID',
+  /** S23 MG1: the tier has no live level. */
+  'MERCHANT_TIER_UNAVAILABLE',
+  /** S23 MG1: the tier is not above the merchant's earned tier; `details.earnedTier`. */
+  'MERCHANT_TIER_GRANT_NOT_HIGHER',
+  /** S23 MG1: the merchant has an open grant already; `details.grantId`. */
+  'MERCHANT_TIER_GRANT_OPEN',
   /** S21 AL1: more than 200 follows. */
   'WATCHES_LIMIT_REACHED',
   /** S21 BK1: the bulk list has no line or more than 50; `details.lines`, `details.max`. */

@@ -4,6 +4,7 @@ import {
   effectivePriceListId,
   type PriceKind,
   type PriceListKind,
+  accountPriceKind,
   priceKindOf,
 } from '@vertex-digital/contracts';
 import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
@@ -43,10 +44,9 @@ export async function accountPriceList(
     .where(eq(customers.id, customerId));
   if (!customer) return null;
   // S21 LV5: a merchant's level picks the list below an assigned one.
-  const id = effectivePriceListId({
-    ...customer,
-    levelListId: customer.accountType === 'merchant' ? await levelListId(db, customerId) : null,
-  });
+  const levelList =
+    customer.accountType === 'merchant' ? await levelListId(db, customerId) : null;
+  const id = effectivePriceListId({ ...customer, levelListId: levelList });
   const [list] = await db
     .select({ id: priceLists.id, kind: priceLists.kind, name: priceLists.name })
     .from(priceLists)
@@ -56,7 +56,8 @@ export async function accountPriceList(
     accountType: customer.accountType,
     assignedListId: customer.priceListId,
     effectiveList: list,
-    priceKind: priceKindOf(list.kind),
+    // S23 PX6: a tier list reads as wholesale.
+    priceKind: accountPriceKind(list.kind, customer.priceListId === null && levelList !== null),
   };
 }
 

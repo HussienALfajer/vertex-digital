@@ -22,7 +22,7 @@ The single source of shapes and pure rules shared by api, worker, store and admi
 ## Import boundaries (no cycles, small store bundles)
 - `suppliers.ts` imports `catalog.ts`, and `pricing.ts` imports `suppliers.ts`: keep that order.
 - `customer-status.ts` imports no other module, so deposits, orders and support can all use it.
-- `merchants.ts` imports only `auth`, `lists`, `money`, `price-kinds`, and `product-alerts.ts` only `catalog`, `money`, so the store's forms stay light.
+- `merchants.ts` imports only `auth`, `lists`, `money`, `price-kinds`, `merchant-tiers` (which imports only `money` and `price-kinds`), and `product-alerts.ts` only `catalog`, `money`, so the store's forms stay light.
 - `notifications.ts` imports `merchant-tools.ts`, never `merchant-documents.ts` (price list and statement schemas), so pages that ship notifications do not ship those or the wallet's.
 
 ## Money (ADR 0003)
