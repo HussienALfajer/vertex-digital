@@ -261,6 +261,14 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 #### F42 — Availability and price-drop alerts
 - "Notify me when available" and "when the price drops" per pack, by web push and in the notification center.
 
+#### F43 — Merchant tiers
+Added by the owner on 2026-10-29; extends F39 (S23).
+- Four tiers: Bronze (every merchant without a level, on the wholesale list), Silver, Gold and Diamond (monthly net purchase thresholds set in the panel), each with its own price list inheriting from the tier below; a smaller margin per tier, varied by category; fixed prices on best sellers for Diamond. A tier never costs more than the tier below and never sells below cost.
+- Identity: a tier badge in the merchant area, a tier card, an upgrade celebration; the badge on receipts, the verification page, the price list and the statement (named from Silver up); a printable "تاجر معتمد" certificate with a QR to a live page; a shop sticker image.
+- Progress: a progress bar, a tier table with example prices, a forecast, a month-end reminder, a monthly history, the savings against Bronze, and the existing grace (a tier is held through the next month) made explicit.
+- Privileges per tier, set in the panel: deposit limits, player-check quota, bulk lines and codes per order, deposit and ticket queue priority with a reply promise, a direct contact for Diamond, early access to packs the admin chooses, faster alerts, receipt customisation.
+- The admin grants a higher tier for up to 90 days; tier column, filter and report; Telegram alerts for Gold and Diamond changes; a preview of a threshold change.
+
 ## 5. Automations (fixed rules in V1)
 
 | ID | Trigger | Automatic result |
@@ -293,6 +301,7 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 | Merchant credit lines; merchants as cash-in points and prepaid wallet vouchers | Later, after the merchant features (owner, 2026-10-20): ledger transfers between accounts need their own anti-fraud and anti-money-laundering design |
 | Telegram purchase bot (customers) | Not planned (owner, 2026-10-29); the admin bot (F07) is in V1 |
 | Loyalty points, cashback and referrals | Declined (owner, 2026-10-20) |
+| Merchant tier rewards beyond prices (deposit bonus, monthly cashback, buying on credit, locking Diamond), merchant referral rewards and seasonal challenges | Declined (owner, 2026-10-29, S23): a tier changes only the price and the privileges |
 | Delivery-time guarantee, price history chart, Eid and scheduled gifts, group gifts, season calendar, renewal reminders, Telegram customer notifications, onboarding steps, account story page | Proposed on 2026-10-20 and declined by the owner |
 | Syrian mobile credit (Syriatel, MTN) | Not planned (owner, 2026-10-29) |
 | Sham Cash automation | No API today; manual review with fraud checks in V1; not planned (owner, 2026-10-29) |
@@ -311,7 +320,7 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 | 1. Money core | F01–F07, F26, F27 | Test customers can sign up and fund wallets; the admin can review deposits safely; registration stays closed |
 | 2. Selling | F08–F16 | Test customers buy and receive top-ups automatically; registration still closed |
 | 3. Operations | F17–F25 | The admin runs the store from the panel; nightly reconciliation; PWA |
-| M. Merchants and store growth | F28–F42 (owner, 2026-10-20: started before the pilot) | Merchants apply and buy at their lists; shops get counter, bulk and print tools; quicker retail buying |
+| M. Merchants and store growth | F28–F43 (owner, 2026-10-20: started before the pilot; F43 added 2026-10-29) | Merchants apply and buy at their lists; shops get counter, bulk and print tools; quicker retail buying |
 | Pilot | Registration opened (F26), quiet launch with low limits | Real orders, real suppliers, limits raised as confidence grows |
 
 ## 8. V1 success metrics (two months after launch)
