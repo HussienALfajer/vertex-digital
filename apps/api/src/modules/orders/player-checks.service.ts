@@ -14,12 +14,11 @@ import {
   supplierServesCustomer,
 } from '@vertex-digital/contracts';
 import {
-  applicant,
   checkOrderFields,
-  currentMerchantSettings,
   type Database,
   damascusDate,
   lockActiveCustomer,
+  merchantPrivileges,
   newId,
   type PlayerCheckLookup,
   type ProductRoutingState,
@@ -315,14 +314,19 @@ export class PlayerChecksService {
       : { kind: 'targets', targets, allowedRegions: [] };
   }
 
-  /** S21 BK4: a merchant's player checks an hour and a day; null for a customer. */
+  /**
+   * S21 BK4, S23 TS4: a merchant's player checks an hour and a day, their effective tier's; null
+   * for a customer.
+   */
   private async merchantQuota(
     customerId: string,
   ): Promise<{ perHour: number; perDay: number } | null> {
-    const person = await applicant(this.db, customerId);
-    if (person?.accountType !== 'merchant') return null;
-    const settings = await currentMerchantSettings(this.db);
-    return { perHour: settings.playerChecksPerHour, perDay: settings.playerChecksPerDay };
+    const privileges = await merchantPrivileges(this.db, customerId);
+    if (privileges === null) return null;
+    return {
+      perHour: privileges.settings.playerChecksPerHour,
+      perDay: privileges.settings.playerChecksPerDay,
+    };
   }
 
   /** Rule BB2: the game's unarchived fields, the same schema the purchase uses. */
@@ -399,8 +403,8 @@ export class PlayerChecksService {
     );
     if (!sendable) return { result: 'not_supported' };
     // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own);
-    // a customer has no day limit (owner, 2026-10-29). S21 BK4: a merchant's hour and day come
-    // from the merchant settings, and so does the address's hour.
+    // a customer has no day limit (owner, 2026-10-29). S21 BK4, S23 TS4: a merchant's hour and day
+    // come from their tier's settings, and so does the address's hour.
     const quota = requester.kind === 'customer' ? await this.merchantQuota(requester.id) : null;
     const allowed = await withinLimits(
       this.db,

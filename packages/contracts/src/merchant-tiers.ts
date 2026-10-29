@@ -274,6 +274,53 @@ export const TIER_THRESHOLD_DEFAULTS = {
   diamond: usd(3_000),
 } as const satisfies Record<LevelTier, number>;
 
+/** PX1: the names the setup command gives the wholesale list and the tier lists. */
+export const TIER_LIST_NAMES = {
+  bronze: 'البرونزية',
+  silver: 'الفضية',
+  gold: 'الذهبية',
+  diamond: 'الماسية',
+} as const satisfies Record<MerchantTier, string>;
+
+/** A tier list's margin (percent in basis points, the minimum margin in USD units; fixed $0). */
+export interface TierRuleValues {
+  percentBp: number;
+  minMarginUsdUnits: number;
+}
+
+/**
+ * PX3 (decisions 3, 4): the rules the setup command writes on each tier list: the global rule
+ * (game top-ups and game cards take the full step), half the step for chat and streaming apps and
+ * subscriptions, none (Bronze's 5% and $0.05) for store, platform and shopping cards.
+ */
+export const TIER_RULE_DEFAULTS = {
+  global: {
+    silver: { percentBp: 400, minMarginUsdUnits: 40_000 },
+    gold: { percentBp: 300, minMarginUsdUnits: 30_000 },
+    diamond: { percentBp: 200, minMarginUsdUnits: 20_000 },
+  },
+  // A minimum margin is whole cents (S07): $0.045 and $0.035 rounded up (owner, 2026-10-29).
+  half: {
+    silver: { percentBp: 450, minMarginUsdUnits: 50_000 },
+    gold: { percentBp: 400, minMarginUsdUnits: 40_000 },
+    diamond: { percentBp: 350, minMarginUsdUnits: 40_000 },
+  },
+  none: {
+    silver: { percentBp: 500, minMarginUsdUnits: 50_000 },
+    gold: { percentBp: 500, minMarginUsdUnits: 50_000 },
+    diamond: { percentBp: 500, minMarginUsdUnits: 50_000 },
+  },
+} as const satisfies Record<'global' | 'half' | 'none', Record<LevelTier, TierRuleValues>>;
+
+/**
+ * PX3: the production categories that take a category rule, by slug (read from the production
+ * store on 2026-10-29: `games` and `game-cards` take the global rule). A missing slug is skipped.
+ */
+export const TIER_CATEGORY_STEPS = {
+  half: ['apps', 'subscriptions'],
+  none: ['gift-cards', 'shopping'],
+} as const;
+
 /** A tier's settings in force (TS1). */
 export const tierSettingsSchema = z
   .object({

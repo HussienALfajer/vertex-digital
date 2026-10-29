@@ -11,8 +11,8 @@ import {
   type MerchantListQuery,
   type MerchantSettings,
   type MerchantSettingsInput,
+  accountPriceKind,
   merchantLimitsBelowMinimum,
-  priceKindOf,
 } from '@vertex-digital/contracts';
 import {
   type AdminActor,
@@ -305,6 +305,7 @@ export class MerchantsAdminService {
       q: query.q ?? null,
       listId: query.listId ?? null,
       levelId: query.levelId ?? null,
+      tier: query.tier ?? null,
       after: query.cursor ? decodeCursor(query.cursor) : null,
       limit: query.limit,
     });
@@ -319,8 +320,11 @@ export class MerchantsAdminService {
         governorate: row.governorate,
         city: row.city,
         priceList: { id: row.listId, name: row.listName },
-        priceKind: priceKindOf(row.listKind),
+        // S23 PX6: a tier list reads as wholesale.
+        priceKind: accountPriceKind(row.listKind, !row.assigned && row.tier !== 'bronze'),
         level: row.level,
+        tier: row.tier,
+        tierGranted: row.tierGranted,
         termsAccepted: row.termsAccepted,
         frozen: row.frozen,
         grantedAt: row.grantedAt.toISOString(),

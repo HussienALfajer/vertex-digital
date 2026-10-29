@@ -99,7 +99,9 @@ export async function grantTier(
 }
 
 /** Who ends a grant: the admin with a reason (MG3), or the system (MG4, MG7, TR9). */
-export type GrantEnder = { kind: 'admin'; actor: AdminActor; reason: string } | { kind: 'system' };
+export type GrantEnder =
+  | { kind: 'admin'; actor: AdminActor; reason: string | null }
+  | { kind: 'system' };
 
 /**
  * MG3, MG4, MG7, TR9: ends the customer's open grant, locked `FOR UPDATE` after the customer

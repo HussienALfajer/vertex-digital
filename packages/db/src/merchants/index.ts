@@ -63,9 +63,15 @@ export {
   liveTierLevels,
   merchantPrivileges,
   merchantTier,
+  openGrantsOfTier,
   openTierGrant,
   recordTierChange,
   type TierGrantRow,
   type TierSettingsRow,
+  tierGrantRows,
+  tierListRefs,
+  tierMerchantCounts,
+  tierMerchants,
   tierQuantities,
 } from './tiers.js';
+export { setupMerchantTiers, type TierSetupReport } from './setup.js';

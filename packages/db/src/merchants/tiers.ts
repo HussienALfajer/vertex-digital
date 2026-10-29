@@ -6,7 +6,7 @@ import {
   type TierQuantities,
   tierOf,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
 import { newId } from '../id.js';
 import {
@@ -16,6 +16,7 @@ import {
   merchantTierChanges,
   merchantTierGrants,
   merchantTierSettings,
+  priceLists,
 } from '../schema/index.js';
 
 /*
@@ -148,4 +149,111 @@ export async function recordTierChange(
 /** The tier of a level row, archived or not (a level archived before S23 has none: Bronze). */
 export function levelTier(level: { tier: MerchantTier | null } | null | undefined): MerchantTier {
   return level?.tier ?? tierOf(null);
+}
+
+/** AD5: the customer's grants, newest first. */
+export function tierGrantRows(db: Executor, customerId: string): Promise<TierGrantRow[]> {
+  return db
+    .select()
+    .from(merchantTierGrants)
+    .where(eq(merchantTierGrants.customerId, customerId))
+    .orderBy(desc(merchantTierGrants.startsAt), desc(merchantTierGrants.id));
+}
+
+/**
+ * AD2: the merchants holding each tier now, by source: granted, not revoked merchants; Bronze is
+ * every one without a live effective level.
+ */
+export async function tierMerchantCounts(
+  db: Executor,
+): Promise<Record<MerchantTier, { earned: number; granted: number }>> {
+  const rows = await db
+    .select({
+      tier: sql<MerchantTier>`coalesce(${merchantLevels.tier}, 'bronze')`,
+      granted: sql<boolean>`${merchantLevels.tier} is not null and ${merchantProfiles.levelSource} = 'granted'`,
+      count: count(),
+    })
+    .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .leftJoin(
+      merchantLevels,
+      and(eq(merchantLevels.id, merchantProfiles.levelId), isNull(merchantLevels.archivedAt)),
+    )
+    .where(and(eq(customers.accountType, 'merchant'), isNull(merchantProfiles.revokedAt)))
+    .groupBy(sql`1`, sql`2`);
+  const counts = Object.fromEntries(
+    MERCHANT_TIERS.map((tier) => [tier, { earned: 0, granted: 0 }]),
+  ) as Record<MerchantTier, { earned: number; granted: number }>;
+  for (const row of rows) counts[row.tier][row.granted ? 'granted' : 'earned'] += row.count;
+  return counts;
+}
+
+/** AD2: the lists a tier page names, by id (archived ones too). */
+export async function tierListRefs(
+  db: Executor,
+  ids: readonly string[],
+): Promise<Map<string, { id: string; name: string; parentListId: string | null; archived: boolean; kind: string }>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: priceLists.id,
+      name: priceLists.name,
+      kind: priceLists.kind,
+      parentListId: priceLists.parentListId,
+      archivedAt: priceLists.archivedAt,
+    })
+    .from(priceLists)
+    .where(inArray(priceLists.id, [...new Set(ids)]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        name: row.name,
+        kind: row.kind,
+        parentListId: row.parentListId,
+        archived: row.archivedAt !== null,
+      },
+    ]),
+  );
+}
+
+/** MG7: the open grants of a tier, by customer id (the order their locks are taken in). */
+export function openGrantsOfTier(db: Executor, tier: LevelTier): Promise<TierGrantRow[]> {
+  return db
+    .select()
+    .from(merchantTierGrants)
+    .where(and(eq(merchantTierGrants.tier, tier), isNull(merchantTierGrants.endedAt)))
+    .orderBy(asc(merchantTierGrants.customerId));
+}
+
+/** AD3: every granted, not revoked merchant with their trade name and earned tier. */
+export async function tierMerchants(
+  db: Executor,
+): Promise<{ customerId: string; tradeName: string; earnedTier: MerchantTier }[]> {
+  const rows = await db
+    .select({
+      customerId: merchantProfiles.customerId,
+      tradeName: merchantProfiles.tradeName,
+      tier: merchantLevels.tier,
+    })
+    .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .leftJoin(
+      merchantLevels,
+      and(eq(merchantLevels.id, merchantProfiles.earnedLevelId), isNull(merchantLevels.archivedAt)),
+    )
+    .where(
+      and(
+        eq(customers.accountType, 'merchant'),
+        isNull(customers.archivedAt),
+        isNull(merchantProfiles.revokedAt),
+      ),
+    )
+    .orderBy(asc(merchantProfiles.tradeName), asc(merchantProfiles.customerId));
+  return rows.map((row) => ({
+    customerId: row.customerId,
+    tradeName: row.tradeName,
+    earnedTier: row.tier ?? 'bronze',
+  }));
 }

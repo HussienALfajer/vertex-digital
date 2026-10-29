@@ -1,10 +1,22 @@
 import {
   type MerchantApplicationStatus,
+  type MerchantTier,
   NEW_ACCOUNT_DAYS,
   type PriceListKind,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import { type AnyColumn, and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import {
+  type AnyColumn,
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { Executor } from '../client.js';
 import { receiptSettingsOf } from '../merchant-tools/counter.js';
 import {
@@ -18,6 +30,7 @@ import {
   priceLists,
 } from '../schema/index.js';
 import { monthsPurchases } from './levels.js';
+import { tierGrantRows } from './tiers.js';
 
 /*
  * Merchant reads that join the customers (S20 screens): the panel's queue and merchants list, the
@@ -141,6 +154,10 @@ export async function merchantProfileOf(db: Executor, customerId: string) {
       revokedAt: merchantProfiles.revokedAt,
       levelId: merchantLevels.id,
       levelNameAr: merchantLevels.nameAr,
+      levelTier: merchantLevels.tier,
+      levelArchivedAt: merchantLevels.archivedAt,
+      levelSource: merchantProfiles.levelSource,
+      earnedLevelId: merchantProfiles.earnedLevelId,
       levelChangedAt: merchantProfiles.levelChangedAt,
       watchCount: sql<number>`(select count(*)::int from ${merchantWatches}
         where ${merchantWatches.customerId} = ${merchantProfiles.customerId})`,
@@ -150,11 +167,36 @@ export async function merchantProfileOf(db: Executor, customerId: string) {
     .leftJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
     .where(eq(merchantProfiles.customerId, customerId));
   if (!row) return null;
-  const { levelId, levelNameAr, ...profile } = row;
+  const {
+    levelId,
+    levelNameAr,
+    levelTier,
+    levelArchivedAt,
+    levelSource,
+    earnedLevelId,
+    ...profile
+  } = row;
+  // S23 AD5: the effective tier (a live level of a profile not revoked), the earned one, the grants.
+  const live = levelId !== null && levelArchivedAt === null && row.revokedAt === null;
+  const [earned] =
+    earnedLevelId === null || row.revokedAt !== null
+      ? []
+      : await db
+          .select({ tier: merchantLevels.tier })
+          .from(merchantLevels)
+          .where(and(eq(merchantLevels.id, earnedLevelId), isNull(merchantLevels.archivedAt)));
+  const grants = await tierGrantRows(db, customerId);
   return {
     ...profile,
     // S21 LV4: the level and the months' purchases that decide it.
     level: levelId !== null && levelNameAr !== null ? { id: levelId, nameAr: levelNameAr } : null,
+    tier: {
+      tier: live ? (levelTier ?? 'bronze') : ('bronze' as const),
+      earnedTier: earned?.tier ?? ('bronze' as const),
+      source: live ? levelSource : null,
+      since: live ? row.levelChangedAt : null,
+      grants,
+    },
     ...(await monthsPurchases(db, customerId, new Date())),
     // S21 BR3: the receipt branding (a profile always has its settings, saved or default).
     branding: await brandingOf(db, customerId),
@@ -172,6 +214,8 @@ export async function merchantPage(
     listId: string | null;
     /** S21: a level's merchants, or `none`. */
     levelId: string | null;
+    /** S23 AD1: a tier's merchants, or `granted` for a granted tier. */
+    tier: MerchantTier | 'granted' | null;
     after: KeysetAt | null;
     limit: number;
   },
@@ -200,6 +244,12 @@ export async function merchantPage(
       listKind: sql<PriceListKind>`${priceLists.kind}`,
       levelId: merchantLevels.id,
       levelNameAr: merchantLevels.nameAr,
+      // S23 AD1: the effective tier, Bronze without a live level.
+      tier: sql<MerchantTier>`case when ${merchantLevels.archivedAt} is null
+        then coalesce(${merchantLevels.tier}, 'bronze') else 'bronze' end`,
+      tierGranted: sql<boolean>`coalesce(${merchantLevels.archivedAt} is null
+        and ${merchantProfiles.levelSource} = 'granted', false)`,
+      assigned: sql<boolean>`${customers.priceListId} is not null`,
       sales30d: sql<string>`coalesce((select sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits})
         from ${orders} where ${orders.customerId} = ${customers.id}
           and ${orders.status} in ('delivered', 'partially_refunded')
@@ -221,6 +271,17 @@ export async function merchantPage(
           : input.levelId
             ? eq(merchantProfiles.levelId, input.levelId)
             : undefined,
+        input.tier === null
+          ? undefined
+          : input.tier === 'granted'
+            ? and(
+                isNull(merchantLevels.archivedAt),
+                eq(merchantProfiles.levelSource, 'granted'),
+                isNotNull(merchantLevels.id),
+              )
+            : input.tier === 'bronze'
+              ? or(isNull(merchantLevels.id), isNotNull(merchantLevels.archivedAt))
+              : and(eq(merchantLevels.tier, input.tier), isNull(merchantLevels.archivedAt)),
         pattern
           ? or(
               ilike(merchantProfiles.tradeName, pattern),

@@ -4,8 +4,8 @@ import { AuthModule } from '../auth/index.js';
 import { CustomersModule } from '../customers/index.js';
 import { DepositsModule } from '../deposits/index.js';
 import { FilesModule } from '../files/index.js';
-import { MerchantLevelsAdminController } from './merchant-levels.admin.controller.js';
-import { MerchantLevelsService } from './merchant-levels.service.js';
+import { MerchantTiersAdminController } from './merchant-tiers.admin.controller.js';
+import { MerchantTiersService } from './merchant-tiers.service.js';
 import { MerchantsAdminController } from './merchants.admin.controller.js';
 import { MerchantsController } from './merchants.controller.js';
 import { MerchantsService } from './merchants.service.js';
@@ -17,13 +17,15 @@ import { MerchantsAdminService } from './merchants-admin.service.js';
  * are the `auth` module's columns, changed through `packages/db/src/merchants` with the customer
  * locked; the answers of a grant and a revocation are the customer profile of `customers`. Above
  * `customers` and `deposits` (the minimums the limits must reach). The dashboard reads the waiting
- * count through `MerchantsAdminService`. S21 F39: `merchant_levels` (the panel's levels; the
- * recomputation is the worker's `merchants.level`).
+ * count through `MerchantsAdminService`. S21 F39, S23 F43: `merchant_levels` (one per tier
+ * above Bronze), `merchant_tier_settings`, `merchant_tier_grants`, `merchant_tier_changes`,
+ * `merchant_tier_months` (the panel's tiers and grants; the recomputation is the worker's
+ * `merchants.level`).
  */
 @Module({
   imports: [AuthModule, AdminModule, CustomersModule, DepositsModule, FilesModule],
-  controllers: [MerchantsController, MerchantsAdminController, MerchantLevelsAdminController],
-  providers: [MerchantsService, MerchantsAdminService, MerchantLevelsService],
+  controllers: [MerchantsController, MerchantsAdminController, MerchantTiersAdminController],
+  providers: [MerchantsService, MerchantsAdminService, MerchantTiersService],
   exports: [MerchantsAdminService],
 })
 export class MerchantsModule {}

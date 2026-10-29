@@ -5,7 +5,6 @@ import {
   type PriceKind,
   type PriceListKind,
   accountPriceKind,
-  priceKindOf,
 } from '@vertex-digital/contracts';
 import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -125,7 +124,10 @@ export async function setCustomerPriceList(
       {
         customerId: customer.id,
         event: 'price_list_changed',
-        params: { priceKind: priceKindOf(list.kind) },
+        // S23 PX6: back on the tier's list, the account reads wholesale.
+        params: {
+          priceKind: accountPriceKind(list.kind, input.priceListId === null && level !== null),
+        },
       },
       { email: false },
     );

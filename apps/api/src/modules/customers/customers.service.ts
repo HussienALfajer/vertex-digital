@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  type AdminMerchantTier,
+  type LevelTier,
   type AdminCustomer,
   type AdminCustomerPage,
   type AuditPage,
@@ -183,6 +185,7 @@ export class CustomersService {
         grantedAt: merchant.grantedAt.toISOString(),
         revokedAt: merchant.revokedAt?.toISOString() ?? null,
         levelChangedAt: merchant.levelChangedAt?.toISOString() ?? null,
+        tier: merchantTierView(merchant.tier),
       },
       pinnedNote: pinned && noteOf(pinned),
       balanceUnits: facts.balanceUnits,
@@ -519,4 +522,27 @@ export class CustomersService {
       userAgent: meta.userAgent,
     } as const;
   }
+}
+
+/** S23 AD5: the merchant's tiers and grants as the profile shows them. */
+function merchantTierView(
+  tier: NonNullable<Awaited<ReturnType<typeof merchantProfileOf>>>['tier'],
+): AdminMerchantTier {
+  const grants = tier.grants.map((grant) => ({
+    id: grant.id,
+    tier: grant.tier as LevelTier,
+    startsAt: grant.startsAt.toISOString(),
+    endsAt: grant.endsAt.toISOString(),
+    reason: grant.reason,
+    endedAt: grant.endedAt?.toISOString() ?? null,
+    endReason: grant.endReason,
+  }));
+  return {
+    tier: tier.tier,
+    earnedTier: tier.earnedTier,
+    source: tier.source,
+    since: tier.since?.toISOString() ?? null,
+    openGrant: grants.find((grant) => grant.endedAt === null) ?? null,
+    grants,
+  };
 }

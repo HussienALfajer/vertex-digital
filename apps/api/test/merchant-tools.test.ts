@@ -1,11 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { markupPrice, ROOT_PRICE_LIST_IDS, WATCHES_MAX } from '@vertex-digital/contracts';
+import { markupPrice, WATCHES_MAX } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   customers,
   ensureCustomerWallet,
   ensureSystemAccount,
-  merchantLevels,
   merchantProfiles,
   newId,
   postJournal,
@@ -20,7 +19,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RatesService } from '../src/modules/rates/index.js';
 import {
   api,
-  auditOf,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -32,18 +30,16 @@ import { startApp, type TestApp } from './start-app.js';
 /*
  * The merchant area (S21 PR 1) over HTTP against the test database with the `fake` supplier:
  * access (MA1), selling settings and prices (SP1–SP3), the sale row of a purchase (SP4), the
- * dashboard (DB1–DB5), follows (AL1), alert settings (AL5, AL6), and the panel's volume levels
- * (LV1, LV6) with the merchants list's level. Levels and the category are archived in `afterAll`.
+ * dashboard (DB1–DB5), follows (AL1) and alert settings (AL5, AL6). The panel's tiers (S23) are
+ * in `merchant-tiers.test.ts`. The category is archived in `afterAll`.
  */
 
 let test: TestApp;
 let client: ReturnType<typeof api>;
 let admin: Awaited<ReturnType<ReturnType<typeof api>['adminWithTotp']>>;
-let plainAdmin: string;
 const seeded: string[] = [];
 const run = randomBytes(4).toString('hex');
 const usd = (dollars: number) => Math.round(dollars * 1_000_000);
-const { retail, wholesale } = ROOT_PRICE_LIST_IDS;
 const ids = { fake: '', categoryId: '', gameId: '', slug: `mt-pubg-${run}` };
 let item: { id: string };
 
@@ -61,7 +57,6 @@ async function json<T = Record<string, unknown>>(response: Response, status: num
   return payload as T;
 }
 
-const adminGet = (path: string) => client.get(path, { cookie: admin.cookie });
 const adminSend = (method: string, path: string, payload?: unknown, cookie = admin.cookie) =>
   client.request(method, path, { cookie, body: payload });
 const send = (method: string, path: string, cookie: string, payload?: unknown) =>
@@ -171,7 +166,6 @@ beforeAll(async () => {
   client = api(test.url);
   admin = await client.adminWithTotp(test.db);
   seeded.push(admin.id);
-  plainAdmin = await client.signInAdmin(admin.email, admin.secret);
   await reauthenticate();
   await setSwitches(test.db);
   const [fake] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'fake'));
@@ -222,10 +216,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await test.db
-    .update(merchantLevels)
-    .set({ archivedAt: new Date() })
-    .where(isNull(merchantLevels.archivedAt));
-  await test.db
     .update(priceLists)
     .set({ archivedAt: new Date() })
     .where(and(eq(priceLists.kind, 'custom'), isNull(priceLists.archivedAt)));
@@ -273,25 +263,6 @@ describe('access (S21 MA1, "Access")', () => {
         403,
       ),
     ).toMatchObject({ code: 'ACCOUNT_FROZEN' });
-  });
-
-  it('keeps the levels to the admin and re-authenticates their changes', async () => {
-    const shop = await merchant(0);
-    expect((await client.get('/api/admin/merchant-levels')).status).toBe(401);
-    expect((await client.get('/api/admin/merchant-levels', { cookie: shop.cookie })).status).toBe(
-      401,
-    );
-    const body = { nameAr: 'فضي', monthlyThresholdUsdUnits: usd(50), priceListId: wholesale };
-    for (const [method, route] of [
-      ['POST', '/api/admin/merchant-levels'],
-      ['PATCH', `/api/admin/merchant-levels/${randomUUID()}`],
-      ['POST', `/api/admin/merchant-levels/${randomUUID()}/archive`],
-    ] as const) {
-      expect(
-        await json(await adminSend(method, route, body, plainAdmin), 403),
-        route,
-      ).toMatchObject({ code: 'REAUTHENTICATION_REQUIRED' });
-    }
   });
 });
 
@@ -497,168 +468,6 @@ describe('follows and alert settings (S21 AL1, AL5, AL6)', () => {
         400,
       ),
     ).toMatchObject({ code: 'VALIDATION_FAILED' });
-  });
-});
-
-describe('volume levels in the panel (S21 LV1, LV5, LV6)', () => {
-  interface Level {
-    id: string;
-    nameAr: string;
-    monthlyThresholdUsdUnits: number;
-    priceList: { id: string; priceKind: string };
-    merchantCount: number;
-    archivedAt: string | null;
-  }
-
-  it('creates, edits and archives levels with their audit, refusing what LV1 refuses', async () => {
-    await test.db
-      .update(merchantLevels)
-      .set({ archivedAt: new Date() })
-      .where(isNull(merchantLevels.archivedAt));
-    const silver = await json<Level>(
-      await adminSend('POST', '/api/admin/merchant-levels', {
-        nameAr: `فضي ${run}`,
-        monthlyThresholdUsdUnits: usd(50),
-        priceListId: wholesale,
-      }),
-      201,
-    );
-    expect(silver).toMatchObject({
-      monthlyThresholdUsdUnits: usd(50),
-      priceList: { id: wholesale, priceKind: 'wholesale' },
-      merchantCount: 0,
-      archivedAt: null,
-    });
-    expect(
-      await json(
-        await adminSend('POST', '/api/admin/merchant-levels', {
-          nameAr: `ذهبي ${run}`,
-          monthlyThresholdUsdUnits: usd(50),
-          priceListId: wholesale,
-        }),
-        409,
-      ),
-    ).toMatchObject({ code: 'MERCHANT_LEVEL_THRESHOLD_TAKEN' });
-    expect(
-      await json(
-        await adminSend('POST', '/api/admin/merchant-levels', {
-          nameAr: `فضي ${run}`,
-          monthlyThresholdUsdUnits: usd(60),
-          priceListId: wholesale,
-        }),
-        409,
-      ),
-    ).toMatchObject({ code: 'MERCHANT_LEVEL_NAME_TAKEN' });
-    expect(
-      await json(
-        await adminSend('POST', '/api/admin/merchant-levels', {
-          nameAr: `تجزئة ${run}`,
-          monthlyThresholdUsdUnits: usd(70),
-          priceListId: retail,
-        }),
-        400,
-      ),
-    ).toMatchObject({ code: 'VALIDATION_FAILED' });
-    expect(
-      await json(
-        await adminSend('POST', '/api/admin/merchant-levels', {
-          nameAr: `ذهبي ${run}`,
-          monthlyThresholdUsdUnits: usd(51.5),
-          priceListId: wholesale,
-        }),
-        400,
-      ),
-    ).toMatchObject({ code: 'VALIDATION_FAILED' });
-
-    // A custom list named by a live level is not archived (LV6).
-    const list = await json<{ id: string }>(
-      await adminSend('POST', '/api/admin/pricing/lists', {
-        name: `مستوى ${run}`,
-        parentListId: wholesale,
-      }),
-      201,
-    );
-    const edited = await json<Level>(
-      await adminSend('PATCH', `/api/admin/merchant-levels/${silver.id}`, {
-        nameAr: `فضي ${run}`,
-        monthlyThresholdUsdUnits: usd(40),
-        priceListId: list.id,
-      }),
-      200,
-    );
-    expect(edited).toMatchObject({ monthlyThresholdUsdUnits: usd(40), priceList: { id: list.id } });
-    expect(
-      await json(await adminSend('POST', `/api/admin/pricing/lists/${list.id}/archive`), 409),
-    ).toMatchObject({ code: 'PRICE_LIST_IN_USE', details: { levels: 1 } });
-
-    const listed = await json<{ items: Level[] }>(
-      await adminGet('/api/admin/merchant-levels'),
-      200,
-    );
-    expect(listed.items.filter((level) => level.archivedAt === null).map((l) => l.id)).toEqual([
-      silver.id,
-    ]);
-    const archived = await json<Level>(
-      await adminSend('POST', `/api/admin/merchant-levels/${silver.id}/archive`),
-      200,
-    );
-    expect(archived.archivedAt).not.toBeNull();
-    expect(
-      await json(await adminSend('POST', `/api/admin/merchant-levels/${silver.id}/archive`), 404),
-    ).toMatchObject({ code: 'NOT_FOUND' });
-    await json(await adminSend('POST', `/api/admin/pricing/lists/${list.id}/archive`), 200);
-
-    expect((await auditOf(test.db, silver.id)).map((entry) => entry.action).sort()).toEqual([
-      'merchant_level.archived',
-      'merchant_level.created',
-      'merchant_level.updated',
-    ]);
-    // Every change requeues the merchants' recomputation (LV6).
-    const [queued] = (
-      await test.db.execute<{ count: number }>(
-        sql`select count(*)::int as count from pgboss.job where name = 'merchants.level'`,
-      )
-    ).rows;
-    expect(queued?.count ?? 0).toBeGreaterThan(0);
-  });
-
-  it('shows the level on the merchants list and filters by it', async () => {
-    const shop = await merchant(0);
-    const level = await json<Level>(
-      await adminSend('POST', '/api/admin/merchant-levels', {
-        nameAr: `برونزي ${run}`,
-        monthlyThresholdUsdUnits: usd(10),
-        priceListId: wholesale,
-      }),
-      201,
-    );
-    await test.db
-      .update(merchantProfiles)
-      .set({ levelId: level.id })
-      .where(eq(merchantProfiles.customerId, shop.id));
-    const page = await json<{ items: { customerId: string; level: unknown }[] }>(
-      await adminGet(`/api/admin/merchants?levelId=${level.id}`),
-      200,
-    );
-    expect(page.items).toEqual([
-      expect.objectContaining({
-        customerId: shop.id,
-        level: { id: level.id, nameAr: level.nameAr },
-      }),
-    ]);
-    const none = await json<{ items: { customerId: string }[] }>(
-      await adminGet('/api/admin/merchants?levelId=none&limit=100'),
-      200,
-    );
-    expect(none.items.some((row) => row.customerId === shop.id)).toBe(false);
-    const profile = await json<{ merchant: { level: unknown; watchCount: number } }>(
-      await adminGet(`/api/admin/customers/${shop.id}`),
-      200,
-    );
-    expect(profile.merchant).toMatchObject({
-      level: { id: level.id, nameAr: level.nameAr },
-      watchCount: 0,
-    });
   });
 });
 

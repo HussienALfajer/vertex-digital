@@ -149,10 +149,10 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
 | Rule on the tier's list | Silver | Gold | Diamond |
 |---|---|---|---|
 | Global (game top-ups and game cards) | 4% · $0.04 | 3% · $0.03 | 2% · $0.02 |
-| Category: chat and streaming apps; subscriptions and digital services | 4.5% · $0.045 | 4% · $0.04 | 3.5% · $0.035 |
+| Category: chat and streaming apps; subscriptions and digital services | 4.5% · $0.05 | 4% · $0.04 | 3.5% · $0.04 |
 | Category: store and platform cards; shopping cards | 5% · $0.05 | 5% · $0.05 | 5% · $0.05 |
 
-  Bronze stays the wholesale global rule (5% · $0.05). PR 1 reads the six production category slugs (read only) and lists them in the command; a missing slug is skipped with a warning. Because the nearer list wins (S20 LS4), a game or product rule on wholesale is overridden by a tier's category or global rule; the parent cap keeps the tier at or below it, and the admin repeats a specific rule on a tier list to keep it lower.
+  A minimum margin is whole cents (S07), so the half step's $0.045 and $0.035 are rounded up to $0.05 and $0.04 (owner, 2026-10-29). Bronze stays the wholesale global rule (5% · $0.05). The six production slugs (read 2026-10-29): `games` and `game-cards` (global rule), `apps` and `subscriptions` (half step), `gift-cards` and `shopping` (no step). PR 1 reads the six production category slugs (read only) and lists them in the command; a missing slug is skipped with a warning. Because the nearer list wins (S20 LS4), a game or product rule on wholesale is overridden by a tier's category or global rule; the parent cap keeps the tier at or below it, and the admin repeats a specific rule on a tier list to keep it lower.
 - PX4. **Never below cost:** every tier row is at least cost plus its minimum margin (≥ $0.01, S20 LS2), guarded by S20 LP1 and the routing guard; the parent cap only lowers a price to a parent price that is itself guarded.
 - PX5. **Diamond fixed prices:** S20 fixed prices on Diamond's list; the tiers page's helper lists the 20 packs merchants bought most in the last 30 days (delivered units) with each tier's price and margin, and opens S20's fixed price dialog for a pack. The fallback (S20 LP1) and the parent cap apply.
 - PX6. **Price kind** (amends S20 AT4): an account whose effective list is a live level's list has price kind `wholesale` (shown "سعر الجملة"); the tier's name is shown beside it. Lists' names, rules and costs stay hidden. The tier table (PG2) shows the prices of three packs on every tier's list (decision 8).

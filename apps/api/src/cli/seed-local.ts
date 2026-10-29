@@ -16,12 +16,14 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
-import { createDatabase, loadRootEnv } from '@vertex-digital/db';
+import { createDatabase, loadRootEnv, setupMerchantTiers } from '@vertex-digital/db';
 import { type FakeSupplierState, fakeSupplierStateSchema } from '@vertex-digital/suppliers';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AppModule } from '../app.module.js';
 import { parseEnv } from '../core/config/env.js';
+import { routingContext } from '../core/config/routing-context.js';
+import { JobsService } from '../core/jobs/index.js';
 import { createAdmin, theAdmin } from '../modules/admin/index.js';
 import { FileStorage } from '../modules/files/index.js';
 import { SettingsService } from '../modules/settings/index.js';
@@ -128,6 +130,12 @@ try {
     values: { webhookSecret: randomBytes(24).toString('base64url') },
   });
   log(`  ${await repriceCatalog(db, new Date())} products repriced`);
+  // S23 PX1: the tiers, their lists and levels, as production gets them after the deploy.
+  const tiers = await setupMerchantTiers(db, {
+    jobs: app.get(JobsService, { strict: false }),
+    routing: routingContext(env),
+  });
+  log(`Merchant tiers: ${tiers.lines.length} steps, ${tiers.listRowsAppended} list rows`);
 
   const customerPassword = randomBytes(9).toString('base64url');
   const report = await new Scenarios(app, db, {

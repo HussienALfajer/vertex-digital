@@ -96,8 +96,13 @@ export class MerchantCounterService {
     meta: RequestMeta,
   ): Promise<BulkCheckResult> {
     await requireMerchant(this.db, customerId, true);
-    await this.db
-      .transaction(async (tx) => requireMerchantTerms(await lockActiveCustomer(tx, customerId)))
+    // S23 TS5: the tier's lines and code units, read with the customer.
+    const tier = await this.db
+      .transaction(async (tx) => {
+        const customer = await lockActiveCustomer(tx, customerId);
+        requireMerchantTerms(customer);
+        return customer.tierQuantities;
+      })
       .catch((error: unknown) => {
         if (error instanceof OrderError) {
           throw new CodedException(
@@ -117,10 +122,11 @@ export class MerchantCounterService {
     }
     const game = await bulkGame(this.db, request.gameId);
     const parsed = parseBulkLines(request.text, game);
-    if (parsed.length === 0 || parsed.length > BULK_LINES_MAX) {
-      throw new CodedException(422, 'BULK_LINES_INVALID', 'Expected 1 to 50 lines', {
+    const linesMax = tier?.bulkLinesMax ?? BULK_LINES_MAX;
+    if (parsed.length === 0 || parsed.length > linesMax) {
+      throw new CodedException(422, 'BULK_LINES_INVALID', `Expected 1 to ${linesMax} lines`, {
         lines: parsed.length,
-        max: BULK_LINES_MAX,
+        max: linesMax,
       });
     }
     const packs = new Map(game.packs.map((pack) => [pack.id, pack]));
@@ -139,7 +145,7 @@ export class MerchantCounterService {
       const unit = pack ? (prices.get(pack.id)?.priceUsdUnits ?? null) : null;
       const errors: BulkCheckLine['errors'] = line.errors.map((code) => ({ code, field: null }));
       let fields = line.fields;
-      if (pack && line.quantity !== null && line.quantity > orderQuantityMax(pack, 'merchant')) {
+      if (pack && line.quantity !== null && line.quantity > orderQuantityMax(pack, 'merchant', tier)) {
         errors.push({ code: 'quantity_above_max', field: null });
       }
       if (pack && unit === null) errors.push({ code: 'pack_unavailable', field: null });
