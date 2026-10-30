@@ -14,6 +14,11 @@ import {
   SheetContent,
   SheetTitle,
   SheetTrigger,
+  SidebarPanel,
+  sidebarChildSize,
+  sidebarItemSize,
+  sidebarLink,
+  sidebarSection,
   toast,
   VertexMark,
 } from '@vertex-digital/ui';
@@ -269,20 +274,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-const navLink = cn(
-  'relative flex items-center rounded-md text-sidebar-muted-foreground transition-colors duration-150 ease-out',
-  'hover:bg-sidebar-hover hover:text-sidebar-foreground',
-  'data-[status=active]:bg-sidebar-active data-[status=active]:font-medium data-[status=active]:text-sidebar-foreground',
-  'before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:bg-sidebar-marker before:opacity-0 data-[status=active]:before:opacity-100',
-);
-
-/** A section with pages under it: the active page is marked, the section only brightens. */
-const navSection = cn(
-  'flex items-center rounded-md text-sidebar-muted-foreground transition-colors duration-150 ease-out',
-  'hover:bg-sidebar-hover hover:text-sidebar-foreground',
-  'data-[current=true]:font-medium data-[current=true]:text-sidebar-foreground',
-);
-
 /** Vertex Green navigation with the sand mark and a sand marker on the active item (§2). */
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
@@ -290,61 +281,48 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // A section brightens on any of its pages, some of which live under another path (settings).
   const within = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   return (
-    <div className="flex h-full w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground [--ring:var(--sidebar-ring)]">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
-        <VertexMark className="w-8 text-sidebar-marker" />
-        <span className="text-lg font-bold">{t('app.name')}</span>
-      </div>
-      {/* The links scroll under the fixed header on short screens and phones. */}
-      <nav
-        aria-label={t('nav.label')}
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3"
-      >
-        {navItems.map(({ to, label, icon: Icon, exact, children }) => {
-          const NavBadge = navBadges[to];
-          return (
-            <div key={label} className="flex flex-col gap-1">
-              <Link
-                to={to}
-                onClick={onNavigate}
-                activeOptions={{ exact: exact ?? false }}
-                data-current={children ? children.some((child) => within(child.to)) : undefined}
-                className={cn(
-                  children ? navSection : navLink,
-                  'h-10 gap-3 px-3 text-base pointer-coarse:h-11',
-                )}
-              >
-                <Icon className="size-5" />
-                {t(label)}
-                {!children && NavBadge && <NavBadge />}
-              </Link>
-              {children && (
-                <div className="flex flex-col gap-0.5">
-                  {children.map((child) => {
-                    const ChildBadge = navBadges[child.to];
-                    return (
-                      <Link
-                        key={child.label}
-                        to={child.to}
-                        onClick={onNavigate}
-                        activeOptions={{
-                          exact: child.except?.some((path) => pathname.startsWith(path)) ?? false,
-                          includeSearch: false,
-                        }}
-                        className={cn(navLink, 'h-8 gap-3 ps-11 pe-3 text-sm pointer-coarse:h-11')}
-                      >
-                        {t(child.label)}
-                        {ChildBadge && <ChildBadge />}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-    </div>
+    <SidebarPanel title={t('app.name')} navLabel={t('nav.label')}>
+      {navItems.map(({ to, label, icon: Icon, exact, children }) => {
+        const NavBadge = navBadges[to];
+        return (
+          <div key={label} className="flex flex-col gap-1">
+            <Link
+              to={to}
+              onClick={onNavigate}
+              activeOptions={{ exact: exact ?? false }}
+              data-current={children ? children.some((child) => within(child.to)) : undefined}
+              className={cn(children ? sidebarSection : sidebarLink, sidebarItemSize)}
+            >
+              <Icon className="size-5" />
+              {t(label)}
+              {!children && NavBadge && <NavBadge />}
+            </Link>
+            {children && (
+              <div className="flex flex-col gap-0.5">
+                {children.map((child) => {
+                  const ChildBadge = navBadges[child.to];
+                  return (
+                    <Link
+                      key={child.label}
+                      to={child.to}
+                      onClick={onNavigate}
+                      activeOptions={{
+                        exact: child.except?.some((path) => pathname.startsWith(path)) ?? false,
+                        includeSearch: false,
+                      }}
+                      className={cn(sidebarLink, sidebarChildSize)}
+                    >
+                      {t(child.label)}
+                      {ChildBadge && <ChildBadge />}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </SidebarPanel>
   );
 }
 

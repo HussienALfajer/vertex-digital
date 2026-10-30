@@ -8,7 +8,7 @@ import { tm } from './i18n';
 
 /**
  * A selling price as typed (S21 SP2, SP5, PS3): the currency, then the amount, checked by the
- * caller with `parseSellingPrice`. Shared by the order page and the point of sale.
+ * caller with `parseSellingPrice`. Shared by the order page and the sale mode.
  */
 export function SellingPriceField({
   currency,

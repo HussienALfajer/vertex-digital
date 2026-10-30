@@ -10,18 +10,22 @@ import { t } from '@/lib/i18n';
 import { CategoryCard } from './category-card';
 import { getStorefront } from './data';
 import { GameCard } from './game-card';
+import { SCROLLER } from './scroller';
 
 /** The hero (S09 screens): the title and the large search field (rule SR6). Static. */
 export function HomeHero() {
   return (
     <section className="relative overflow-hidden border-b border-border">
       <AscentLines className="absolute inset-y-0 end-0 h-full w-1/3 text-accent opacity-10" />
-      <div className="relative mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 md:py-16">
-        <h1 className="flex max-w-2xl items-start gap-3 text-3xl font-bold md:text-4xl">
+      {/* S21 PS1: in the sale mode (a merchant's, set before paint) only the search stays. */}
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 md:py-16 [[data-sale-mode-hint]_&]:py-4 [[data-sale-mode-hint]_&]:md:py-6">
+        <h1 className="flex max-w-2xl items-start gap-3 text-3xl font-bold md:text-4xl [[data-sale-mode-hint]_&]:sr-only">
           <AscentBar className="mt-2 h-8 w-1.5" />
           {t('home.title')}
         </h1>
-        <p className="max-w-2xl text-md text-muted-foreground">{t('home.subtitle')}</p>
+        <p className="max-w-2xl text-md text-muted-foreground [[data-sale-mode-hint]_&]:hidden">
+          {t('home.subtitle')}
+        </p>
         <SearchField />
       </div>
     </section>
@@ -30,10 +34,6 @@ export function HomeHero() {
 
 /** S24 NH1: how many games a category's row shows on the home page. */
 const ROW_GAMES = 10;
-
-/** A phone's horizontal row reaching both edges of the screen, a grid from `sm`. */
-const SCROLLER =
-  '-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:snap-none sm:overflow-visible sm:px-0 sm:pb-0';
 
 /**
  * The catalog (rule SF1, S24 NH1): the category cards, then one row per category with its first

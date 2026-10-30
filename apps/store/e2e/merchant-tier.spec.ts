@@ -120,7 +120,9 @@ test.describe('the tier page (S23 ID3, PG1–PG5)', () => {
       if (scheme === 'light') await page.addInitScript(lightTheme);
       tierPage(api);
       await page.goto('/merchant/tier');
-      await expect(page.getByTestId('merchant-tier')).toHaveText(tools.tier.badge.silver);
+      await expect(page.getByTestId('merchant-tier').locator('visible=true')).toHaveText(
+        tools.tier.badge.silver,
+      );
       const card = page.getByTestId('tier-card');
       await expect(card).toContainText('$720.00');
       await expect(card).toContainText('$280.00');

@@ -247,7 +247,7 @@ function SaleEditor({ order, onChange }: { order: Order; onChange: () => Promise
           {tm('order.save')}
         </Button>
         <Button type="button" variant="ghost" size="xl" onClick={() => setEditing(false)}>
-          {tm('pos.cancel')}
+          {tm('sale.cancel')}
         </Button>
       </div>
     </form>

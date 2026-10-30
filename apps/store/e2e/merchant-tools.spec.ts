@@ -176,7 +176,9 @@ test.describe('the merchant area (S21 PR 1)', () => {
         .on('GET /api/merchant/alerts', 200, alerts);
       await page.goto('/merchant');
       await expect(page.getByTestId('merchant-dashboard')).toBeVisible();
-      await expect(page.getByTestId('merchant-tier')).toHaveText(tools.tier.badge.bronze);
+      await expect(page.getByTestId('merchant-tier').locator('visible=true')).toHaveText(
+        tools.tier.badge.bronze,
+      );
       const nav = page.getByRole('navigation', { name: tools.title });
       const current = nav.locator('[aria-current="page"]');
 
@@ -189,7 +191,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await open(tools.nav.dashboard).click();
         await expect(nav).toBeVisible();
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(9);
+        await expect(nav.getByRole('link')).toHaveCount(13);
         await screenshot(page, testInfo, `merchant-nav-sheet-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();
         await expect(page).toHaveURL('/merchant/alerts');
@@ -197,7 +199,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await expect(open(tools.nav.alerts)).toBeVisible();
       } else {
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(9);
+        await expect(nav.getByRole('link')).toHaveCount(13);
         await expect(page.getByRole('complementary')).toContainText('سارة الأحمد');
         await screenshot(page, testInfo, `merchant-sidebar-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();

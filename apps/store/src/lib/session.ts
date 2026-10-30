@@ -35,24 +35,51 @@ export const PRIVATE_PRICES_HINT_KEY = 'vd-private-prices';
 export const QUICK_BUY_HINT_KEY = 'vd-quick-buy';
 
 /**
+ * S21 PS1: this browser's account was a merchant at its last read (`1` only). SESSION_HINT_SCRIPT
+ * turns it into `data-merchant-hint`, and the home page reserves the sidebar's width and the sale
+ * switch's height only then.
+ */
+export const MERCHANT_HINT_KEY = 'vd-merchant';
+
+/**
+ * S21 PS1: this browser's merchant turned the sale mode on (`features/merchant-tools/sale-mode.ts`).
+ * SESSION_HINT_SCRIPT turns it into `data-sale-mode-hint`, which lays the home and game pages out
+ * for the counter before paint. Only ever set for a merchant, and dropped with the merchant hint.
+ */
+export const SALE_MODE_KEY = 'vd-sale-mode';
+
+/**
  * Runs in <head> before the page paints: a browser that was signed in at its last read gets
  * `data-signed-in-hint` on <html>, so the header shows the signed-in placeholder instead of
  * flashing "sign in" while the session is read (pages stay static: the server never knows).
  */
-export const SESSION_HINT_SCRIPT = `try{if(localStorage.getItem('${HINT_KEY}'))document.documentElement.setAttribute('data-signed-in-hint','');if(localStorage.getItem('${PRIVATE_PRICES_HINT_KEY}'))document.documentElement.setAttribute('data-private-prices-hint','');if(localStorage.getItem('${QUICK_BUY_HINT_KEY}'))document.documentElement.setAttribute('data-quick-buy-hint','')}catch(e){}`;
+export const SESSION_HINT_SCRIPT = `try{if(localStorage.getItem('${HINT_KEY}'))document.documentElement.setAttribute('data-signed-in-hint','');if(localStorage.getItem('${PRIVATE_PRICES_HINT_KEY}'))document.documentElement.setAttribute('data-private-prices-hint','');if(localStorage.getItem('${QUICK_BUY_HINT_KEY}'))document.documentElement.setAttribute('data-quick-buy-hint','');if(localStorage.getItem('${MERCHANT_HINT_KEY}')){document.documentElement.setAttribute('data-merchant-hint','');if(localStorage.getItem('${SALE_MODE_KEY}'))document.documentElement.setAttribute('data-sale-mode-hint','')}}catch(e){}`;
 
-function rememberSession(signedIn: boolean) {
+function rememberSession(session: Session) {
+  const merchant = session?.user.accountType === 'merchant' && session.user.emailVerified !== false;
   try {
-    if (signedIn) localStorage.setItem(HINT_KEY, '1');
+    if (session) localStorage.setItem(HINT_KEY, '1');
     else localStorage.removeItem(HINT_KEY);
+    if (merchant) {
+      localStorage.setItem(MERCHANT_HINT_KEY, '1');
+    } else {
+      localStorage.removeItem(MERCHANT_HINT_KEY);
+      localStorage.removeItem(SALE_MODE_KEY);
+    }
   } catch {
     // Storage can be unavailable (private mode): the header then waits for the read as before.
+  }
+  if (merchant) {
+    document.documentElement.setAttribute('data-merchant-hint', '');
+  } else {
+    document.documentElement.removeAttribute('data-merchant-hint');
+    document.documentElement.removeAttribute('data-sale-mode-hint');
   }
 }
 
 /** Sign-out: the next page starts signed out at once, with retail prices. */
 export const forgetSession = () => {
-  rememberSession(false);
+  rememberSession(null);
   try {
     localStorage.removeItem(PRIVATE_PRICES_HINT_KEY);
     localStorage.removeItem(QUICK_BUY_HINT_KEY);
@@ -77,7 +104,7 @@ export function readSessionResult(): Promise<SessionRead> {
         if (!response.ok) return { session: null, known: false };
         const session = (await response.json()) as Session;
         // Only a clear answer changes the hint; a failed read leaves it as it was.
-        rememberSession(session !== null);
+        rememberSession(session);
         return { session, known: true };
       })
       .catch((): SessionRead => ({ session: null, known: false }))

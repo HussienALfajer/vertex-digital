@@ -59,6 +59,10 @@ const config: NextConfig = {
       },
     ];
   },
+  // S21 PS1: the point of sale became the sale mode; old links and installed apps still land there.
+  async redirects() {
+    return [{ source: '/merchant/pos', destination: '/?sale=1', permanent: false }];
+  },
   // nginx sends /api to the API in production; the development server does it here.
   async rewrites() {
     if (process.env.NODE_ENV === 'production') return [];

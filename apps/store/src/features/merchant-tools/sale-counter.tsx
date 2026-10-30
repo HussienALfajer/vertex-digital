@@ -1,11 +1,11 @@
 'use client';
 
 import {
+  displaySypTotal,
   formatAmountInput,
   formatSyp,
   formatUsd,
   MERCHANT_CODE_QUANTITY_MAX,
-  type MerchantGame,
   type OrderSummary,
   orderTotal,
   type PlayerCheck,
@@ -14,6 +14,7 @@ import {
   type SavedPlayer,
   type SellingPriceRow,
   type StoreGame,
+  type StoreProduct,
 } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import { Button } from '@vertex-digital/ui/components/button';
@@ -26,7 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@vertex-digital/ui/components/dialog';
-import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import {
   Field,
   FieldDescription,
@@ -37,7 +37,8 @@ import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
-  CircleAlertIcon,
+  EyeIcon,
+  EyeOffIcon,
   KeyboardIcon,
   PrinterIcon,
   TicketIcon,
@@ -47,85 +48,97 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { readCustomerPrices } from '@/features/catalog/customer-prices';
+import { PackButton } from '@/features/catalog/pack-button';
+import { withPrivatePrices } from '@/features/catalog/private-prices';
 import { useNotificationEvents } from '@/features/notifications/live';
 import { listOrders } from '@/features/orders/requests';
 import { STAGE_TONES, stageText } from '@/features/orders/stages';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { usePurchasesStopped } from '@/features/purchase/customer';
+import { FieldInput } from '@/features/purchase/field-input';
 import { checkFields, type FieldValues } from '@/features/purchase/fields';
 import { freesKey } from '@/features/purchase/order-key';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
-import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
-import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { parseSellingPrice } from './form';
 import { tm } from './i18n';
-import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
-import {
-  getMerchantGames,
-  getRecentPlayers,
-  getSavedPlayers,
-  getSellingPrices,
-  getWatches,
-  readCounterGame,
-  setOrderSale,
-} from './requests';
+import { getRecentPlayers, getSavedPlayers, getSellingPrices, setOrderSale } from './requests';
+import { type Amount, type SalePrice, saleFigures } from './sale-figures';
+import { toggleCostHidden, useCostHidden } from './sale-mode';
 import { SellingPriceField } from './selling-price-field';
-import { useMerchantTier } from './tier-state';
+import { MerchantTierProvider, useMerchantTier } from './tier-state';
 
 // S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
 const TermsSheet = dynamic(() =>
   import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
 );
 
-/** PS1: followed games first, then by the merchant's 30-day units, then the store's order. */
-async function posGames() {
-  const [games, watches] = await Promise.all([getMerchantGames(), getWatches()]);
-  if (!games.ok) return games;
-  const followed = new Set(watches.ok ? watches.data.games.map((game) => game.gameId) : []);
-  const items = [...games.data.items].sort(
-    (a, b) =>
-      Number(followed.has(b.id)) - Number(followed.has(a.id)) || b.recentUnits - a.recentUnits,
-  );
-  return { ok: true as const, data: items };
-}
-
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
+/** A shortcut is not one with a modifier held (`Ctrl+P` prints the page). */
+const plainKey = (event: KeyboardEvent) => !event.ctrlKey && !event.metaKey && !event.altKey;
+
 /**
- * "نقطة البيع" (S21 F32, PS1–PS5): a game bar, the pack grid with each pack's purchase and selling
- * price and availability, the player fields with the game's recent and saved ids, and the last 10
- * orders live. A pack with an id filled opens the confirmation (two taps and a confirmation);
- * the order goes through `POST /api/orders` with every S08 and S09 rule. Keyboard: `/`, `1`–`9`,
- * `F2`, `Enter`, `Esc`, `P`, `?`. Tablet and desktop first; works at phone width.
+ * The sale mode of a game page (S21 F32, PS1–PS6), a merchant's only: each pack's selling and
+ * purchase price in both currencies with the profit, the player fields with the game's recent and
+ * saved ids, and the last 10 orders live. A pack with an id filled opens the confirmation (two taps
+ * and a confirmation); the order goes through `POST /api/orders` with every S08 and S09 rule.
+ * Keyboard: `/`, `1`–`9`, `F2`, `Enter`, `Esc`, `P`, `H`, `?`. `pack` is the page's `?pack=`.
  */
-export function PosPage() {
-  const read = useCallback(() => posGames(), []);
-  const { state, reload } = useMerchantRead(read);
-  const [gameId, setGameId] = useState<string | null>(null);
+export function SaleCounter({
+  data,
+  pack,
+  frozen: accountFrozen,
+  linkWaiting,
+}: {
+  data: StoreGame;
+  pack: string | null;
+  frozen: boolean;
+  /** A link asked the buy box for something, and it would show the hidden cost (PS1b). */
+  linkWaiting: boolean;
+}) {
+  // Its own tier read: the code packs' limit (S23 TS5). Outside the merchant area's layout.
+  return (
+    <MerchantTierProvider>
+      <Counter data={data} pack={pack} accountFrozen={accountFrozen} linkWaiting={linkWaiting} />
+    </MerchantTierProvider>
+  );
+}
+
+function Counter({
+  data,
+  pack,
+  accountFrozen,
+  linkWaiting,
+}: {
+  data: StoreGame;
+  pack: string | null;
+  accountFrozen: boolean;
+  linkWaiting: boolean;
+}) {
   const strip = useOrderStrip();
   const [help, setHelp] = useState(false);
-  // S21 MA1: a frozen merchant reads only; the packs stay shown but open nothing.
-  const frozen = isFrozenCustomer(useCustomer());
+  const hideCost = useCostHidden();
   // S05 SW7, BB7: while purchases are stopped the packs open nothing either (audit A09-24).
   const stopped = usePurchasesStopped();
 
   useEffect(() => {
-    if (state.status === 'ready' && gameId === null) setGameId(state.data[0]?.id ?? null);
-  }, [state, gameId]);
-
-  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (isTyping(event.target)) return;
-      if (event.key === '?') {
+      if (isTyping(event.target) || !plainKey(event)) return;
+      if (event.key === '?' || event.key === '؟') {
         event.preventDefault();
         setHelp(true);
-      } else if (event.key.toLowerCase() === 'p' && strip.lastDelivered) {
+      } else if (event.code === 'KeyH') {
+        // By the key's place: an Arabic keyboard layout has no `h`.
+        event.preventDefault();
+        toggleCostHidden();
+      } else if (event.code === 'KeyP' && strip.lastDelivered) {
         event.preventDefault();
         window.open(`/orders/${strip.lastDelivered}/print?paper=58&content=receipt`, '_blank');
       }
@@ -134,51 +147,45 @@ export function PosPage() {
     return () => document.removeEventListener('keydown', onKey);
   }, [strip.lastDelivered]);
 
-  if (state.status !== 'ready') {
-    return <MerchantPageStatus state={state} onRetry={reload} skeleton={<MerchantSkeleton />} />;
-  }
-  const game = state.data.find((item) => item.id === gameId) ?? null;
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3">
-        <nav aria-label={tm('pos.games')} className="-mx-4 overflow-x-auto px-4">
-          <ul className="flex min-w-max gap-2">
-            {state.data.map((item) => (
-              <li key={item.id}>
-                <Button
-                  size="xl"
-                  variant={item.id === gameId ? 'primary' : 'outline'}
-                  aria-pressed={item.id === gameId}
-                  onClick={() => setGameId(item.id)}
-                >
-                  {item.nameAr}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="xl"
+          aria-pressed={hideCost}
+          aria-keyshortcuts="H"
+          onClick={toggleCostHidden}
+        >
+          {hideCost ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
+          {tm(hideCost ? 'sale.showCost' : 'sale.hideCost')}
+        </Button>
         <Button
           variant="ghost"
           size="xl"
-          className="hidden shrink-0 md:inline-flex"
+          className="hidden md:inline-flex"
           onClick={() => setHelp(true)}
         >
           <KeyboardIcon aria-hidden="true" />
-          {tm('pos.shortcutsOpen')}
+          {tm('sale.shortcutsOpen')}
         </Button>
       </div>
-      {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
+      {linkWaiting && <FormAlert tone="warning">{tm('sale.linkNeedsCost')}</FormAlert>}
+      {accountFrozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
       {stopped && <FormAlert>{t('purchase.stopped')}</FormAlert>}
-      {game ? (
-        <GamePanel key={game.id} game={game} frozen={frozen || stopped} onPlaced={strip.reload} />
-      ) : (
-        <EmptyState icon={<CircleAlertIcon />} title={tm('pos.chooseGame')} />
-      )}
+      <GamePanel
+        store={data}
+        pack={linkWaiting ? null : pack}
+        frozen={accountFrozen || stopped}
+        paused={help}
+        hideCost={hideCost}
+        onPlaced={strip.reload}
+      />
       <OrderStrip strip={strip} />
       <Dialog open={help} onOpenChange={setHelp}>
         <DialogContent closeLabel={tm('common.close')}>
           <DialogHeader>
-            <DialogTitle>{tm('pos.shortcuts')}</DialogTitle>
+            <DialogTitle>{tm('sale.shortcuts')}</DialogTitle>
           </DialogHeader>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {(
@@ -189,6 +196,7 @@ export function PosPage() {
                 ['Enter', 'confirm'],
                 ['Esc', 'close'],
                 ['P', 'print'],
+                ['H', 'hideCost'],
                 ['?', 'help'],
               ] as const
             ).map(([key, label]) => (
@@ -198,7 +206,7 @@ export function PosPage() {
                     {key}
                   </kbd>
                 </dt>
-                <dd>{tm(`pos.keys.${label}`)}</dd>
+                <dd>{tm(`sale.keys.${label}`)}</dd>
               </div>
             ))}
           </dl>
@@ -209,54 +217,155 @@ export function PosPage() {
 }
 
 type GameData = {
-  store: StoreGame;
   prices: SellingPriceRow[];
+  products: StoreProduct[];
+  /** The purchase price in SYP per pack (the merchant's own prices of the game), where known. */
+  purchaseSyp: Map<string, number>;
   recent: RecentPlayers['items'];
   saved: SavedPlayer[];
 };
 
 type GameState = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; data: GameData };
 
-async function readGame(game: MerchantGame): Promise<GameState> {
-  const [store, prices, recent, saved] = await Promise.all([
-    readCounterGame(game.slug),
-    getSellingPrices(game.id),
-    getRecentPlayers(game.id),
-    getSavedPlayers(game.id),
+async function readGame(store: StoreGame): Promise<GameState> {
+  const [own, prices, recent, saved] = await Promise.all([
+    readCustomerPrices(store.game.slug),
+    getSellingPrices(store.game.id),
+    getRecentPlayers(store.game.id),
+    getSavedPlayers(store.game.id),
   ]);
-  if (!store.ok || !prices.ok) return { status: 'failed' };
+  if (!prices.ok) return { status: 'failed' };
+  const products = own ? withPrivatePrices(store.products, own) : store.products;
+  const purchaseSyp = new Map<string, number>();
+  for (const row of prices.data.products) {
+    const product = products.find((item) => item.id === row.productId);
+    // Only the figure of the same price: a read that crossed a price change shows USD alone.
+    if (product?.priceSypUnits != null && product.priceUsdUnits === row.purchaseUsdUnits) {
+      purchaseSyp.set(row.productId, product.priceSypUnits);
+    }
+  }
   return {
     status: 'ready',
     data: {
-      store: store.data,
       prices: prices.data.products,
+      products,
+      purchaseSyp,
       recent: recent.ok ? recent.data.items : [],
       saved: saved.ok ? saved.data.items : [],
     },
   };
 }
 
-function priceLine(row: SellingPriceRow): string {
-  if (row.sellingSypUnits !== null)
-    return tm('common.syp', { amount: formatSyp(row.sellingSypUnits) });
-  if (row.sellingUsdUnits !== null) return ltr(formatUsd(row.sellingUsdUnits));
-  return tm('pos.noSelling');
+const amountText = ({ currency, units }: Amount) =>
+  currency === 'syp' ? tm('common.syp', { amount: formatSyp(units) }) : formatUsd(units);
+
+/** A price with its equivalent after "≈" (brand/identity.md §6: the rate is not locked here). */
+function PriceLine({ price, large }: { price: SalePrice; large?: boolean }) {
+  return (
+    <span className={`flex flex-wrap items-baseline gap-x-1.5 ${large ? '' : 'text-xs'}`}>
+      <bdi className={`tabular-nums ${large ? 'text-xl font-bold' : ''}`}>
+        {amountText(price.main)}
+      </bdi>
+      {price.approx && (
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {tm('common.approx', { amount: amountText(price.approx) })}
+        </span>
+      )}
+    </span>
+  );
 }
 
-/** PS1–PS3: one game's packs, the player fields and the confirmation. */
+/** PS3, PS6: what a pack shows in the sale mode; with the cost hidden, the selling price alone. */
+function SaleCard({
+  row,
+  number,
+  purchaseSyp,
+  hideCost,
+}: {
+  row: SellingPriceRow;
+  number: number;
+  purchaseSyp: number | null;
+  hideCost: boolean;
+}) {
+  const { selling, purchase, profit } = saleFigures(row, purchaseSyp);
+  return (
+    <>
+      <span className="flex w-full items-start justify-between gap-2">
+        <bdi className="font-bold break-words">{row.nameAr}</bdi>
+        {number <= 9 && (
+          <kbd className="rounded border border-border px-1.5 tabular-nums text-xs" dir="ltr">
+            {number}
+          </kbd>
+        )}
+      </span>
+      {row.available && purchase ? (
+        <>
+          <span className="flex flex-col">
+            <span className="text-xs text-muted-foreground">{tm('sale.selling')}</span>
+            {selling ? (
+              <PriceLine price={selling} large />
+            ) : (
+              <span className="text-sm">{tm('sale.noSelling')}</span>
+            )}
+          </span>
+          {!hideCost && (
+            <>
+              <span className="flex flex-col">
+                <span className="text-xs text-muted-foreground">{tm('sale.purchase')}</span>
+                <PriceLine price={purchase} />
+              </span>
+              {profit && (
+                <Badge
+                  tone={profit.units > 0 ? 'success' : profit.units < 0 ? 'danger' : 'neutral'}
+                  className="mt-auto self-start"
+                >
+                  {tm('sale.profit', {
+                    amount: `${profit.units > 0 ? '+' : profit.units < 0 ? '-' : ''}${amountText({
+                      ...profit,
+                      units: Math.abs(profit.units),
+                    })}`,
+                  })}
+                </Badge>
+              )}
+              {row.belowCost && (
+                <span className="text-xs text-status-danger-foreground">
+                  {tm('prices.belowCost')}
+                </span>
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <Badge tone="neutral" className="self-start">
+          {tm('sale.unavailable')}
+        </Badge>
+      )}
+    </>
+  );
+}
+
+/** PS1–PS3: the game's packs, the player fields and the confirmation. */
 function GamePanel({
-  game,
+  store,
+  pack,
   frozen,
+  paused,
+  hideCost,
   onPlaced,
 }: {
-  game: MerchantGame;
+  store: StoreGame;
+  pack: string | null;
   frozen: boolean;
+  /** The help sheet is open: the number keys wait. */
+  paused: boolean;
+  hideCost: boolean;
   onPlaced: () => void;
 }) {
+  const game = store.game;
   const [state, setState] = useState<GameState>({ status: 'loading' });
   // The player typed for this game until the sale goes through, across a game change and a reload.
   const [values, setValues] = useState<FieldValues>(
-    () => readFormDraft<FieldValues>(`pos:${game.id}`) ?? {},
+    () => readFormDraft<FieldValues>(`sale:${game.id}`) ?? {},
   );
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<SellingPriceRow | null>(null);
@@ -265,18 +374,18 @@ function GamePanel({
   const searchRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => setState(await readGame(game)), [game]);
+  const load = useCallback(async () => setState(await readGame(store)), [store]);
   useEffect(() => {
     void load();
   }, [load]);
   useEffect(() => {
-    if (Object.keys(values).length > 0) saveFormDraft(`pos:${game.id}`, values);
-    else clearFormDraft(`pos:${game.id}`);
+    if (Object.keys(values).length > 0) saveFormDraft(`sale:${game.id}`, values);
+    else clearFormDraft(`sale:${game.id}`);
   }, [game.id, values]);
 
   const ready = state.status === 'ready' ? state.data : null;
   const kinds = useMemo(
-    () => new Map(ready?.store.products.map((product) => [product.id, product]) ?? []),
+    () => new Map(ready?.products.map((product) => [product.id, product]) ?? []),
     [ready],
   );
   const packs = useMemo(
@@ -290,17 +399,17 @@ function GamePanel({
   // when they change, never on a re-render (audit A06-6, BK4's quota).
   const fields = useMemo(
     () =>
-      ready && ready.store.fields.length > 0
-        ? (checkFields(ready.store.fields, values) as { values: FieldValues }).values
+      store.fields.length > 0
+        ? (checkFields(store.fields, values) as { values: FieldValues }).values
         : {},
-    [ready, values],
+    [store.fields, values],
   );
 
   const open = useCallback(
     (row: SellingPriceRow) => {
       if (frozen || !ready || !row.available) return;
       const product = kinds.get(row.productId);
-      if (product?.kind === 'direct' && !checkFields(ready.store.fields, values).ok) {
+      if (product?.kind === 'direct' && !checkFields(store.fields, values).ok) {
         setNeedPlayer(true);
         playerRef.current?.querySelector('input')?.focus();
         return;
@@ -308,8 +417,17 @@ function GamePanel({
       setNeedPlayer(false);
       setChosen(row);
     },
-    [frozen, ready, kinds, values],
+    [frozen, ready, kinds, store.fields, values],
   );
+
+  // `?pack=` (a search result): that pack, once it is known; it asks for the id first if missing.
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pack || !ready || opened.current === pack) return;
+    opened.current = pack;
+    const row = ready.prices.find((item) => item.productId === pack);
+    if (row) open(row);
+  }, [pack, ready, open]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -318,9 +436,11 @@ function GamePanel({
         playerRef.current?.querySelector('input')?.focus();
         return;
       }
-      if (chosen || isTyping(event.target)) return;
+      if (chosen || paused || isTyping(event.target) || !plainKey(event)) return;
       if (event.key === '/') {
         event.preventDefault();
+        // The packs' search here, not the store's (which `Ctrl+K` still opens).
+        event.stopPropagation();
         searchRef.current?.focus();
       } else if (/^[1-9]$/.test(event.key)) {
         const row = packs[Number(event.key) - 1];
@@ -332,7 +452,7 @@ function GamePanel({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [packs, open, chosen]);
+  }, [packs, open, chosen, paused]);
 
   if (state.status === 'loading') {
     return (
@@ -350,7 +470,7 @@ function GamePanel({
   if (state.status === 'failed') {
     return (
       <Card className="gap-3 border-status-danger" role="alert">
-        <p className="text-sm">{tm('pos.offline')}</p>
+        <p className="text-sm">{tm('sale.offline')}</p>
         <Button variant="outline" size="xl" className="self-start" onClick={() => void load()}>
           {tm('common.retry')}
         </Button>
@@ -358,7 +478,7 @@ function GamePanel({
     );
   }
   const data = state.data;
-  const direct = data.store.fields.length > 0;
+  const direct = store.fields.length > 0;
   const chips = [
     ...data.saved.map((player) => ({
       fields: player.fields,
@@ -376,30 +496,26 @@ function GamePanel({
       <div className="flex flex-col gap-3 lg:order-2" ref={playerRef}>
         {direct && (
           <Card className="gap-3">
-            <h2 className="font-bold">{tm('pos.player')}</h2>
-            {data.store.fields.map((field) => (
-              <Field key={field.key} invalid={needPlayer}>
-                <FieldLabel>{field.labelAr}</FieldLabel>
-                <Input
-                  name={field.key}
-                  dir="ltr"
-                  autoComplete="off"
-                  className="h-11 text-md"
-                  value={values[field.key] ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setValues((current) => ({ ...current, [field.key]: value }));
-                  }}
-                />
-              </Field>
+            <h2 className="font-bold">{tm('sale.player')}</h2>
+            {store.fields.map((field) => (
+              <FieldInput
+                key={field.key}
+                field={field}
+                value={values[field.key] ?? ''}
+                onChange={(value) => {
+                  setValues((current) => ({ ...current, [field.key]: value }));
+                  setNeedPlayer(false);
+                }}
+                onBlur={() => {}}
+              />
             ))}
-            {needPlayer && <FormAlert>{tm('pos.fillPlayer')}</FormAlert>}
+            {needPlayer && <FormAlert>{tm('sale.fillPlayer')}</FormAlert>}
             <div className="flex flex-col gap-2">
               <span className="text-xs text-muted-foreground">
-                {tm('pos.saved')} · {tm('pos.recent')}
+                {tm('sale.saved')} · {tm('sale.recent')}
               </span>
               {chips.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{tm('pos.noRecent')}</p>
+                <p className="text-sm text-muted-foreground">{tm('sale.noRecent')}</p>
               ) : (
                 <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
                   {chips.map((chip) => (
@@ -433,75 +549,53 @@ function GamePanel({
             ref={searchRef}
             type="search"
             name="search"
-            placeholder={tm('pos.search')}
-            aria-label={tm('pos.search')}
+            placeholder={tm('sale.search')}
+            aria-label={tm('sale.search')}
             className="h-11 text-md"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <span className="hidden shrink-0 text-xs text-muted-foreground md:inline">
-            {tm('pos.searchHint')}
+            {tm('sale.searchHint')}
           </span>
         </div>
         {notice &&
           (notice.saleSaved ? (
             <p className="text-sm text-status-success-foreground" role="status">
-              {tm('pos.placed', { number: notice.number })}
+              {tm('sale.placed', { number: notice.number })}
             </p>
           ) : (
             <div className="flex flex-col items-start gap-1">
               <FormAlert tone="warning">
-                {tm('pos.saleNotSaved', { number: notice.number })}
+                {tm('sale.saleNotSaved', { number: notice.number })}
               </FormAlert>
               <Link
                 href={`/orders/${notice.id}`}
                 prefetch={false}
                 className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
               >
-                {tm('pos.saleSetOnOrder')}
+                {tm('sale.saleSetOnOrder')}
               </Link>
             </div>
           ))}
         {packs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{tm('pos.noPacks')}</p>
+          <p className="text-sm text-muted-foreground">{tm('sale.noPacks')}</p>
         ) : (
           <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             {packs.map((row, index) => (
               <li key={row.productId}>
-                <button
-                  type="button"
-                  disabled={frozen || !row.available}
-                  onClick={() => open(row)}
-                  className="flex h-full min-h-28 w-full flex-col items-start gap-1 rounded-lg border border-border bg-surface p-3 text-start transition-colors hover:border-primary disabled:opacity-50"
+                <PackButton
+                  available={!frozen && row.available}
+                  selected={false}
+                  onSelect={() => open(row)}
                 >
-                  <span className="flex w-full items-start justify-between gap-2">
-                    <span className="font-bold break-words">
-                      <bdi>{row.nameAr}</bdi>
-                    </span>
-                    {index < 9 && (
-                      <kbd
-                        className="rounded border border-border px-1.5 tabular-nums text-xs"
-                        dir="ltr"
-                      >
-                        {index + 1}
-                      </kbd>
-                    )}
-                  </span>
-                  {row.available && row.purchaseUsdUnits !== null ? (
-                    <>
-                      <span className="text-xs text-muted-foreground">
-                        {tm('pos.purchase')} <bdi dir="ltr">{formatUsd(row.purchaseUsdUnits)}</bdi>
-                      </span>
-                      <span
-                        className={`text-sm ${row.belowCost ? 'text-status-danger-foreground' : ''}`}
-                      >
-                        {tm('pos.selling')} <bdi>{priceLine(row)}</bdi>
-                      </span>
-                    </>
-                  ) : (
-                    <Badge tone="neutral">{tm('pos.unavailable')}</Badge>
-                  )}
-                </button>
+                  <SaleCard
+                    row={row}
+                    number={index + 1}
+                    purchaseSyp={data.purchaseSyp.get(row.productId) ?? null}
+                    hideCost={hideCost}
+                  />
+                </PackButton>
               </li>
             ))}
           </ul>
@@ -512,10 +606,13 @@ function GamePanel({
           <ConfirmSale
             key={chosen.productId}
             row={chosen}
-            store={data.store}
+            products={data.products}
+            gameName={game.nameAr}
+            purchaseSyp={data.purchaseSyp.get(chosen.productId) ?? null}
+            hideCost={hideCost}
             fields={fields}
             onPlaced={(placed) => {
-              clearFormDraft(`pos-sale:${chosen.productId}`);
+              clearFormDraft(`sale-price:${chosen.productId}`);
               // The next sale is for another player: this id never comes back by itself.
               setValues({});
               setChosen(null);
@@ -539,18 +636,26 @@ type Notice = { id: string; number: string; saleSaved: boolean };
 /** PS3: the pack, quantity, id with its check, the price paid, the editable selling price. */
 function ConfirmSale({
   row,
-  store,
+  products,
+  gameName,
+  purchaseSyp,
+  hideCost,
   fields,
   onPlaced,
   onPriceChanged,
 }: {
   row: SellingPriceRow;
-  store: StoreGame;
+  products: StoreProduct[];
+  gameName: string;
+  /** The pack's purchase price in SYP at `row.purchaseUsdUnits`; null when not known. */
+  purchaseSyp: number | null;
+  /** PS6: the customer may see the screen, so no price paid here either. */
+  hideCost: boolean;
   fields: FieldValues;
   onPlaced: (placed: Notice) => void;
   onPriceChanged: () => void;
 }) {
-  const product = store.products.find((item) => item.id === row.productId);
+  const product = products.find((item) => item.id === row.productId);
   const code = product?.kind === 'code';
   // S23 TS5: a code pack takes up to the tier's units per order (the server enforces it too).
   const unitsMax = useMerchantTier().tier?.privileges.orderUnitsMax ?? MERCHANT_CODE_QUANTITY_MAX;
@@ -563,7 +668,7 @@ function ConfirmSale({
   // A selling price typed here stays with the pack until the sale goes through (a closed
   // confirmation, a reload).
   const [typedSale] = useState(() =>
-    readFormDraft<{ currency: SaleCurrency; amount: string }>(`pos-sale:${row.productId}`),
+    readFormDraft<{ currency: SaleCurrency; amount: string }>(`sale-price:${row.productId}`),
   );
   const [currency, setCurrency] = useState<SaleCurrency>(typedSale?.currency ?? startCurrency);
   // The pack's selling price as the field shows it, in the currency it was set in.
@@ -588,8 +693,8 @@ function ConfirmSale({
 
   useEffect(() => {
     if (currency === startCurrency && amount === initialAmount) {
-      clearFormDraft(`pos-sale:${row.productId}`);
-    } else saveFormDraft(`pos-sale:${row.productId}`, { currency, amount });
+      clearFormDraft(`sale-price:${row.productId}`);
+    } else saveFormDraft(`sale-price:${row.productId}`, { currency, amount });
   }, [row.productId, currency, amount, startCurrency, initialAmount]);
 
   useEffect(() => {
@@ -612,6 +717,7 @@ function ConfirmSale({
     check.check.result !== 'valid' &&
     check.check.result !== 'not_supported';
   const units = Number(quantity);
+  const shownUnits = Number.isInteger(units) && units > 0 && units <= max ? units : 1;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -669,9 +775,9 @@ function ConfirmSale({
   return (
     <DialogContent closeLabel={tm('common.close')}>
       <DialogHeader>
-        <DialogTitle>{tm('pos.confirmTitle')}</DialogTitle>
+        <DialogTitle>{tm('sale.confirmTitle')}</DialogTitle>
         <DialogDescription>
-          <bdi>{row.nameAr}</bdi> · {store.game.nameAr}
+          <bdi>{row.nameAr}</bdi> · {gameName}
         </DialogDescription>
       </DialogHeader>
       <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
@@ -680,20 +786,20 @@ function ConfirmSale({
             <bdi dir="ltr" className="font-medium">
               {Object.values(fields).join(' · ')}
             </bdi>
-            {check.status === 'checking' && <span>{tm('pos.checking')}</span>}
+            {check.status === 'checking' && <span>{tm('sale.checking')}</span>}
             {check.status === 'done' && check.check.result === 'valid' && (
               <span className="flex items-center gap-2 text-status-success-foreground">
                 <UserRoundCheckIcon className="size-4" aria-hidden="true" />
                 {check.check.playerName
-                  ? tm('pos.checkedName', { name: check.check.playerName })
+                  ? tm('sale.checkedName', { name: check.check.playerName })
                   : tm('bulk.checks.validNoName')}
               </span>
             )}
             {needsConfirm && check.status === 'done' && (
               <span className="text-status-warning-foreground">
                 {check.check.result === 'invalid'
-                  ? tm('pos.checkInvalid')
-                  : tm('pos.checkUnavailable')}
+                  ? tm('sale.checkInvalid')
+                  : tm('sale.checkUnavailable')}
               </span>
             )}
             {needsConfirm && (
@@ -708,14 +814,14 @@ function ConfirmSale({
                   aria-invalid={invalid === 'player'}
                   onChange={(event) => setConfirmed(event.target.checked)}
                 />
-                {tm('pos.confirmPlayer')}
+                {tm('sale.confirmPlayer')}
               </label>
             )}
           </div>
         )}
         {code && (
           <Field invalid={invalid === 'quantity'}>
-            <FieldLabel>{tm('pos.quantity')}</FieldLabel>
+            <FieldLabel>{tm('sale.quantity')}</FieldLabel>
             <Input
               name="quantity"
               dir="ltr"
@@ -724,34 +830,46 @@ function ConfirmSale({
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
             />
-            <FieldDescription>{tm('pos.quantityHint', { max })}</FieldDescription>
+            <FieldDescription>{tm('sale.quantityHint', { max })}</FieldDescription>
             <FieldError match={invalid === 'quantity'}>
-              {tm('pos.quantityHint', { max })}
+              {tm('sale.quantityHint', { max })}
             </FieldError>
           </Field>
         )}
-        <p className="flex items-baseline justify-between text-sm">
-          <span className="text-muted-foreground">{tm('pos.total')}</span>
-          <bdi dir="ltr" className="font-bold">
-            {formatUsd(
-              orderTotal(
-                purchase,
-                Number.isInteger(units) && units > 0 && units <= max ? units : 1,
-              ),
+        {/* A price that changed is shown whatever is hidden: it must be seen before it is paid. */}
+        {(!hideCost || purchase !== row.purchaseUsdUnits) && (
+          <div className="flex flex-col">
+            <p className="flex items-baseline justify-between text-sm">
+              <span className="text-muted-foreground">{tm('sale.total')}</span>
+              <bdi dir="ltr" className="font-bold">
+                {formatUsd(orderTotal(purchase, shownUnits))}
+              </bdi>
+            </p>
+            {/* The SYP of the price on the card only: a refusal's new price comes in USD alone. */}
+            {purchaseSyp !== null && purchase === row.purchaseUsdUnits && (
+              <span className="text-end text-xs text-muted-foreground tabular-nums">
+                {tm('common.approx', {
+                  amount: tm('common.syp', {
+                    amount: formatSyp(
+                      displaySypTotal([{ sypUnits: purchaseSyp, count: shownUnits }]),
+                    ),
+                  }),
+                })}
+              </span>
             )}
-          </bdi>
-        </p>
+          </div>
+        )}
         <SellingPriceField
           currency={currency}
           amount={amount}
           invalid={invalid === 'price'}
-          label={tm('pos.sellingPrice')}
+          label={tm('sale.sellingPrice')}
           onCurrency={setCurrency}
           onAmount={setAmount}
         />
-        <p className="text-xs text-muted-foreground">{tm('pos.sellingHint')}</p>
+        <p className="text-xs text-muted-foreground">{tm('sale.sellingHint')}</p>
         {termsAccepted ? (
-          <FormAlert tone="success">{tm('pos.termsAccepted')}</FormAlert>
+          <FormAlert tone="success">{tm('sale.termsAccepted')}</FormAlert>
         ) : (
           failure && <FormAlert>{errorText(failure)}</FormAlert>
         )}
@@ -764,7 +882,7 @@ function ConfirmSale({
         )}
         <DialogFooter>
           <Button type="submit" size="xl" disabled={pending || check.status === 'checking'}>
-            {tm('pos.confirm')}
+            {tm('sale.confirm')}
           </Button>
         </DialogFooter>
       </form>
@@ -813,10 +931,10 @@ function OrderStrip({ strip }: { strip: Strip }) {
   }, []);
   return (
     <Card className="gap-3">
-      <h2 className="font-bold">{tm('pos.strip')}</h2>
+      <h2 className="font-bold">{tm('sale.strip')}</h2>
       {strip.orders === null && strip.failed ? (
         <div className="flex flex-col items-start gap-2" role="alert">
-          <p className="text-sm">{tm('pos.stripFailed')}</p>
+          <p className="text-sm">{tm('sale.stripFailed')}</p>
           <Button variant="outline" size="xl" onClick={strip.reload}>
             {tm('common.retry')}
           </Button>
@@ -824,7 +942,7 @@ function OrderStrip({ strip }: { strip: Strip }) {
       ) : strip.orders === null ? (
         <Skeleton className="h-16 w-full" />
       ) : strip.orders.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{tm('pos.stripEmpty')}</p>
+        <p className="text-sm text-muted-foreground">{tm('sale.stripEmpty')}</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border">
           {strip.orders.map((order) => (
@@ -852,7 +970,7 @@ function OrderStrip({ strip }: { strip: Strip }) {
                     }
                   >
                     <PrinterIcon aria-hidden="true" />
-                    {tm('pos.printReceipt')}
+                    {tm('sale.printReceipt')}
                   </Button>
                 )}
                 {/* PS5: a delivered code pack prints its codes too (Q27). */}
@@ -869,7 +987,7 @@ function OrderStrip({ strip }: { strip: Strip }) {
                     }
                   >
                     <TicketIcon aria-hidden="true" />
-                    {tm('pos.printCodes')}
+                    {tm('sale.printCodes')}
                   </Button>
                 )}
               </span>
