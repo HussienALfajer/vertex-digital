@@ -1,6 +1,7 @@
 import {
   damascusMonth,
   monthRange,
+  QUEUES,
   TIER_NAMES_AR,
   TIER_SETTINGS_DEFAULTS,
 } from '@vertex-digital/contracts';
@@ -299,8 +300,11 @@ describe('one failing merchant in the merchant jobs (audit A06-33)', () => {
     const compared = await merchantsToCompare(db);
     expect(compared.length).toBeGreaterThanOrEqual(2);
     const comparing = poisoned(0);
+    // Within the hour's first quarter, when every merchant is compared (OP8).
+    const hourly = new Date();
+    hourly.setUTCMinutes(5);
     await expect(
-      new MerchantWatchAlertsJob(pgBoss, comparing.db, env).compareAll(new Date()),
+      new MerchantWatchAlertsJob(pgBoss, comparing.db, env).compareAll(hourly),
     ).rejects.toThrow('Watch comparison failed for 1 merchants');
     expect(comparing.state.calls).toBe(compared.length);
     const digesting = poisoned(0);
@@ -796,7 +800,6 @@ describe('operations jobs (S23 OP6, OP7, OP8)', () => {
 
   it('counts the windows that ended since the last run, and refreshes the store (OP7)', async () => {
     const productId = await product();
-    const job = new CatalogEarlyAccessEndJob(pgBoss, db);
     await inRollback(async (tx) => {
       const now = new Date();
       await tx.execute(sql`update catalog_products set early_access_until = now() - interval '1 minute'
@@ -810,7 +813,32 @@ describe('operations jobs (S23 OP6, OP7, OP8)', () => {
         where id = ${productId}`);
       expect(await earlyAccessEndedBetween(tx, span, now)).toBe(before);
     });
-    expect(await job.run(new Date())).toBeGreaterThanOrEqual(0);
+    // A committed end: both runs queue the refresh in the one debounced slot; none without an end.
+    const sent: { queue: string; options: { singletonKey?: string } }[] = [];
+    const counting = {
+      boss: {
+        send: async (queue: string, _data: unknown, options: { singletonKey?: string }) => {
+          sent.push({ queue, options });
+          return null;
+        },
+      },
+    } as unknown as PgBossService;
+    const refreshing = new CatalogEarlyAccessEndJob(counting, db);
+    await db.execute(sql`update catalog_products set early_access_until = now() - interval '1 minute'
+      where id = ${productId}`);
+    try {
+      expect(await refreshing.run(new Date())).toBeGreaterThanOrEqual(1);
+      expect(await refreshing.run(new Date())).toBeGreaterThanOrEqual(1);
+      expect(sent).toHaveLength(2);
+      expect(sent.every((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
+      expect(sent.every((job) => job.options.singletonKey === 'catalog')).toBe(true);
+      expect(await refreshing.run(new Date(Date.UTC(2035, 0, 1)))).toBe(0);
+      expect(sent).toHaveLength(2);
+    } finally {
+      await db.execute(
+        sql`update catalog_products set early_access_until = null where id = ${productId}`,
+      );
+    }
   });
 
   it('compares faster-alert tiers every quarter hour and the others hourly (OP8)', async () => {

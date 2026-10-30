@@ -1,21 +1,24 @@
 'use client';
 
 import type { StoreGame } from '@vertex-digital/contracts';
-import { Badge } from '@vertex-digital/ui/components/badge';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
+import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
-import { type ReactNode, Suspense, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useCustomer } from '@/features/purchase/session';
 import { t } from '@/lib/i18n';
 import { readEarlyAccessGame } from './customer-prices';
-import { accentStyle } from './game-card';
-import { GameShop } from './game-shop';
-import { PackContent } from './pack-card';
+
+// Every game page imports this file: the game's view (money formatting, the shop) loads once a
+// merchant's game is read, so the page's first load stays light (apps/store/CLAUDE.md).
+const EarlyGameView = dynamic(() =>
+  import('./early-game-view').then((module) => module.EarlyGameView),
+);
 
 /**
  * S23 OP5, edge case 13: a game in early access is not found on the cached page. For a merchant of
- * an early-access tier the not-found view reads the game in the browser and shows it with its
- * packs and the "وصول مبكر" chip; anyone else keeps the not-found view (`children`).
+ * an early-access tier the page reads the game in the browser and shows it with its packs and the
+ * "وصول مبكر" chip; anyone else keeps the not-found view (`children`).
  */
 export function EarlyAccessGame({ children }: { children: ReactNode }) {
   const { slug } = useParams<{ slug: string }>();
@@ -35,6 +38,12 @@ export function EarlyAccessGame({ children }: { children: ReactNode }) {
     };
   }, [customer.status, merchant, slug]);
 
+  // The server's title says not found: the merchant's tab names the game once it is read.
+  const name = game && game !== 'loading' ? game.game.nameAr : null;
+  useEffect(() => {
+    if (name) document.title = t('game.metaTitle', { name });
+  }, [name]);
+
   if (game === 'loading') {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8" aria-hidden="true">
@@ -44,33 +53,5 @@ export function EarlyAccessGame({ children }: { children: ReactNode }) {
     );
   }
   if (game === null) return children;
-  return (
-    <div style={accentStyle(game.game.accentColor)} className="flex flex-col">
-      <div aria-hidden="true" className="h-2 bg-(--game-accent)" />
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:py-10">
-        <header className="flex flex-col gap-2">
-          <Badge tone="gold" className="self-start">
-            {t('catalog.earlyAccess')}
-          </Badge>
-          <h1 className="text-2xl font-bold break-words md:text-3xl">
-            {t('game.title', { name: game.game.nameAr })}
-          </h1>
-          <p dir="ltr" className="text-end text-sm text-muted-foreground">
-            {game.game.nameEn}
-          </p>
-        </header>
-        <Suspense>
-          <GameShop
-            data={game}
-            cards={Object.fromEntries(
-              game.products.map((product) => [
-                product.id,
-                <PackContent key={product.id} product={product} cached={false} />,
-              ]),
-            )}
-          />
-        </Suspense>
-      </div>
-    </div>
-  );
+  return <EarlyGameView game={game} />;
 }

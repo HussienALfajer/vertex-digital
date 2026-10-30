@@ -485,9 +485,10 @@ describe('the admin side (TK2, TK5, TK9, TK12, TK13)', () => {
       } while (cursor);
       const ids = all.map((item) => item.id);
       expect(new Set(ids).size).toBe(ids.length);
-      expect(ids[0]).toBe(priority.id);
+      // The test database keeps earlier runs' tickets: the merchants' still lead, whatever their age.
+      expect(ids.indexOf(priority.id)).toBeLessThan(ids.indexOf(older.id));
       expect(ids).toContain(older.id);
-      expect(all[0]?.customer.tier).toBe('bronze');
+      expect(all[ids.indexOf(priority.id)]?.customer.tier).toBe('bronze');
       expect(all.find((item) => item.id === older.id)?.customer.tier).toBeNull();
       const detail = await json<{ customer: { tier: string | null } }>(
         await client.get(`/api/admin/support/tickets/${priority.id}`, { cookie: admin.cookie }),

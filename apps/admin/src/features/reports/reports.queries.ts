@@ -84,7 +84,8 @@ export function useExportReport() {
 export const merchantTierReportQuery = (month: string) =>
   queryOptions({
     queryKey: ['reports', 'merchant-tiers', month],
-    queryFn: () => call(api.GET('/api/admin/reports/merchant-tiers', { params: { query: { month } } })),
+    queryFn: () =>
+      call(api.GET('/api/admin/reports/merchant-tiers', { params: { query: { month } } })),
     placeholderData: keepPreviousData,
   });
 

@@ -35,13 +35,13 @@ import { centsParam } from '@/features/deposits/amounts';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { usePurchasesStopped } from '@/features/purchase/customer';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
-import { apiRequest, type Failure } from '@/lib/api';
+import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
-import { checkBulk, getMerchantGames } from './requests';
+import { checkBulk, getMerchantGames, readCounterGame } from './requests';
 import { useMerchantTier } from './tier-state';
 
 // S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
@@ -160,9 +160,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
 
   async function download() {
     if (!game) return;
-    const store = await apiRequest<StoreGame>(
-      `/api/catalog/games/${encodeURIComponent(game.slug)}`,
-    );
+    const store = await readCounterGame(game.slug);
     if (!store.ok) return setFailure(store.reason);
     const url = URL.createObjectURL(new Blob([template(store.data)], { type: 'text/csv' }));
     const anchor = document.createElement('a');

@@ -26,6 +26,7 @@ import {
   notifyEarlyAccess,
   type ProductRoutingState,
   productRoutingStates,
+  queueStoreRevalidate,
   repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
@@ -482,17 +483,25 @@ export class CatalogItemsService {
 
   /**
    * `PUT /api/admin/catalog/products/:id/early-access` (S23 OP5): as the game's, for one pack
-   * (edge case 14: only that pack is hidden from the others).
+   * (edge case 14: only that pack is hidden from the others). A paused pack is activated with its
+   * window; while its game is paused the window opens without a notice, whose link could not open.
    */
   setProductEarlyAccess(actor: Actor, id: string, on: boolean, now = new Date()): Promise<Product> {
     return this.db.transaction(async (tx) => {
       const { game, row } = await this.lockProduct(tx, id);
+      if (row.archivedAt) throw refusals.parentArchived();
       let result = row;
       if (on) {
         const until = earlyAccessEnd(now);
+        if (row.status === 'paused') {
+          await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(id), {
+            before: { status: 'paused' },
+            after: { status: 'active' },
+          });
+        }
         const [saved] = await tx
           .update(catalogProducts)
-          .set({ earlyAccessUntil: until })
+          .set({ earlyAccessUntil: until, status: 'active' })
           .where(eq(catalogProducts.id, id))
           .returning();
         result = saved as ProductRow;
@@ -501,18 +510,20 @@ export class CatalogItemsService {
           nameAr: row.nameAr,
           until: until.toISOString(),
         });
-        await notifyEarlyAccess(
-          tx,
-          this.jobs,
-          {
-            gameId: game.id,
-            gameSlug: game.slug,
-            gameNameAr: game.nameAr,
-            product: { id, nameAr: row.nameAr },
-            until,
-          },
-          now,
-        );
+        if (game.status === 'active') {
+          await notifyEarlyAccess(
+            tx,
+            this.jobs,
+            {
+              gameId: game.id,
+              gameSlug: game.slug,
+              gameNameAr: game.nameAr,
+              product: { id, nameAr: row.nameAr },
+              until,
+            },
+            now,
+          );
+        }
       } else if (inEarlyAccess(row.earlyAccessUntil, now)) {
         const [saved] = await tx
           .update(catalogProducts)
@@ -525,6 +536,7 @@ export class CatalogItemsService {
           nameAr: row.nameAr,
         });
       }
+      await queueStoreRevalidate(tx, this.jobs);
       return this.product(tx, result);
     });
   }

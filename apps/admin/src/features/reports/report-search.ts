@@ -127,7 +127,9 @@ export interface TierReportSearch {
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function parseTierReportSearch(search: Record<string, unknown>): TierReportSearch {
-  return typeof search.month === 'string' && MONTH.test(search.month) ? { month: search.month } : {};
+  return typeof search.month === 'string' && MONTH.test(search.month)
+    ? { month: search.month }
+    : {};
 }
 
 /** The month the report shows: the URL's, else this Damascus month. */

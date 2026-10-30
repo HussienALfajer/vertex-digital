@@ -2,6 +2,7 @@ import {
   type AlertSettings,
   type BulkCheckRequest,
   type BulkCheckResult,
+  type CustomerPrices,
   ERROR_CODES,
   type ErrorCode,
   type MerchantAlertPage,
@@ -26,12 +27,13 @@ import {
   type SellingSettings,
   type Statement,
   type StatementMonths,
+  type StoreGame,
   type UpdateReceiptSettings,
   type UpdateWatches,
   type UploadedLogo,
   type Watches,
 } from '@vertex-digital/contracts';
-import { apiRequest, type Failure } from '@/lib/api';
+import { apiRequest, type Failure, type Result } from '@/lib/api';
 
 /*
  * The merchant area (S21 F30–F35). The routes take no customer id: the session cookie says
@@ -42,6 +44,26 @@ type Fetcher = typeof fetch;
 
 export function getDashboard(period: 'today' | 'month', fetcher: Fetcher = fetch) {
   return apiRequest<MerchantDashboard>(`/api/merchant/dashboard?period=${period}`, { fetcher });
+}
+
+/**
+ * S23 OP5: a game for the counter tools: the public read with the packs in early access an
+ * eligible merchant's prices carry, or, for a game in early access, its own read.
+ */
+export async function readCounterGame(slug: string): Promise<Result<StoreGame>> {
+  const path = `/api/catalog/games/${encodeURIComponent(slug)}`;
+  const [store, own] = await Promise.all([
+    apiRequest<StoreGame>(path),
+    apiRequest<CustomerPrices>(`${path}/prices`),
+  ]);
+  const read =
+    !store.ok && store.reason === 'NOT_FOUND'
+      ? await apiRequest<StoreGame>(`${path}/early-access`)
+      : store;
+  if (!read.ok || !own.ok) return read;
+  const shown = new Set(read.data.products.map((product) => product.id));
+  const early = own.data.earlyProducts.filter((product) => !shown.has(product.id));
+  return { ok: true, data: { ...read.data, products: [...read.data.products, ...early] } };
 }
 
 export function getMerchantGames(fetcher: Fetcher = fetch) {

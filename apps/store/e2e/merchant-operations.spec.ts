@@ -161,6 +161,7 @@ for (const scheme of ['dark', 'light'] as const) {
       });
     await page.goto('/games/early-game');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('لعبة جديدة');
+    await expect(page).toHaveTitle(/لعبة جديدة/);
     await expect(
       packButton(page, ar.catalog.earlyAccess).or(packButton(page, '8100 UC')).first(),
     ).toContainText('$98.00');
@@ -176,4 +177,87 @@ test('a game in early access stays not found for a customer', async ({ page, api
   await page.goto('/games/early-game');
   await expect(page.getByRole('heading', { name: ar.notFound.title })).toBeVisible();
   expect(api.last('GET /api/catalog/games/early-game/early-access')).toBeUndefined();
+});
+
+test('a Gold merchant pays an early pack from the cart (OP5)', async ({ page, api }) => {
+  merchant(api)
+    .on('GET /api/catalog/games/pubg-mobile/prices', 200, goldPrices(PUBG.products))
+    // The public index leaves the early pack out.
+    .on('GET /api/catalog/search-index', 200, { games: [], products: [] });
+  await page.addInitScript(
+    ([id, name]) =>
+      localStorage.setItem(
+        'vd-cart',
+        JSON.stringify({
+          v: 1,
+          lines: [
+            {
+              id: 'early-line',
+              productId: id,
+              gameSlug: 'pubg-mobile',
+              quantity: 1,
+              maxQuantity: 10,
+              fields: { player_id: '51234567' },
+              expectedUnitPriceUsdUnits: 98_000_000,
+              confirmPlayer: false,
+              playerCheck: { result: 'valid', playerName: 'Lina_99' },
+              display: {
+                gameNameAr: 'ببجي موبايل',
+                productNameAr: name,
+                cover: null,
+                fields: [],
+              },
+            },
+          ],
+        }),
+      ),
+    [EARLY.id, EARLY.nameAr],
+  );
+  await page.goto('/cart');
+  await expect(page.getByText(ar.cart.removeUnavailable)).toHaveCount(0);
+  await expect(page.getByText('$98.00').first()).toBeVisible();
+});
+
+test('the point of sale opens a game in early access (OP5)', async ({ page, api }) => {
+  const game: StoreGame = {
+    ...PUBG,
+    game: { ...PUBG.game, slug: 'early-game', nameAr: 'لعبة جديدة', nameEn: 'New Game' },
+    products: [EARLY],
+  };
+  merchant(api)
+    .on('GET /api/merchant/games', 200, {
+      items: [{ id: PUBG.game.id, slug: 'early-game', nameAr: 'لعبة جديدة' }],
+    })
+    .on('GET /api/merchant/watches', 200, {
+      games: [],
+      products: [],
+      suggestions: { games: [], products: [] },
+    })
+    .on('GET /api/catalog/games/early-game', 404, { statusCode: 404, code: 'NOT_FOUND' })
+    .on('GET /api/catalog/games/early-game/early-access', 200, game)
+    .on('GET /api/catalog/games/early-game/prices', 200, {
+      ...goldPrices([EARLY]),
+      earlyProducts: [EARLY],
+    })
+    .on('GET /api/merchant/selling-prices', 200, {
+      settings: { markupBp: 1000, sypStepUnits: 50_000 },
+      storeStepUnits: 500,
+      products: [
+        {
+          productId: EARLY.id,
+          nameAr: EARLY.nameAr,
+          available: true,
+          purchaseUsdUnits: 98_000_000,
+          ownPrice: null,
+          sellingUsdUnits: 105_000_000,
+          sellingSypUnits: 136_500_000,
+          source: 'markup',
+          belowCost: false,
+        },
+      ],
+    })
+    .on('GET /api/merchant/recent-players', 200, { items: [] })
+    .on('GET /api/orders', 200, { items: [], nextCursor: null, checkout: null });
+  await page.goto('/merchant/pos');
+  await expect(page.getByRole('button', { name: /8100 UC/ })).toBeVisible();
 });

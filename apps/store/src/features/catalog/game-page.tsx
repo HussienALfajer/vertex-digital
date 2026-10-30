@@ -1,7 +1,7 @@
 import type { StoreGame } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Gamepad2Icon } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
 import { getGame } from './data';
@@ -21,12 +21,19 @@ export async function gameOf(slug: string): Promise<StoreGame | null> {
 /**
  * A game page (S09 screens): the hero with the accent as a flat band, the cover, the names, the
  * status chip and the region notes; "أين أجد المعرّف؟"; the packs, the calculator and the buy box.
- * Unknown, archived and paused games are not found (rule SF1).
+ * Unknown, archived and paused games are not found (rule SF1): `missing` in place of the page, not
+ * `notFound()`, so a merchant's early-access game (S23 OP5) opens outside Next's error boundary.
  */
-export async function GamePage({ params }: { params: Promise<{ slug: string }> }) {
+export async function GamePage({
+  params,
+  missing,
+}: {
+  params: Promise<{ slug: string }>;
+  missing: ReactNode;
+}) {
   const { slug } = await params;
   const data = await gameOf(slug);
-  if (!data) notFound();
+  if (!data) return missing;
   const { game } = data;
   return (
     <div style={accentStyle(game.accentColor)} className="flex flex-col">

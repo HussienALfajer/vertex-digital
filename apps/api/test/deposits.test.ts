@@ -1124,9 +1124,12 @@ describe('the review queue (rule RV10)', () => {
       } while (cursor);
       const ids = all.map((item) => item.id);
       expect(new Set(ids).size).toBe(ids.length);
-      expect(ids[0]).toBe(priority.id);
+      // The test database keeps earlier runs' deposits: the merchants' still lead, whatever their age.
       expect(ids).toContain(older.id);
-      expect(all[0]?.customer.tier).toBe('bronze');
+      expect(ids.indexOf(priority.id)).toBeLessThan(ids.indexOf(older.id));
+      expect(all[ids.indexOf(priority.id)]?.customer.tier).toBe('bronze');
+      const firstPlain = all.findIndex((item) => item.customer.tier === null);
+      expect(all.slice(firstPlain).every((item) => item.customer.tier === null)).toBe(true);
       expect(all.find((item) => item.id === older.id)?.customer.tier).toBeNull();
       const detail = (await (
         await client.get(`/api/admin/deposits/${priority.id}`, { cookie: admin.cookie })

@@ -1,6 +1,7 @@
 import type { ProductKind } from '@vertex-digital/contracts';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
+import { outsideEarlyAccess } from '../pricing/routing.js';
 import {
   catalogInputFields,
   catalogProducts,
@@ -24,10 +25,14 @@ export interface BulkPack {
   maxQuantity: number;
 }
 
-/** BK1 (`BulkGame` of the contracts): a game's unarchived field keys in their order and its unarchived packs. */
+/**
+ * BK1 (`BulkGame` of the contracts): a game's unarchived field keys in their order and its
+ * unarchived packs, without those in early access unless the merchant's tier sees them (S23 OP5).
+ */
 export async function bulkGame(
   db: Executor,
   gameId: string,
+  access: { earlyAccess: boolean; now: Date },
 ): Promise<{ fieldKeys: string[]; packs: BulkPack[] }> {
   const fields = await db
     .select({ key: catalogInputFields.key })
@@ -43,7 +48,15 @@ export async function bulkGame(
       maxQuantity: catalogProducts.maxQuantity,
     })
     .from(catalogProducts)
-    .where(and(eq(catalogProducts.gameId, gameId), isNull(catalogProducts.archivedAt)))
+    .where(
+      and(
+        eq(catalogProducts.gameId, gameId),
+        isNull(catalogProducts.archivedAt),
+        access.earlyAccess
+          ? undefined
+          : outsideEarlyAccess(catalogProducts.earlyAccessUntil, access.now),
+      ),
+    )
     .orderBy(asc(catalogProducts.sortOrder), asc(catalogProducts.createdAt));
   return { fieldKeys: fields.map((field) => field.key), packs };
 }

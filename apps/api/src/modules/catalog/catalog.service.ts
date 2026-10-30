@@ -34,6 +34,7 @@ import {
   type ProductRoutingState,
   productDeliveryStats,
   productRoutingStates,
+  queueStoreRevalidate,
   readAll,
   type Transaction,
   waitingAlertCounts,
@@ -628,16 +629,26 @@ export class CatalogService {
   /**
    * `PUT /api/admin/catalog/games/:id/early-access` (S23 OP5): `on` opens a 24-hour window from now
    * (a running one restarts) and tells the merchants of early-access tiers who follow or bought
-   * the game, once each; `off` ends it now. Audited; the store refreshes after the commit.
+   * the game, once each; `off` ends it now. A paused game is activated with its window, in this
+   * transaction, so it is never public first and no notice points at a page that is not open
+   * (decision 15, on activation). Audited; the store's refresh is queued with the change.
    */
   setGameEarlyAccess(actor: Actor, id: string, on: boolean, now = new Date()): Promise<GameDetail> {
     return this.db.transaction(async (tx) => {
       const row = await this.lockGame(tx, id);
+      if (row.archivedAt) throw refusals.parentArchived();
       if (on) {
         const until = earlyAccessEnd(now);
+        if (row.status === 'paused') {
+          await assertComplete(tx, { id, status: 'active', coverFileId: row.coverFileId });
+          await auditCatalog(tx, actor, 'catalog_game.updated', gameEntity(id), {
+            before: { status: 'paused' },
+            after: { status: 'active' },
+          });
+        }
         await tx
           .update(catalogGames)
-          .set({ earlyAccessUntil: until })
+          .set({ earlyAccessUntil: until, status: 'active' })
           .where(eq(catalogGames.id, id));
         await auditCatalog(tx, actor, 'catalog_game.early_access_set', gameEntity(id), {
           nameAr: row.nameAr,
@@ -655,6 +666,7 @@ export class CatalogService {
           nameAr: row.nameAr,
         });
       }
+      await queueStoreRevalidate(tx, this.jobs);
       return this.game(id, tx);
     });
   }

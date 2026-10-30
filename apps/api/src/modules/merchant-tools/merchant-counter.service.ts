@@ -123,7 +123,7 @@ export class MerchantCounterService {
     if (!(await shownGames(this.db, earlyAccess)).some((game) => game.id === request.gameId)) {
       throw refusals.notFound('game');
     }
-    const game = await bulkGame(this.db, request.gameId);
+    const game = await bulkGame(this.db, request.gameId, { earlyAccess, now: new Date() });
     const parsed = parseBulkLines(request.text, game);
     const linesMax = tier?.bulkLinesMax ?? BULK_LINES_MAX;
     if (parsed.length === 0 || parsed.length > linesMax) {

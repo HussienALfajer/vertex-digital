@@ -4783,10 +4783,11 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
         ).toMatchObject({
           code: 'PRODUCT_UNAVAILABLE',
         });
-        // The window ended: everyone buys it.
-        await pool.query('update catalog_games set early_access_until = now() where id = $1', [
-          item.game,
-        ]);
+        // The window ended: everyone buys it. A minute back: the purchase reads the app's clock.
+        await pool.query(
+          "update catalog_games set early_access_until = now() - interval '1 minute' where id = $1",
+          [item.game],
+        );
         expect((await buy(request(buyer, { id: item.id, price: retailPrice }))).order.status).toBe(
           'paid',
         );

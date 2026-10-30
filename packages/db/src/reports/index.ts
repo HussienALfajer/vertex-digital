@@ -1,3 +1,4 @@
+export { merchantTierReport } from './merchant-tiers.js';
 export {
   breakdownReport,
   customersReport,
@@ -7,4 +8,3 @@ export {
   refundsReport,
   salesReport,
 } from './reports.js';
-export { merchantTierReport } from './merchant-tiers.js';

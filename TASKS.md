@@ -45,8 +45,7 @@ PR 1a (#230), PR 1b (#231) and PR 2 (#232) are merged. Spec PR 3 (decisions 11, 
 - [x] i18n keys, states
 
 ### E2E and close
-- [ ] e2e: admin (queues, early access, best-sellers, report, contact settings; light and dark) done and passing (92/92: `merchant-tiers`, `deposits`, `support`, `catalog`, `merchants`, `reports` specs); store `e2e/merchant-operations.spec.ts` written (promise, contact, chip, early game), 78/82 of the store run pass: the test "a game in early access opens for a Gold merchant from its not-found page (OP5)" fails in all four projects with `expect(received).toEqual(expected)` (most likely the fixture's unmocked-request or console-error check: the public `GET /api/catalog/games/early-game` 404 or the not-found page's own reads; read `.verify/` and the Playwright report)
-- [ ] browser check on the local stack (acceptance 5–8 parts this PR covers)
-- [ ] checks, reviewer, PR and merge
-
-Stopped at: (2026-10-30, Local) all layers built and committed on `feat/s23-operations`; contracts, db, api, worker gates green (api: deposits, support, merchant-tiers and 11 more files; worker 70/70); admin E2E green. Next: fix the store early-game E2E (`pnpm verify apps/store/e2e/merchant-operations.spec.ts`), the browser check on the local stack (`pnpm db:migrate` is done; acceptance 6–8: a Gold-granted merchant, early access on a pack and a game, an overdue ticket with the reply promise lowered, a deposit first in the queue, the report by tier), then the full `pnpm verify` through the checker with the reviewer (spec `docs/specs/S23-merchant-tiers.md`), the PR with auto-merge, Auto-fix, the merge wait, then the S23 deploy and `merchants:setup-tiers` in production. Docs already updated: `docs/architecture.md`, `docs/ROADMAP.md` (PR 3 marked done; keep it), the spec's settled details.
+- [x] e2e: admin (queues, early access, best-sellers, report, contact settings; light and dark) and store `e2e/merchant-operations.spec.ts` (promise, contact, chip, early game); the game page renders its missing view directly instead of `notFound()`, so an early game opens outside Next's error boundary
+- [x] browser check on the local stack (acceptance 6-8 parts this PR covers; the overdue Telegram alert not seen live, servers stopped first at the owner's request, covered by the worker's test)
+- [x] checks, reviewer, PR and merge
+- [ ] deploy S23 and `merchants:setup-tiers` in production

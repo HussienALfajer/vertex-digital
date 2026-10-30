@@ -61,7 +61,13 @@ const ATTEMPT = 'cart';
 type Prices =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; products: Map<string, SearchIndexProduct> };
+  | {
+      status: 'ready';
+      products: Map<
+        string,
+        Pick<SearchIndexProduct, 'available' | 'priceUsdUnits' | 'priceSypUnits'>
+      >;
+    };
 
 type Sending =
   | { status: 'idle' }
@@ -71,7 +77,8 @@ type Sending =
 /**
  * The search index's products by id (rule CT4): public, cached by the browser for 30 seconds. S20
  * AT4: a signed-in account reads its own prices of the lines' games too, which replace the index's
- * retail ones when it pays another list.
+ * retail ones when it pays another list. S23 OP5: the packs in early access the index leaves out
+ * come with a merchant's prices.
  */
 async function loadPrices(signedIn: boolean): Promise<Prices> {
   const slugs = signedIn ? [...new Set((readCart() ?? []).map((line) => line.gameSlug))] : [];
@@ -81,10 +88,13 @@ async function loadPrices(signedIn: boolean): Promise<Prices> {
     Promise.all(slugs.map((slug) => readCustomerPrices(slug))),
   ]);
   if (!index.ok) return { status: 'failed' };
-  const products = new Map(index.data.products.map((item) => [item.id, item]));
+  const products: Extract<Prices, { status: 'ready' }>['products'] = new Map(
+    index.data.products.map((item) => [item.id, item]),
+  );
   for (const result of own) {
     // Never the retail figure in place of the account's own: a failed read offers the retry.
     if (!result) return { status: 'failed' };
+    for (const early of result.earlyProducts) products.set(early.id, early);
     if (result.priceKind === 'retail') continue;
     for (const row of result.products) {
       const product = products.get(row.id);
