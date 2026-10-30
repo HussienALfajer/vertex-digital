@@ -28,7 +28,7 @@ PR 1a (#230) and PR 1b (#231) are merged. Spec PR 2 (decisions 6–8: ID1–ID9,
 - [x] e2e: tier flow spec with mocks; RTL screenshots phone width dark and light (header badge per tier, tier card, celebration, tier page, receipt and verification, certificate print and page, receipt settings)
 - [x] browser check on the local stack (acceptance 2–4): a seeded customer made a Gold merchant in the dev database (the seed creates no merchant), the celebration once, the tier page (card, forecast, table, history), the certificate print and its public page at phone width, the square and story stickers drawn (download stubbed), the welcome line saved and in the preview; fixed there: the forecast in whole cents, the certificate's icon black on paper
 - [x] reviewer fixes: the admin removes a welcome line (`DELETE /api/admin/customers/:id/merchant/welcome-text`, re-authenticated, audited `merchant.welcome_text_removed`, the profile's row and dialog); the welcome filter on the NFKC form (any domain shape, `@handle`, 7+ digits of any script with any separator); a closed account's certificate shows as no longer approved; a re-grant writes a new certificate code
-- [ ] checks once more, PR and merge
+- [x] checks once more (`pnpm verify` 2026-10-30: lint, typecheck, test, build, 345 admin and 679 store E2E, migration and OpenAPI drift; the store's `merchant-counter.spec.ts:724` clipboard test fails on this Windows machine only, the clipboard answering CRLF, code untouched here), PR and merge
 
 ## Moved to later PRs (spec delivery plan)
 
