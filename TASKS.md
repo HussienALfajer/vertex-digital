@@ -31,7 +31,7 @@ Branch: `claude/merchant-tools-overhaul-eto2vk` (the cloud session's branch; the
 - [x] API: `POST /api/merchant/bulk/check`, service code, contracts, tests; OpenAPI + admin client
 - [x] Past `source: bulk` rows stay valid; new code never creates it; keep the merchant player-check quota
 - [x] S23 tier privileges and the 50-line limit callers: report
-- [ ] `v1-scope.md` F33, S21, S23: removed by the owner on 2026-10-30
+- [x] `v1-scope.md` F33, S21, S23: removed by the owner on 2026-10-30
 
 ## 6. Selling prices
 - [x] Shared store game picker (bar + dialog: search AR/EN, arrows + Enter, "ألعابك", category chips, cover grid; single and multiple)
@@ -60,19 +60,21 @@ Branch: `claude/merchant-tools-overhaul-eto2vk` (the cloud session's branch; the
 - [x] Each merchant page's title is its section
 
 ## Finish
-- [ ] Specs, architecture, folder CLAUDE.md, commands table, ROADMAP
-- [ ] RTL screenshots (dark, light, phone, desktop) for every changed screen
-- [ ] `pnpm verify`, `reviewer`, fixes
-- [ ] Push, owner presses Create PR, auto-merge, wait for the merge
+- [x] Specs, architecture, folder CLAUDE.md, commands table, ROADMAP
+- [x] RTL screenshots (dark, light, phone, desktop) for every changed screen
+- [x] `pnpm verify`, `reviewer`, fixes
+- [x] Push the branch
+- [ ] The owner presses **Create PR** in the session; then auto-merge (merge commit) and the wait for the merge
 
 ## Local session (cannot run in the cloud)
-- [ ] Deploy `main` (the migration runs through the deploy, `docs/deployment.md`)
-- [ ] Check production: home, sale mode, game page star, merchant prices, price list (PDF, image), statement
+- [ ] Deploy `main` once the PR has merged (migration 0109 runs through the deploy, `docs/deployment.md`; no new secret, no `provision.sh` change)
+- [ ] Check production without real money: the home page (categories first, the new cards), a merchant's sale mode (USD first, the slide, the star and "ألعابك", "ترتيب"), `/merchant/bulk` → `/merchant`, the selling prices (picker, `?game=`, chips), the price list (A4 pages, PDF, one image), the statement screen, the account menu without "أدوات التاجر"
+- [ ] The owner uploads the six category images in the panel ("إدارة الفئات")
 - [ ] Browser test against the full local store (`pnpm db:seed-local`)
 - [ ] Deploy log line in a docs PR
 
-## E2E (in progress)
-- [ ] `merchant-counter.spec.ts`: sale mode (USD first, slide, End, unavailable last, touch keys), pinned star and "ألعابك"
-- [ ] `merchant-tools.spec.ts`, `merchant-tier.spec.ts`: no "أدوات التاجر" in the menu; prices table, picker, `?game=`
-- [ ] `merchant-documents.spec.ts`: price list (pages, image select, rate refusal), statement screen
-- [ ] Home and category pages: categories first, new card, counts
+## E2E
+- [x] `merchant-counter.spec.ts`: sale mode (USD first, slide, End, unavailable last, touch keys), pinned star and "ألعابك"
+- [x] `merchant-tools.spec.ts`, `merchant-tier.spec.ts`: no "أدوات التاجر" in the menu; prices table, picker, `?game=`
+- [x] `merchant-documents.spec.ts`: price list (pages, image select, rate refusal), statement screen
+- [x] Home and category pages: categories first, new card, counts
