@@ -164,6 +164,15 @@ test.describe('the bottom bar (NH4, NH5)', () => {
     );
   });
 
+  test('the cart item is in the server HTML, so the bar does not shift', async ({
+    page,
+    api: _api,
+  }, testInfo) => {
+    test.skip(!phone(testInfo.project.name), 'the HTML is one');
+    const html = await (await page.request.get('/')).text();
+    expect(html).toContain('href="/cart"');
+  });
+
   test('sheets sit above the bar', async ({ page, api }, testInfo) => {
     test.skip(!phone(testInfo.project.name), 'phone only');
     index(api);
