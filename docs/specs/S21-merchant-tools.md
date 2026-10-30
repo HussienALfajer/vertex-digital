@@ -21,13 +21,25 @@ S20 made shops merchants who buy at their own price list; they still buy through
 
 Defaults chosen in the spec (editable in the panel or by the merchant, flag in review if wrong): merchant player checks 100 an hour and 300 a day; SYP rounding step for selling prices 5, 10, 50, 100, 500 or 1,000 SYP (default the store's display step); at most 10 live levels; at most 200 followed items; logo up to 1 MB; the trade name on receipts is the one the admin approved (the merchant asks for a change through a ticket).
 
+## Amendments (owner, 2026-10-30: the merchant tools overhaul)
+1. **Bulk orders (F33) removed:** `/merchant/bulk` redirects to `/merchant`; `POST /api/merchant/bulk/check`, its contracts and its error code are gone. Past checkouts with `source: bulk` stay valid and readable (the enum keeps the value); a new checkout names only `cart` (`NEW_CHECKOUT_SOURCES`). The merchant player-check quota (BK4) stays for the buy box and the sale mode, and the tier's `bulk_lines_max` still caps a merchant's checkout (S23 TS5).
+2. **USD leads** in the sale mode (PS1a, PS3): each figure in USD with its SYP after "≈" (`بيعك $5.08 ≈ 730 ل.س`, `ربحك +$0.47 ≈ 70 ل.س`); the profit is one subtraction of integer USD units, its SYP the two SYP figures' difference shown only when its sign agrees; without a rate, USD alone. The confirmation's selling price starts in USD with the pack's ready amount; untouched, a currency change shows the ready amount in the other currency and nothing is saved as `manual`; typed, a currency change clears the field.
+3. **Slide to confirm** (PS3, PS4): the confirmation ends in the buy box's `SlideToPay` (remounted after a refusal, focused when it can slide, the sending state, a retry with the same key after an answer that may follow a write), disabled while the id is checked, until an unfound or unchecked id is confirmed, and while the account is frozen or purchases are stopped. `End` (or the arrows) slides from the keyboard; the shortcuts sheet names `End` for it.
+4. **"ألعابك" pinned** (PS1): `merchant_pinned_games` (the merchant's own preference, at most 20, an explicit `position`), apart from the follows, which drive the price alerts only. `GET /api/merchant/pinned-games` (merchant) and `PUT` (merchant, not frozen; the whole ordered list; unknown games `NOT_FOUND`, more than 20 or duplicates `VALIDATION_FAILED`); a paused or archived game stays stored and leaves the read. A star on each game card and on the game page, loaded in the browser for merchants only; "ترتيب" moves the pinned games up and down. The row shows the pinned games in order, then, below 10, suggestions from the followed games and the 30-day units marked "مقترحة" (`yourGames`).
+5. **Home order:** the search, the categories, "ألعابك" (sale mode), the banners, "اشحن مجدداً" (never in the sale mode), the game rows (S24 NH1 amended).
+6. **Selling prices** (`/merchant/prices`): the settings as one line ("نسبة الربح 10% · تقريب المتجر · تعديل") opening the same form; the game from a picker (live search in Arabic and English with the arrows and Enter, "ألعابك", the merchant's best sellers, category chips over covers; categories from `GET /api/merchant/games`, covers and English names from the public search index) kept in the address (`?game=<slug>`); a compact table with a sticky header (cards on a phone) and chips with counts: الكل، بالنسبة، سعر خاص، بلا سعر، تحت التكلفة. A pack's own price starts in USD and never carries a typed amount to the other currency.
+7. **Price list** (PL1 amended): settings beside the preview on a wide screen (sticky), the multi-game picker with quick choices ("ألعابك", "الأكثر مبيعًا", a whole category); none chosen: the pinned games, else the 10 best sellers of the last 30 days, else none, never the whole catalog. The preview as A4 pages with their count and the packs'. One image selector and one download; the 20-an-hour refusal is said plainly. The document: header with the shop's name, logo and tier line; each game's cover beside its title; alternating rows; USD before SYP when both show; a footer with the date, "الأسعار قابلة للتغيير" and the shop's WhatsApp when its receipts show it (`whatsapp` on the response). The PNG matches it.
+8. **Statement screen** (ST2 amended): apart from the official print page and Excel, which stay as they were: the month moved in place, the month in a sentence and four figures (opening → in → out → closing), "مبيعاتك وربحك" (`sales` on the statement: the month's delivered orders with a selling price, their cost and the estimated profit, the dashboard's measure; orders without a selling price counted apart), the tier's progress, and the movements by Damascus day, newest first, with chips by kind, a search by order number or player id, clear titles, a link to the order and the balance after each.
+9. **Menus and titles:** the account menu no longer shows "أدوات التاجر" or reads the tier (the sidebar and the account page's merchant card lead to the area); each merchant page's header and title are its section's.
+10. **Sale mode polish:** unavailable packs last; `1`–`9` reach the available packs only; no shortcut numbers on a touch screen.
+
 ## In scope / out of scope
 - In:
   - The merchant area in the store (`/merchant/*`), for accounts of type `merchant` only.
   - F31 selling settings (markup, SYP step), per-product selling prices, the selling price snapshot on each merchant order, editable afterwards.
   - F30 the dashboard (today and this month): sales, spending, estimated profit, balance, top products, the level and the gap to the next.
   - F32 the point-of-sale screen: product grid, keyboard shortcuts, recent and saved player IDs, two taps and a confirmation, live status, print.
-  - F33 bulk orders: paste or CSV, check, pay once through the S10 checkout (50 lines for merchants), follow each line.
+  - F33 bulk orders: paste or CSV, check, pay once through the S10 checkout (50 lines for merchants), follow each line. Removed by the owner on 2026-10-30 (amendment 1).
   - F34 up to 50 codes per order for merchants; release for print, copy and Excel, logged; thermal print pages (58 and 80 mm) with redemption steps.
   - F35 a verification code on every order, the QR on every receipt and printed page, the public verification page; the branded receipt (print and share link) with the shop name, WhatsApp, logo and selling price.
   - F36 the printable price list (selling or purchase prices, SYP, USD or both), as a print page and a PNG.
@@ -50,7 +62,8 @@ Defaults chosen in the spec (editable in the panel or by the merchant, flag in r
 |---|---|---|
 | Read the dashboard, selling prices, follows, alert settings, receipt settings, recent players, statements, price list | Customer | Merchant (not archived; frozen allowed: reads only) |
 | Change selling settings and prices, an order's selling price, follows, alert and receipt settings; upload the logo | Customer | Merchant, not frozen |
-| Check a bulk list | Customer, quota | Merchant, not frozen, terms accepted (S20 MT2) |
+| Check a bulk list (removed 2026-10-30) | — | — |
+| Read or save the pinned games (amendment 4) | Customer | Merchant; saving not frozen |
 | Pay a bulk list (S10 checkout) or a POS purchase (S08 order) | Customer, `Idempotency-Key` | Merchant, not frozen, terms accepted |
 | Release an order's codes for print, copy or export | Customer | The merchant who owns the order |
 | Read an order's print page data | Customer | The order's customer |
@@ -94,6 +107,9 @@ Money is USD units (micro-dollars) or SYP units with the rate used (ADR 0003). A
 
 ### `merchant_watches` (new; the merchant's own preferences)
 - `id`, `customer_id`, `game_id` → `catalog_games` (nullable), `product_id` → `catalog_products` (nullable); exactly one of the two (check); unique per `(customer_id, game_id)` and `(customer_id, product_id)`; at most 200 per customer (checked by the API). Deleted for real.
+
+### `merchant_pinned_games` (new 2026-10-30, migration 0109; the merchant's own preferences, amendment 4)
+- `id`, `customer_id` (customers), `game_id` (catalog_games), `position` (0–19, checked), `created_at`. Unique `(customer_id, game_id)` and `(customer_id, position)`; indexes on both foreign keys. Replaced whole on a save under the merchant's advisory lock; nothing references it; not audited.
 
 ### `merchant_watch_states` (new; what the merchant was last told, per product)
 - `customer_id`, `product_id` (primary key together), `price_usd_units` (the merchant's list price last told, nullable when it had none), `available` boolean, `told_at`. Written by the alerts job only.
@@ -163,7 +179,7 @@ The separate point-of-sale page was replaced on 2026-10-30 (owner): the game pag
 - PS4. **Keyboard:** `/` search packs (on the game page in the mode, in place of the store's search), `1`–`9` choose the n-th pack, `F2` the player field, `Enter` confirm, `Esc` close, `P` print the last receipt, `H` hide or show the cost. Shortcuts are shown in a help sheet (`?`).
 - PS5. **After paying:** the order joins the strip with its live state (S09 LT2 stream); delivered orders offer "طباعة الإيصال" and, for codes, "طباعة الأكواد".
 
-### Bulk orders (F33)
+### Bulk orders (F33) — removed by the owner on 2026-10-30 (amendment 1; BK4's quota stays)
 - BK1. `/merchant/bulk`: the merchant chooses a game, then pastes lines or uploads a CSV (UTF-8, at most 50 data lines, 100 KB). A line is the game's input fields in their order (as in the buy box), then the pack, then an optional quantity (default 1), separated by commas, tabs or semicolons. The pack is matched within the game by its `game_amount` or its exact Arabic name; a downloadable template per game lists the fields and the packs.
 - BK2. **Check** (`POST /api/merchant/bulk/check`): parses and validates every line (fields by the game's rules, the pack available on the merchant's list, quantity within QT1), runs the store-wide player check for each distinct ID (S19 PC rules, cache first), and returns per line: the product, unit price, total, the check result and errors. Supplier calls count against the merchant quota (BK4). Nothing is written but the checks' cache.
 - BK3. **Pay:** the store sends the checked lines to `POST /api/checkouts` (S10) with `source: bulk` and per line `expectedUnitPriceUsdUnits` and `confirmPlayer` (true only for lines the merchant ticked after a `not_found` or unchecked result; decision 5). The checkout is all or nothing (S10 CT3, `CHECKOUT_REFUSED` with each line's code), one journal, up to 50 lines for a merchant; a line's quantity follows QT1.
@@ -193,7 +209,7 @@ The separate point-of-sale page was replaced on 2026-10-30 (owner): the game pag
 - BR3. The trade name is `merchant_profiles.trade_name` (admin-approved); the merchant changes the WhatsApp, its visibility and the logo; the admin may remove a logo (re-authentication, reason, audited). PR 2: an uploaded logo is the merchant's logo at once (the receipt settings are its only owner record); the merchant removes it by saving without it.
 
 ### Price list (F36)
-- PL1. `/merchant/price-list`: the merchant picks games (default: followed games, else all), prices (`selling`: their selling prices, default; `purchase`: their own list prices, with a note "هذه أسعار شرائك"), currency (SYP default, USD, both), and whether to list unavailable packs ("غير متوفر").
+- PL1. `/merchant/price-list`: the merchant picks games (default: the pinned games, else the 10 best sellers of the last 30 days, else none; amendment 7), prices (`selling`: their selling prices, default; `purchase`: their own list prices, with a note "هذه أسعار شرائك"), currency (SYP default, USD, both), and whether to list unavailable packs ("غير متوفر").
 - PL2. The document: shop name and logo, "قائمة الأسعار" with the date and time (Damascus) and "الأسعار قابلة للتغيير", packs grouped by game in the store's order, each with its price; packs without a selling price in `selling` mode are omitted with a count shown to the merchant only (not printed).
 - PL3. Outputs: the print page (A4, PR1) and a PNG (`GET /api/merchant/price-list.png`, 1080 px wide, rendered by the api with sharp and Pango like the share image, at most 60 rows per image, `page` for more), `no-store`, 20 per hour.
 
@@ -234,7 +250,8 @@ None new. A POS or buy-box purchase posts S08 M1; a bulk payment is an S10 check
 | `PUT /api/merchant/selling-prices/:productId` · `DELETE` | Merchant, not frozen | `sellingPriceInputSchema` · — | the product's row | `NOT_FOUND`, `VALIDATION_FAILED` |
 | `PUT /api/orders/:id/sale` (PR 2) | Merchant (own order) | `sellingPriceInputSchema` (`{ currency, amountUnits }`) | the sale | `NOT_FOUND`, `NOT_MERCHANT`, `VALIDATION_FAILED` |
 | `GET /api/merchant/recent-players` | Merchant | `gameId` | up to 20 `{ fields, playerName?, lastUsedAt }` | `NOT_MERCHANT` |
-| `POST /api/merchant/bulk/check` | Merchant, not frozen, terms; 30 / hour | `bulkCheckRequestSchema` (`gameId`, `text` or parsed lines) | `bulkCheckResultSchema` | `BULK_LINES_INVALID`, `PLAYER_CHECK_QUOTA_EXCEEDED`, `MERCHANT_TERMS_REQUIRED`, `ACCOUNT_FROZEN` |
+| ~~`POST /api/merchant/bulk/check`~~ | Removed 2026-10-30 (amendment 1) | | | |
+| `GET /api/merchant/pinned-games` · `PUT` | Merchant · not frozen | — · `pinnedGamesSchema` (`gameIds`, ordered, ≤ 20, distinct) | `pinnedGamesSchema` | `NOT_MERCHANT`, `ACCOUNT_FROZEN`, `NOT_FOUND`, `VALIDATION_FAILED` |
 | `POST /api/checkouts` (S10, extended) | Customer, `Idempotency-Key` | adds `source`; 50 lines for merchants | as S10 | as S10 |
 | `POST /api/orders/:id/codes/release` | Merchant (own order), `no-store`, 20 / 10 min | `codeReleaseRequestSchema` | codes in clear, or the `.xlsx` for `export` | `CODES_NOT_DELIVERED`, `NOT_FOUND`, `RATE_LIMITED` |
 | `GET /api/orders/:id/print` | Customer (own order), `no-store` | — | `orderPrintSchema`: receipt fields, branding, selling price, verification URL | `NOT_FOUND` |
@@ -271,17 +288,17 @@ S20's `GET /api/admin/customers/:id` and `GET /api/admin/merchants` gain the lev
 
 ### Store (RTL; the counter screens are tablet and desktop first, every page also works at phone width)
 - PR 1: the merchant pages read their strings from their own catalog (`features/merchant-tools/messages.ar.json`), so the catalog every store page ships stays within its budget; the session's user carries `accountType` (a Better Auth field) so the account menu shows "أدوات التاجر" without another read; the notification preferences list the push-only `merchant_watch_digest`.
-- **Merchant area** (`/merchant`): the dashboard (DB1–DB5) with a period switch, cards for sales, spending, estimated profit and balance, top products and the level card; the area's tabs above every page lead to the tools (owner, 2026-10-27, Q27: no separate shortcuts). DB4's count of orders without a selling price links to the selling prices page, where the cause is fixed (a filtered orders list is a follow-up). Empty state for a new merchant: "ابدأ بتحديد نسبة ربحك" linking to selling prices. The account menu gains "أدوات التاجر".
-- **Selling prices** (`/merchant/prices`): the markup and SYP step at the top; per game, a card per pack with the purchase price, the selling price, its source and the below-cost warning, edited in a dialog in SYP or USD (Q27: cards, not an inline table, read better at phone width).
+- **Merchant area** (`/merchant`): the dashboard (DB1–DB5) with a period switch, cards for sales, spending, estimated profit and balance, top products and the level card; the area's tabs above every page lead to the tools (owner, 2026-10-27, Q27: no separate shortcuts). DB4's count of orders without a selling price links to the selling prices page, where the cause is fixed (a filtered orders list is a follow-up). Empty state for a new merchant: "ابدأ بتحديد نسبة ربحك" linking to selling prices. ~~The account menu gains "أدوات التاجر".~~ Removed 2026-10-30 (amendment 9).
+- **Selling prices** (`/merchant/prices`): amendment 6 (the settings line, the picker with `?game=`, the table with chips; cards at phone width).
 - **Sale mode** (the home and game pages): PS1–PS5; the confirmation is a modal at every width (Q27); delivered code orders in the status strip offer "طباعة الأكواد" (PS5); loading skeletons for the grid; offline or error banner "تعذّر الاتصال" with retry and no buy action.
-- **Bulk** (`/merchant/bulk`): game select, a text area and a CSV upload with the template link, "فحص" then a list of lines (Q27: a list, not a table; state color, product, ID and name, the unit price and the line's total, errors, a "تأكيد المعرّف" tick for unchecked or not-found lines), the total against the balance with the S10 shortfall line, and "ادفع الكل" naming the total, disabled while the balance is short. Invalid lines block paying until fixed or removed. The template lists every pack of the game.
+- ~~**Bulk** (`/merchant/bulk`)~~ (removed 2026-10-30): game select, a text area and a CSV upload with the template link, "فحص" then a list of lines (Q27: a list, not a table; state color, product, ID and name, the unit price and the line's total, errors, a "تأكيد المعرّف" tick for unchecked or not-found lines), the total against the balance with the S10 shortfall line, and "ادفع الكل" naming the total, disabled while the balance is short. Invalid lines block paying until fixed or removed. The template lists every pack of the game.
 - **Order page** (S08, extended): for merchants "طباعة الإيصال" (58, 80 mm, A4), for code orders "طباعة الأكواد", "نسخ الأكواد", "تصدير Excel", the selling price (editable), and the release log. Every order shows its verification QR in the receipt section.
 - **Print pages** (`/orders/[id]/print`, `/merchant/price-list/print`, `/merchant/statements/[month]/print`): no header or footer; an on-screen bar with "طباعة / حفظ PDF" and the paper choice, hidden when printing.
 - **Verification** (`/v/[code]`): VF2, phone first, server-rendered, `noindex`.
 - **Receipt settings** (`/merchant/receipt`): the trade name (read-only with "اطلب تعديلاً" opening a ticket), WhatsApp and its switch, logo upload, and a live preview of the 58 mm receipt.
-- **Price list** (`/merchant/price-list`): PL1 options, the preview, "طباعة / حفظ PDF" and "تنزيل صورة".
+- **Price list** (`/merchant/price-list`): amendment 7 (sticky settings, the picker's quick choices, A4 pages, "طباعة / حفظ PDF" and one image download).
 - **Alerts** (`/merchant/alerts`): follows (games with search; products from the suggestions with "متابعة", and unfollowed from their list; Q27), the low-balance threshold, the daily email switch, and the last 90 days of events.
-- **Statements** (`/merchant/statements`): the months list; a month page with the summary, entries, "طباعة / حفظ PDF" and "تنزيل Excel".
+- **Statements** (`/merchant/statements`): amendment 8: this month's screen at once, the others a step away (`/merchant/statements/[month]`), with "طباعة / حفظ PDF" and "تنزيل Excel" for the official statement.
 
 ### Admin
 - **Levels** (`/merchants/levels`): the levels table (name, threshold, list, merchants on it), create, edit, archive; a note that a level's list must be wholesale or a custom list.

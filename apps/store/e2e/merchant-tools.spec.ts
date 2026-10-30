@@ -116,18 +116,39 @@ const alerts: MerchantAlertPage = {
 
 const settings: AlertSettings = { lowBalanceUsdUnits: null, dailyEmail: false };
 
-const games = { items: [{ id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل' }] };
+const CATEGORY = { categoryId: '0199e100-0000-7000-8000-0000000000e1', categoryNameAr: 'ألعاب' };
+
+const games = {
+  items: [
+    { id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', ...CATEGORY, recentUnits: 0 },
+    {
+      id: '0199e100-0000-7000-8000-0000000000a2',
+      slug: 'free-fire',
+      nameAr: 'فري فاير',
+      ...CATEGORY,
+      recentUnits: 5,
+    },
+  ],
+};
+
+/** The picker's covers and English names: an index without the games shows their names alone. */
+const emptyIndex = { games: [], products: [] };
 
 test.describe('the merchant area (S21 PR 1)', () => {
-  test('opens from the account menu and shows the dashboard (F30)', async ({
+  test('shows the dashboard under its own title (F30; owner, 2026-10-30)', async ({
     page,
     api,
   }, testInfo) => {
     signedIn(api).on('GET /api/merchant/dashboard', 200, dashboard());
+    // The account menu no longer leads here: the sidebar and the account page's card do.
     await page.goto('/');
     await page.getByRole('button', { name: ar.header.menu }).click();
-    await page.getByRole('menuitem', { name: ar.header.merchantTools }).click();
-    await expect(page).toHaveURL('/merchant');
+    await expect(page.getByRole('menuitem', { name: ar.header.account })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: ar.header.merchantTools })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.goto('/merchant');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(tools.nav.dashboard);
+    await expect(page).toHaveTitle(new RegExp(`^${tools.nav.dashboard}`));
     const board = page.getByTestId('merchant-dashboard');
     await expect(board).toContainText('$48.60');
     await expect(board).toContainText('$7.35');
@@ -217,8 +238,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
     test.skip(testInfo.project.name !== 'phone', 'the sheet is the phone pattern');
     signedIn(api).on('GET /api/merchant/dashboard', 200, dashboard());
     await page.goto('/');
-    await page.getByRole('button', { name: ar.header.menu }).click();
-    await page.getByRole('menuitem', { name: ar.header.merchantTools }).click();
+    await page.goto('/merchant');
     await expect(page.getByTestId('merchant-dashboard')).toBeVisible();
     await page
       .getByRole('button', { name: tools.nav.open.replace('{section}', tools.nav.dashboard) })
@@ -292,22 +312,41 @@ test.describe('the merchant area (S21 PR 1)', () => {
           source: 'product',
         }),
       );
-    await page.goto('/merchant/prices');
+    api.on('GET /api/catalog/search-index', 200, emptyIndex);
+    // The game in the address opens; without one, the best seller would (owner, 2026-10-30).
+    await page.goto('/merchant/prices?game=pubg-mobile');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(tools.nav.prices);
+    await expect(page.getByText('ببجي موبايل', { exact: true })).toBeVisible();
     const rows = page.getByTestId('selling-prices');
     await expect(rows).toContainText('$1.16');
     await expect(rows).toContainText(tools.prices.belowCost);
+    // One line of settings, opening the same form.
+    const line = page.getByTestId('selling-settings');
+    await expect(line).toContainText('10%');
     await screenshot(page, testInfo, 'merchant-prices');
 
-    await page.getByLabel(tools.prices.markup).fill('12.5');
-    await page.getByRole('button', { name: tools.common.save }).first().click();
-    await expect(page.getByRole('status')).toHaveText(tools.common.saved);
+    // Chips with their counts: below cost leaves the one pack sold under its price.
+    await page.getByRole('button', { name: new RegExp(`^${tools.prices.filters.below}`) }).click();
+    await expect(rows.getByText('60 شدة')).toHaveCount(0);
+    await expect(rows.getByText('325 شدة').first()).toBeVisible();
+    await page.getByRole('button', { name: new RegExp(`^${tools.prices.filters.all}`) }).click();
+
+    await page.getByRole('button', { name: tools.prices.editSettings }).click();
+    const settingsDialog = page.getByRole('dialog');
+    await settingsDialog.getByLabel(tools.prices.markup).fill('12.5');
+    await settingsDialog.getByRole('button', { name: tools.common.save }).click();
+    await expect(settingsDialog).toBeHidden();
+    await expect(line).toContainText('12.5%');
     expect(api.last('PUT /api/merchant/selling-settings')?.body).toEqual({
       markupBp: 1250,
       sypStepUnits: 50_000,
     });
 
-    await page.getByRole('button', { name: tools.prices.edit }).first().click();
+    await page
+      .getByRole('button', { name: tools.prices.editOf.replace('{name}', '60 شدة') })
+      .click();
     const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: tools.prices.syp, exact: true }).click();
     await dialog.getByLabel(tools.prices.amount).fill('15000');
     await screenshot(page, testInfo, 'merchant-price-dialog');
     await dialog.getByRole('button', { name: tools.common.save }).click();
@@ -317,6 +356,33 @@ test.describe('the merchant area (S21 PR 1)', () => {
       amountUnits: 1_500_000,
     });
     await expect(rows).toContainText(tools.prices.sources.product);
+
+    // The picker: search in Arabic or English, Enter picks, and the address keeps it.
+    await page.getByRole('button', { name: tools.picker.change }).click();
+    const picker = page.getByRole('dialog');
+    await expect(picker.getByText(tools.picker.topSold)).toBeVisible();
+    await screenshot(page, testInfo, 'merchant-game-picker');
+    await picker.getByRole('combobox', { name: tools.picker.search }).fill('فري');
+    await page.keyboard.press('Enter');
+    await expect(picker).toBeHidden();
+    await expect(page).toHaveURL(/[?&]game=free-fire/);
+  });
+
+  test('shows the selling prices in the light theme, and opens the best seller first', async ({
+    page,
+    api,
+  }, testInfo) => {
+    await page.addInitScript(() => localStorage.setItem('vertex-theme', 'light'));
+    signedIn(api)
+      .on('GET /api/merchant/selling-settings', 200, { markupBp: null, sypStepUnits: null })
+      .on('GET /api/merchant/games', 200, games)
+      .on('GET /api/catalog/search-index', 200, emptyIndex)
+      .on('GET /api/merchant/selling-prices', 200, prices([row()]));
+    await page.goto('/merchant/prices');
+    await expect(page.getByText('فري فاير', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('selling-settings')).toContainText(tools.prices.noMarkup);
+    await expect(page.getByTestId('selling-prices')).toContainText('$1.16');
+    await screenshot(page, testInfo, 'merchant-prices-light');
   });
 
   test('follows a game and sets the low-balance alert (F37, AL1, AL5)', async ({

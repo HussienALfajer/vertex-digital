@@ -160,10 +160,11 @@ test.describe('the tier page (S23 ID3, PG1–PG5)', () => {
     });
     await page.goto('/merchant');
     await expect(page.getByTestId('tier-card')).toContainText(tools.tier.badge.silver);
+    // The account menu reads no tier and names no merchant area (owner, 2026-10-30).
     await page.getByRole('button', { name: ar.header.menu }).click();
     await expect(
       page.getByRole('menuitem', { name: new RegExp(ar.header.merchantTools) }),
-    ).toContainText('تاجر فضي');
+    ).toHaveCount(0);
   });
 
   test('says the history starts this month, and keeps the top tier (PG1, PG5)', async ({

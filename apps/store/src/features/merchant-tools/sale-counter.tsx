@@ -269,7 +269,8 @@ function profitText(profit: SalePrice): string {
       ? ''
       : ` ${tm('common.approx', {
           amount: tm('common.syp', {
-            amount: ltr(`${sign(profit.sypUnits)}${formatSyp(Math.abs(profit.sypUnits))}`),
+            // "+$0.47 ≈ 70 ل.س": only a loss signs its pounds.
+            amount: ltr(`${profit.sypUnits < 0 ? '-' : ''}${formatSyp(Math.abs(profit.sypUnits))}`),
           }),
         })}`;
   return tm('sale.profit', { amount: `${usd}${syp}` });
@@ -613,7 +614,10 @@ function GamePanel({
         {packs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{tm('sale.noPacks')}</p>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+          <ul
+            className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3"
+            data-testid="sale-packs"
+          >
             {packs.map((row) => (
               <li key={row.productId}>
                 <PackButton

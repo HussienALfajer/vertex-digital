@@ -24,16 +24,44 @@ function overflow(page: Page) {
 }
 
 test.describe('home and categories (NH1–NH3)', () => {
-  test('a card shows its image, else a collage of its first covers (NH2)', async ({
-    page,
-    api: _api,
-  }) => {
+  test('a card shows its image, else its first covers whole (NH2)', async ({ page, api: _api }) => {
     await page.goto('/');
-    const cards = page.getByRole('navigation', { name: ar.catalog.categories });
+    const cards = page.getByRole('navigation', { name: ar.catalog.browse });
     await expect(cards.locator('a[href="/categories/gift-cards"] img')).toHaveCount(1);
-    // ألعاب has no image of its own: its two games with covers (the third has none).
-    await expect(cards.locator('a[href="/categories/games"] img')).toHaveCount(2);
+    // ألعاب has no image of its own: its two games with covers (the third has none), square.
+    const covers = cards.locator('a[href="/categories/games"] img');
+    await expect(covers).toHaveCount(2);
+    const box = await covers.first().boundingBox();
+    expect(Math.abs((box?.width ?? 0) - (box?.height ?? 1))).toBeLessThan(2);
   });
+
+  for (const scheme of ['dark', 'light'] as const) {
+    test(`the categories lead the page with their counts, apart from the games (${scheme})`, async ({
+      page,
+      api: _api,
+    }, testInfo) => {
+      if (scheme === 'light') await page.addInitScript(lightTheme);
+      await page.goto('/');
+      const cards = page.getByRole('navigation', { name: ar.catalog.browse });
+      await expect(cards.getByRole('heading', { name: ar.catalog.browse })).toBeVisible();
+      // "147 عنصرًا": the count agrees with its number (brand/identity.md §10).
+      const games = CATALOG.storefront.categories.find((item) => item.slug === 'games');
+      const count = games?.games.length ?? 0;
+      const form = new Intl.PluralRules('ar').select(count) as keyof typeof ar.catalog.itemCount;
+      await expect(cards.locator('a[href="/categories/games"]')).toContainText(
+        (ar.catalog.itemCount[form] ?? ar.catalog.itemCount.other).replace(
+          '{count}',
+          String(count),
+        ),
+      );
+      const firstRow = page.locator('section[id]').first();
+      expect((await cards.boundingBox())?.y ?? 0).toBeLessThan(
+        (await firstRow.boundingBox())?.y ?? 0,
+      );
+      expect(await overflow(page)).toBe(0);
+      await screenshot(page, testInfo, `home-categories-${scheme}`);
+    });
+  }
 
   test('the home page shows the cards and rows, each with its link to all', async ({
     page,
@@ -41,7 +69,7 @@ test.describe('home and categories (NH1–NH3)', () => {
   }) => {
     await page.goto('/');
     const categories = CATALOG.storefront.categories.filter((item) => item.games.length > 0);
-    const cards = page.getByRole('navigation', { name: ar.catalog.categories });
+    const cards = page.getByRole('navigation', { name: ar.catalog.browse });
     await expect(cards.getByRole('link')).toHaveCount(categories.length);
     for (const category of categories) {
       await expect(page.locator(`section#${category.slug}`)).toBeVisible();
@@ -242,7 +270,7 @@ for (const theme of ['dark', 'light'] as const) {
     index(api);
     if (theme === 'light') await page.addInitScript(lightTheme);
     await page.goto('/');
-    await expect(page.getByRole('navigation', { name: ar.catalog.categories })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: ar.catalog.browse })).toBeVisible();
     await screenshot(page, testInfo, `home-categories-${theme}`);
     await page.goto(`/categories/${CATALOG.storefront.categories[0]?.slug}`);
     await expect(page.locator('main a[href^="/games/"]').first()).toBeVisible();

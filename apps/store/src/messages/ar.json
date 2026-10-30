@@ -842,7 +842,6 @@
   },
   "catalog": {
     "empty": "نجهّز المتجر، عُد قريبًا",
-    "categories": "الفئات",
     "browse": "تصفّح حسب الفئة",
     "viewAll": "عرض الكل",
     "viewAllOf": "عرض كل {name}",

@@ -139,7 +139,7 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
 
 - TS3. **Deposit limits** (amends S20 MD1): a merchant's per-deposit and 24-hour limits are their effective tier's; S12 per-customer overrides still replace them; the profile's limit source reads "الافتراضي: تاجر ذهبي" (the tier's name). Telegram approval keeps its $100 ceiling (MD4). Limits apply at a deposit's creation (S03 SC3): a fall does not touch deposits already created.
 - TS4. **Player checks** (amends S21 BK4): the effective tier's hourly and daily numbers; the per-IP limit for a merchant's request is the hourly number; the supplier's daily quota still caps everything.
-- TS5. **Quantities** (amends S21 QT1, BK1, BK3): a merchant's code order may carry up to the tier's `order_units_max`, a bulk list and a merchant checkout up to `bulk_lines_max`. The database checks widen to 1–100 (`orders.quantity`, `checkouts.line_count`); customers keep the product's `max_quantity` and 10 lines. QT3 (a supplier offer's own limit) is unchanged. A bulk list checked under a higher tier and paid after a fall is refused with `VALIDATION_FAILED` naming the limit.
+- TS5. **Quantities** (amends S21 QT1, BK1, BK3): a merchant's code order may carry up to the tier's `order_units_max`, a bulk list and a merchant checkout up to `bulk_lines_max`. Bulk orders were removed by the owner on 2026-10-30 (S21 amendment 1): `bulk_lines_max` keeps its name and now caps a merchant's checkout only; the store's cart holds 10 lines, so it binds only a checkout sent to the API directly. The tier card and the tier-change email no longer name bulk lines; the panel calls the setting "أسطر دفعة التاجر الواحدة". The database checks widen to 1–100 (`orders.quantity`, `checkouts.line_count`); customers keep the product's `max_quantity` and 10 lines. QT3 (a supplier offer's own limit) is unchanged. A bulk list checked under a higher tier and paid after a fall is refused with `VALIDATION_FAILED` naming the limit.
 
 ### Price ladder
 - PX1. **Setup** (`pnpm --filter @vertex-digital/api merchants:setup-tiers`, idempotent, after `pnpm build`; run once in production after the deploy): renames the wholesale list "البرونزية"; creates the three custom lists "الفضية" (parent wholesale), "الذهبية" (parent Silver's), "الماسية" (parent Gold's) with their global and category rules (PX3); creates the three levels at $300, $1,000 and $3,000 on them. Anything that already exists by name is left untouched and reported; it never changes a rule the admin edited. Creating each list prices it (S20 RP3). `pnpm db:seed-local` runs it too.
@@ -168,7 +168,7 @@ Money is USD units (micro-dollars, ADR 0003). `merchants` owns tiers, settings, 
 
 ### Identity
 - ID1. **Badge** (`TierBadge` in `packages/ui`): the tier's icon (Lucide: Bronze `Shield`, Silver `Medal`, Gold `Crown`, Diamond `Gem`) and name on a tier tint. Tier colour tokens (`tier-bronze`, `tier-silver`, `tier-gold`, `tier-diamond`, each with a text step for light and dark) join `brand/identity.md` in PR 2, measured for contrast (non-text ≥ 3 on green-900 and white; text AA). Starting values: Bronze `#B07A55`, Silver `#A9B4B2`, Gold `#B9A87A` (gold-400), Diamond `#8FD3C8`. Tier colours tint the badge, the tier card, the certificate and the sticker only; never buttons, prices or status (§2, §9).
-- ID2. **Navigation and menu:** the merchant area's navigation (the sidebar's top; beside the sections' button on a phone) and the account menu show the badge.
+- ID2. **Navigation and menu:** the merchant area's navigation (the sidebar's top; beside the sections' button on a phone) shows the badge. The account menu no longer names the merchant area nor reads the tier (owner, 2026-10-30, S21 amendment 9).
 - ID3. **Tier card** on the dashboard (replaces S21's level card): a flat tint of the tier's hue (10% fill, 40% border; settled in PR 2: `brand/identity.md` §9 refuses gradients), the tier name and badge, "منذ <date>" (`level_changed_at`, or the grant date of the merchant profile for Bronze), what the tier grants (from TS2), the progress bar (PG1), the keep line (TR7), and the savings (PG6); a link to the tier page.
 - ID4. **Celebration:** on the first merchant-area visit with `celebrate_pending`, a full-screen sheet with the new badge, the tier's name, what it grants and one short motion (the mark's three strokes, then the badge; `prefers-reduced-motion` shows it still); "متابعة" calls `POST /api/merchant/tier/celebrated`. The S21 `merchant_level_changed` notification and email name the tier and what it grants.
 - ID5. **Receipts and verification** (S21 PR2, VF2, BR1): a merchant's receipt (print and share link) and the verification page show under the shop name "تاجر <tier> معتمد من Vertex Digital" with the badge for Silver and up, "تاجر معتمد من Vertex Digital" for Bronze; the tier is the merchant's **current** effective tier when the page is rendered; a revoked merchant shows none. Thermal paper prints the icon and text in black.
@@ -247,7 +247,7 @@ S21's `/api/admin/merchant-levels` routes are replaced by the tiers routes (the 
 ## Screens
 
 ### Store (RTL, phone first; the tier page and certificate also at tablet and desktop)
-- **Merchant area header and account menu:** the badge (ID2).
+- **Merchant area header:** the badge (ID2; the account menu's was removed 2026-10-30).
 - **Dashboard** (`/merchant`): the tier card (ID3) in place of the level card; the celebration sheet on the first visit after a rise (ID4).
 - **Tier page** (`/merchant/tier`): the tier card at the top, the tier table (PG2) as cards at phone width and a table from tablet, the forecast, the history, "اطبع شهادة التاجر المعتمد", "صورة للواجهة" (ID8), and the Diamond contact (OP4). Loading skeletons; empty history shows "يبدأ السجل من هذا الشهر".
 - **Certificate print** (`/merchant/certificate/print`): ID7, with the on-screen print bar (S21 PR1).
@@ -298,7 +298,7 @@ S21's `/api/admin/merchant-levels` routes are replaced by the tiers routes (the 
 6. A grant expiring while a purchase is in flight: serialized by the customer lock; the purchase is charged the list in force when it took the lock.
 7. A revoked merchant with an open grant: the grant ends `merchant_revoked`; a re-grant of merchant status recomputes without it.
 8. A tier fall with awaiting-balance reservations: cancelled with `price_list_changed` (S20 AT3), as any list change.
-9. A bulk list of 100 lines checked as Gold, the merchant falls to Silver before paying: refused with `VALIDATION_FAILED` naming the 50-line limit.
+9. ~~A bulk list of 100 lines checked as Gold, the merchant falls to Silver before paying~~ (bulk orders removed 2026-10-30): a merchant checkout above the tier's lines is refused with `VALIDATION_FAILED` naming the limit.
 10. A code order of 80 units for a Gold merchant on an offer limited to 50: QT3 skips that route; with none left, S08's refund path.
 11. A merchant with no purchases for three months: Bronze; the history shows the months with zero; no reminder unless within 30% of Silver.
 12. The 25th reminder for a merchant already at Diamond who has reached Diamond's threshold this month: none.
