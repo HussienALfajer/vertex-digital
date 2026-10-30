@@ -811,3 +811,10 @@ export const removeMerchantLogoSchema = z
   .meta({ id: 'RemoveMerchantLogo' });
 
 export type RemoveMerchantLogo = z.infer<typeof removeMerchantLogoSchema>;
+
+/** `DELETE /api/admin/customers/:id/merchant/welcome-text` (S23 RC1). */
+export const removeWelcomeTextSchema = z
+  .object({ reason: z.string().trim().min(3).max(500) })
+  .meta({ id: 'RemoveWelcomeText' });
+
+export type RemoveWelcomeText = z.infer<typeof removeWelcomeTextSchema>;

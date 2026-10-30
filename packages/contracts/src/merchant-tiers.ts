@@ -774,12 +774,14 @@ export type MerchantTierHistory = z.infer<typeof merchantTierHistorySchema>;
 /** RC1: 2–60 characters after trimming. */
 export const WELCOME_TEXT_MAX = 60;
 
-// No control characters; no link; no run of 7 or more digits (Latin, Arabic-Indic or Persian),
-// spaces, dots and dashes between them included, so no phone number hides in it.
+// No control characters. Links and contacts are read on the NFKC form, so fullwidth or other
+// lookalike forms count as the plain ones: no scheme, `www`, `name.tld` (spaces around the dot
+// included) or `@handle`; no run of 7 or more digits of any script, whatever separates them but
+// letters, so no phone number hides in it (reviewer, S23 PR 2).
 const CONTROL = /\p{Cc}|\p{Cf}/u;
 const LINK =
-  /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|me|sy|co|app|link|ly|info|xyz|site|online|store)\b|t\.me\/|wa\.me\/)/iu;
-const DIGIT_RUN = /(?:[0-9\u0660-\u0669\u06F0-\u06F9][\s.-]*){7,}/u;
+  /(?:[a-z][a-z0-9+.-]*:\/\/|www\s*\.|[a-z0-9-]+\s*[.。．]\s*[a-z]{2,}|@[a-z0-9_]{3,})/iu;
+const DIGIT_RUN = /(?:\p{Nd}[^\p{L}]*){7,}/u;
 
 /** RC1: the receipt's welcome line. */
 export const welcomeTextSchema = z
@@ -788,5 +790,5 @@ export const welcomeTextSchema = z
   .min(2)
   .max(WELCOME_TEXT_MAX)
   .refine((text) => !CONTROL.test(text), 'Control characters are not allowed')
-  .refine((text) => !LINK.test(text), 'Links are not allowed')
-  .refine((text) => !DIGIT_RUN.test(text), 'Long digit runs are not allowed');
+  .refine((text) => !LINK.test(text.normalize('NFKC')), 'Links are not allowed')
+  .refine((text) => !DIGIT_RUN.test(text.normalize('NFKC')), 'Long digit runs are not allowed');

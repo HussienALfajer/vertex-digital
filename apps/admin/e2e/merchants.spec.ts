@@ -229,6 +229,27 @@ test.describe('merchants', () => {
     await expect(page.getByText(m.profile.noLogo)).toBeVisible();
   });
 
+  test('removes a merchant’s welcome line with a reason and re-authentication (S23 RC1)', async ({
+    page,
+    admin,
+  }, testInfo) => {
+    await brandedMerchant(page, admin);
+    admin.merchants.setBranding(CUSTOMER_IDS.sara, { welcomeText: 'أهلاً بكم في محل النور' });
+    admin.reauthenticationRequired = true;
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto(`/customers/${CUSTOMER_IDS.sara}`);
+      await expect(page.getByTestId('merchant-welcome-text')).toHaveText('أهلاً بكم في محل النور');
+      await screenshot(page, testInfo, `customer-merchant-welcome-${colorScheme}`);
+    }
+    await page.getByRole('button', { name: m.profile.removeWelcome }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel(m.fields.reason, { exact: true }).fill('رقم تواصل مخالف للشروط');
+    await dialog.getByRole('button', { name: m.profile.removeWelcome }).click();
+    await reauthenticate(page);
+    await expect(page.getByText(m.profile.noWelcomeText)).toBeVisible();
+  });
+
   test('saves the order rate within its bounds (PO5)', async ({ page, admin }) => {
     admin.signedIn = true;
     await page.goto('/settings/merchants');

@@ -303,9 +303,23 @@ describe('the welcome line (RC1)', () => {
       'اتصل 0991234567',
       'اتصل ٠٩٩١٢٣٤٥٦٧',
       'اتصل 099 123 45 67',
+      // Bypasses the reviewer found: any top-level domain, spaced dots, any separator, any script.
+      'زورونا scam.shop',
+      'pay . ru',
+      'تابعونا t . me / shop',
+      'x.pro',
+      'telegram @shop_sy',
+      'اتصل 0933/123/456',
+      'اتصل (0933)123456',
+      'اتصل 0933_123_456',
+      'اتصل 0933،123،456',
+      'اتصل ０９３３１２３４５６',
+      'اتصل ০৯৩৩১২৩৪৫৬',
     ]) {
       expect(welcomeTextSchema.safeParse(text).success, text).toBe(false);
     }
-    expect(welcomeTextSchema.safeParse('خصم 10% على 500 UC').success).toBe(true);
+    for (const text of ['خصم 10% على 500 UC', 'أهلاً بكم. نخدمكم يومياً', 'شحن 24 ساعة']) {
+      expect(welcomeTextSchema.safeParse(text).success, text).toBe(true);
+    }
   });
 });

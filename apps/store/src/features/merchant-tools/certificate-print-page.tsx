@@ -68,7 +68,9 @@ function CertificateDocument({ certificate }: { certificate: MerchantCertificate
           })}
         </p>
         <p className="flex items-center gap-2 text-2xl font-bold">
-          {certificate.tier !== 'bronze' && <TierIcon tier={certificate.tier} className="size-8 text-neutral-950" />}
+          {certificate.tier !== 'bronze' && (
+            <TierIcon tier={certificate.tier} className="size-8 text-neutral-950" />
+          )}
           {approvedLine(certificate.tier, true)}
         </p>
         <p>{tm('tier.certificate.since', { date: formatDate(certificate.since) })}</p>

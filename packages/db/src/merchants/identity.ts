@@ -212,8 +212,8 @@ export async function reissueCertificate(
 
 /**
  * ID7 (`GET /api/certificates/:code`): the trade name, place and current tier by the code, or
- * `revoked` for a merchant no longer approved; null for an unknown code. A frozen merchant still
- * shows their tier (edge case 16).
+ * `revoked` for a merchant no longer approved (revoked, or the account closed); null for an
+ * unknown code. A frozen merchant still shows their tier (edge case 16).
  */
 export async function certificateByCode(db: Executor, code: string) {
   const [row] = await db
@@ -223,13 +223,17 @@ export async function certificateByCode(db: Executor, code: string) {
       city: merchantProfiles.city,
       governorate: merchantProfiles.governorate,
       revokedAt: merchantProfiles.revokedAt,
+      archivedAt: customers.archivedAt,
       levelChangedAt: merchantProfiles.levelChangedAt,
       grantedAt: merchantProfiles.grantedAt,
     })
     .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
     .where(eq(merchantProfiles.certificateCode, code));
   if (!row) return null;
-  const tier = row.revokedAt === null ? await merchantTier(db, row.customerId) : null;
+  // A closed (archived) account is no longer approved, as a revoked one (reviewer, S23 PR 2).
+  const approved = row.revokedAt === null && row.archivedAt === null;
+  const tier = approved ? await merchantTier(db, row.customerId) : null;
   if (tier === null) return { status: 'revoked' as const };
   return {
     status: 'active' as const,

@@ -1133,6 +1133,7 @@
                 "merchant.tier_grant_ended",
                 "merchant.certificate_reissued",
                 "merchant.logo_removed",
+                "merchant.welcome_text_removed",
                 "customer.limits_changed",
                 "customer.archived",
                 "customer.unarchived",
@@ -4330,6 +4331,39 @@
         "responses": {
           "204": {
             "description": "The receipts carry no logo from now on"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/merchant/welcome-text": {
+      "delete": {
+        "operationId": "MerchantsAdminController_removeWelcomeText",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveWelcomeText"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The receipts carry no welcome line from now on"
           }
         },
         "tags": [
@@ -16614,6 +16648,7 @@
           "merchant.tier_grant_ended",
           "merchant.certificate_reissued",
           "merchant.logo_removed",
+          "merchant.welcome_text_removed",
           "customer.limits_changed",
           "customer.archived",
           "customer.unarchived",
@@ -20884,12 +20919,17 @@
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "welcomeText": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "showWhatsapp",
               "whatsapp",
-              "logoFileId"
+              "logoFileId",
+              "welcomeText"
             ],
             "additionalProperties": false
           }
@@ -22842,6 +22882,19 @@
           "reason"
         ]
       },
+      "RemoveWelcomeText": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "MerchantSettings": {
         "type": "object",
         "properties": {
@@ -23508,56 +23561,6 @@
               "additionalProperties": false
             }
           },
-          "level": {
-            "nullable": true,
-            "type": "object",
-            "properties": {
-              "current": {
-                "nullable": true,
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/MerchantLevelRef"
-                  }
-                ]
-              },
-              "thisMonthUsdUnits": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "next": {
-                "nullable": true,
-                "type": "object",
-                "properties": {
-                  "nameAr": {
-                    "type": "string"
-                  },
-                  "monthlyThresholdUsdUnits": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "missingUsdUnits": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  }
-                },
-                "required": [
-                  "nameAr",
-                  "monthlyThresholdUsdUnits",
-                  "missingUsdUnits"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "current",
-              "thisMonthUsdUnits",
-              "next"
-            ],
-            "additionalProperties": false
-          },
           "sellingConfigured": {
             "type": "boolean"
           }
@@ -23572,7 +23575,6 @@
           "ordersWithoutSale",
           "balanceUsdUnits",
           "topProducts",
-          "level",
           "sellingConfigured"
         ],
         "additionalProperties": false

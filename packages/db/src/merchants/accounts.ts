@@ -121,10 +121,19 @@ export async function grantMerchant(
     grantedAt: now,
     revokedAt: null,
   };
+  // S23 ID7: a re-grant writes a new certificate code, so certificates printed before a
+  // revocation never resolve again (a first grant takes the column's default).
   await tx
     .insert(merchantProfiles)
     .values({ customerId: customer.id, ...profile })
-    .onConflictDoUpdate({ target: merchantProfiles.customerId, set: profile });
+    .onConflictDoUpdate({
+      target: merchantProfiles.customerId,
+      set: {
+        ...profile,
+        certificateCode: sql`order_verification_code()`,
+        certificateReissuedAt: null,
+      },
+    });
   // AT3, decision 11: a change of account type cancels the reservations, whatever the list.
   const cancelledOrderIds = await cancelAccountReservations(tx, context, customer.id);
   await recordAudit(tx, {

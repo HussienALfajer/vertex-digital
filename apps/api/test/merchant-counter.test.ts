@@ -663,6 +663,7 @@ describe('receipt settings and the logo (S21 BR3)', () => {
       showWhatsapp: true,
       whatsapp: '+963933123456',
       logoFileId: uploaded.fileId,
+      welcomeText: null,
     });
     expect(
       (await client.get(`/api/admin/customers/${shop.id}/merchant/logo`, { cookie: admin.cookie }))

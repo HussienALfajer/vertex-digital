@@ -272,6 +272,21 @@ describe('access (S23 Access)', () => {
         code: 'NOT_MERCHANT',
       });
     }
+    // RC1: the admin's removal of a welcome line needs a fresh re-authentication.
+    const plainAdmin = await client.signInAdmin(admin.email, admin.secret);
+    expect(
+      await json(
+        await client.request(
+          'DELETE',
+          `/api/admin/customers/${customer.id}/merchant/welcome-text`,
+          {
+            cookie: plainAdmin,
+            body: { reason: 'رقم تواصل مخالف' },
+          },
+        ),
+        403,
+      ),
+    ).toMatchObject({ code: 'REAUTHENTICATION_REQUIRED' });
     for (const code of ['A'.repeat(22), 'short', 'x'.repeat(23)]) {
       expect(await json(await get(`/api/certificates/${code}`), 404)).toMatchObject({
         code: 'NOT_FOUND',
@@ -408,11 +423,44 @@ describe('the certificate (S23 ID7)', () => {
     ).toHaveLength(3);
 
     // A revoked merchant shows only that (edge case 16 keeps a frozen one's tier).
-    await test.db
-      .update(merchantProfiles)
-      .set({ revokedAt: new Date() })
-      .where(eq(merchantProfiles.customerId, shop.id));
+    await json(
+      await adminSend('POST', `/api/admin/customers/${shop.id}/merchant/revoke`, {
+        reason: 'مخالفة شروط التاجر',
+      }),
+      200,
+    );
     expect(await json(await get(`/api/certificates/${code}`), 200)).toEqual({ status: 'revoked' });
+
+    // A re-grant writes a new code: prints from before the revocation never resolve again.
+    await json(
+      await adminSend('POST', `/api/admin/customers/${shop.id}/merchant`, {
+        tradeName: first.tradeName,
+        governorate: 'aleppo',
+        city: 'اعزاز',
+        reason: 'عاد التاجر بعد المراجعة',
+      }),
+      200,
+    );
+    expect((await get(`/api/certificates/${code}`)).status).toBe(404);
+    const regranted = await json<{ code: string; reissuedAt: string | null }>(
+      await get('/api/merchant/certificate', shop.cookie),
+      200,
+    );
+    expect(regranted.code).not.toBe(code);
+    expect(regranted.reissuedAt).toBeNull();
+    expect(await json(await get(`/api/certificates/${regranted.code}`), 200)).toMatchObject({
+      status: 'active',
+    });
+
+    // A closed (archived) account is no longer approved either.
+    await test.db
+      .update(customers)
+      .set({ archivedAt: new Date() })
+      .where(eq(customers.id, shop.id));
+    expect(await json(await get(`/api/certificates/${regranted.code}`), 200)).toEqual({
+      status: 'revoked',
+    });
+    await test.db.update(customers).set({ archivedAt: null }).where(eq(customers.id, shop.id));
     await archiveLevels();
   });
 });
@@ -440,6 +488,31 @@ describe('the welcome line (S23 RC1)', () => {
       welcomeText: 'أهلاً بكم في محلنا',
       welcomeAllowed: true,
     });
+    // The admin sees the line on the profile and removes it, with a reason, audited.
+    const removePath = `/api/admin/customers/${shop.id}/merchant/welcome-text`;
+    expect(
+      await json<{ merchant: { branding: { welcomeText: string | null } } }>(
+        await client.get(`/api/admin/customers/${shop.id}`, { cookie: admin.cookie }),
+        200,
+      ),
+    ).toMatchObject({ merchant: { branding: { welcomeText: 'أهلاً بكم في محلنا' } } });
+    expect(
+      (await client.request('DELETE', removePath, { cookie: shop.cookie, body: { reason: 'xyz' } }))
+        .status,
+    ).toBe(401);
+    expect((await adminSend('DELETE', removePath, { reason: 'رقم تواصل مخالف' })).status).toBe(204);
+    expect(await json(await get('/api/merchant/receipt-settings', shop.cookie), 200)).toMatchObject(
+      { welcomeText: null },
+    );
+    expect(
+      (await auditOf(test.db, shop.id)).filter(
+        (entry) => entry.action === 'merchant.welcome_text_removed',
+      ),
+    ).toEqual([expect.objectContaining({ reason: 'رقم تواصل مخالف' })]);
+    expect(
+      await json(await adminSend('DELETE', removePath, { reason: 'مرة ثانية' }), 404),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    await json(await settings('أهلاً بكم في محلنا'), 200);
     await json(
       await adminSend('POST', `${grantPath(shop.id)}/end`, { reason: 'انتهت الشراكة' }),
       200,

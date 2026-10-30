@@ -122,6 +122,27 @@ export async function removeMerchantLogo(
 }
 
 /**
+ * S23 RC1: the admin removes a merchant's welcome line in the caller's transaction, the row
+ * locked; answers the removed line, or null when there was none.
+ */
+export async function removeWelcomeText(
+  tx: Transaction,
+  customerId: string,
+): Promise<string | null> {
+  const [row] = await tx
+    .select({ welcomeText: merchantReceiptSettings.welcomeText })
+    .from(merchantReceiptSettings)
+    .where(eq(merchantReceiptSettings.customerId, customerId))
+    .for('update');
+  if (!row?.welcomeText) return null;
+  await tx
+    .update(merchantReceiptSettings)
+    .set({ welcomeText: null })
+    .where(eq(merchantReceiptSettings.customerId, customerId));
+  return row.welcomeText;
+}
+
+/**
  * BR3: the uploaded logo made the merchant's logo in the caller's transaction, changing nothing
  * else (audit A06-39): a WhatsApp saved at the same time is kept. Without a saved row, the
  * defaults are written with it. False without a merchant profile.

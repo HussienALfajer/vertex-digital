@@ -1,6 +1,6 @@
 # TASKS — S23 Merchant tiers, PR 2 "Identity and progress" (`docs/specs/S23-merchant-tiers.md`)
 
-PR 1a (#230) and PR 1b (#231) are merged. Spec PR 2 (decisions 6–8: ID1–ID9, PG1–PG7, RC1–RC2) ships as one PR (owner, 2026-10-30), server and store together, on `feat/s23-identity`. PR 3 (operations and reports) follows in its own session.
+PR 1a (#230) and PR 1b (#231) are merged. Spec PR 2 (decisions 6–8: ID1–ID9, PG1–PG7, RC1–RC2, the welcome line's admin removal of AD5) ships as one PR (owner, 2026-10-30), server and store together, on `feat/s23-identity`. PR 3 (operations and reports) follows in its own session.
 
 ## PR 2 — identity and progress
 
@@ -17,16 +17,18 @@ PR 1a (#230) and PR 1b (#231) are merged. Spec PR 2 (decisions 6–8: ID1–ID9,
 
 ### Store
 
-- [ ] tier colour tokens in `brand/identity.md` and the UI tokens, measured for contrast (ID1); `TierBadge` in `packages/ui`
-- [ ] header and account menu badge (ID2); dashboard tier card replacing the level card (ID3) with progress bar (PG1), keep line, savings
-- [ ] celebration sheet (ID4, reduced motion)
-- [ ] tier page `/merchant/tier` (PG2 table, forecast PG4, history PG5; the Diamond contact comes in PR 3)
-- [ ] certificate print `/merchant/certificate/print` and public page `/m/[code]` (ID7, `noindex`), reissue action; sticker canvas PNG square and story with QR and Web Share (ID8)
-- [ ] receipts and verification badge line (ID5), welcome line and larger logo (RC1, RC2); receipt settings welcome field with counter and preview, disabled below Silver; statement tier block (ID9)
-- [ ] code-quantity input and bulk lines read `orderUnitsMax` and `bulkLinesMax` from `GET /api/merchant/tier` (moved from PR 1b)
-- [ ] i18n keys, loading, empty and error states
-- [ ] e2e: tier flow spec with mocks; RTL screenshots phone width dark and light (header badge per tier, tier card, celebration, tier page, receipt and verification, certificate print and page, receipt settings)
-- [ ] browser check (acceptance 2–4), checks, reviewer, PR and merge
+- [x] tier colour tokens in `brand/identity.md` and the UI tokens, measured for contrast (ID1); `TierBadge` in `packages/ui`
+- [x] header and account menu badge (ID2); dashboard tier card replacing the level card (ID3) with progress bar (PG1), keep line, savings
+- [x] celebration sheet (ID4, reduced motion)
+- [x] tier page `/merchant/tier` (PG2 table, forecast PG4, history PG5; the Diamond contact comes in PR 3)
+- [x] certificate print `/merchant/certificate/print` and public page `/m/[code]` (ID7, `noindex`), reissue action; sticker canvas PNG square and story with QR and Web Share (ID8)
+- [x] receipts and verification badge line (ID5), welcome line and larger logo (RC1, RC2); receipt settings welcome field with counter and preview, disabled below Silver; statement tier block (ID9)
+- [x] code-quantity input and bulk lines read `orderUnitsMax` and `bulkLinesMax` from `GET /api/merchant/tier` (moved from PR 1b)
+- [x] i18n keys, loading, empty and error states
+- [x] e2e: tier flow spec with mocks; RTL screenshots phone width dark and light (header badge per tier, tier card, celebration, tier page, receipt and verification, certificate print and page, receipt settings)
+- [x] browser check on the local stack (acceptance 2–4): a seeded customer made a Gold merchant in the dev database (the seed creates no merchant), the celebration once, the tier page (card, forecast, table, history), the certificate print and its public page at phone width, the square and story stickers drawn (download stubbed), the welcome line saved and in the preview; fixed there: the forecast in whole cents, the certificate's icon black on paper
+- [x] reviewer fixes: the admin removes a welcome line (`DELETE /api/admin/customers/:id/merchant/welcome-text`, re-authenticated, audited `merchant.welcome_text_removed`, the profile's row and dialog); the welcome filter on the NFKC form (any domain shape, `@handle`, 7+ digits of any script with any separator); a closed account's certificate shows as no longer approved; a re-grant writes a new certificate code
+- [ ] checks once more, PR and merge
 
 ## Moved to later PRs (spec delivery plan)
 

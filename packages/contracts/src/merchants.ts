@@ -528,11 +528,15 @@ export const adminMerchantProfileSchema = z
     previousMonthUsdUnits: z.int(),
     /** S21 AL1: the follows. */
     watchCount: z.int().nonnegative(),
-    /** S21 BR3: the receipt branding the merchant set (the admin may remove the logo). */
+    /**
+     * S21 BR3: the receipt branding the merchant set (the admin may remove the logo); S23 RC1: and
+     * the welcome line (the admin may remove it too).
+     */
     branding: z.object({
       showWhatsapp: z.boolean(),
       whatsapp: z.string().nullable(),
       logoFileId: z.uuid().nullable(),
+      welcomeText: z.string().nullable(),
     }),
   })
   .meta({ id: 'AdminMerchantProfile' });

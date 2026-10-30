@@ -417,6 +417,8 @@ export const AUDIT_DETAILS = {
   'merchant.certificate_reissued': z.strictObject({}),
   /** S21 BR3: the admin removed a merchant's receipt logo, with the reason. */
   'merchant.logo_removed': z.strictObject({ fileId: z.uuid(), reason: z.string() }),
+  /** S23 RC1: the admin removed a merchant's welcome line; the reason is the entry's `reason`. */
+  'merchant.welcome_text_removed': z.strictObject({ welcomeText: z.string() }),
   /** S12 LM5. */
   'customer.limits_changed': z.strictObject({
     before: customerLimitValues,
