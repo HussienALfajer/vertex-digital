@@ -64,14 +64,15 @@ Branch: `claude/merchant-tools-overhaul-eto2vk` (the cloud session's branch; the
 - [x] RTL screenshots (dark, light, phone, desktop) for every changed screen
 - [x] `pnpm verify`, `reviewer`, fixes
 - [x] Push the branch
-- [ ] The owner presses **Create PR** in the session; then auto-merge (merge commit) and the wait for the merge
+- [x] The owner presses **Create PR** in the session; then auto-merge (merge commit) and the wait for the merge
 
 ## Local session (cannot run in the cloud)
-- [ ] Deploy `main` once the PR has merged (migration 0109 runs through the deploy, `docs/deployment.md`; no new secret, no `provision.sh` change)
-- [ ] Check production without real money: the home page (categories first, the new cards), a merchant's sale mode (USD first, the slide, the star and "ألعابك", "ترتيب"), `/merchant/bulk` → `/merchant`, the selling prices (picker, `?game=`, chips), the price list (A4 pages, PDF, one image), the statement screen, the account menu without "أدوات التاجر"
+- [x] Deploy `main` once the PR has merged (migration 0109 ran through the deploy; then PR #245)
+- [x] Check production signed out: the home page (categories first, the new cards), a category page, a game page, `/merchant/bulk` → `/merchant`
+- [ ] Check production signed in, without real money: a merchant's sale mode (USD first, the star and "ألعابك", "ترتيب"), the selling prices (picker, `?game=`, chips), the price list (A4 pages, PDF, one image), the statement screen, the account menu without "أدوات التاجر". All passed on the local store; production needs the owner's merchant account signed in
 - [ ] The owner uploads the six category images in the panel ("إدارة الفئات")
-- [ ] Browser test against the full local store (`pnpm db:seed-local`)
-- [ ] Deploy log line in a docs PR
+- [x] Browser test against the full local store (`pnpm db:seed-local`): found and fixed the image's currency order and the seed's failure on tier lists (PR #245)
+- [x] Deploy log line in a docs PR
 
 ## E2E
 - [x] `merchant-counter.spec.ts`: sale mode (USD first, slide, End, unavailable last, touch keys), pinned star and "ألعابك"
