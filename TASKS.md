@@ -48,4 +48,4 @@ PR 1a (#230), PR 1b (#231) and PR 2 (#232) are merged. Spec PR 3 (decisions 11, 
 - [x] e2e: admin (queues, early access, best-sellers, report, contact settings; light and dark) and store `e2e/merchant-operations.spec.ts` (promise, contact, chip, early game); the game page renders its missing view directly instead of `notFound()`, so an early game opens outside Next's error boundary
 - [x] browser check on the local stack (acceptance 6-8 parts this PR covers; the overdue Telegram alert not seen live, servers stopped first at the owner's request, covered by the worker's test)
 - [x] checks, reviewer, PR and merge
-- [ ] deploy S23 and `merchants:setup-tiers` in production
+- [x] deploy S23 and `merchants:setup-tiers` in production
