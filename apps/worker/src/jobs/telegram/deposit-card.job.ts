@@ -16,6 +16,7 @@ import {
   depositReceipts,
   depositSettings,
   deposits,
+  merchantTier,
   readAll,
   storedFiles,
   TELEGRAM_DEPOSIT_CARD_OPTIONS,
@@ -275,7 +276,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
     if (usdt && !outcome && (deposit.status !== 'submitted' || usdt.checkStatus !== 'review')) {
       return null;
     }
-    const [[customer], [credited], flags, [settings]] = await readAll(db, [
+    const [[customer], [credited], flags, [settings], merchant] = await readAll(db, [
       () =>
         db
           .select({ name: customers.name, frozenAt: customers.frozenAt })
@@ -304,6 +305,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
           .from(depositSettings)
           .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
           .limit(1),
+      () => merchantTier(db, deposit.customerId),
     ]);
     const refusal = telegramApprovalRefusal({
       method: deposit.method,
@@ -321,6 +323,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
       declaredUsdUnits: deposit.declaredUsdUnits,
       rate: deposit.rate && rateFromNumeric(deposit.rate),
       customerName: customer?.name ?? '',
+      merchantTier: merchant,
       creditedCount: credited?.count ?? 0,
       flags: flags.map((flag) => flag.code),
       submittedAt: deposit.submittedAt,

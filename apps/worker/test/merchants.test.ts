@@ -8,19 +8,29 @@ import {
   createDatabase,
   customers,
   type Database,
+  earlyAccessEndedBetween,
   ensureCustomerWallet,
   ensureSystemAccount,
   merchantApplications,
   merchantsToCompare,
+  merchantTierSettings,
   newId,
+  type OverdueTicket,
+  overdueTickets,
   postJournal,
   statementEmailMerchants,
+  supportTickets,
   type Transaction,
+  tellTicketOverdue,
 } from '@vertex-digital/db';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Env } from '../src/core/config/env.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import {
+  CatalogEarlyAccessEndJob,
+  EARLY_ACCESS_END_LOOKBACK_MS,
+} from '../src/jobs/catalog/early-access-end.job.js';
 import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { ExpireApplicationsJob } from '../src/jobs/merchants/expire-applications.job.js';
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
@@ -713,5 +723,132 @@ describe('the merchant tools emails (S21)', () => {
     const email = renderEmail('customer_merchant_statement_ready', { month: '2026-09' }, store);
     expect(email.subject).toContain('2026');
     expect(email.text).toContain('https://digital.example/merchant/statements/2026-09');
+  });
+});
+
+describe('operations jobs (S23 OP6, OP7, OP8)', () => {
+  const env = { SUPPLIER_FAKE_ENABLED: true } as Env;
+  const sender = { send: async () => newId() };
+  /** A new Bronze settings row in the transaction, with `changes` (TS1: the newest is in force). */
+  const bronzeWith = async (tx: Transaction, changes: Record<string, unknown>) => {
+    const [bronze] = await tx
+      .select()
+      .from(merchantTierSettings)
+      .where(eq(merchantTierSettings.tier, 'bronze'))
+      .orderBy(desc(merchantTierSettings.createdAt), desc(merchantTierSettings.id))
+      .limit(1);
+    if (!bronze) throw new Error('No Bronze settings');
+    const { id: _id, createdAt: _at, ...values } = bronze;
+    await tx.insert(merchantTierSettings).values({ ...values, id: newId(), ...changes });
+  };
+
+  it('tells the admin of a ticket past its tier promise once per waiting period (OP6)', async () => {
+    const shop = await merchant();
+    await inRollback(async (tx) => {
+      await bronzeWith(tx, { supportReplyMinutes: 15 });
+      const ticket = newId();
+      await tx.insert(supportTickets).values({
+        id: ticket,
+        number: `VT-${newId()
+          .slice(-6)
+          .toUpperCase()
+          .replace(/[^2-9A-HJKMNP-Z]/g, '2')}`,
+        customerId: shop,
+        category: 'account',
+        subject: 'طلب عاجل',
+        status: 'open',
+        openedBy: 'customer',
+        lastCustomerMessageAt: sql`now() - interval '20 minutes'`,
+      });
+      const now = new Date();
+      const due = (await overdueTickets(tx, now)).find((row) => row.ticketId === ticket);
+      expect(due).toMatchObject({ tier: 'bronze', replyMinutes: 15, tradeName: 'محل النور' });
+      expect(await tellTicketOverdue(tx, sender, due as OverdueTicket, now)).toBe(true);
+      expect(await tellTicketOverdue(tx, sender, due as OverdueTicket, now)).toBe(false);
+      const [row] = (
+        await tx.execute<{ params: { waitingMinutes: number } }>(
+          sql`select params from telegram_messages where kind = 'ticket_overdue'
+            and params->>'ticketId' = ${ticket}`,
+        )
+      ).rows;
+      expect(row?.params.waitingMinutes).toBeGreaterThanOrEqual(20);
+      // A ticket answered (no longer open), or within the promise, is not overdue.
+      await tx.execute(sql`update support_tickets set last_customer_message_at = now()
+        where id = ${ticket}`);
+      expect((await overdueTickets(tx, now)).some((item) => item.ticketId === ticket)).toBe(false);
+    });
+    const text = renderTelegramMessage(
+      'ticket_overdue',
+      {
+        ticketId: newId(),
+        number: 'VT-K7Q2MA',
+        subject: 'طلب عاجل',
+        tier: 'gold',
+        tradeName: 'محل النور',
+        replyMinutes: 180,
+        waitingMinutes: 200,
+      },
+      LINKS,
+    ).text;
+    expect(text).toContain('تاجر ذهبي');
+    expect(text).toContain('200 دقيقة');
+  });
+
+  it('counts the windows that ended since the last run, and refreshes the store (OP7)', async () => {
+    const productId = await product();
+    const job = new CatalogEarlyAccessEndJob(pgBoss, db);
+    await inRollback(async (tx) => {
+      const now = new Date();
+      await tx.execute(sql`update catalog_products set early_access_until = now() - interval '1 minute'
+        where id = ${productId}`);
+      const span = new Date(now.getTime() - EARLY_ACCESS_END_LOOKBACK_MS);
+      expect(await earlyAccessEndedBetween(tx, span, now)).toBeGreaterThanOrEqual(1);
+      await tx.execute(sql`update catalog_products set early_access_until = now() + interval '1 hour'
+        where id = ${productId}`);
+      const before = await earlyAccessEndedBetween(tx, span, now);
+      await tx.execute(sql`update catalog_products set early_access_until = now() - interval '1 hour'
+        where id = ${productId}`);
+      expect(await earlyAccessEndedBetween(tx, span, now)).toBe(before);
+    });
+    expect(await job.run(new Date())).toBeGreaterThanOrEqual(0);
+  });
+
+  it('compares faster-alert tiers every quarter hour and the others hourly (OP8)', async () => {
+    const job = new MerchantWatchAlertsJob(pgBoss, db, env);
+    const shop = await merchant();
+    await db.execute(sql`insert into merchant_watches (id, customer_id, product_id)
+      values (${newId()}, ${shop}, ${await product()})`);
+    const at = (minute: number) => new Date(Date.UTC(2030, 0, 2, 10, minute));
+    expect((await job.dueMerchants(at(5))).due).toContain(shop);
+    expect((await job.dueMerchants(at(20))).due).not.toContain(shop);
+    // Bronze with faster alerts: compared at :20 too.
+    const [bronze] = await db
+      .select()
+      .from(merchantTierSettings)
+      .where(eq(merchantTierSettings.tier, 'bronze'))
+      .orderBy(desc(merchantTierSettings.createdAt), desc(merchantTierSettings.id))
+      .limit(1);
+    if (!bronze) throw new Error('No Bronze settings');
+    const { id: _id, createdAt: _at, ...values } = bronze;
+    await db.insert(merchantTierSettings).values({ ...values, id: newId(), fastAlerts: true });
+    try {
+      const quarter = await job.dueMerchants(at(20));
+      expect(quarter.due).toContain(shop);
+      expect(quarter.fast.has(shop)).toBe(true);
+    } finally {
+      await db.insert(merchantTierSettings).values({ ...values, id: newId() });
+    }
+  });
+
+  it('names the early access in the push, never a price (OP5)', () => {
+    expect(
+      renderPush('merchant_early_access', {
+        gameSlug: 'pubg-mobile',
+        gameNameAr: 'ببجي موبايل',
+        productId: null,
+        productNameAr: null,
+        until: '2030-01-02T10:00:00.000Z',
+      }),
+    ).toMatchObject({ body: expect.stringContaining('ببجي موبايل'), url: '/games/pubg-mobile' });
   });
 });

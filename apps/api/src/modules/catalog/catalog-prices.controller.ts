@@ -1,6 +1,6 @@
 import { Controller, Get, Header, Param, SerializeOptions } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { customerPricesSchema } from '@vertex-digital/contracts';
+import { customerPricesSchema, storeGameSchema } from '@vertex-digital/contracts';
 import { CurrentCustomer, CustomerRoute } from '../../core/access/index.js';
 import type { CustomerIdentity } from '../auth/index.js';
 import { CatalogStoreService } from './catalog-store.service.js';
@@ -21,5 +21,15 @@ export class CatalogPricesController {
   @ApiOkResponse({ description: 'The account’s prices', standardSchema: customerPricesSchema })
   prices(@CurrentCustomer() customer: CustomerIdentity, @Param('slug') slug: string) {
     return this.store.customerPrices(customer.id, slug);
+  }
+
+  /** S23 OP5: an early-access game for a merchant whose tier has early access. */
+  @Get('games/:slug/early-access')
+  @CustomerRoute()
+  @Header('cache-control', 'private, no-store')
+  @SerializeOptions({ schema: storeGameSchema })
+  @ApiOkResponse({ description: 'The early-access game', standardSchema: storeGameSchema })
+  earlyAccessGame(@CurrentCustomer() customer: CustomerIdentity, @Param('slug') slug: string) {
+    return this.store.earlyAccessGame(customer.id, slug);
   }
 }

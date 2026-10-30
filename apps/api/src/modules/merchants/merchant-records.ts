@@ -123,6 +123,8 @@ export function settingsView(row: MerchantSettingsRow): MerchantSettings {
     ordersPerTenMinutes: row.ordersPerTenMinutes,
     reapplyWaitDays: row.reapplyWaitDays,
     infoExpiryDays: row.infoExpiryDays,
+    directContactWhatsapp: row.directContactWhatsapp,
+    directContactTelegram: row.directContactTelegram,
     updatedAt: row.createdAt.toISOString(),
   };
 }

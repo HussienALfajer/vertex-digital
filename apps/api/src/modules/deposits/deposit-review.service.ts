@@ -35,6 +35,9 @@ import {
   type Executor,
   LedgerError,
   lockCustomerWallet,
+  merchantsWith,
+  merchantTier,
+  merchantTiers,
   newId,
   type PaymentReferenceOwner,
   postDepositCredit,
@@ -163,26 +166,33 @@ const flagged = sql<boolean>`exists (select 1 from ${depositFlags} where ${depos
 /** A deposit the admin must decide (F4-8): Sham Cash submitted, or USDT in review. */
 const waitsForAdmin = sql`${deposits.status} = 'submitted' and (${deposits.method} = 'sham_cash' or ${usdtDeposits.checkStatus} = 'review')`;
 
-/** The queue's cursor (rule RV10): flagged first, then oldest submission, then id. */
+/**
+ * The queue's cursor (rule RV10, S23 OP1): a priority merchant's Sham Cash deposit first, then
+ * flagged, then oldest submission, then id.
+ */
 interface QueuePosition {
+  priority: boolean;
   flagged: boolean;
   at: string;
   id: string;
 }
 
 const encodeQueueCursor = (position: QueuePosition) =>
-  Buffer.from(JSON.stringify(['q', position.flagged, position.at, position.id])).toString(
-    'base64url',
-  );
+  Buffer.from(
+    JSON.stringify(['q', position.priority, position.flagged, position.at, position.id]),
+  ).toString('base64url');
 
 function decodeQueueCursor(cursor: string): QueuePosition {
   try {
-    const [tag, isFlagged, at, id] = JSON.parse(
+    const [tag, priority, isFlagged, at, id] = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as unknown[];
-    if (tag !== 'q' || typeof isFlagged !== 'boolean' || typeof at !== 'string') throw new Error();
-    if (typeof id !== 'string' || !isUuid(id) || Number.isNaN(Date.parse(at))) throw new Error();
-    return { flagged: isFlagged, at, id };
+    if (tag !== 'q' || typeof priority !== 'boolean' || typeof isFlagged !== 'boolean') {
+      throw new Error();
+    }
+    if (typeof at !== 'string' || typeof id !== 'string' || !isUuid(id)) throw new Error();
+    if (Number.isNaN(Date.parse(at))) throw new Error();
+    return { priority, flagged: isFlagged, at, id };
   } catch {
     throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid cursor', [
       { path: ['cursor'], message: 'Invalid cursor' },
@@ -237,9 +247,11 @@ export class DepositReviewService {
       ? await this.reviewRows(filters, query)
       : await this.newestRows(filters, query);
     const ids = rows.items.map((row) => row.id);
-    const [customers, flags] = await Promise.all([
-      this.customers.depositCustomers([...new Set(rows.items.map((row) => row.customerId))]),
+    const customerIds = [...new Set(rows.items.map((row) => row.customerId))];
+    const [customers, flags, tiers] = await Promise.all([
+      this.customers.depositCustomers(customerIds),
       this.flagCodes(ids),
+      merchantTiers(this.db, customerIds),
     ]);
     return {
       items: rows.items.map((row) => {
@@ -252,6 +264,7 @@ export class DepositReviewService {
             name: customer.name,
             email: customer.email,
             isTest: customer.isTest,
+            tier: tiers.get(row.customerId) ?? null,
           },
           flags: flags.get(row.id) ?? [],
         };
@@ -1038,29 +1051,52 @@ export class DepositReviewService {
     return codes;
   }
 
-  /** `submitted`: flagged first, then the oldest submission (rule RV10). */
+  /**
+   * `submitted`: Sham Cash deposits of merchants whose tier has deposit priority first (S23 OP1),
+   * then flagged, then the oldest submission (rule RV10).
+   */
   private async reviewRows(filters: (SQL | undefined)[], query: AdminDepositQuery) {
     const cursor = query.cursor ? decodeQueueCursor(query.cursor) : undefined;
+    const priorityIds = await merchantsWith(this.db, 'depositPriority');
+    // Never the constant `false`: PostgreSQL refuses a constant in `ORDER BY`.
+    const priority =
+      priorityIds.length === 0
+        ? sql<boolean>`(${deposits.customerId} is null)`
+        : sql<boolean>`(${deposits.method} = 'sham_cash' and ${inArray(deposits.customerId, priorityIds)})`;
+    const same = (expression: SQL, value: boolean) => (value ? expression : sql`not ${expression}`);
+    const after = (expression: SQL, value: boolean) =>
+      value ? sql`not ${expression}` : sql`false`;
     const position = cursor
       ? or(
-          cursor.flagged ? sql`not ${flagged}` : sql`false`,
+          after(priority, cursor.priority),
           and(
-            cursor.flagged ? flagged : sql`not ${flagged}`,
+            same(priority, cursor.priority),
             or(
-              sql`${deposits.submittedAt} > ${cursor.at}::timestamptz`,
+              after(flagged, cursor.flagged),
               and(
-                sql`${deposits.submittedAt} = ${cursor.at}::timestamptz`,
-                sql`${deposits.id} > ${cursor.id}`,
+                same(flagged, cursor.flagged),
+                or(
+                  sql`${deposits.submittedAt} > ${cursor.at}::timestamptz`,
+                  and(
+                    sql`${deposits.submittedAt} = ${cursor.at}::timestamptz`,
+                    sql`${deposits.id} > ${cursor.id}`,
+                  ),
+                ),
               ),
             ),
           ),
         )
       : undefined;
     const rows = await this.db
-      .select({ row: deposits, isFlagged: flagged, at: cursorTime(deposits.submittedAt) })
+      .select({
+        row: deposits,
+        isPriority: priority,
+        isFlagged: flagged,
+        at: cursorTime(deposits.submittedAt),
+      })
       .from(deposits)
       .where(and(...filters, position))
-      .orderBy(desc(flagged), asc(deposits.submittedAt), asc(deposits.id))
+      .orderBy(desc(priority), desc(flagged), asc(deposits.submittedAt), asc(deposits.id))
       .limit(query.limit + 1);
     const items = rows.slice(0, query.limit);
     const last = items.at(-1);
@@ -1068,7 +1104,12 @@ export class DepositReviewService {
       items: items.map(({ row }) => row),
       nextCursor:
         rows.length > query.limit && last
-          ? encodeQueueCursor({ flagged: last.isFlagged, at: last.at, id: last.row.id })
+          ? encodeQueueCursor({
+              priority: last.isPriority,
+              flagged: last.isFlagged,
+              at: last.at,
+              id: last.row.id,
+            })
           : null,
     };
   }
@@ -1189,6 +1230,7 @@ export class DepositReviewService {
         phone: customer.phone,
         isTest: customer.isTest,
         marks: await customerMarks(this.db, customer.id),
+        tier: await merchantTier(this.db, customer.id),
         createdAt: customer.createdAt.toISOString(),
         established: history.creditedCount > 0,
         creditedCount: history.creditedCount,

@@ -399,6 +399,8 @@ export class MerchantsAdminService {
             ordersPerTenMinutes: before.ordersPerTenMinutes,
             reapplyWaitDays: before.reapplyWaitDays,
             infoExpiryDays: before.infoExpiryDays,
+            directContactWhatsapp: before.directContactWhatsapp,
+            directContactTelegram: before.directContactTelegram,
           },
           after: input,
         },

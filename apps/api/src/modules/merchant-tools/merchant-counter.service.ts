@@ -26,6 +26,7 @@ import {
   type Database,
   findCustomerWallet,
   lockActiveCustomer,
+  merchantEarlyAccess,
   merchantListPrices,
   merchantPrivileges,
   OrderError,
@@ -118,7 +119,8 @@ export class MerchantCounterService {
       { key: `bulk-check:customer:${customerId}`, max: 30, windowMs: HOUR },
     ]);
     if (!allowed) throw new CodedException(429, 'RATE_LIMITED', 'Too many requests, try later');
-    if (!(await shownGames(this.db)).some((game) => game.id === request.gameId)) {
+    const earlyAccess = await merchantEarlyAccess(this.db, customerId);
+    if (!(await shownGames(this.db, earlyAccess)).some((game) => game.id === request.gameId)) {
       throw refusals.notFound('game');
     }
     const game = await bulkGame(this.db, request.gameId);

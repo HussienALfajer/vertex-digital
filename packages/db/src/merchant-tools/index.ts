@@ -10,11 +10,13 @@ export {
   saveReceiptSettings,
   setMerchantLogo,
 } from './counter.js';
+export { type EarlyAccessTarget, notifyEarlyAccess } from './early-access.js';
 export {
   type AlertEventRow,
   alertEvents,
   type DashboardFacts,
   dashboardFacts,
+  earlyAccessAudience,
   gameProducts,
   liveGames,
   liveProducts,
@@ -50,6 +52,7 @@ export {
   compareMerchantWatches,
   dailyDigestMerchants,
   deleteOldAlertEvents,
+  FAST_ALERTS_WINDOW_MS,
   merchantsToCompare,
   sendDailyDigest,
 } from './watch-alerts.js';

@@ -115,6 +115,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'merchant_tier_changed',
   /** S23 MG5: a manual tier grant ends within 3 days (once per grant). */
   'merchant_tier_grant_ending',
+  /** S23 OP6: a ticket waits past its tier's reply promise (once per waiting period). */
+  'ticket_overdue',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -408,6 +410,16 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     source: tierChangeSourceSchema,
     thisMonthUsdUnits: z.int(),
     previousMonthUsdUnits: z.int(),
+  }),
+  /** S23 OP6: the ticket, the merchant's tier, the promise and how long the customer has waited. */
+  ticket_overdue: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    subject: z.string().max(120),
+    tier: merchantTierSchema,
+    tradeName: z.string(),
+    replyMinutes: z.int().positive(),
+    waitingMinutes: z.int().positive(),
   }),
   /** S23 MG5: the grant's tier and end, and the tier the merchant returns to. */
   merchant_tier_grant_ending: z.object({

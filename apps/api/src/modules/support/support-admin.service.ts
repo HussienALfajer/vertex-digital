@@ -16,6 +16,9 @@ import {
   type Database,
   findCustomer,
   lockTicketCustomer,
+  merchantsWith,
+  merchantTier,
+  merchantTiers,
   recordAudit,
   supportMessages,
   supportSettings,
@@ -24,7 +27,7 @@ import {
   ticketDepositLink,
   ticketOrderLink,
 } from '@vertex-digital/db';
-import { and, asc, count, desc, eq, gt, min, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, min, or, type SQL, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -52,6 +55,40 @@ import {
 const statusOf = (customer: DepositCustomer): CustomerStatus =>
   customer.archived ? 'archived' : customer.frozen ? 'frozen' : 'active';
 
+/** S23 OP2: the "بانتظار ردّك" cursor: priority, then the customer message time and id. */
+const encodeWaitingCursor = (priority: boolean, at: string, id: string) =>
+  Buffer.from(JSON.stringify(['w', priority, at, id])).toString('base64url');
+
+function decodeWaitingCursor(cursor: string): { priority: boolean; at: string; id: string } {
+  try {
+    const [tag, priority, at, id] = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as unknown[];
+    if (tag !== 'w' || typeof priority !== 'boolean' || typeof at !== 'string') throw new Error();
+    if (typeof id !== 'string' || !isUuid(id) || Number.isNaN(Date.parse(at))) throw new Error();
+    return { priority, at, id };
+  } catch {
+    throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid cursor', [
+      { path: ['cursor'], message: 'Invalid cursor' },
+    ]);
+  }
+}
+
+function waitingPage<Row extends { ticket: { id: string }; cursorAt: string; isPriority: boolean }>(
+  rows: Row[],
+  limit: number,
+): { items: Row[]; nextCursor: string | null } {
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor:
+      rows.length > limit && last
+        ? encodeWaitingCursor(last.isPriority, last.cursorAt, last.ticket.id)
+        : null,
+  };
+}
+
 /**
  * The admin's support (S12 F23, rules TK2, TK3, TK5, TK9, TK11–TK13, SC1): the queue, the thread,
  * replies and closes, tickets opened to a customer, and the support settings. The admin has no
@@ -66,7 +103,10 @@ export class SupportAdminService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  /** `GET /api/admin/support/tickets` (TK12): "بانتظار ردّك" oldest customer message first. */
+  /**
+   * `GET /api/admin/support/tickets` (TK12): "بانتظار ردّك" oldest customer message first; S23
+   * OP2: there, tickets of merchants whose tier has support priority come first.
+   */
   async queue(query: AdminTicketListQuery): Promise<AdminTicketPage> {
     const filters: (SQL | undefined)[] = [
       query.status === 'all' ? undefined : eq(supportTickets.status, query.status),
@@ -82,36 +122,50 @@ export class SupportAdminService {
     }
     const waiting = query.status === 'open';
     const time = waiting ? supportTickets.lastCustomerMessageAt : supportTickets.updatedAt;
+    const priorityIds = waiting ? await merchantsWith(this.db, 'supportPriority') : [];
+    // Never the constant `false`: PostgreSQL refuses a constant in `ORDER BY`.
+    const priority =
+      priorityIds.length === 0
+        ? sql<boolean>`(${supportTickets.customerId} is null)`
+        : sql<boolean>`${inArray(supportTickets.customerId, priorityIds)}`;
     if (query.cursor) {
-      const cursor = decodeCursor(query.cursor);
-      filters.push(
-        waiting
-          ? or(
-              sql`${time} > ${cursor.at}::timestamptz`,
-              and(
-                sql`${time} = ${cursor.at}::timestamptz`,
-                sql`${supportTickets.id} > ${cursor.id}`,
-              ),
-            )
-          : after(time, supportTickets.id, cursor),
-      );
+      if (waiting) {
+        const cursor = decodeWaitingCursor(query.cursor);
+        const later = or(
+          sql`${time} > ${cursor.at}::timestamptz`,
+          and(sql`${time} = ${cursor.at}::timestamptz`, sql`${supportTickets.id} > ${cursor.id}`),
+        );
+        filters.push(
+          cursor.priority
+            ? or(sql`not ${priority}`, and(priority, later))
+            : and(sql`not ${priority}`, later),
+        );
+      } else {
+        filters.push(after(time, supportTickets.id, decodeCursor(query.cursor)));
+      }
     }
     const rows = await this.db
       .select({
         ticket: supportTickets,
         // An open ticket always has a customer message: it is what made it open.
         cursorAt: cursorTime(time),
+        isPriority: priority,
       })
       .from(supportTickets)
       .where(and(...filters))
       .orderBy(
-        waiting ? asc(time) : desc(time),
-        waiting ? asc(supportTickets.id) : desc(supportTickets.id),
+        ...(waiting
+          ? [desc(priority), asc(time), asc(supportTickets.id)]
+          : [desc(time), desc(supportTickets.id)]),
       )
       .limit(query.limit + 1);
-    const page = pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.ticket.id }));
-    const people = await this.customers.depositCustomers([
-      ...new Set(page.items.map((row) => row.ticket.customerId)),
+    const page = waiting
+      ? waitingPage(rows, query.limit)
+      : pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.ticket.id }));
+    const customerIds = [...new Set(page.items.map((row) => row.ticket.customerId))];
+    const [people, tiers] = await Promise.all([
+      this.customers.depositCustomers(customerIds),
+      merchantTiers(this.db, customerIds),
     ]);
     const summaries = await ticketSummaries(
       this.db,
@@ -128,6 +182,7 @@ export class SupportAdminService {
           name: customer.name,
           email: customer.email,
           status: statusOf(customer),
+          tier: tiers.get(customer.id) ?? null,
         },
       };
     });
@@ -382,11 +437,12 @@ export class SupportAdminService {
   }
 
   private async view(row: TicketRow): Promise<AdminTicket> {
-    const [summary, messages, customer, marks, order, deposit] = await Promise.all([
+    const [summary, messages, customer, marks, tier, order, deposit] = await Promise.all([
       ticketSummary(this.db, row),
       ticketMessages(this.db, row.id),
       findCustomer(this.db, row.customerId),
       customerMarks(this.db, row.customerId),
+      merchantTier(this.db, row.customerId),
       row.orderId ? ticketOrderLink(this.db, row.orderId) : null,
       row.depositId ? ticketDepositLink(this.db, row.depositId) : null,
     ]);
@@ -402,6 +458,7 @@ export class SupportAdminService {
         phone: customer.phone,
         isTest: customer.isTest,
         marks,
+        tier,
       },
       orderSummary: order && {
         id: order.id,

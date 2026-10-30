@@ -300,6 +300,9 @@ export const merchantSettings = pgTable(
     /** S21 BK4: a merchant's player checks an hour and a day (defaults for older versions). */
     playerChecksPerHour: integer('player_checks_per_hour').notNull().default(100),
     playerChecksPerDay: integer('player_checks_per_day').notNull().default(300),
+    /** S23 OP4 (decision 12): the Diamond contact, E.164 and a Telegram username; null hides it. */
+    directContactWhatsapp: text('direct_contact_whatsapp'),
+    directContactTelegram: text('direct_contact_telegram'),
     /** Null for the seed. */
     adminId: uuid('admin_id'),
     createdAt: stampedAt(),
@@ -318,6 +321,11 @@ export const merchantSettings = pgTable(
         and ${table.infoExpiryDays} between 1 and 60
         and ${table.playerChecksPerHour} between 10 and 1000
         and ${table.playerChecksPerDay} between 30 and 5000`,
+    ),
+    check(
+      'merchant_settings_direct_contact_check',
+      sql`${table.directContactWhatsapp} ~ '^[+][1-9][0-9]{6,14}$'
+        and ${table.directContactTelegram} ~ '^[A-Za-z0-9_]{5,32}$'`,
     ),
   ],
 );

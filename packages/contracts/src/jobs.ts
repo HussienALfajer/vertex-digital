@@ -78,7 +78,10 @@ export const QUEUES = {
   merchantsTierGrants: 'merchants.tier-grants',
   /** Reminds merchants near the next tier or below their own, the 25th at 10:00 `Asia/Damascus` (S23 PG3). */
   merchantsTierReminders: 'merchants.tier-reminders',
-  /** Compares followed products with what each merchant was told, at :05 every hour (S21 AL2). */
+  /**
+   * Compares followed products with what each merchant was told (S21 AL2): every 15 minutes at
+   * :05, :20, :35, :50; merchants of a tier with faster alerts every run, the rest at :05 (S23 OP8).
+   */
   merchantsWatchAlerts: 'merchants.watch-alerts',
   /** The daily alert email at 09:00 `Asia/Damascus` (S21 AL4). */
   merchantsDailyDigest: 'merchants.daily-digest',
@@ -86,6 +89,10 @@ export const QUEUES = {
   merchantsStatementEmails: 'merchants.statement-emails',
   /** Sends due product alerts, every 15 minutes at :07, one run at a time (S22 PA3–PA6). */
   catalogProductAlerts: 'catalog.product-alerts',
+  /** Refreshes the store's catalog for early-access windows that ended, every 5 minutes (S23 OP7). */
+  catalogEarlyAccessEnd: 'catalog.early-access-end',
+  /** Tells the admin of tickets waiting past their tier's reply promise, every 15 minutes (S23 OP6). */
+  supportOverdueTickets: 'support.overdue-tickets',
 } as const;
 
 /**

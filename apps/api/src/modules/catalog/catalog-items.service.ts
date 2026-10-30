@@ -5,8 +5,10 @@ import {
   type createInputFieldSchema,
   type createProductSchema,
   DEFAULT_MAX_QUANTITY,
+  earlyAccessEnd,
   type ImportRowError,
   type InputField,
+  inEarlyAccess,
   inputFieldShapeSchema,
   MAX_INPUT_FIELDS_PER_GAME,
   MAX_PRODUCTS_PER_GAME,
@@ -21,6 +23,7 @@ import {
   catalogProducts,
   type Database,
   newId,
+  notifyEarlyAccess,
   type ProductRoutingState,
   productRoutingStates,
   repriceProducts,
@@ -32,6 +35,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { CatalogService } from './catalog.service.js';
 import {
   type Actor,
@@ -88,6 +92,7 @@ export class CatalogItemsService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
     private readonly catalog: CatalogService,
+    private readonly jobs: JobsService,
   ) {}
 
   // Input fields (rule CT7) ------------------------------------------------------------------------
@@ -473,6 +478,55 @@ export class CatalogItemsService {
     const game = await this.catalog.lockGame(tx, gameId);
     const [row] = await tx.select().from(catalogProducts).where(eq(catalogProducts.id, id));
     return { game, row: row as ProductRow };
+  }
+
+  /**
+   * `PUT /api/admin/catalog/products/:id/early-access` (S23 OP5): as the game's, for one pack
+   * (edge case 14: only that pack is hidden from the others).
+   */
+  setProductEarlyAccess(actor: Actor, id: string, on: boolean, now = new Date()): Promise<Product> {
+    return this.db.transaction(async (tx) => {
+      const { game, row } = await this.lockProduct(tx, id);
+      let result = row;
+      if (on) {
+        const until = earlyAccessEnd(now);
+        const [saved] = await tx
+          .update(catalogProducts)
+          .set({ earlyAccessUntil: until })
+          .where(eq(catalogProducts.id, id))
+          .returning();
+        result = saved as ProductRow;
+        await auditCatalog(tx, actor, 'catalog_product.early_access_set', productEntity(id), {
+          gameId: game.id,
+          nameAr: row.nameAr,
+          until: until.toISOString(),
+        });
+        await notifyEarlyAccess(
+          tx,
+          this.jobs,
+          {
+            gameId: game.id,
+            gameSlug: game.slug,
+            gameNameAr: game.nameAr,
+            product: { id, nameAr: row.nameAr },
+            until,
+          },
+          now,
+        );
+      } else if (inEarlyAccess(row.earlyAccessUntil, now)) {
+        const [saved] = await tx
+          .update(catalogProducts)
+          .set({ earlyAccessUntil: now })
+          .where(eq(catalogProducts.id, id))
+          .returning();
+        result = saved as ProductRow;
+        await auditCatalog(tx, actor, 'catalog_product.early_access_ended', productEntity(id), {
+          gameId: game.id,
+          nameAr: row.nameAr,
+        });
+      }
+      return this.product(tx, result);
+    });
   }
 
   /** A review's pause (S07 rule P4, CT4) in the caller's transaction, with its audit entry. */

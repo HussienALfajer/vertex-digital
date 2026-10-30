@@ -11,6 +11,7 @@ import {
   sypDepositUsd,
   usdCentsSchema,
 } from './money.js';
+import { merchantTierSchema } from './price-kinds.js';
 import { displayStepSchema } from './rates.js';
 import { USDT_METHODS, usdtMethodSchema } from './usdt.js';
 
@@ -952,7 +953,10 @@ export type DepositPage = z.infer<typeof depositPageSchema>;
 
 /* Admin routes --------------------------------------------------------------------------- */
 
-/** `GET /api/admin/deposits` (rule RV10): `submitted` by default, flagged first, oldest first. */
+/**
+ * `GET /api/admin/deposits` (rule RV10): `submitted` by default, flagged first, oldest first. S23
+ * OP1: Sham Cash deposits of merchants whose tier has deposit priority come before the rest.
+ */
 export const adminDepositQuerySchema = cursorQuerySchema
   .extend({
     status: z.enum([...DEPOSIT_STATUSES, 'all']).default('submitted'),
@@ -972,6 +976,8 @@ const depositCustomer = {
   name: z.string(),
   email: z.string(),
   isTest: z.boolean(),
+  /** S23 OP1: the merchant's effective tier (its badge); null for a customer. */
+  tier: merchantTierSchema.nullable(),
 };
 
 export const adminDepositListItemSchema = z

@@ -10,6 +10,7 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { amountUnitsSchema } from './money.js';
 import { type OrderStatus, orderStatusSchema } from './orders.js';
+import { merchantTierSchema } from './price-kinds.js';
 
 /*
  * Support tickets and the support channels (S12 F23, owner 2026-10-10), owned by the api `support`
@@ -410,7 +411,10 @@ export const ticketPageSchema = cursorPageSchema(ticketSummarySchema, 'TicketPag
 
 export type TicketPage = z.infer<typeof ticketPageSchema>;
 
-/** The admin queue's tabs (TK12): `open` is "بانتظار ردّك", oldest customer message first. */
+/**
+ * The admin queue's tabs (TK12): `open` is "بانتظار ردّك", oldest customer message first; S23 OP2:
+ * tickets of merchants whose tier has support priority first.
+ */
 export const ADMIN_TICKET_TABS = ['open', 'answered', 'closed', 'all'] as const;
 
 export const adminTicketTabSchema = z.enum(ADMIN_TICKET_TABS);
@@ -438,6 +442,8 @@ const adminTicketCustomer = {
   name: z.string(),
   email: z.string(),
   status: customerStatusSchema,
+  /** S23 OP2: the merchant's effective tier (its badge); null for a customer. */
+  tier: merchantTierSchema.nullable(),
 };
 
 /** One row of the admin queue (TK12). */

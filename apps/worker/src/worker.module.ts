@@ -9,6 +9,7 @@ import { DATABASE, DatabaseModule } from './core/database/database.module.js';
 import { Mailer } from './core/email/mailer.js';
 import { PgBossService } from './core/jobs/pg-boss.service.js';
 import { PurgeExpiredJob } from './jobs/auth/purge-expired.job.js';
+import { CatalogEarlyAccessEndJob } from './jobs/catalog/early-access-end.job.js';
 import { ProductAlertsJob } from './jobs/catalog/product-alerts.job.js';
 import { chainReadersProvider } from './jobs/deposits/chain/chain-readers.provider.js';
 import { ExpireDepositsJob } from './jobs/deposits/expire.job.js';
@@ -39,6 +40,7 @@ import { SupplierSyncJob } from './jobs/suppliers/sync.job.js';
 import { SupplierSyncScheduleJob } from './jobs/suppliers/sync-schedule.job.js';
 import { SupplierWebhookJob } from './jobs/suppliers/webhook.job.js';
 import { SupportAutoCloseJob } from './jobs/support/auto-close.job.js';
+import { SupportOverdueTicketsJob } from './jobs/support/overdue-tickets.job.js';
 import { PurgeSignInsJob } from './jobs/support/purge-sign-ins.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 import { PurgeOutboxesJob } from './jobs/system/purge-outboxes.job.js';
@@ -127,6 +129,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     MerchantTierRemindersJob,
     MerchantWatchAlertsJob,
     ProductAlertsJob,
+    CatalogEarlyAccessEndJob,
     SupplierRegistry,
     SupplierSyncJob,
     SupplierSyncScheduleJob,
@@ -143,6 +146,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     SupplierWebhookJob,
     StoreRevalidateJob,
     SupportAutoCloseJob,
+    SupportOverdueTicketsJob,
     PurgeSignInsJob,
     PurgeOutboxesJob,
     PurgeSupplierLogsJob,

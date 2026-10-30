@@ -8,6 +8,7 @@ import {
   catalogImagePath,
   type DeliveryStats,
   type InputField,
+  inEarlyAccess,
   missingForActivation,
   type PriceChangeCause,
   type Product,
@@ -115,8 +116,14 @@ export function toProduct(row: ProductRow, pricing: ProductPricing, storeUrl: st
     regionAr: row.regionAr,
     redemptionAr: row.redemptionAr,
     status: row.status,
+    earlyAccessUntil: runningWindow(row.earlyAccessUntil),
     ...pricing,
   };
+}
+
+/** S23 OP5: a running early-access window's end; null once it ended. */
+export function runningWindow(until: Date | null, now = new Date()): string | null {
+  return until !== null && inEarlyAccess(until, now) ? until.toISOString() : null;
 }
 
 export const refusals = {

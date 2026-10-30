@@ -907,3 +907,283 @@ describe('the setup command (S23 PX1)', () => {
     }
   });
 });
+
+describe('operations (S23 PR 3: OP4, OP5, PX5, AD4)', () => {
+  const day = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  const grant = async (customerId: string, tier: 'gold' | 'diamond') =>
+    json(
+      await adminSend('POST', `/api/admin/customers/${customerId}/merchant/tier-grant`, {
+        tier,
+        endsOn: day(3),
+        reason: 'شريك جديد في المدينة',
+      }),
+      200,
+    );
+  /** The levels, then the custom lists they named: a run holds at most so many lists. */
+  const archiveTiers = async () => {
+    await archiveLevels();
+    await test.db
+      .update(priceLists)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(priceLists.kind, 'custom'), isNull(priceLists.archivedAt)));
+  };
+  /** Silver, Gold and Diamond on chained lists, out of reach so grants decide. */
+  async function threeTiers() {
+    await archiveLevels();
+    const silverList = await customList(wholesale);
+    const goldList = await customList(silverList.id);
+    const diamondList = await customList(goldList.id);
+    await json(
+      await setLevel('silver', {
+        monthlyThresholdUsdUnits: usd(100_000),
+        priceListId: silverList.id,
+      }),
+      200,
+    );
+    await json(
+      await setLevel('gold', { monthlyThresholdUsdUnits: usd(200_000), priceListId: goldList.id }),
+      200,
+    );
+    await json(
+      await setLevel('diamond', {
+        monthlyThresholdUsdUnits: usd(300_000),
+        priceListId: diamondList.id,
+      }),
+      200,
+    );
+    return { diamondList };
+  }
+  const lastAudit = async (action: string) =>
+    (
+      await test.db.execute<{ entity_id: string; details: unknown }>(
+        sql`select entity_id, details from audit_entries where action = ${action}
+          order by occurred_at desc, id desc limit 1`,
+      )
+    ).rows[0];
+  const settingsBody = {
+    ordersPerTenMinutes: 60,
+    reapplyWaitDays: 7,
+    infoExpiryDays: 7,
+  };
+
+  it('serves the Diamond contact to Diamond merchants only (OP4)', async () => {
+    await reauthenticate();
+    await threeTiers();
+    expect(
+      (
+        await adminSend('PUT', '/api/admin/merchant-settings', {
+          ...settingsBody,
+          directContactWhatsapp: null,
+          directContactTelegram: 'bad name',
+        })
+      ).status,
+    ).toBe(400);
+    const saved = await json<{ id?: string; directContactWhatsapp: string | null }>(
+      await adminSend('PUT', '/api/admin/merchant-settings', {
+        ...settingsBody,
+        directContactWhatsapp: '0933 123 456',
+        directContactTelegram: 'vertex_shop',
+      }),
+      200,
+    );
+    expect(saved.directContactWhatsapp).toBe('+963933123456');
+    const diamond = await merchant();
+    const gold = await merchant();
+    try {
+      await grant(diamond.id, 'diamond');
+      await grant(gold.id, 'gold');
+      const contactOf = async (cookie: string) =>
+        (
+          await json<{ contact: unknown; privileges: { supportReplyMinutes: number | null } }>(
+            await client.get('/api/merchant/tier', { cookie }),
+            200,
+          )
+        ).contact;
+      expect(await contactOf(diamond.cookie)).toEqual({
+        whatsappUrl: 'https://wa.me/963933123456',
+        telegramUrl: 'https://t.me/vertex_shop',
+      });
+      expect(await contactOf(gold.cookie)).toBeNull();
+      expect((await lastAudit('merchant_settings.changed'))?.details).toMatchObject({
+        after: { directContactWhatsapp: '+963933123456', directContactTelegram: 'vertex_shop' },
+      });
+    } finally {
+      await json(
+        await adminSend('PUT', '/api/admin/merchant-settings', {
+          ...settingsBody,
+          directContactWhatsapp: null,
+          directContactTelegram: null,
+        }),
+        200,
+      );
+      await archiveTiers();
+    }
+  });
+
+  it('opens a pack and a game early to early-access tiers only, then to everyone (OP5)', async () => {
+    await reauthenticate();
+    await threeTiers();
+    const pack = await product(1);
+    const [game] = await test.db
+      .execute<{ slug: string }>(sql`select slug from catalog_games where id = ${ids.gameId}`)
+      .then((result) => result.rows);
+    const slug = game?.slug as string;
+    const bronze = await merchant(usd(20));
+    const gold = await merchant(usd(20));
+    await grant(gold.id, 'gold');
+    // Gold follows the game: told once when it opens early.
+    await test.db.execute(
+      sql`insert into merchant_watches (id, customer_id, game_id) values (${newId()}, ${gold.id}, ${ids.gameId})`,
+    );
+    const earlyPath = `/api/admin/catalog/products/${pack.id}/early-access`;
+    expect((await adminSend('PUT', earlyPath, { on: true }, plainAdmin)).status).toBe(403);
+    expect((await client.request('PUT', earlyPath, { body: { on: true } })).status).toBe(401);
+    try {
+      const opened = await json<{ earlyAccessUntil: string | null }>(
+        await adminSend('PUT', earlyPath, { on: true }),
+        200,
+      );
+      expect(opened.earlyAccessUntil).not.toBeNull();
+      expect((await lastAudit('catalog_product.early_access_set'))?.entity_id).toBe(pack.id);
+      // The public page and a Bronze merchant do not see it.
+      const publicPage = await json<{ products: { id: string }[] }>(
+        await client.get(`/api/catalog/games/${slug}`),
+        200,
+      );
+      expect(publicPage.products.map((row) => row.id)).not.toContain(pack.id);
+      type Prices = {
+        products: { id: string; earlyAccess: boolean; priceUsdUnits: number | null }[];
+        earlyProducts: { id: string; earlyAccess: boolean; nameAr: string }[];
+      };
+      const pricesOf = async (cookie: string) =>
+        json<Prices>(await client.get(`/api/catalog/games/${slug}/prices`, { cookie }), 200);
+      const bronzePrices = await pricesOf(bronze.cookie);
+      expect(bronzePrices.products.map((row) => row.id)).not.toContain(pack.id);
+      expect(bronzePrices.earlyProducts).toEqual([]);
+      const buy = (cookie: string, price: number) =>
+        client.post('/api/orders', {
+          cookie,
+          headers: { 'idempotency-key': randomUUID() },
+          body: {
+            productId: pack.id,
+            quantity: 1,
+            fields: { player_id: '5123456789' },
+            expectedUnitPriceUsdUnits: price,
+            confirmPlayer: true,
+          },
+        });
+      const goldPrices = await pricesOf(gold.cookie);
+      const own = goldPrices.products.find((row) => row.id === pack.id);
+      expect(own?.earlyAccess).toBe(true);
+      expect(goldPrices.earlyProducts.map((row) => row.id)).toEqual([pack.id]);
+      expect(await json(await buy(bronze.cookie, own?.priceUsdUnits as number), 409)).toMatchObject(
+        { code: 'PRODUCT_UNAVAILABLE', details: { availability: 'hidden' } },
+      );
+      expect((await buy(gold.cookie, own?.priceUsdUnits as number)).status).toBe(201);
+      // Told once, whatever the windows set again.
+      await json(await adminSend('PUT', earlyPath, { on: true }), 200);
+      const told = await test.db.execute<{ count: number }>(
+        sql`select count(*)::int as count from customer_notifications
+          where customer_id = ${gold.id} and event = 'merchant_early_access'`,
+      );
+      expect(told.rows[0]?.count).toBe(1);
+      // Ended early: everyone sees it at once.
+      const ended = await json<{ earlyAccessUntil: string | null }>(
+        await adminSend('PUT', earlyPath, { on: false }),
+        200,
+      );
+      expect(ended.earlyAccessUntil).toBeNull();
+      expect(
+        (
+          await json<{ products: { id: string }[] }>(
+            await client.get(`/api/catalog/games/${slug}`),
+            200,
+          )
+        ).products.map((row) => row.id),
+      ).toContain(pack.id);
+
+      // A whole game early: not found publicly and for Bronze, served to Gold.
+      const gamePath = `/api/admin/catalog/games/${ids.gameId}/early-access`;
+      await json(await adminSend('PUT', gamePath, { on: true }), 200);
+      expect((await client.get(`/api/catalog/games/${slug}`)).status).toBe(404);
+      const earlyGame = `/api/catalog/games/${slug}/early-access`;
+      expect((await client.get(earlyGame, { cookie: bronze.cookie })).status).toBe(404);
+      expect((await client.get(earlyGame)).status).toBe(401);
+      const served = await json<{ products: { id: string; earlyAccess: boolean }[] }>(
+        await client.get(earlyGame, { cookie: gold.cookie }),
+        200,
+      );
+      expect(served.products.every((row) => row.earlyAccess)).toBe(true);
+      expect(
+        (await client.get(`/api/catalog/games/${slug}/prices`, { cookie: bronze.cookie })).status,
+      ).toBe(404);
+      await json(await adminSend('PUT', gamePath, { on: false }), 200);
+      expect((await client.get(`/api/catalog/games/${slug}`)).status).toBe(200);
+      expect((await client.get(earlyGame, { cookie: gold.cookie })).status).toBe(404);
+    } finally {
+      await test.db.execute(
+        sql`update catalog_games set early_access_until = null where id = ${ids.gameId}`,
+      );
+      await test.db.execute(
+        sql`update catalog_products set early_access_until = null where id = ${pack.id}`,
+      );
+      await archiveTiers();
+    }
+  });
+
+  it('lists the best sellers with each tier price for the Diamond list (PX5)', async () => {
+    const { diamondList } = await threeTiers();
+    try {
+      expect((await client.get('/api/admin/merchant-tiers/best-sellers')).status).toBe(401);
+      const shop = await merchant();
+      expect(
+        (await client.get('/api/admin/merchant-tiers/best-sellers', { cookie: shop.cookie }))
+          .status,
+      ).toBe(401);
+      const page = await json<{
+        diamondListId: string | null;
+        items: { tiers: { tier: string }[] }[];
+      }>(await adminGet('/api/admin/merchant-tiers/best-sellers'), 200);
+      expect(page.diamondListId).toBe(diamondList.id);
+      for (const item of page.items) {
+        expect(item.tiers.map((row) => row.tier)).toEqual(['bronze', 'silver', 'gold', 'diamond']);
+      }
+    } finally {
+      await archiveTiers();
+    }
+  });
+
+  it('reports a month by tier and exports it, audited (AD4)', async () => {
+    await threeTiers();
+    const shop = await merchant();
+    try {
+      await reauthenticate();
+      await grant(shop.id, 'gold');
+      const month = new Date().toISOString().slice(0, 7);
+      expect((await client.get(`/api/admin/reports/merchant-tiers?month=${month}`)).status).toBe(
+        401,
+      );
+      expect((await adminGet('/api/admin/reports/merchant-tiers?month=2026-13')).status).toBe(400);
+      const report = await json<{
+        current: boolean;
+        rows: { tier: string; merchants: number; rises: number }[];
+      }>(await adminGet(`/api/admin/reports/merchant-tiers?month=${month}`), 200);
+      expect(report.current).toBe(true);
+      expect(report.rows.map((row) => row.tier)).toEqual(['bronze', 'silver', 'gold', 'diamond']);
+      const goldRow = report.rows.find((row) => row.tier === 'gold');
+      expect(goldRow?.merchants).toBeGreaterThanOrEqual(1);
+      expect(goldRow?.rises).toBeGreaterThanOrEqual(1);
+      const exported = await adminGet(`/api/admin/reports/merchant-tiers/export?month=${month}`);
+      expect(exported.status).toBe(200);
+      expect(exported.headers.get('content-disposition')).toContain(
+        `vertex-merchant-tiers-${month}.xlsx`,
+      );
+      expect((await lastAudit('report.merchant_tiers_exported'))?.details).toEqual({
+        month,
+        rows: 4,
+      });
+    } finally {
+      await archiveTiers();
+    }
+  });
+});

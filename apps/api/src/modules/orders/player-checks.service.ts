@@ -18,6 +18,7 @@ import {
   type Database,
   damascusDate,
   lockActiveCustomer,
+  merchantEarlyAccess,
   merchantPrivileges,
   newId,
   type PlayerCheckLookup,
@@ -155,8 +156,14 @@ export class PlayerChecksService {
           throw asCodedException(error);
         });
     }
+    // S23 OP5: an early-access pack is checked only for a merchant whose tier sees it.
+    const earlyAccess =
+      requester.kind === 'customer' ? await merchantEarlyAccess(this.db, requester.id) : true;
     const state = (
-      await productRoutingStates(this.db, [request.productId], routingContext(this.env))
+      await productRoutingStates(this.db, [request.productId], {
+        ...routingContext(this.env),
+        earlyAccess,
+      })
     ).get(request.productId);
     const paused = state?.availability === 'paused' && requester.kind === 'customer';
     if (!state || state.availability === 'hidden' || paused) {

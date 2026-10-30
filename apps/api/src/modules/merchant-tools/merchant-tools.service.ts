@@ -32,6 +32,7 @@ import {
   liveGames,
   liveProducts,
   merchantAlertSettings,
+  merchantEarlyAccess,
   merchantListPrices,
   merchantSellingPrices,
   merchantSellingSettings,
@@ -115,7 +116,7 @@ export class MerchantToolsService {
   async games(customerId: string): Promise<MerchantGames> {
     await this.merchant(customerId);
     const [games, units] = await Promise.all([
-      shownGames(this.db),
+      shownGames(this.db, await merchantEarlyAccess(this.db, customerId)),
       recentGameUnits(this.db, customerId),
     ]);
     return { items: games.map((game) => ({ ...game, recentUnits: units.get(game.id) ?? 0 })) };
@@ -140,7 +141,7 @@ export class MerchantToolsService {
   /** `GET /api/merchant/selling-prices?gameId` (SP3): one row per unarchived pack of the game. */
   async sellingPrices(customerId: string, gameId: string): Promise<SellingPrices> {
     await this.merchant(customerId);
-    const games = await shownGames(this.db);
+    const games = await shownGames(this.db, await merchantEarlyAccess(this.db, customerId));
     if (!games.some((game) => game.id === gameId)) throw refusals.notFound('game');
     return this.pricesOf(customerId, gameId);
   }
@@ -168,7 +169,9 @@ export class MerchantToolsService {
     rate: string | null;
     rows: (SellingPriceRow & { gameId: string })[];
   }> {
-    const products = (await gameProducts(this.db, gameIds)).filter(
+    // S23 OP5: early-access packs only for a tier that sees them.
+    const earlyAccess = await merchantEarlyAccess(this.db, customerId);
+    const products = (await gameProducts(this.db, gameIds, earlyAccess)).filter(
       (product) => only === undefined || product.id === only,
     );
     const ids = products.map((product) => product.id);

@@ -7,3 +7,4 @@ export {
   refundsReport,
   salesReport,
 } from './reports.js';
+export { merchantTierReport } from './merchant-tiers.js';

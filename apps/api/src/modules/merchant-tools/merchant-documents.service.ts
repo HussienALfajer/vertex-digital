@@ -69,7 +69,7 @@ export class MerchantDocumentsService {
     const branding = await receiptSettingsOf(this.db, customerId);
     const privileges = await merchantPrivileges(this.db, customerId);
     if (!branding || !privileges) throw refusals.notMerchant();
-    const games = await shownGames(this.db);
+    const games = await shownGames(this.db, privileges.settings.earlyAccess);
     const gameIds = await this.listGames(
       customerId,
       games.map((game) => game.id),

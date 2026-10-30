@@ -875,7 +875,9 @@ export function matrixCellWarnings(cell: {
 
 /**
  * `GET /api/catalog/games/:slug/prices` (S20 AT4, store): the signed-in account's prices for a
- * game's packs, never cached; the kind only, never the list's name, rule or cost.
+ * game's packs, never cached; the kind only, never the list's name, rule or cost. S23 OP5: for a
+ * merchant of an early-access tier, `earlyProducts` are the packs in early access, which the
+ * cached page leaves out, in full; empty for everyone else.
  */
 export const customerPricesSchema = z
   .object({
@@ -889,8 +891,10 @@ export const customerPricesSchema = z
         savings: true,
         perHundredUsdUnits: true,
         bestValue: true,
+        earlyAccess: true,
       }),
     ),
+    earlyProducts: z.array(storeProductSchema),
     rateId: z.uuid().nullable(),
   })
   .meta({ id: 'CustomerPrices' });

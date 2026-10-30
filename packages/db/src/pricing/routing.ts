@@ -1,6 +1,7 @@
 import {
   DELIVERY_MEASURE_DAYS,
   DELIVERY_MEASURE_MIN_DELIVERIES,
+  inEarlyAccess,
   listPrice,
   type MarginRuleValues,
   orderRoutes,
@@ -23,7 +24,21 @@ import {
   type SupplierPolicy,
   supplierAvailable,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import {
+  type AnyColumn,
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogCategories,
@@ -58,6 +73,11 @@ export interface RoutingContext {
   now: Date;
   /** `SUPPLIER_FAKE_ENABLED` (rule SP1). */
   fakeEnabled: boolean;
+  /**
+   * S23 OP5: the viewer is a merchant of an early-access tier, so a product in a running window
+   * (its own or its game's) keeps its availability; otherwise it reads `hidden`.
+   */
+  earlyAccess?: boolean;
 }
 
 export interface SupplierState {
@@ -148,6 +168,44 @@ export interface ProductRoutingState {
   openReview: ReviewRow | null;
   /** On the list read (S20 PO1). */
   availability: ProductAvailability;
+  /** S23 OP5: the end of the running early-access window (the product's or its game's), or null. */
+  earlyAccessUntil: Date | null;
+}
+
+/** S23 OP5: the latest end among the running windows, or null when none runs at `now`. */
+export function runningEarlyAccess(ends: readonly (Date | null)[], now: Date): Date | null {
+  let latest: Date | null = null;
+  for (const end of ends) {
+    if (end !== null && inEarlyAccess(end, now) && (latest === null || end > latest)) latest = end;
+  }
+  return latest;
+}
+
+/**
+ * S23 OP5: a game or product row outside a running early-access window, for reads that hide it
+ * from viewers without the privilege (the public catalog, quick links, the tier table).
+ */
+export function outsideEarlyAccess(column: AnyColumn, now: Date): SQL {
+  return sql`(${column} is null or ${column} <= ${now.toISOString()}::timestamptz)`;
+}
+
+/**
+ * S23 OP7: how many games and products had an early-access window end in `(from, to]`, for the
+ * end job's store refresh.
+ */
+export async function earlyAccessEndedBetween(db: Executor, from: Date, to: Date): Promise<number> {
+  const ended = (column: AnyColumn) =>
+    sql`${column} > ${from.toISOString()}::timestamptz and ${column} <= ${to.toISOString()}::timestamptz`;
+  const [games, products] = await readAll(db, [
+    () =>
+      db.select({ count: count() }).from(catalogGames).where(ended(catalogGames.earlyAccessUntil)),
+    () =>
+      db
+        .select({ count: count() })
+        .from(catalogProducts)
+        .where(ended(catalogProducts.earlyAccessUntil)),
+  ]);
+  return (games[0]?.count ?? 0) + (products[0]?.count ?? 0);
 }
 
 /** The policy in force: the newest `supplier_policy` row (the seed at least). */
@@ -366,6 +424,7 @@ export async function productRoutingStates(
           product: catalogProducts,
           gameStatus: catalogGames.status,
           gameArchivedAt: catalogGames.archivedAt,
+          gameEarlyAccessUntil: catalogGames.earlyAccessUntil,
           categoryId: catalogGames.categoryId,
           categoryArchivedAt: catalogCategories.archivedAt,
         })
@@ -442,6 +501,10 @@ export async function productRoutingStates(
   }
 
   for (const { product, ...where } of products) {
+    const earlyAccessWindow = runningEarlyAccess(
+      [product.earlyAccessUntil, where.gameEarlyAccessUntil],
+      context.now,
+    );
     const liveFieldKeys = keysOf.get(product.gameId) ?? [];
     const liveSelectOptions = selectsOf.get(product.gameId) ?? {};
     const routes: RouteState[] = routeRows
@@ -549,6 +612,7 @@ export async function productRoutingStates(
       currentMinMarginUsdUnits,
       retailCurrent,
       openReview: reviewOf.get(product.id) ?? null,
+      earlyAccessUntil: earlyAccessWindow,
       availability: productAvailability({
         categoryArchived: where.categoryArchivedAt !== null,
         gameArchived: where.gameArchivedAt !== null,
@@ -559,6 +623,7 @@ export async function productRoutingStates(
           ? { priceUsdUnits: current.priceUsdUnits, minMarginUsdUnits: currentMinMarginUsdUnits }
           : null,
         usableRouteCostsUsdUnits: usable.map((route) => route.costUsdUnits as number),
+        earlyAccessHidden: earlyAccessWindow !== null && context.earlyAccess !== true,
       }),
     });
   }

@@ -1,6 +1,8 @@
 import type { Writable } from 'node:stream';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  type MerchantTierReport,
+  type MerchantTierReportQuery,
   type Report,
   type ReportKind,
   type ReportQuery,
@@ -13,6 +15,7 @@ import {
   type Database,
   depositsReport,
   ledgerReport,
+  merchantTierReport,
   newId,
   recordAudit,
   refundsReport,
@@ -21,7 +24,11 @@ import {
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
-import { reportRowCount, writeReportWorkbook } from './report-workbook.js';
+import {
+  reportRowCount,
+  writeMerchantTierWorkbook,
+  writeReportWorkbook,
+} from './report-workbook.js';
 
 /**
  * Reports (S13 rules RP1–RP9, X1–X4): a read module with no tables of its own; the queries live
@@ -65,6 +72,37 @@ export class ReportsService {
       }
     })();
     return { ...body, generatedAt } as Report<Kind>;
+  }
+
+  /** S23 AD4: `GET /api/admin/reports/merchant-tiers`. */
+  async merchantTiers(query: MerchantTierReportQuery): Promise<MerchantTierReport> {
+    const now = new Date();
+    const body = await merchantTierReport(this.db, query.month, now);
+    return { ...body, generatedAt: now.toISOString() };
+  }
+
+  /** S23 AD4: the report by tier's export, audited before it streams (rule X4). */
+  async exportMerchantTiers(
+    adminId: string,
+    query: MerchantTierReportQuery,
+    meta: RequestMeta,
+    stream: () => Writable,
+  ): Promise<void> {
+    const report = await this.merchantTiers(query);
+    await this.db.transaction((tx) =>
+      recordAudit(tx, {
+        action: 'report.merchant_tiers_exported',
+        actorKind: 'admin',
+        actorId: adminId,
+        channel: 'admin',
+        entityType: 'report',
+        entityId: newId(),
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        details: { month: query.month, rows: report.rows.length },
+      }),
+    );
+    await writeMerchantTierWorkbook(stream(), report);
   }
 
   /** Rule X4: the export's audit entry, then the workbook streamed to `stream`. */

@@ -26,8 +26,10 @@ export {
 export {
   cheapestAvailablePrice,
   currentSupplierPolicy,
+  earlyAccessEndedBetween,
   forgetDeliveryMeasure,
   newestListPrices,
+  outsideEarlyAccess,
   type PriceRow,
   type ProductRoutingState,
   productRoutingStates,
@@ -36,6 +38,7 @@ export {
   type RoutingContext,
   routedProductIds,
   ruleValues,
+  runningEarlyAccess,
   type SupplierState,
   supplierDeliveryMedians,
   supplierStates,

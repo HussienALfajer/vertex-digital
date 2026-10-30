@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   adminMerchantTierSchema,
+  directContactLinks,
   earnedTierFor,
   effectiveLevel,
   expectedParentListId,
   higherTier,
   isImportantTierChange,
+  merchantTierReportQuerySchema,
   TIER_SETTINGS_DEFAULTS,
   TIER_THRESHOLD_DEFAULTS,
   type TierLevel,
@@ -13,6 +15,7 @@ import {
   tierGrantInputSchema,
   tierKeptUntil,
   tierLevelInputSchema,
+  tierMove,
   tierOf,
   tierPreviewInputSchema,
   tierProgress,
@@ -320,6 +323,35 @@ describe('the welcome line (RC1)', () => {
     }
     for (const text of ['خصم 10% على 500 UC', 'أهلاً بكم. نخدمكم يومياً', 'شحن 24 ساعة']) {
       expect(welcomeTextSchema.safeParse(text).success, text).toBe(true);
+    }
+  });
+});
+
+describe('the Diamond contact (OP4)', () => {
+  it('links only what the settings name', () => {
+    expect(directContactLinks(null, null)).toBeNull();
+    expect(directContactLinks('+963933123456', null)).toEqual({
+      whatsappUrl: 'https://wa.me/963933123456',
+      telegramUrl: null,
+    });
+    expect(directContactLinks(null, 'vertex_shop')).toEqual({
+      whatsappUrl: null,
+      telegramUrl: 'https://t.me/vertex_shop',
+    });
+  });
+});
+
+describe('the report by tier (AD4)', () => {
+  it('reads a move up or down the ladder', () => {
+    expect(tierMove('bronze', 'gold')).toBe('rise');
+    expect(tierMove('diamond', 'silver')).toBe('fall');
+    expect(tierMove('gold', 'gold')).toBeNull();
+  });
+
+  it('takes a month', () => {
+    expect(merchantTierReportQuerySchema.safeParse({ month: '2026-10' }).success).toBe(true);
+    for (const month of ['2026-13', '2026-1', '2026-10-01']) {
+      expect(merchantTierReportQuerySchema.safeParse({ month }).success, month).toBe(false);
     }
   });
 });

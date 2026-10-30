@@ -14,6 +14,7 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -77,11 +78,16 @@ export const catalogGames = pgTable(
     /** S09 rule AD1: normalized (rule SR1), unique, at most 20. */
     searchTerms: text('search_terms').array().notNull().default(sql`'{}'::text[]`),
     sortOrder: integer('sort_order').notNull(),
+    /** S23 OP5: while in the future, only merchants of an early-access tier see the game. */
+    earlyAccessUntil: timestamp('early_access_until', { withTimezone: true }),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [
     index('catalog_games_category_id_sort_order_idx').on(table.categoryId, table.sortOrder),
+    index('catalog_games_early_access_until_idx')
+      .on(table.earlyAccessUntil)
+      .where(sql`${table.earlyAccessUntil} is not null`),
     index('catalog_games_cover_file_id_idx').on(table.coverFileId),
     index('catalog_games_id_guide_file_id_idx').on(table.idGuideFileId),
     uniqueIndex('catalog_games_name_ar_live_idx').on(table.nameAr).where(isNull(table.archivedAt)),
@@ -179,10 +185,15 @@ export const catalogProducts = pgTable(
      * insert and for every existing product; never changed (the guard of migration 0092).
      */
     quickCode: text('quick_code').notNull().unique().default(sql`catalog_quick_code()`),
+    /** S23 OP5: while in the future, only merchants of an early-access tier see and buy it. */
+    earlyAccessUntil: timestamp('early_access_until', { withTimezone: true }),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [
+    index('catalog_products_early_access_until_idx')
+      .on(table.earlyAccessUntil)
+      .where(sql`${table.earlyAccessUntil} is not null`),
     check('catalog_products_quick_code_check', sql`${table.quickCode} ~ '^[2-9A-HJKMNP-Z]{6}$'`),
     index('catalog_products_game_id_sort_order_idx').on(table.gameId, table.sortOrder),
     uniqueIndex('catalog_products_game_id_name_ar_live_idx')

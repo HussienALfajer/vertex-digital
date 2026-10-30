@@ -13,8 +13,11 @@ import {
   createGameSchema,
   createInputFieldSchema,
   createProductSchema,
+  EARLY_ACCESS_HOURS,
+  earlyAccessEnd,
   gameListQuerySchema,
   gameServiceStatus,
+  inEarlyAccess,
   inputFieldShapeSchema,
   MAX_REORDER_IDS,
   missingForActivation,
@@ -293,6 +296,7 @@ describe('products (rule CT8)', () => {
     );
     expect(productAvailability({ ...facts, gameArchived: true })).toBe('hidden');
     expect(productAvailability({ ...facts, categoryArchived: true })).toBe('hidden');
+    expect(productAvailability({ ...facts, earlyAccessHidden: true })).toBe('hidden');
   });
 
   it('follow the price and the usable routes (S07 rule P6)', () => {
@@ -566,5 +570,17 @@ describe('withoutHiddenText (audit A6)', () => {
     const option = { value: 'eu', labelAr: 'أوروبا‏' };
     expect(selectOptionSchema.safeParse(option).success).toBe(true);
     expect(selectOptionInputSchema.safeParse(option).success).toBe(false);
+  });
+});
+
+describe('early access (S23 OP5)', () => {
+  it('runs 24 hours from when it is set', () => {
+    const now = new Date('2026-10-30T10:00:00Z');
+    const until = earlyAccessEnd(now);
+    expect(until.toISOString()).toBe('2026-10-31T10:00:00.000Z');
+    expect(EARLY_ACCESS_HOURS).toBe(24);
+    expect(inEarlyAccess(until, now)).toBe(true);
+    expect(inEarlyAccess(until.toISOString(), until)).toBe(false);
+    expect(inEarlyAccess(null, now)).toBe(false);
   });
 });

@@ -5,17 +5,20 @@ import { crc32 } from 'node:zlib';
 import { DEPOSIT_SETTINGS_DEFAULTS, UPLOAD_MAX_BYTES } from '@vertex-digital/contracts';
 import {
   auditEntries,
+  customers,
   depositFlags,
   depositReceipts,
   deposits,
   ledgerAccounts,
   ledgerJournals,
   ledgerPostings,
+  merchantProfiles,
+  merchantTierSettings,
   newId,
   storedFiles,
   storeSwitchChanges,
 } from '@vertex-digital/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -1068,6 +1071,70 @@ describe('the review queue (rule RV10)', () => {
     ).rows;
     expect(read.waiting).toBe(expected?.waiting);
     expect(read.waitingFlagged).toBeLessThanOrEqual(read.waiting);
+  });
+
+  it("lists a priority tier's Sham Cash deposits first, with the tier, over the cursor (S23 OP1)", async () => {
+    const plain = await customer();
+    const shop = await customer();
+    await test.db
+      .update(customers)
+      .set({ accountType: 'merchant' })
+      .where(eq(customers.id, shop.id));
+    const termsVersionId = newId();
+    await test.db.execute(sql`insert into content_page_versions
+      (id, page, version, title, body, draft_revision, admin_id)
+      values (${termsVersionId}, 'merchant_terms', 1000 + floor(random() * 1e9)::int,
+        'شروط التاجر', 'النص', 1, ${newId()})`);
+    await test.db.insert(merchantProfiles).values({
+      customerId: shop.id,
+      tradeName: 'محل النور',
+      governorate: 'aleppo',
+      city: 'اعزاز',
+      grantedAt: new Date(),
+      termsVersionId,
+    });
+    // Bronze takes the deposit priority for this test (TS1: a new settings row is in force).
+    const [bronze] = await test.db
+      .select()
+      .from(merchantTierSettings)
+      .where(eq(merchantTierSettings.tier, 'bronze'))
+      .orderBy(desc(merchantTierSettings.createdAt), desc(merchantTierSettings.id))
+      .limit(1);
+    if (!bronze) throw new Error('No Bronze settings');
+    const { id: _id, createdAt: _at, ...values } = bronze;
+    await test.db
+      .insert(merchantTierSettings)
+      .values({ ...values, id: newId(), depositPriority: true });
+    try {
+      const older = await submitted(plain.cookie, { currency: 'USD', amountUnits: 5 * USD });
+      const priority = await submitted(shop.cookie, { currency: 'USD', amountUnits: 5 * USD });
+      const page = async (query: string) =>
+        (await (
+          await client.get(`/api/admin/deposits${query}`, { cookie: admin.cookie })
+        ).json()) as {
+          items: { id: string; customer: { tier: string | null } }[];
+          nextCursor: string | null;
+        };
+      const all: { id: string; customer: { tier: string | null } }[] = [];
+      let cursor: string | null = null;
+      do {
+        const result = await page(`?limit=3${cursor ? `&cursor=${cursor}` : ''}`);
+        all.push(...result.items);
+        cursor = result.nextCursor;
+      } while (cursor);
+      const ids = all.map((item) => item.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids[0]).toBe(priority.id);
+      expect(ids).toContain(older.id);
+      expect(all[0]?.customer.tier).toBe('bronze');
+      expect(all.find((item) => item.id === older.id)?.customer.tier).toBeNull();
+      const detail = (await (
+        await client.get(`/api/admin/deposits/${priority.id}`, { cookie: admin.cookie })
+      ).json()) as { customer: { tier: string | null } };
+      expect(detail.customer.tier).toBe('bronze');
+    } finally {
+      await test.db.insert(merchantTierSettings).values({ ...values, id: newId() });
+    }
   });
 
   it('shows the admin the deposit, its receipts, flags and customer', async () => {

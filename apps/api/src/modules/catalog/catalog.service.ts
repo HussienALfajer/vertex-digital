@@ -8,10 +8,12 @@ import {
   type CreateCategory,
   type CreateGame,
   contrastRatio,
+  earlyAccessEnd,
   type Game,
   type GameDetail,
   type GameListQuery,
   type GamePage,
+  inEarlyAccess,
   type MarginScope,
   type Product,
   type ProductKind,
@@ -28,6 +30,7 @@ import {
   currentSupplierPolicy,
   type Database,
   newId,
+  notifyEarlyAccess,
   type ProductRoutingState,
   productDeliveryStats,
   productRoutingStates,
@@ -53,6 +56,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { FilesService } from '../files/index.js';
 import { RatesService } from '../rates/index.js';
 import {
@@ -71,6 +75,7 @@ import {
   refusals,
   repriceGameProducts,
   rewriteOrder,
+  runningWindow,
   toCategory,
   toImage,
   toInputField,
@@ -144,6 +149,7 @@ export class CatalogService {
     @Inject(ENV) private readonly env: Env,
     private readonly files: FilesService,
     private readonly rates: RatesService,
+    private readonly jobs: JobsService,
   ) {}
 
   // Images (rule CT10) ----------------------------------------------------------------------------
@@ -619,6 +625,40 @@ export class CatalogService {
     );
   }
 
+  /**
+   * `PUT /api/admin/catalog/games/:id/early-access` (S23 OP5): `on` opens a 24-hour window from now
+   * (a running one restarts) and tells the merchants of early-access tiers who follow or bought
+   * the game, once each; `off` ends it now. Audited; the store refreshes after the commit.
+   */
+  setGameEarlyAccess(actor: Actor, id: string, on: boolean, now = new Date()): Promise<GameDetail> {
+    return this.db.transaction(async (tx) => {
+      const row = await this.lockGame(tx, id);
+      if (on) {
+        const until = earlyAccessEnd(now);
+        await tx
+          .update(catalogGames)
+          .set({ earlyAccessUntil: until })
+          .where(eq(catalogGames.id, id));
+        await auditCatalog(tx, actor, 'catalog_game.early_access_set', gameEntity(id), {
+          nameAr: row.nameAr,
+          until: until.toISOString(),
+        });
+        await notifyEarlyAccess(
+          tx,
+          this.jobs,
+          { gameId: id, gameSlug: row.slug, gameNameAr: row.nameAr, product: null, until },
+          now,
+        );
+      } else if (inEarlyAccess(row.earlyAccessUntil, now)) {
+        await tx.update(catalogGames).set({ earlyAccessUntil: now }).where(eq(catalogGames.id, id));
+        await auditCatalog(tx, actor, 'catalog_game.early_access_ended', gameEntity(id), {
+          nameAr: row.nameAr,
+        });
+      }
+      return this.game(id, tx);
+    });
+  }
+
   // For the game's fields and products (`CatalogItemsService`) --------------------------------------
 
   /**
@@ -642,7 +682,8 @@ export class CatalogService {
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
     const ids = rows.map((row) => row.id);
     const [states, rate, delivery, policy, waiting] = await readAll(executor, [
-      () => productRoutingStates(executor, ids, routingContext(this.env)),
+      // The panel reads early-access packs as they are (S23 OP5): the game page marks the window.
+      () => productRoutingStates(executor, ids, { ...routingContext(this.env), earlyAccess: true }),
       () => this.rates.current(executor),
       () => productDeliveryStats(executor, ids),
       () => currentSupplierPolicy(executor),
@@ -1075,6 +1116,7 @@ function toGame(
     nameAr: row.nameAr,
     nameEn: row.nameEn,
     status: row.status,
+    earlyAccessUntil: runningWindow(row.earlyAccessUntil),
     cover: image(row.coverFileId),
     idGuide: image(row.idGuideFileId),
     accentColor: row.accentColor,
