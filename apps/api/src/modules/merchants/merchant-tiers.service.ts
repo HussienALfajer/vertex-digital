@@ -85,10 +85,11 @@ export class MerchantTiersService {
 
   /** `GET /api/admin/merchant-tiers`: Bronze first. */
   async list(): Promise<MerchantTierList> {
-    const [levels, settings, counts] = [
+    const [levels, settings, counts, minDepositUsdUnits] = [
       await liveTierLevels(this.db),
       await currentTierSettings(this.db),
       await tierMerchantCounts(this.db),
+      await this.minimumDeposit(),
     ];
     const wholesale = ROOT_PRICE_LIST_IDS.wholesale;
     const lists = await tierListRefs(this.db, [
@@ -124,6 +125,7 @@ export class MerchantTiersService {
           merchants: counts[tier],
         };
       }),
+      minDepositUsdUnits,
     };
   }
 

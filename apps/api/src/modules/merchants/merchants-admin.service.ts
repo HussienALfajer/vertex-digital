@@ -6,13 +6,11 @@ import {
   type AdminMerchantPage,
   accountPriceKind,
   applicationTransition,
-  DEPOSIT_SETTINGS_DEFAULTS,
   type GrantMerchant,
   type MerchantApplicationListQuery,
   type MerchantListQuery,
   type MerchantSettings,
   type MerchantSettingsInput,
-  merchantLimitsBelowMinimum,
 } from '@vertex-digital/contracts';
 import {
   type AdminActor,
@@ -44,7 +42,6 @@ import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
 import { CustomersService } from '../customers/index.js';
-import { DepositSettingsService } from '../deposits/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import {
   applicationEvents,
@@ -75,7 +72,6 @@ export class MerchantsAdminService {
     private readonly jobs: JobsService,
     private readonly files: FilesService,
     private readonly customers: CustomersService,
-    private readonly depositSettings: DepositSettingsService,
   ) {}
 
   /** `GET /api/admin/merchant-applications` (MA8). */
@@ -339,24 +335,30 @@ export class MerchantsAdminService {
 
   /** `GET /api/admin/merchant-settings`. */
   async settings(): Promise<MerchantSettings> {
-    return settingsView(await currentMerchantSettings(this.db), await this.minimumDeposit());
+    return settingsView(await currentMerchantSettings(this.db));
   }
 
-  /** `PUT /api/admin/merchant-settings`: a new version, both limits at least the minimums. */
+  /**
+   * `PUT /api/admin/merchant-settings`: a new version. S23 TS2: the deposit limits and player
+   * checks are the tiers'; the retired columns keep the values they had.
+   */
   async saveSettings(
     input: MerchantSettingsInput,
     actor: MerchantActor,
   ): Promise<MerchantSettings> {
-    const minimum = await this.minimumDeposit();
-    const below = merchantLimitsBelowMinimum(input, minimum);
-    if (below.length > 0) {
-      throw refusals.invalid(below[0] as string, 'Below the deposit minimum');
-    }
     const row = await this.db.transaction(async (tx) => {
       const before = await currentMerchantSettings(tx);
       const [saved] = await tx
         .insert(merchantSettings)
-        .values({ id: newId(), ...input, adminId: actor.adminId })
+        .values({
+          id: newId(),
+          perDepositUsdUnits: before.perDepositUsdUnits,
+          dailyDepositUsdUnits: before.dailyDepositUsdUnits,
+          playerChecksPerHour: before.playerChecksPerHour,
+          playerChecksPerDay: before.playerChecksPerDay,
+          ...input,
+          adminId: actor.adminId,
+        })
         .returning();
       await recordAudit(tx, {
         action: 'merchant_settings.changed',
@@ -369,20 +371,16 @@ export class MerchantsAdminService {
         userAgent: actor.meta.userAgent,
         details: {
           before: {
-            perDepositUsdUnits: before.perDepositUsdUnits,
-            dailyDepositUsdUnits: before.dailyDepositUsdUnits,
             ordersPerTenMinutes: before.ordersPerTenMinutes,
             reapplyWaitDays: before.reapplyWaitDays,
             infoExpiryDays: before.infoExpiryDays,
-            playerChecksPerHour: before.playerChecksPerHour,
-            playerChecksPerDay: before.playerChecksPerDay,
           },
           after: input,
         },
       });
       return saved as typeof before;
     });
-    return settingsView(row, minimum);
+    return settingsView(row);
   }
 
   /** MA8: the dashboard's `merchant_applications_waiting`, with the oldest submission. */
@@ -392,12 +390,6 @@ export class MerchantsAdminService {
       .from(merchantApplications)
       .where(eq(merchantApplications.status, 'under_review'));
     return { count: row?.count ?? 0, oldestAt: row?.oldestAt ?? null };
-  }
-
-  /** The highest of the Sham Cash and USDT minimums (data: both limits reach it). */
-  private async minimumDeposit(): Promise<number> {
-    const current = (await this.depositSettings.current()) ?? DEPOSIT_SETTINGS_DEFAULTS;
-    return Math.max(current.minDepositUsdUnits, current.usdtMinDepositUsdUnits);
   }
 
   private async find(id: string): Promise<MerchantApplicationRow> {

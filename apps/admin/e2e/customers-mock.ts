@@ -366,7 +366,7 @@ export class CustomersMock {
 
   /** S20: the accounts' lists, set by the price lists mock. */
   /** S20: the merchant state of an account (the merchants mock). */
-  merchants: Pick<MerchantsMock, 'isMerchant' | 'profileOf' | 'settings'> | null = null;
+  merchants: Pick<MerchantsMock, 'isMerchant' | 'profileOf' | 'depositTier'> | null = null;
   priceLists: Pick<PriceListsMock, 'pricing' | 'assign'> | null = null;
   /** The deposits a ticket links to (TK2): the deposits mock's. */
   deposits: (() => MockDeposit[]) | null = null;
@@ -508,15 +508,9 @@ export class CustomersMock {
     };
   }
 
-  /** S20 MD1: the merchant tier of a merchant's deposit limits. */
+  /** S23 TS3: the deposit limits of a merchant's tier. */
   private merchantTier(customerId: string) {
-    const settings = this.merchants?.settings;
-    return settings && this.merchants?.isMerchant(customerId)
-      ? {
-          perDepositUsdUnits: settings.perDepositUsdUnits,
-          dailyDepositUsdUnits: settings.dailyDepositUsdUnits,
-        }
-      : null;
+    return this.merchants?.depositTier(customerId) ?? null;
   }
 
   profile(row: MockCustomer): AdminCustomer {

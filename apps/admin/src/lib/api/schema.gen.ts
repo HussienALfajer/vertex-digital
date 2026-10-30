@@ -7066,28 +7066,20 @@ export interface components {
             reason: string;
         };
         MerchantSettings: {
-            perDepositUsdUnits: number;
-            dailyDepositUsdUnits: number;
             ordersPerTenMinutes: number;
             reapplyWaitDays: number;
             infoExpiryDays: number;
-            playerChecksPerHour: number;
-            playerChecksPerDay: number;
-            minDepositUsdUnits: number;
             /** Format: date-time */
             updatedAt: string;
         };
         MerchantSettingsInput: {
-            perDepositUsdUnits: number;
-            dailyDepositUsdUnits: number;
             ordersPerTenMinutes: number;
             reapplyWaitDays: number;
             infoExpiryDays: number;
-            playerChecksPerHour: number;
-            playerChecksPerDay: number;
         };
         MerchantTierList: {
             items: components["schemas"]["MerchantTierView"][];
+            minDepositUsdUnits: number;
         };
         MerchantTierView: {
             tier: components["schemas"]["MerchantTier"];

@@ -16,4 +16,11 @@ describe('merchant searches in the URL (S20 screens)', () => {
     expect(parseMerchantsSearch({ q: '  نور ', listId })).toEqual({ q: 'نور', listId });
     expect(parseMerchantsSearch({ q: ' ', listId: 'x' })).toEqual({});
   });
+
+  it('keep a known tier or granted (S23 AD1)', () => {
+    expect(parseMerchantsSearch({ tier: 'gold' })).toEqual({ tier: 'gold' });
+    expect(parseMerchantsSearch({ tier: 'granted' })).toEqual({ tier: 'granted' });
+    expect(parseMerchantsSearch({ tier: 'platinum' })).toEqual({});
+    expect(parseMerchantsSearch({ tier: 3 })).toEqual({});
+  });
 });

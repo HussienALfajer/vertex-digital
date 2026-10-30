@@ -1,6 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { MERCHANT_SETTINGS_DEFAULTS, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
-import { merchantApplications } from '@vertex-digital/db';
+import {
+  MERCHANT_SETTINGS_DEFAULTS,
+  ROOT_PRICE_LIST_IDS,
+  TIER_SETTINGS_DEFAULTS,
+} from '@vertex-digital/contracts';
+import { currentMerchantSettings, merchantApplications } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -335,13 +339,13 @@ describe('the application (MA1–MA5, MA8)', () => {
     expect(state.application?.events).toHaveLength(4);
     expect(await json(await submit(shop), 409)).toMatchObject({ code: 'ALREADY_MERCHANT' });
 
-    // MD2: the profile reads the merchant tier.
+    // MD2, S23 TS3: the profile reads the merchant's tier (Bronze).
     const profile = await json<{ limits: { effective: { perDeposit: unknown } } }>(
       await adminGet(`/api/admin/customers/${shop.id}`),
       200,
     );
     expect(profile.limits.effective.perDeposit).toEqual({
-      units: MERCHANT_SETTINGS_DEFAULTS.perDepositUsdUnits,
+      units: TIER_SETTINGS_DEFAULTS.bronze.perDepositUsdUnits,
       source: 'default_merchant',
     });
     const merchants = await json<{ items: { customerId: string; priceKind: string }[] }>(
@@ -672,28 +676,39 @@ describe('the direct grant, the terms and the revocation (MA6, MA7, MT2)', () =>
 });
 
 describe('settings, reports and the dashboard', () => {
-  it('refuses limits below the deposit minimums or above the day', async () => {
+  it('refuses values out of bounds and keeps the retired limits (S23 TS2)', async () => {
+    const before = await currentMerchantSettings(test.db);
     expect(
       await json(
         await adminSend('PUT', '/api/admin/merchant-settings', {
           ...MERCHANT_SETTINGS_DEFAULTS,
-          perDepositUsdUnits: usd(1),
+          ordersPerTenMinutes: 9,
         }),
         400,
       ),
     ).toMatchObject({ code: 'VALIDATION_FAILED' });
-    expect(
-      await json(
-        await adminSend('PUT', '/api/admin/merchant-settings', {
-          ...MERCHANT_SETTINGS_DEFAULTS,
-          perDepositUsdUnits: usd(6000),
-        }),
-        400,
-      ),
-    ).toMatchObject({ code: 'VALIDATION_FAILED' });
-    expect(await json(await adminGet('/api/admin/merchant-settings'), 200)).toMatchObject({
+    await json(
+      await adminSend('PUT', '/api/admin/merchant-settings', {
+        ...MERCHANT_SETTINGS_DEFAULTS,
+        infoExpiryDays: 9,
+      }),
+      200,
+    );
+    expect(await json(await adminGet('/api/admin/merchant-settings'), 200)).toEqual({
       ...MERCHANT_SETTINGS_DEFAULTS,
+      infoExpiryDays: 9,
+      updatedAt: expect.any(String),
     });
+    expect(await currentMerchantSettings(test.db)).toMatchObject({
+      perDepositUsdUnits: before.perDepositUsdUnits,
+      dailyDepositUsdUnits: before.dailyDepositUsdUnits,
+      playerChecksPerHour: before.playerChecksPerHour,
+      playerChecksPerDay: before.playerChecksPerDay,
+    });
+    await json(
+      await adminSend('PUT', '/api/admin/merchant-settings', MERCHANT_SETTINGS_DEFAULTS),
+      200,
+    );
   });
 
   it('breaks sales down by price list and by merchant', async () => {

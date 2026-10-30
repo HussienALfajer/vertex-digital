@@ -427,8 +427,13 @@ describe('levels per tier (S23 TS1, the levels rules, PX2, MG7)', () => {
 
 describe('tier settings (S23 TS1, TS2)', () => {
   it('saves a new version with its audit, both limits at least the deposit minimums', async () => {
-    const before = (await tiers())[0]?.settings;
-    expect(before).toMatchObject(TIER_SETTINGS_DEFAULTS.bronze);
+    const list = await json<{ items: Tier[]; minDepositUsdUnits: number }>(
+      await adminGet('/api/admin/merchant-tiers'),
+      200,
+    );
+    expect(list.items[0]?.settings).toMatchObject(TIER_SETTINGS_DEFAULTS.bronze);
+    // The panel's dialog reads the minimum both limits must reach.
+    expect(list.minDepositUsdUnits).toBeGreaterThan(usd(0.01));
     const after = { ...TIER_SETTINGS_DEFAULTS.bronze, playerChecksPerHour: 120, bulkLinesMax: 60 };
     const saved = await json<Tier>(
       await adminSend('PUT', '/api/admin/merchant-tiers/bronze/settings', after),

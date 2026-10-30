@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { adminMerchantTierSchema } from './merchant-tiers.js';
-import { amountUnitsSchema, isWholeCents, USD_CENT } from './money.js';
+import { amountUnitsSchema } from './money.js';
 import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
 
 /*
@@ -588,79 +588,39 @@ export type AdminMerchantPage = z.infer<typeof adminMerchantPageSchema>;
 
 /* Settings (MD1, PO5, MA1, MA4) -------------------------------------------------------------- */
 
-/** The seeded values (owner decisions 1, 7, 8). */
+/**
+ * The seeded values (owner decisions 1, 7, 8). S23 TS2: the deposit limits and player checks are
+ * the tiers' (`merchant_tier_settings`); the retired columns keep their last values.
+ */
 export const MERCHANT_SETTINGS_DEFAULTS = {
-  perDepositUsdUnits: 2_000 * 1_000_000,
-  dailyDepositUsdUnits: 5_000 * 1_000_000,
   ordersPerTenMinutes: 60,
   reapplyWaitDays: 7,
   infoExpiryDays: 7,
-  playerChecksPerHour: 100,
-  playerChecksPerDay: 300,
 } as const;
 
 /** A customer's order rate (PO5): orders and checkouts per 10 minutes. */
 export const CUSTOMER_ORDERS_PER_TEN_MINUTES = 10;
 
-/** At most $100,000 for a merchant limit (as S12's overrides). */
-export const MERCHANT_LIMIT_MAX_USD_UNITS = 100_000 * 1_000_000;
-
-const merchantLimit = z
-  .int()
-  .min(USD_CENT)
-  .max(MERCHANT_LIMIT_MAX_USD_UNITS)
-  .refine(isWholeCents, 'Expected whole cents');
-
 /** `PUT /api/admin/merchant-settings`. */
 export const merchantSettingsInputSchema = z
   .object({
-    perDepositUsdUnits: merchantLimit,
-    dailyDepositUsdUnits: merchantLimit,
     ordersPerTenMinutes: z.int().min(10).max(500),
     reapplyWaitDays: z.int().min(0).max(365),
     infoExpiryDays: z.int().min(1).max(60),
-    /** S21 BK4: a merchant's player checks, replacing S09's 10 an hour and 30 a day. */
-    playerChecksPerHour: z.int().min(10).max(1_000),
-    playerChecksPerDay: z.int().min(30).max(5_000),
-  })
-  .refine((value) => value.perDepositUsdUnits <= value.dailyDepositUsdUnits, {
-    path: ['perDepositUsdUnits'],
-    message: 'Above the daily limit',
   })
   .meta({ id: 'MerchantSettingsInput' });
 
 export type MerchantSettingsInput = z.infer<typeof merchantSettingsInputSchema>;
 
-/** `GET` and `PUT /api/admin/merchant-settings`: the values in force and the deposit minimums. */
+/** `GET` and `PUT /api/admin/merchant-settings`: the values in force. */
 export const merchantSettingsSchema = z
   .object({
-    perDepositUsdUnits: amountUnitsSchema,
-    dailyDepositUsdUnits: amountUnitsSchema,
-    ordersPerTenMinutes: z.int(),
-    reapplyWaitDays: z.int(),
-    infoExpiryDays: z.int(),
-    playerChecksPerHour: z.int(),
-    playerChecksPerDay: z.int(),
-    /** The highest deposit minimum (Sham Cash, USDT): both limits must reach it. */
-    minDepositUsdUnits: amountUnitsSchema,
+    ...merchantSettingsInputSchema.shape,
     updatedAt: z.iso.datetime(),
   })
   .meta({ id: 'MerchantSettings' });
 
 export type MerchantSettings = z.infer<typeof merchantSettingsSchema>;
-
-/**
- * The settings' check against the deposit minimums (data: both limits at least the Sham Cash and
- * USDT minimums): the fields below them.
- */
-export function merchantLimitsBelowMinimum(
-  settings: Pick<MerchantSettingsInput, 'perDepositUsdUnits' | 'dailyDepositUsdUnits'>,
-  minDepositUsdUnits: number,
-): ('perDepositUsdUnits' | 'dailyDepositUsdUnits')[] {
-  return (['perDepositUsdUnits', 'dailyDepositUsdUnits'] as const).filter(
-    (field) => settings[field] < minDepositUsdUnits,
-  );
-}
 
 /** MD1: the merchant tier's deposit limits. */
 export interface MerchantDepositTier {

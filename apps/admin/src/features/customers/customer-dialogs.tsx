@@ -32,7 +32,7 @@ import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { Picker } from '../pricing/picker';
 import { priceListsQuery } from '../pricing/pricing.queries';
-import { LIMIT_SOURCE_KEYS, limitInput, parseLimitInput } from './customer-labels';
+import { limitInput, limitSourceLabel, parseLimitInput } from './customer-labels';
 import {
   type CustomerStateAction,
   useCustomerStateChange,
@@ -277,7 +277,11 @@ export function LimitsDialog({
                     effective.units === null
                       ? t('customers.limits.noCap')
                       : ltr(formatUsd(effective.units)),
-                  source: t(LIMIT_SOURCE_KEYS[effective.source]),
+                  source: limitSourceLabel(
+                    t,
+                    effective.source,
+                    customer.merchant?.tier.tier ?? null,
+                  ),
                 })}
               </FieldDescription>
               <FieldError match={wrong}>

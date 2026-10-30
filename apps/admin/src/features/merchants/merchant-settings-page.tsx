@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
-  formatUsd,
   type MerchantSettings,
   type MerchantSettingsInput,
   merchantSettingsInputSchema,
@@ -25,28 +25,16 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
-import { ltr } from '../../lib/format';
-import { limitInput, parseLimitInput } from '../customers/customer-labels';
 import { merchantSettingsQuery, useSaveMerchantSettings } from './merchants.queries';
 
 type SettingsField = keyof MerchantSettingsInput;
 
-const FIELDS: { name: SettingsField; money: boolean }[] = [
-  { name: 'perDepositUsdUnits', money: true },
-  { name: 'dailyDepositUsdUnits', money: true },
-  { name: 'ordersPerTenMinutes', money: false },
-  { name: 'reapplyWaitDays', money: false },
-  { name: 'infoExpiryDays', money: false },
-  // S21 BK4: a merchant's player checks.
-  { name: 'playerChecksPerHour', money: false },
-  { name: 'playerChecksPerDay', money: false },
-];
+const FIELDS: SettingsField[] = ['ordersPerTenMinutes', 'reapplyWaitDays', 'infoExpiryDays'];
 
 /**
- * "إعدادات التجّار" (S20 MD1, PO5, MA1, MA4): the merchant tier's deposit limits, the order rate,
- * the reapply wait and the information expiry, and (S21 BK4) the player-check quota, with their
- * bounds; saving asks for
- * re-authentication and keeps the earlier version in the audit log.
+ * "إعدادات التجّار" (S20 PO5, MA1, MA4): the order rate, the reapply wait and the information
+ * expiry, with their bounds; saving asks for re-authentication and keeps the earlier version in the
+ * audit log. S23 TS2: the deposit limits and player checks are each tier's, on the tiers page.
  */
 export function MerchantSettingsPage() {
   const { t } = useTranslation();
@@ -57,6 +45,12 @@ export function MerchantSettingsPage() {
         title={t('merchants.settings.title')}
         description={t('merchants.settings.subtitle')}
       />
+      <p className="text-sm text-muted-foreground">
+        {t('merchants.settings.tiersNote')}{' '}
+        <Link to="/merchants/tiers" className="font-medium underline underline-offset-4">
+          {t('nav.merchantTiers')}
+        </Link>
+      </p>
       {settings.isPending && <Skeleton className="h-96 w-full max-w-2xl" aria-hidden="true" />}
       {settings.isError && !settings.data && (
         <EmptyState
@@ -91,13 +85,9 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
   const { t } = useTranslation();
   const save = useSaveMerchantSettings();
   const [values, setValues] = useState<Record<SettingsField, string>>(() => ({
-    perDepositUsdUnits: limitInput(saved.perDepositUsdUnits),
-    dailyDepositUsdUnits: limitInput(saved.dailyDepositUsdUnits),
     ordersPerTenMinutes: String(saved.ordersPerTenMinutes),
     reapplyWaitDays: String(saved.reapplyWaitDays),
     infoExpiryDays: String(saved.infoExpiryDays),
-    playerChecksPerHour: String(saved.playerChecksPerHour),
-    playerChecksPerDay: String(saved.playerChecksPerDay),
   }));
   const [invalid, setInvalid] = useState<Set<SettingsField>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);
@@ -109,12 +99,7 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
     setFailure(null);
     setDone(false);
     const parsed = merchantSettingsInputSchema.safeParse(
-      Object.fromEntries(
-        FIELDS.map(({ name, money }) => [
-          name,
-          money ? parseLimitInput(values[name]) : Number(values[name].trim() || Number.NaN),
-        ]),
-      ),
+      Object.fromEntries(FIELDS.map((name) => [name, Number(values[name].trim() || Number.NaN)])),
     );
     if (!parsed.success) {
       setInvalid(new Set(parsed.error.issues.map((issue) => issue.path[0] as SettingsField)));
@@ -129,7 +114,7 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
         error instanceof ApiError && Array.isArray(error.details)
           ? (error.details as { path?: unknown[] }[]).map((issue) => issue.path?.[0])
           : [];
-      const refused = FIELDS.map(({ name }) => name).filter((name) => fields.includes(name));
+      const refused = FIELDS.filter((name) => fields.includes(name));
       if (refused.length > 0) {
         setInvalid(new Set(refused));
         return focusInvalid();
@@ -141,28 +126,22 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
   return (
     <Card className="max-w-2xl">
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
-        {FIELDS.map(({ name, money }) => (
+        {FIELDS.map((name) => (
           <Field key={name} invalid={invalid.has(name)}>
             <FieldLabel>{t(`merchants.settings.fields.${name}`)}</FieldLabel>
             <Input
               name={name}
               dir="ltr"
-              inputMode={money ? 'decimal' : 'numeric'}
+              inputMode="numeric"
               value={values[name]}
               onChange={(event) => {
                 const value = event.target.value;
                 setValues((current) => ({ ...current, [name]: value }));
               }}
             />
-            <FieldDescription>
-              {t(`merchants.settings.hints.${name}`, {
-                minimum: ltr(formatUsd(saved.minDepositUsdUnits)),
-              })}
-            </FieldDescription>
+            <FieldDescription>{t(`merchants.settings.hints.${name}`)}</FieldDescription>
             <FieldError match={invalid.has(name)}>
-              {t(`merchants.settings.errors.${name}`, {
-                minimum: ltr(formatUsd(saved.minDepositUsdUnits)),
-              })}
+              {t(`merchants.settings.errors.${name}`)}
             </FieldError>
           </Field>
         ))}

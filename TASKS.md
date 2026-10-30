@@ -2,7 +2,7 @@
 
 Spec PR 1 (decisions 1–5, 9, 10, 13, 14) is split in two PRs so neither is half-wired: 1a the server side, 1b the panel. PR 2 (identity and progress) and PR 3 (operations and reports) follow in their own sessions.
 
-Stopped at: PR 1a ready and pushed; the owner presses Create PR, then auto-merge and the wait for the merge.
+PR 1a merged (#230). PR 1b on `feat/s23-panel`.
 
 Owner decision (2026-10-29), not applied yet: PX3's half-step minimum margins are whole cents, rounded up: Silver $0.05 (was $0.045), Diamond $0.04 (was $0.035); Gold stays $0.04. Apply it in `TIER_RULE_DEFAULTS.half` (`packages/contracts/src/merchant-tiers.ts`) and in the spec's PX3 table, with a line naming the six production slugs read on 2026-10-29: `games`, `game-cards` (global rule), `apps`, `subscriptions` (half step), `gift-cards`, `shopping` (no step).
 
@@ -18,22 +18,22 @@ Owner decision (2026-10-29), not applied yet: PX3's half-step minimum margins ar
 - [x] reviewer (`docs/specs/S23-merchant-tiers.md`): fixed the 50-unit request cap (orders, releases, resolve, fulfil up to 100), the month row written before the recomputation, the setup refusing a same-named list off the chain, the Bronze seed's hourly checks clamped, and tests for TS3–TS5, MG7, edge case 9 and access
 - [x] full `pnpm verify` again after the review fixes (pass, 2026-10-29: lint, typecheck, test, build, 340 admin E2E, migration and OpenAPI drift); the db test "gives every order a fixed verification code … (VF1–VF3)" in `packages/db/src/orders/orders.test.ts` passes when its file runs alone (148/148): nothing to fix
 - [x] docs: AGENTS.md commands table (`merchants:setup-tiers`), `docs/architecture.md` ownership (merchants owns the four tier tables), `apps/api/CLAUDE.md` and `packages/db/CLAUDE.md` notes (tiers, grants, parent cap, setup), ROADMAP line
-- [ ] note in the PR: migration 0104's SQL was rewritten to the generator's output without the early `merchant_levels_tier_check` (moved to 0105 after the archive; owner approved deleting the first generation); `pnpm db:generate` reports no drift
-- [ ] checks, reviewer, PR and merge
+- [x] note in the PR: migration 0104's SQL was rewritten to the generator's output without the early `merchant_levels_tier_check` (moved to 0105 after the archive; owner approved deleting the first generation); `pnpm db:generate` reports no drift
+- [x] checks, reviewer, PR and merge (#230)
 
 Before the S23 deploy (from the reviewer, not confirmed here): read production's newest `merchant_settings` row and whether lists named "الفضية", "الذهبية" or "الماسية" exist; time `PUT /api/admin/merchant-tiers/:tier/level` (it reprices every routed product in one request) against the 15 s lock timeout on the production catalog; a grant racing the archive of its tier can stay open without effect (single admin, not blocking).
 
 ## PR 1b — the panel (admin)
 
-- [ ] admin: tiers page `/merchants/tiers` (replaces `/merchants/levels`): four cards, threshold and list dialog, settings dialog, threshold preview side panel; Diamond contact in Settings → merchants (deposit and check fields leave it)
-- [ ] admin: merchants list tier column with "ممنوحة" and the tier filter; customer profile tier card, "منح فئة" and "إنهاء المنح" dialogs (re-authentication), grant history
-- [ ] i18n keys, error and audit labels; loading, empty and error states
-- [ ] e2e: tiers page, preview, grant dialog, merchants filter; RTL screenshots light and dark
-- [ ] browser check on the local stack (acceptance 1 and 5)
+- [x] contracts and api: the merchant settings lose the deposit and check fields (input, view, audit; the retired columns keep their last values on each new version); the tiers list carries the deposit minimum for the settings dialog; OpenAPI and the admin client regenerated
+- [x] admin: tiers page `/merchants/tiers` (navigation item): four cards with threshold, list, merchants earned and granted, privileges, the chain gap and an archived list; threshold and list dialog, settings dialog (deposit minimum checked in place), stop a tier; threshold preview side panel with counts and movers
+- [x] admin: merchants list tier column with "ممنوحة" and the tier filter in the URL (`tier`); customer profile tier card (effective, earned, source, since), "منح فئة" and "إنهاء المنح" dialogs (re-authentication), grant history; the limit source names the tier (TS3); the pricing chip names the tier; Settings → merchants keeps the order rate, reapply wait and information expiry with a link to the tiers page
+- [x] i18n keys (tiers, grants, preview, limit source); loading, empty and error states
+- [x] e2e: `merchant-tiers.spec.ts` (tiers page, preview, grant and end, filter; RTL screenshots light and dark), `merchants.spec.ts` adapted; mocks script tiers, grants and the preview
+- [x] browser check on the local stack (acceptance 1 and 5): tiers page on the seeded chain, preview with a mover, Diamond granted for 2 days and ended, both `merchant_tier_changed` Telegram messages queued (skipped: no linked chat locally), phone width without overflow; the seed's snapshot copy fixed (a margin rule keeps its fixed columns, guard 0099)
 - [ ] checks, reviewer, PR and merge
 
 ## Moved to later PRs (spec delivery plan)
 
-- PR 1b: the merchant settings lose the deposit and check fields (contract and panel, they are no longer read); the profile's limit source names the tier (TS3, "الافتراضي: تاجر ذهبي"); the store's code-quantity input reads the tier's `orderUnitsMax` (today 50 in the browser, the server enforces the tier).
-- PR 2: `celebrate_pending`, `certificate_code`, `certificate_reissued_at` (identity); the notification's "what it grants".
+- PR 2: the store's code-quantity input (POS) reads the tier's `orderUnitsMax` from `GET /api/merchant/tier` (today 50 in the browser, the server enforces the tier; moved from PR 1b, which adds no customer route); `celebrate_pending`, `certificate_code`, `certificate_reissued_at` (identity); the notification's "what it grants".
 - PR 3: the Diamond contact columns of `merchant_settings` (decision 12).

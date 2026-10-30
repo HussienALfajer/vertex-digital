@@ -6,21 +6,37 @@ import {
   type AdminMerchantTier,
   type ApplicationAction,
   applicationTransition,
+  earnedTierFor,
+  expectedParentListId,
   type Governorate,
   grantMerchantSchema,
+  LEVEL_TIERS,
+  type LevelTier,
   MERCHANT_SETTINGS_DEFAULTS,
   MERCHANT_TIERS,
   type MerchantApplicationEventKind,
   type MerchantSettings,
+  type MerchantTier,
   type MerchantTierView,
-  merchantLimitsBelowMinimum,
   merchantMessageSchema,
   merchantSettingsInputSchema,
   priceKindOf,
   ROOT_PRICE_LIST_IDS,
   removeMerchantLogoSchema,
   revokeMerchantSchema,
+  TIER_LIST_NAMES,
   TIER_SETTINGS_DEFAULTS,
+  TIER_THRESHOLD_DEFAULTS,
+  type TierGrant,
+  type TierSettings,
+  tierGrantEndInputSchema,
+  tierGrantEndsAt,
+  tierGrantInputSchema,
+  tierLevelInputSchema,
+  tierPreviewInputSchema,
+  tierRank,
+  tierSettingsInputSchema,
+  tierThresholdsRise,
 } from '@vertex-digital/contracts';
 import { type Answer, nextId } from './catalog-mock';
 import type { PriceListsMock } from './price-lists-mock';
@@ -28,8 +44,10 @@ import type { PriceListsMock } from './price-lists-mock';
 /*
  * Merchants of S20 PR 3 as the panel sees them: applications moved on the contracts'
  * `applicationTransition` (MA4), approvals and direct grants that make the account a merchant on
- * its list (MA5, MA6), revocations (MA7), the merchants list and the settings with the deposit
- * minimum check. `seedApplication` adds one for a test.
+ * its list (MA5, MA6), revocations (MA7), the merchants list and the settings; S23: the tiers with
+ * their levels on chained lists (`setupTiers`, as the production setup does), their privileges with
+ * the deposit minimum check, the threshold preview and the manual grants. `seedApplication` adds an
+ * application for a test, `setMonths` a merchant's net purchases.
  */
 
 type Body = Record<string, unknown> | null;
@@ -61,7 +79,7 @@ interface StoredProfile {
   termsVersion: number | null;
   grantedAt: string;
   revokedAt: string | null;
-  /** S21 LV4: the level; S23 PR 1b sets it with the tier. */
+  /** S21 LV4: the effective level (S23: its tier's). */
   level: { id: string; nameAr: string } | null;
   levelChangedAt: string | null;
   /** S23 AD5: the tier, Bronze by default. */
@@ -88,9 +106,19 @@ export class MerchantsMock {
   readonly profiles = new Map<string, StoredProfile>();
   settings: MerchantSettings = {
     ...MERCHANT_SETTINGS_DEFAULTS,
-    minDepositUsdUnits: MIN_DEPOSIT,
     updatedAt: '2026-10-20T09:00:00.000Z',
   };
+  /** S23 TS1: each tier's privileges in force. */
+  tierSettings = Object.fromEntries(
+    MERCHANT_TIERS.map((tier) => [
+      tier,
+      { ...TIER_SETTINGS_DEFAULTS[tier], updatedAt: '2026-10-20T09:00:00.000Z' },
+    ]),
+  ) as Record<MerchantTier, TierSettings>;
+  /** S23 TR1: the live level of each tier above Bronze. */
+  levels: Partial<
+    Record<LevelTier, { id: string; monthlyThresholdUsdUnits: number; priceListId: string }>
+  > = {};
 
   constructor(
     private readonly reauthenticationRequired: () => boolean,
@@ -224,15 +252,12 @@ export class MerchantsMock {
     if (key === 'GET /api/admin/merchants') {
       const q = url.searchParams.get('q');
       const listId = url.searchParams.get('listId');
-      const levelId = url.searchParams.get('levelId');
+      const tier = url.searchParams.get('tier');
       const rows = [...this.profiles.entries()]
         .filter(([customerId]) => this.isMerchant(customerId))
         .map(([customerId, profile]) => this.merchantRow(customerId, profile))
         .filter((row) => !listId || row.priceList.id === listId)
-        .filter(
-          (row) =>
-            !levelId || (levelId === 'none' ? row.level === null : row.level?.id === levelId),
-        )
+        .filter((row) => !tier || (tier === 'granted' ? row.tierGranted : row.tier === tier))
         .filter((row) => !q || row.tradeName.includes(q) || row.name.includes(q));
       return { status: 200, json: { items: rows, nextCursor: null } };
     }
@@ -285,7 +310,32 @@ export class MerchantsMock {
       return { status: 200, json: this.profile(customerId) };
     }
     if (key === 'GET /api/admin/merchant-tiers') {
-      return { status: 200, json: { items: this.tierRows() } };
+      return { status: 200, json: { items: this.tierRows(), minDepositUsdUnits: MIN_DEPOSIT } };
+    }
+    if (key === 'POST /api/admin/merchant-tiers/preview') {
+      const parsed = tierPreviewInputSchema.safeParse(body);
+      if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+      return { status: 200, json: this.preview(parsed.data) };
+    }
+    const tierRoute = path.match(/^\/api\/admin\/merchant-tiers\/([a-z]+)\/(level|settings)$/);
+    if (tierRoute && method === 'PUT') {
+      const tier = MERCHANT_TIERS.find((value) => value === tierRoute[1]);
+      if (!tier) return error(404, 'NOT_FOUND');
+      const refused = sensitive();
+      if (refused) return refused;
+      return tierRoute[2] === 'level'
+        ? this.setLevel(tier, body)
+        : this.saveTierSettings(tier, body);
+    }
+    const tierGrant = path.match(
+      /^\/api\/admin\/customers\/([^/]+)\/merchant\/tier-grant(\/end)?$/,
+    );
+    if (tierGrant && method === 'POST') {
+      const refused = sensitive();
+      if (refused) return refused;
+      return tierGrant[2]
+        ? this.endGrant(tierGrant[1] as string, body)
+        : this.grantTier(tierGrant[1] as string, body);
     }
     if (key === 'GET /api/admin/merchant-settings') return { status: 200, json: this.settings };
     if (key === 'PUT /api/admin/merchant-settings') {
@@ -297,14 +347,6 @@ export class MerchantsMock {
           400,
           'VALIDATION_FAILED',
           parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
-        );
-      }
-      const below = merchantLimitsBelowMinimum(parsed.data, MIN_DEPOSIT);
-      if (below.length > 0) {
-        return error(
-          400,
-          'VALIDATION_FAILED',
-          below.map((field) => ({ path: [field], message: 'Below the deposit minimum' })),
         );
       }
       this.settings = { ...this.settings, ...parsed.data, updatedAt: NOW() };
@@ -406,24 +448,265 @@ export class MerchantsMock {
     };
   }
 
-  /** S23: the four tiers with their seeded settings and no live level (PR 1b scripts them). */
-  private tierRows(): MerchantTierView[] {
-    const wholesale = this.priceLists.lists.find((list) => list.kind === 'wholesale');
-    return MERCHANT_TIERS.map((tier) => ({
+  /** S23 PX1: the three tier lists chained under wholesale, their levels at the starter values. */
+  setupTiers(): void {
+    let parent: string = ROOT_PRICE_LIST_IDS.wholesale;
+    for (const tier of LEVEL_TIERS) {
+      const list = this.priceLists.addList(TIER_LIST_NAMES[tier], parent);
+      this.levels[tier] = {
+        id: nextId(),
+        monthlyThresholdUsdUnits: TIER_THRESHOLD_DEFAULTS[tier],
+        priceListId: list.id,
+      };
+      parent = list.id;
+    }
+    this.recomputeAll();
+  }
+
+  /** S21 LV2: a merchant's net purchases this and last month; the earned tier follows (TR6). */
+  setMonths(customerId: string, thisMonthUsdUnits: number, previousMonthUsdUnits: number): void {
+    const profile = this.profiles.get(customerId);
+    if (!profile) return;
+    profile.thisMonthUsdUnits = thisMonthUsdUnits;
+    profile.previousMonthUsdUnits = previousMonthUsdUnits;
+    this.recompute(profile);
+  }
+
+  /** TS3: the deposit limits of a merchant's effective tier. */
+  depositTier(
+    customerId: string,
+  ): { perDepositUsdUnits: number; dailyDepositUsdUnits: number } | null {
+    const profile = this.profiles.get(customerId);
+    if (!profile || !this.isMerchant(customerId)) return null;
+    const settings = this.tierSettings[profile.tier.tier];
+    return {
+      perDepositUsdUnits: settings.perDepositUsdUnits,
+      dailyDepositUsdUnits: settings.dailyDepositUsdUnits,
+    };
+  }
+
+  private thresholds(): Partial<Record<LevelTier, number>> {
+    return Object.fromEntries(
+      LEVEL_TIERS.flatMap((tier) => {
+        const level = this.levels[tier];
+        return level ? [[tier, level.monthlyThresholdUsdUnits]] : [];
+      }),
+    );
+  }
+
+  /** TR3, TR6: the earned tier from the months; an open grant's live tier wins when higher. */
+  private recompute(profile: StoredProfile): void {
+    const earned = earnedTierFor(
+      this.thresholds(),
+      profile.previousMonthUsdUnits,
+      profile.thisMonthUsdUnits,
+    );
+    const grant = profile.tier.openGrant;
+    const granted =
+      grant && this.levels[grant.tier] && tierRank(grant.tier) > tierRank(earned)
+        ? grant.tier
+        : null;
+    const tier = granted ?? earned;
+    const changed = tier !== profile.tier.tier;
+    profile.tier = {
+      ...profile.tier,
       tier,
-      level: null,
-      priceList:
-        tier === 'bronze' && wholesale
-          ? { id: wholesale.id, name: wholesale.name, parentListId: null, archived: false }
-          : null,
-      settings: { ...TIER_SETTINGS_DEFAULTS[tier], updatedAt: '2026-10-20T09:00:00.000Z' },
-      merchants: {
-        earned: [...this.profiles.values()].filter(
-          (profile) => profile.revokedAt === null && profile.tier.tier === tier,
-        ).length,
-        granted: 0,
-      },
-    }));
+      earnedTier: earned,
+      source: granted ? 'granted' : tier === 'bronze' ? null : 'earned',
+      since: changed ? NOW() : profile.tier.since,
+    };
+    const level = tier === 'bronze' ? undefined : this.levels[tier];
+    profile.level =
+      tier !== 'bronze' && level ? { id: level.id, nameAr: TIER_LIST_NAMES[tier] } : null;
+    if (changed) profile.levelChangedAt = NOW();
+  }
+
+  private recomputeAll(): void {
+    for (const profile of this.profiles.values()) {
+      if (profile.revokedAt === null) this.recompute(profile);
+    }
+  }
+
+  /** TS1, the levels' rules: thresholds in order, a custom list under the tier below's; null archives. */
+  private setLevel(tier: MerchantTier, body: Body): Answer {
+    if (tier === 'bronze') return error(404, 'NOT_FOUND');
+    const parsed = tierLevelInputSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    const values = parsed.data.level;
+    if (values === null) {
+      delete this.levels[tier];
+      // MG7: the tier's open grants end before the recomputation.
+      for (const profile of this.profiles.values()) {
+        if (profile.tier.openGrant?.tier === tier) this.closeGrant(profile, 'tier_archived');
+      }
+    } else {
+      const others = LEVEL_TIERS.flatMap((other) => {
+        const level = this.levels[other];
+        return level && other !== tier ? [{ tier: other, ...level }] : [];
+      });
+      if (!tierThresholdsRise([...others, { tier, ...values }])) {
+        return error(409, 'MERCHANT_TIER_ORDER_INVALID');
+      }
+      const list = this.priceLists.lists.find((row) => row.id === values.priceListId);
+      const parent = expectedParentListId(tier, others, ROOT_PRICE_LIST_IDS.wholesale);
+      const kept = values.priceListId === this.levels[tier]?.priceListId;
+      if (list?.kind !== 'custom' || (!kept && list.parentListId !== parent)) {
+        return error(409, 'MERCHANT_TIER_LIST_INVALID');
+      }
+      this.levels[tier] = { id: this.levels[tier]?.id ?? nextId(), ...values };
+    }
+    this.recomputeAll();
+    return { status: 200, json: this.tierRows().find((row) => row.tier === tier) };
+  }
+
+  private saveTierSettings(tier: MerchantTier, body: Body): Answer {
+    const parsed = tierSettingsInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return error(
+        400,
+        'VALIDATION_FAILED',
+        parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+      );
+    }
+    for (const field of ['perDepositUsdUnits', 'dailyDepositUsdUnits'] as const) {
+      if (parsed.data[field] < MIN_DEPOSIT) {
+        return error(400, 'VALIDATION_FAILED', [
+          { path: [field], message: 'Below the deposit minimum' },
+        ]);
+      }
+    }
+    this.tierSettings[tier] = { ...parsed.data, updatedAt: NOW() };
+    return { status: 200, json: this.tierRows().find((row) => row.tier === tier) };
+  }
+
+  /** AD3: the earned tiers at today's and at the proposed thresholds. */
+  private preview(proposed: Record<LevelTier, number | null>) {
+    const now = this.thresholds();
+    const moves = [...this.profiles.entries()]
+      .filter(([customerId]) => this.isMerchant(customerId))
+      .map(([customerId, profile]) => ({
+        customerId,
+        tradeName: profile.tradeName,
+        from: earnedTierFor(now, profile.previousMonthUsdUnits, profile.thisMonthUsdUnits),
+        to: earnedTierFor(proposed, profile.previousMonthUsdUnits, profile.thisMonthUsdUnits),
+      }));
+    const rising = moves.filter((move) => tierRank(move.to) > tierRank(move.from));
+    const falling = moves.filter((move) => tierRank(move.to) < tierRank(move.from));
+    return {
+      tiers: MERCHANT_TIERS.map((tier) => ({
+        tier,
+        now: moves.filter((move) => move.from === tier).length,
+        proposed: moves.filter((move) => move.to === tier).length,
+      })),
+      rising,
+      risingTotal: rising.length,
+      falling,
+      fallingTotal: falling.length,
+    };
+  }
+
+  /** MG1: a live tier above the earned one, 1 to 90 days, one open grant at a time. */
+  private grantTier(customerId: string, body: Body): Answer {
+    const parsed = tierGrantInputSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    const endsAt = tierGrantEndsAt(parsed.data.endsOn, new Date());
+    if (endsAt === null) {
+      return error(400, 'VALIDATION_FAILED', [{ path: ['endsOn'], message: 'Out of range' }]);
+    }
+    const profile = this.profiles.get(customerId);
+    if (!profile || !this.isMerchant(customerId)) return error(409, 'NOT_MERCHANT');
+    if (!this.levels[parsed.data.tier]) return error(409, 'MERCHANT_TIER_UNAVAILABLE');
+    if (tierRank(parsed.data.tier) <= tierRank(profile.tier.earnedTier)) {
+      return error(409, 'MERCHANT_TIER_GRANT_NOT_HIGHER');
+    }
+    if (profile.tier.openGrant) return error(409, 'MERCHANT_TIER_GRANT_OPEN');
+    const grant: TierGrant = {
+      id: nextId(),
+      tier: parsed.data.tier,
+      startsAt: NOW(),
+      endsAt: endsAt.toISOString(),
+      reason: parsed.data.reason,
+      endedAt: null,
+      endReason: null,
+    };
+    profile.tier = { ...profile.tier, openGrant: grant, grants: [grant, ...profile.tier.grants] };
+    this.recompute(profile);
+    return { status: 201, json: grant };
+  }
+
+  /** MG3: ends the open grant now. */
+  private endGrant(customerId: string, body: Body): Answer {
+    if (!tierGrantEndInputSchema.safeParse(body).success) return error(400, 'VALIDATION_FAILED');
+    const profile = this.profiles.get(customerId);
+    if (!profile || !this.isMerchant(customerId)) return error(409, 'NOT_MERCHANT');
+    if (!profile.tier.openGrant) return error(404, 'NOT_FOUND');
+    const ended = this.closeGrant(profile, 'ended_by_admin');
+    this.recompute(profile);
+    return { status: 200, json: ended };
+  }
+
+  private closeGrant(
+    profile: StoredProfile,
+    reason: 'ended_by_admin' | 'tier_archived',
+  ): TierGrant {
+    const open = profile.tier.openGrant as TierGrant;
+    const ended: TierGrant = { ...open, endedAt: NOW(), endReason: reason };
+    profile.tier = {
+      ...profile.tier,
+      openGrant: null,
+      grants: profile.tier.grants.map((grant) => (grant.id === open.id ? ended : grant)),
+    };
+    return ended;
+  }
+
+  /** AD2: the four tiers, Bronze on wholesale, each live level on its list. */
+  private tierRows(): MerchantTierView[] {
+    const listRef = (id: string) => {
+      const list = this.priceLists.lists.find((row) => row.id === id);
+      return {
+        id,
+        name: list?.name ?? '',
+        parentListId: list?.parentListId ?? null,
+        archived: !!list?.archivedAt,
+      };
+    };
+    const live = LEVEL_TIERS.flatMap((tier) => {
+      const level = this.levels[tier];
+      return level ? [{ tier, priceListId: level.priceListId }] : [];
+    });
+    const held = [...this.profiles.entries()]
+      .filter(([customerId]) => this.isMerchant(customerId))
+      .map(([, profile]) => profile.tier);
+    return MERCHANT_TIERS.map((tier): MerchantTierView => {
+      const level = tier === 'bronze' ? undefined : this.levels[tier];
+      return {
+        tier,
+        level:
+          tier !== 'bronze' && level
+            ? {
+                id: level.id,
+                monthlyThresholdUsdUnits: level.monthlyThresholdUsdUnits,
+                priceList: listRef(level.priceListId),
+                expectedParentListId: expectedParentListId(
+                  tier,
+                  live,
+                  ROOT_PRICE_LIST_IDS.wholesale,
+                ),
+              }
+            : null,
+        priceList:
+          tier === 'bronze'
+            ? listRef(ROOT_PRICE_LIST_IDS.wholesale)
+            : level
+              ? listRef(level.priceListId)
+              : null,
+        settings: this.tierSettings[tier],
+        merchants: {
+          earned: held.filter((row) => row.tier === tier && row.source !== 'granted').length,
+          granted: held.filter((row) => row.tier === tier && row.source === 'granted').length,
+        },
+      };
+    });
   }
 
   private merchantRow(customerId: string, profile: StoredProfile): AdminMerchantRow {

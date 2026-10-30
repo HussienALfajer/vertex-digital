@@ -117,20 +117,12 @@ export function customerApplicationView(
   return current ? view : { ...view, adminMessage: null };
 }
 
-/** The settings in force with the deposit minimum both limits must reach. */
-export function settingsView(
-  row: MerchantSettingsRow,
-  minDepositUsdUnits: number,
-): MerchantSettings {
+/** The settings in force (S23: the deposit limits and player checks are the tiers'). */
+export function settingsView(row: MerchantSettingsRow): MerchantSettings {
   return {
-    perDepositUsdUnits: row.perDepositUsdUnits,
-    dailyDepositUsdUnits: row.dailyDepositUsdUnits,
     ordersPerTenMinutes: row.ordersPerTenMinutes,
     reapplyWaitDays: row.reapplyWaitDays,
     infoExpiryDays: row.infoExpiryDays,
-    playerChecksPerHour: row.playerChecksPerHour,
-    playerChecksPerDay: row.playerChecksPerDay,
-    minDepositUsdUnits,
     updatedAt: row.createdAt.toISOString(),
   };
 }

@@ -7,9 +7,16 @@ import {
 } from '@tanstack/react-query';
 import type {
   GrantMerchant,
+  LevelTier,
   MerchantSettingsInput,
+  MerchantTier,
   RemoveMerchantLogo,
   RevokeMerchant,
+  TierGrantEndInput,
+  TierGrantInput,
+  TierLevelInput,
+  TierPreviewInput,
+  TierSettingsInput,
 } from '@vertex-digital/contracts';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
@@ -18,8 +25,8 @@ import { type ApplicationsSearch, type MerchantsSearch, statusOf, tabOf } from '
 /*
  * Merchants as the admin works them (S20 F28): the applications queue and one application with
  * its decisions (MA4–MA8), the direct grant and the revocation from the customer's profile or the
- * merchants list (MA6, MA7), the merchants list and the merchant settings. Keys start with
- * `merchants`.
+ * merchants list (MA6, MA7), the merchants list and the merchant settings; S23: the tiers, their
+ * levels and settings, the threshold preview and the manual grants. Keys start with `merchants`.
  */
 
 /**
@@ -69,7 +76,7 @@ export const merchantsQuery = (search: MerchantsSearch) =>
             query: {
               q: search.q,
               listId: search.listId,
-              levelId: search.levelId,
+              tier: search.tier,
               cursor: pageParam,
             },
           },
@@ -178,4 +185,47 @@ export const useRevokeMerchant = (customerId: string) =>
 export const useSaveMerchantSettings = () =>
   useMerchantsMutation((body: MerchantSettingsInput) =>
     call(api.PUT('/api/admin/merchant-settings', { body })),
+  );
+
+/** S23 TS1: a tier's threshold and list (null archives the level), re-authenticated. */
+export const useSetTierLevel = (tier: LevelTier) =>
+  useMerchantsMutation((body: TierLevelInput) =>
+    call(api.PUT('/api/admin/merchant-tiers/{tier}/level', { params: { path: { tier } }, body })),
+  );
+
+/** S23 TS1, TS2: a tier's privileges, re-authenticated. */
+export const useSaveTierSettings = (tier: MerchantTier) =>
+  useMerchantsMutation((body: TierSettingsInput) =>
+    call(
+      api.PUT('/api/admin/merchant-tiers/{tier}/settings', { params: { path: { tier } }, body }),
+    ),
+  );
+
+/** S23 AD3: who would hold each tier at proposed thresholds; reads only, so nothing to refresh. */
+export const useTierPreview = () =>
+  useMutation({
+    mutationFn: (body: TierPreviewInput) =>
+      call(api.POST('/api/admin/merchant-tiers/preview', { body })),
+  });
+
+/** S23 MG1: a manual tier until a Damascus day, with a reason, re-authenticated. */
+export const useGrantTier = (customerId: string) =>
+  useMerchantsMutation((body: TierGrantInput) =>
+    call(
+      api.POST('/api/admin/customers/{id}/merchant/tier-grant', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
+  );
+
+/** S23 MG3: ends the open grant early, with a reason, re-authenticated. */
+export const useEndTierGrant = (customerId: string) =>
+  useMerchantsMutation((body: TierGrantEndInput) =>
+    call(
+      api.POST('/api/admin/customers/{id}/merchant/tier-grant/end', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
   );
