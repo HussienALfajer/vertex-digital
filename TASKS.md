@@ -31,7 +31,7 @@ Before the S23 deploy (from the reviewer, not confirmed here): read production's
 - [x] i18n keys (tiers, grants, preview, limit source); loading, empty and error states
 - [x] e2e: `merchant-tiers.spec.ts` (tiers page, preview, grant and end, filter; RTL screenshots light and dark), `merchants.spec.ts` adapted; mocks script tiers, grants and the preview
 - [x] browser check on the local stack (acceptance 1 and 5): tiers page on the seeded chain, preview with a mover, Diamond granted for 2 days and ended, both `merchant_tier_changed` Telegram messages queued (skipped: no linked chat locally), phone width without overflow; the seed's snapshot copy fixed (a margin rule keeps its fixed columns, guard 0099)
-- [ ] checks, reviewer, PR and merge
+- [x] checks, reviewer, PR and merge (`pnpm verify` 2026-10-30: lint, typecheck, test, build, 344 admin E2E, migration and OpenAPI drift; the db reconciliation C9 test timed out once under the parallel run and passes alone, 10/10; reviewer: no blocking issues)
 
 ## Moved to later PRs (spec delivery plan)
 
