@@ -1233,7 +1233,7 @@ describe('operations (S23 PR 3: OP4, OP5, PX5, AD4)', () => {
         await json(await adminOrder({ purpose: 'on_behalf', customerId: buyer.id }), 409),
       ).toMatchObject(hidden);
 
-      // A quick link to it opens nothing; the bulk check does not name it to Bronze.
+      // A quick link to it opens nothing.
       const [code] = await test.db
         .execute<{ quick_code: string }>(
           sql`select quick_code from catalog_products where id = ${pack.id}`,
@@ -1243,16 +1243,6 @@ describe('operations (S23 PR 3: OP4, OP5, PX5, AD4)', () => {
         headers: { 'x-forwarded-for': `203.0.113.${Math.floor(Math.random() * 250)}` },
       });
       expect(await json(link, 200)).toEqual({ target: 'game', gameSlug: expect.any(String) });
-      type Bulk = { lines: { product: { id: string } | null }[] };
-      const bulk = (cookie: string) =>
-        client.post('/api/merchant/bulk/check', {
-          cookie,
-          body: { gameId: ids.gameId, text: '5123456789,8100' },
-        });
-      const bronzeBulk = await json<Bulk>(await bulk(bronze.cookie), 200);
-      expect(bronzeBulk.lines[0]?.product).toBeNull();
-      const goldBulk = await json<Bulk>(await bulk(gold.cookie), 200);
-      expect(goldBulk.lines[0]?.product?.id).toBe(pack.id);
     } finally {
       await test.db.execute(
         sql`update catalog_products set early_access_until = null, game_amount = null where id = ${pack.id}`,

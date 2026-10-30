@@ -1,7 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type {
-  BulkCheckResult,
   Order,
   OrderPrint,
   OrderSummary,
@@ -17,9 +15,9 @@ import { expect, type MockApi, screenshot, test } from './test';
 
 /*
  * S21 PR 2, the counter tools in the store: the sale mode with its keyboard and confirmation
- * (F32), the bulk check and its payment (F33), the order page's merchant tools and the printed
- * receipt and codes (F34, PR1–PR3), the verification page and the branded receipt link (F35), and
- * the receipt settings with the logo (BR3).
+ * (F32), the order page's merchant tools and the printed receipt and codes (F34, PR1–PR3), the
+ * verification page and the branded receipt link (F35), and the receipt settings with the logo
+ * (BR3). Bulk orders (F33) were removed by the owner on 2026-10-30.
  */
 
 const GAME = PUBG.game.id;
@@ -29,7 +27,6 @@ const [P60, P325] = PUBG.products as [
 ];
 const ORDER_ID = '0199e200-0000-7000-8000-0000000000a1';
 const CODE_ORDER_ID = '0199e200-0000-7000-8000-0000000000a2';
-const CHECKOUT_ID = '0199e200-0000-7000-8000-0000000000c1';
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
 
 function signedIn(api: MockApi): MockApi {
@@ -751,6 +748,15 @@ test.describe('the home page for a merchant (PS1, PS7, PS8)', () => {
     await expect(page.getByRole('switch', { name: tools.nav.saleMode })).not.toBeChecked();
   });
 
+  test('the removed bulk page leads to the merchant area (F33, 2026-10-30)', async ({
+    page,
+    api: _api,
+  }) => {
+    const answer = await page.request.get('/merchant/bulk', { maxRedirects: 0 });
+    expect(answer.status()).toBe(307);
+    expect(new URL(answer.headers().location ?? '', 'http://store').pathname).toBe('/merchant');
+  });
+
   test('the old address asks a visitor to sign in and comes back to it (PS7)', async ({
     page,
     api: _api,
@@ -782,255 +788,6 @@ test.describe('the home page for a merchant (PS1, PS7, PS8)', () => {
     await page.reload();
     await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toHaveCount(0);
     expect(await width()).toBe(page.viewportSize()?.width);
-  });
-});
-
-const checked: BulkCheckResult = {
-  lines: [
-    {
-      line: 2,
-      fields: { player_id: '7000000001' },
-      product: { id: P60.id, nameAr: '60 UC' },
-      quantity: 1,
-      unitPriceUsdUnits: 1_050_000,
-      totalUsdUnits: 1_050_000,
-      check: { result: 'valid', playerName: 'Nour', region: null },
-      needsConfirmation: false,
-      errors: [],
-    },
-    {
-      line: 3,
-      fields: { player_id: '7000000002' },
-      product: { id: P325.id, nameAr: '325 UC' },
-      quantity: 1,
-      unitPriceUsdUnits: 5_200_000,
-      totalUsdUnits: 5_200_000,
-      check: { result: 'invalid' },
-      needsConfirmation: true,
-      errors: [],
-    },
-    {
-      line: 4,
-      fields: { player_id: '7000000003' },
-      product: null,
-      quantity: 1,
-      unitPriceUsdUnits: null,
-      totalUsdUnits: null,
-      check: null,
-      needsConfirmation: false,
-      errors: [{ code: 'pack_unknown', field: null }],
-    },
-  ],
-  totalUsdUnits: 6_250_000,
-  balanceUsdUnits: 50_000_000,
-};
-
-test.describe('bulk orders (F33, BK1–BK5)', () => {
-  test('checks the lines, removes the bad one, confirms an id and pays all', async ({
-    page,
-    api,
-  }, testInfo) => {
-    signedIn(api)
-      .on('GET /api/merchant/games', 200, {
-        items: [{ id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل' }],
-      })
-      .on('POST /api/merchant/bulk/check', 200, checked)
-      .on('POST /api/checkouts', 201, {
-        id: CHECKOUT_ID,
-        totalUsdUnits: 6_250_000,
-        totalSypUnits: null,
-        orders: [summary(), summary({ id: CODE_ORDER_ID })],
-      })
-      .on('GET /api/orders', 200, {
-        items: [summary()],
-        nextCursor: null,
-        checkout: { id: CHECKOUT_ID, totalUsdUnits: 6_250_000, orderCount: 2, finishedAt: null },
-      });
-    await page.goto('/merchant/bulk');
-    await page
-      .getByRole('textbox', { name: tools.bulk.text })
-      .fill('7000000001,60\n7000000002,325\n7000000003,999');
-    await page.getByRole('button', { name: tools.bulk.check }).click();
-    await expect(page.getByText(tools.bulk.errors.pack_unknown)).toBeVisible();
-    await expect(page.getByText(tools.bulk.fixFirst)).toBeVisible();
-    await screenshot(page, testInfo, 'merchant-bulk-check');
-    expect(api.last('POST /api/merchant/bulk/check')?.body).toEqual({
-      gameId: GAME,
-      text: '7000000001,60\n7000000002,325\n7000000003,999',
-    });
-
-    await page
-      .locator('li[data-state="invalid"]')
-      .getByRole('button', { name: tools.bulk.remove })
-      .click();
-    await expect(page.getByText(tools.bulk.confirmFirst)).toBeVisible();
-    await page.getByRole('checkbox', { name: tools.bulk.confirm }).check();
-    await page.getByRole('button', { name: tools.bulk.pay }).click();
-    await expect(page).toHaveURL(new RegExp(`/orders\\?checkout=${CHECKOUT_ID}`));
-    expect(api.last('POST /api/checkouts')?.body).toEqual({
-      source: 'bulk',
-      lines: [
-        {
-          productId: P60.id,
-          quantity: 1,
-          fields: { player_id: '7000000001' },
-          expectedUnitPriceUsdUnits: 1_050_000,
-          confirmPlayer: false,
-        },
-        {
-          productId: P325.id,
-          quantity: 1,
-          fields: { player_id: '7000000002' },
-          expectedUnitPriceUsdUnits: 5_200_000,
-          confirmPlayer: true,
-        },
-      ],
-    });
-  });
-
-  /** The first line of `checked` alone, valid and ready to pay. */
-  const payableLines: BulkCheckResult = {
-    ...checked,
-    lines: checked.lines.slice(0, 1),
-    totalUsdUnits: 1_050_000,
-  };
-
-  function bulk(api: MockApi, result: BulkCheckResult = payableLines): MockApi {
-    return signedIn(api)
-      .on('GET /api/merchant/games', 200, {
-        items: [{ id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل' }],
-      })
-      .on('POST /api/merchant/bulk/check', 200, result);
-  }
-
-  async function checkLines(page: Page) {
-    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
-    await page.getByRole('button', { name: tools.bulk.check }).click();
-  }
-
-  test('a payment whose answer was lost keeps its key after a reload (A06-5)', async ({
-    page,
-    api,
-  }) => {
-    bulk(api).on('POST /api/checkouts', 500, { code: 'INTERNAL_ERROR' });
-    await page.goto('/merchant/bulk');
-    await checkLines(page);
-    await page.getByRole('button', { name: tools.bulk.pay }).click();
-    await expect(page.getByText(ar.errors.UNKNOWN)).toBeVisible();
-
-    await page.reload();
-    await checkLines(page);
-    await page.getByRole('button', { name: tools.bulk.pay }).click();
-    await expect(page.getByText(ar.errors.UNKNOWN)).toBeVisible();
-    const keys = api.requests
-      .filter((request) => request.key === 'POST /api/checkouts')
-      .map((request) => request.headers['idempotency-key']);
-    expect(keys).toHaveLength(2);
-    expect(keys[1]).toBe(keys[0]);
-  });
-
-  test('a paid list is not paid again: coming back shows a new, empty form', async ({
-    page,
-    api,
-  }) => {
-    bulk(api)
-      .on('POST /api/checkouts', 201, {
-        id: CHECKOUT_ID,
-        totalUsdUnits: 1_050_000,
-        totalSypUnits: null,
-        orders: [summary()],
-      })
-      .on('GET /api/orders', 200, {
-        items: [summary()],
-        nextCursor: null,
-        checkout: { id: CHECKOUT_ID, totalUsdUnits: 1_050_000, orderCount: 1, finishedAt: null },
-      });
-    await page.goto('/merchant/bulk');
-    await checkLines(page);
-    await page.getByRole('button', { name: tools.bulk.pay }).click();
-    await expect(page).toHaveURL(new RegExp(`/orders\\?checkout=${CHECKOUT_ID}`));
-
-    await page.goBack();
-    await expect(page).toHaveURL('/merchant/bulk');
-    const lines = page.getByRole('textbox', { name: tools.bulk.text });
-    await expect(lines).toHaveValue('');
-    await expect(page.getByRole('button', { name: tools.bulk.pay })).toHaveCount(0);
-    expect(api.requests.filter((request) => request.key === 'POST /api/checkouts')).toHaveLength(1);
-  });
-
-  test('pasted lines survive a reload until they are paid', async ({ page, api }) => {
-    bulk(api);
-    await page.goto('/merchant/bulk');
-    const lines = page.getByRole('textbox', { name: tools.bulk.text });
-    await lines.fill('7000000001,60');
-    await page.reload();
-    await expect(lines).toHaveValue('7000000001,60');
-  });
-
-  test('pay all names its total and waits for a top-up while the balance is short (A06-10)', async ({
-    page,
-    api,
-  }) => {
-    bulk(api, { ...payableLines, balanceUsdUnits: 500_000 });
-    await page.goto('/merchant/bulk');
-    await checkLines(page);
-    // The amount is kept whole in the Arabic sentence by direction marks (`ltr()`).
-    await expect(page.getByText(tools.bulk.shortfall.split('{amount}')[0] as string)).toContainText(
-      '$0.55',
-    );
-    const pay = page.getByRole('button', { name: tools.bulk.pay });
-    await expect(pay).toContainText('$1.05');
-    await expect(pay).toBeDisabled();
-  });
-
-  test('each line names its unit price, and the template lists every pack (BK1, Q27)', async ({
-    page,
-    api,
-  }) => {
-    bulk(api).on('GET /api/catalog/games/pubg-mobile', 200, PUBG);
-    await page.goto('/merchant/bulk');
-    await checkLines(page);
-    await expect(page.getByText(tools.bulk.unitPrice.split('{amount}')[0] as string)).toContainText(
-      '$1.05',
-    );
-    const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: tools.bulk.template }).click();
-    const file = await (await download).path();
-    const lines = (await readFile(file, 'utf8')).trim().split('\n');
-    // The header, then one example per pack of the game.
-    expect(lines).toHaveLength(PUBG.products.length + 1);
-  });
-
-  test('a frozen merchant cannot check or pay (A06-4)', async ({ page, api }) => {
-    bulk(api).on('GET /api/auth/get-session', 200, {
-      user: {
-        name: 'سارة الأحمد',
-        email: 'sara@example.com',
-        emailVerified: true,
-        accountType: 'merchant',
-        frozenAt: '2026-10-10T08:00:00.000Z',
-      },
-      session: { token: 'this-device' },
-    });
-    await page.goto('/merchant/bulk');
-    await expect(page.getByText(tools.common.frozen)).toBeVisible();
-    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
-    await expect(page.getByRole('button', { name: tools.bulk.check })).toBeDisabled();
-  });
-
-  test('while purchases are stopped no check spends the hour’s checks (A09-24)', async ({
-    page,
-    api,
-  }) => {
-    bulk(api).on('GET /api/store/status', 200, {
-      registrationOpen: true,
-      purchasesStopped: true,
-      depositsStopped: false,
-    });
-    await page.goto('/merchant/bulk');
-    await expect(page.getByText(ar.purchase.stopped)).toBeVisible();
-    await page.getByRole('textbox', { name: tools.bulk.text }).fill('7000000001,60');
-    await expect(page.getByRole('button', { name: tools.bulk.check })).toBeDisabled();
   });
 });
 

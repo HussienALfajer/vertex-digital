@@ -1,4 +1,9 @@
-import { ALERT_KINDS, SALE_CURRENCIES, SALE_SOURCES } from '@vertex-digital/contracts';
+import {
+  ALERT_KINDS,
+  PINNED_GAMES_MAX,
+  SALE_CURRENCIES,
+  SALE_SOURCES,
+} from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -145,6 +150,36 @@ export const merchantWatches = pgTable(
     check(
       'merchant_watches_target_check',
       sql`(${table.gameId} is null) <> (${table.productId} is null)`,
+    ),
+  ],
+);
+
+/**
+ * "ألعابك" (owner, 2026-10-30): the games a merchant pins, in their own order (`position` from 0),
+ * at most `PINNED_GAMES_MAX`. Apart from the follows, which drive the price alerts only. The
+ * merchant's own preference: the whole list is replaced on a save, nothing references it.
+ */
+export const merchantPinnedGames = pgTable(
+  'merchant_pinned_games',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => catalogGames.id),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('merchant_pinned_games_game_idx').on(table.customerId, table.gameId),
+    uniqueIndex('merchant_pinned_games_position_idx').on(table.customerId, table.position),
+    index('merchant_pinned_games_customer_id_idx').on(table.customerId),
+    index('merchant_pinned_games_game_id_idx').on(table.gameId),
+    check(
+      'merchant_pinned_games_position_check',
+      sql`${table.position} between 0 and ${sql.raw(String(PINNED_GAMES_MAX - 1))}`,
     ),
   ],
 );

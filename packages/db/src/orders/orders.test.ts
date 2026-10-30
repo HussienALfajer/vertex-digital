@@ -5096,7 +5096,6 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
           purchasesStopped: false,
           channel: 'store',
           playerCheck: async () => null,
-          source: 'bulk',
           lines: Array.from({ length: count }, () => line(unit)),
         }),
       );
@@ -5104,10 +5103,10 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       code: 'VALIDATION_FAILED',
       details: { lines: { max: 10 } },
     });
-    const bulk = await checkout(shop, 12, await wholesalePrice(direct.id));
-    expect(bulk.orders).toHaveLength(12);
-    expect(bulk.checkout.source).toBe('bulk');
-    expect(bulk.checkout.lineCount).toBe(12);
+    const paid = await checkout(shop, 12, await wholesalePrice(direct.id));
+    expect(paid.orders).toHaveLength(12);
+    expect(paid.checkout.source).toBe('cart');
+    expect(paid.checkout.lineCount).toBe(12);
   });
 
   it('releases delivered codes with one log row per code, and shows the log (CR1, CR4)', async () => {
@@ -5277,7 +5276,6 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
         purchasesStopped: false,
         channel: 'store',
         playerCheck: async () => null,
-        source: 'bulk',
         lines: [line('5100000011'), line('5100000012')],
       }),
     );

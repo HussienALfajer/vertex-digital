@@ -298,8 +298,6 @@ export const ERROR_CODES = [
   'CERTIFICATE_REISSUE_LIMIT',
   /** S21 AL1: more than 200 follows. */
   'WATCHES_LIMIT_REACHED',
-  /** S21 BK1: the bulk list has no line or more than the merchant tier's lines (S23 TS5); `details.lines`, `details.max`. */
-  'BULK_LINES_INVALID',
   /** S21 BK4: the merchant's player checks of the hour or the day are used; `details.retryAt`. */
   'PLAYER_CHECK_QUOTA_EXCEEDED',
   /** S21 CR1: the order has no delivered code to release. */

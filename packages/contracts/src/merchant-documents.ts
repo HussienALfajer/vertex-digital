@@ -37,6 +37,9 @@ export const PRICE_LIST_IMAGES_PER_HOUR = 20;
 /** The games a price list may name at most (the store has far fewer). */
 export const PRICE_LIST_GAMES_MAX = 100;
 
+/** PL1: without games asked for or pinned, the merchant's best sellers this many. */
+export const PRICE_LIST_TOP_GAMES = 10;
+
 const gameIdsSchema = z.preprocess(
   (value) =>
     typeof value === 'string' ? value.split(',').filter((part) => part.length > 0) : value,
@@ -45,8 +48,8 @@ const gameIdsSchema = z.preprocess(
 
 /**
  * `GET /api/merchant/price-list` and `.png` (PL1): the games (comma-separated; default the
- * followed games, else all), the prices, the currency, whether to list unavailable packs, and the
- * image's page.
+ * pinned games, else the 10 best sellers of the last 30 days, else none), the prices, the
+ * currency, whether to list unavailable packs, and the image's page.
  */
 export const merchantPriceListQuerySchema = z
   .object({
@@ -125,6 +128,8 @@ export const merchantPriceListSchema = z
   .object({
     tradeName: z.string(),
     logoFileId: z.uuid().nullable(),
+    /** The shop's WhatsApp for the footer, when its receipts show it (BR3); null otherwise. */
+    whatsapp: z.string().nullable(),
     /** S23 ID6: the merchant's effective tier, for the header's line and badge. */
     tier: merchantTierSchema,
     /** S23 RC2: the logo at twice the size. */
@@ -132,7 +137,10 @@ export const merchantPriceListSchema = z
     generatedAt: z.iso.datetime(),
     mode: z.enum(PRICE_LIST_MODES),
     currency: z.enum(PRICE_LIST_CURRENCIES),
-    /** The games asked for, else the followed ones, else all (PL1). */
+    /**
+     * The games asked for, else "ألعابك" (the pinned games), else the 10 the merchant sold most in
+     * the last 30 days, else none (PL1; owner, 2026-10-30: never the whole catalog).
+     */
     gameIds: z.array(z.uuid()),
     /** In the store's order, packs in the store's order; a game without a line is left out. */
     games: z.array(merchantPriceListGameSchema),
@@ -243,6 +251,37 @@ export const statementTierSchema = z
 
 export type StatementTier = z.infer<typeof statementTierSchema>;
 
+/**
+ * "مبيعاتك وربحك" (owner, 2026-10-30): the month's delivered merchant orders with a selling price,
+ * as the dashboard counts them (SP6, DB2–DB4): their sales, their cost (the units delivered at the
+ * price paid) and the estimated profit, sales − cost; the delivered orders without a selling price
+ * are counted apart, in none of the three. The merchant's own bookkeeping: an estimate.
+ */
+export const statementSalesSchema = z
+  .object({
+    salesUsdUnits: z.int(),
+    costUsdUnits: z.int(),
+    profitUsdUnits: z.int(),
+    ordersWithoutSale: z.int().nonnegative(),
+  })
+  .meta({ id: 'StatementSales' });
+
+export type StatementSales = z.infer<typeof statementSalesSchema>;
+
+/** The month's sales from the dashboard's figures (`saleProfit` summed): cost = sales − profit. */
+export function statementSales(facts: {
+  salesUsdUnits: number;
+  profitUsdUnits: number;
+  ordersWithoutSale: number;
+}): StatementSales {
+  return {
+    salesUsdUnits: facts.salesUsdUnits,
+    costUsdUnits: facts.salesUsdUnits - facts.profitUsdUnits,
+    profitUsdUnits: facts.profitUsdUnits,
+    ordersWithoutSale: facts.ordersWithoutSale,
+  };
+}
+
 /** `GET /api/merchant/statements/:month` (ST2). */
 export const statementSchema = z
   .object({
@@ -258,6 +297,8 @@ export const statementSchema = z
     totals: z.array(statementTotalSchema),
     /** S23 ID9: "فئتك هذا الشهر"; null for a month before the tier history starts. */
     tier: statementTierSchema.nullable(),
+    /** The screen's "مبيعاتك وربحك" (owner, 2026-10-30); the print and the Excel leave it out. */
+    sales: statementSalesSchema,
   })
   .meta({ id: 'Statement' });
 

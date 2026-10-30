@@ -3,13 +3,11 @@ import {
   Controller,
   Get,
   Header,
-  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
   Query,
-  Req,
   Res,
   SerializeOptions,
   UploadedFile,
@@ -25,9 +23,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
-  type BulkCheckRequest,
-  bulkCheckRequestSchema,
-  bulkCheckResultSchema,
   MERCHANT_LOGO_MAX_BYTES,
   orderSaleSchema,
   type RecentPlayersQuery,
@@ -40,10 +35,9 @@ import {
   updateReceiptSettingsSchema,
   uploadedLogoSchema,
 } from '@vertex-digital/contracts';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { CurrentCustomer, CustomerRoute } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
-import { requestMeta } from '../../core/http/request-meta.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { CustomerIdentity } from '../auth/index.js';
 import { sendImage, uploadBody } from '../files/index.js';
@@ -55,7 +49,7 @@ const logoUpload = FileInterceptor('file', {
 });
 
 /**
- * The counter tools (S21 F32–F35): merchants only, never cached; a merchant reaches only their
+ * The counter tools (S21 F32, F34, F35): merchants only, never cached; a merchant reaches only their
  * own orders, ids, settings and logo.
  */
 @ApiTags('merchant-tools')
@@ -77,23 +71,6 @@ export class MerchantCounterController {
     @Query({ schema: recentPlayersQuerySchema }) query: RecentPlayersQuery,
   ) {
     return this.counter.recentPlayers(customer.id, query.gameId);
-  }
-
-  @Post('merchant/bulk/check')
-  @CustomerRoute()
-  @HttpCode(200)
-  @Header('cache-control', 'no-store')
-  @SerializeOptions({ schema: bulkCheckResultSchema })
-  @ApiOkResponse({
-    description: 'Every line checked; nothing is bought (BK2)',
-    standardSchema: bulkCheckResultSchema,
-  })
-  bulkCheck(
-    @CurrentCustomer() customer: CustomerIdentity,
-    @Body({ schema: bulkCheckRequestSchema }) body: BulkCheckRequest,
-    @Req() request: Request,
-  ) {
-    return this.counter.bulkCheck(customer.id, body, requestMeta(request));
   }
 
   @Get('merchant/receipt-settings')

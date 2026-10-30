@@ -33,8 +33,7 @@ import { VerifyController } from './verify.controller.js';
  * S16: purchases from the panel and the admin's player checks (`admin-purchases.service.ts`).
  * S19: a game's player-check provider (`game_player_checks`, `game-player-checks.service.ts`).
  * S21: code releases, printed receipts and the public verification page
- * (`order-receipts.service.ts`, `verify.controller.ts`); merchants' bulk lists check their ids
- * through `PlayerChecksService.checkLine`. S22: the home page's quick-buy cards
+ * (`order-receipts.service.ts`, `verify.controller.ts`). S22: the home page's quick-buy cards
  * (`quick-buy.service.ts`).
  */
 @Module({

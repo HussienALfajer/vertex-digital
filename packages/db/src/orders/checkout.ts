@@ -1,9 +1,9 @@
 import {
   CHECKOUT_LINE_REFUSALS,
   type CheckoutLineRefusal,
-  type CheckoutSource,
   checkoutLinesMax,
   checkoutTotal,
+  type NewCheckoutSource,
 } from '@vertex-digital/contracts';
 import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -40,8 +40,8 @@ export type CheckoutRow = typeof checkouts.$inferSelect;
 
 export interface CheckoutInput extends PurchaseCommon {
   lines: LineInput[];
-  /** S21 BK3: the cart or a merchant's bulk list. */
-  source?: CheckoutSource;
+  /** S21 BK3: a new checkout is the cart's; `bulk` rows are past ones (removed 2026-10-30). */
+  source?: NewCheckoutSource;
 }
 
 export interface CheckoutResult {

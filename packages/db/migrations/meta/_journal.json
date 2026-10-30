@@ -764,6 +764,13 @@
       "when": 1793370308859,
       "tag": "0108_uneven_sersi",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1793387467642,
+      "tag": "0109_far_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

@@ -6,77 +6,70 @@ const row = (changes: Partial<SellingPriceRow> = {}): SellingPriceRow => ({
   productId: '0199e200-0000-7000-8000-0000000000a1',
   nameAr: '60 UC',
   available: true,
-  purchaseUsdUnits: 930_000,
+  purchaseUsdUnits: 4_610_000,
   ownPrice: null,
-  sellingUsdUnits: 1_030_000,
-  sellingSypUnits: 15_000,
+  sellingUsdUnits: 5_080_000,
+  sellingSypUnits: 73_000,
   source: 'markup',
   belowCost: false,
   ...changes,
 });
 
-describe('saleFigures (S21 PS3)', () => {
-  it('leads with SYP for a markup and subtracts the figures on the card', () => {
-    expect(saleFigures(row(), 13_500)).toEqual({
-      selling: {
-        main: { currency: 'syp', units: 15_000 },
-        approx: { currency: 'usd', units: 1_030_000 },
-      },
-      purchase: {
-        main: { currency: 'syp', units: 13_500 },
-        approx: { currency: 'usd', units: 930_000 },
-      },
-      profit: { currency: 'syp', units: 1_500 },
+describe('saleFigures (S21 PS1a, USD leads)', () => {
+  it('leads with USD and follows with SYP, profit from the USD units', () => {
+    expect(saleFigures(row(), 66_000)).toEqual({
+      selling: { usdUnits: 5_080_000, sypUnits: 73_000 },
+      purchase: { usdUnits: 4_610_000, sypUnits: 66_000 },
+      profit: { usdUnits: 470_000, sypUnits: 7_000 },
     });
   });
 
-  it('leads with USD for a price set in USD, and counts the profit in USD', () => {
+  it('leads with USD for a price set in SYP too', () => {
     const figures = saleFigures(
-      row({ ownPrice: { currency: 'usd', amountUnits: 1_030_000 }, source: 'product' }),
-      13_500,
+      row({ ownPrice: { currency: 'syp', amountUnits: 73_000 }, source: 'product' }),
+      66_000,
     );
-    expect(figures.selling?.main).toEqual({ currency: 'usd', units: 1_030_000 });
-    expect(figures.selling?.approx).toEqual({ currency: 'syp', units: 15_000 });
-    expect(figures.purchase?.main).toEqual({ currency: 'usd', units: 930_000 });
-    expect(figures.profit).toEqual({ currency: 'usd', units: 100_000 });
+    expect(figures.selling).toEqual({ usdUnits: 5_080_000, sypUnits: 73_000 });
+    expect(figures.profit).toEqual({ usdUnits: 470_000, sypUnits: 7_000 });
   });
 
   it('shows USD alone without a rate', () => {
-    const figures = saleFigures(row({ sellingSypUnits: null }), null);
-    expect(figures.selling).toEqual({ main: { currency: 'usd', units: 1_030_000 }, approx: null });
-    expect(figures.purchase).toEqual({ main: { currency: 'usd', units: 930_000 }, approx: null });
-    expect(figures.profit).toEqual({ currency: 'usd', units: 100_000 });
+    expect(saleFigures(row({ sellingSypUnits: null }), null)).toEqual({
+      selling: { usdUnits: 5_080_000, sypUnits: null },
+      purchase: { usdUnits: 4_610_000, sypUnits: null },
+      profit: { usdUnits: 470_000, sypUnits: null },
+    });
   });
 
-  it('counts in USD when the purchase has no SYP figure', () => {
-    expect(saleFigures(row(), null).profit).toEqual({ currency: 'usd', units: 100_000 });
+  it('has no SYP profit when the purchase has no SYP figure', () => {
+    expect(saleFigures(row(), null).profit).toEqual({ usdUnits: 470_000, sypUnits: null });
   });
 
-  it('is negative below cost', () => {
+  it('is negative below cost, in both currencies', () => {
     const figures = saleFigures(
-      row({ sellingUsdUnits: 900_000, sellingSypUnits: 13_000, belowCost: true }),
-      13_500,
+      row({ sellingUsdUnits: 4_500_000, sellingSypUnits: 65_000, belowCost: true }),
+      66_000,
     );
-    expect(figures.profit).toEqual({ currency: 'syp', units: -500 });
+    expect(figures.profit).toEqual({ usdUnits: -110_000, sypUnits: -1_000 });
   });
 
-  it('never contradicts the below-cost warning when SYP rounding says otherwise', () => {
+  it('drops the SYP profit when its rounding says other than the USD units', () => {
     // USD says below cost, the rounded SYP figures say level.
-    const below = saleFigures(
-      row({ sellingUsdUnits: 920_000, sellingSypUnits: 13_500, belowCost: true }),
-      13_500,
-    );
-    expect(below.profit).toEqual({ currency: 'usd', units: -10_000 });
-    // USD says at or above cost, the rounded SYP figures say below it.
-    const above = saleFigures(
-      row({ sellingUsdUnits: 930_000, sellingSypUnits: 13_000, belowCost: false }),
-      13_500,
-    );
-    expect(above.profit).toEqual({ currency: 'usd', units: 0 });
+    expect(
+      saleFigures(row({ sellingUsdUnits: 4_600_000, sellingSypUnits: 66_000 }), 66_000).profit,
+    ).toEqual({ usdUnits: -10_000, sypUnits: null });
+    // USD says level, the rounded SYP figures say below.
+    expect(
+      saleFigures(row({ sellingUsdUnits: 4_610_000, sellingSypUnits: 65_000 }), 66_000).profit,
+    ).toEqual({ usdUnits: 0, sypUnits: null });
+    // Level in both.
+    expect(
+      saleFigures(row({ sellingUsdUnits: 4_610_000, sellingSypUnits: 66_000 }), 66_000).profit,
+    ).toEqual({ usdUnits: 0, sypUnits: 0 });
   });
 
   it('has no profit without a selling price', () => {
-    const figures = saleFigures(row({ sellingUsdUnits: null, sellingSypUnits: null }), 13_500);
+    const figures = saleFigures(row({ sellingUsdUnits: null, sellingSypUnits: null }), 66_000);
     expect(figures.selling).toBeNull();
     expect(figures.profit).toBeNull();
   });

@@ -206,11 +206,11 @@ describe('checkout (rules CT5, M1)', () => {
       checkoutRequestSchema.safeParse({ lines: Array(CART_LINES_MAX + 1).fill(line) }).success,
     ).toBe(true);
     expect(
-      checkoutRequestSchema.safeParse({
-        lines: Array(CHECKOUT_LINES_MAX).fill(line),
-        source: 'bulk',
-      }).success,
+      checkoutRequestSchema.safeParse({ lines: Array(CHECKOUT_LINES_MAX).fill(line) }).success,
     ).toBe(true);
+    // Bulk orders were removed (owner, 2026-10-30): no new checkout names that source.
+    expect(checkoutRequestSchema.safeParse({ lines: [line], source: 'bulk' }).success).toBe(false);
+    expect(checkoutRequestSchema.parse({ lines: [line], source: 'cart' }).source).toBe('cart');
     expect(
       checkoutRequestSchema.safeParse({ lines: Array(CHECKOUT_LINES_MAX + 1).fill(line) }).success,
     ).toBe(false);

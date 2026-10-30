@@ -1,7 +1,5 @@
 export { afterMerchantPurchase, checkLowBalance, clearLowBalanceIfAbove } from './alerts.js';
 export {
-  type BulkPack,
-  bulkGame,
   ownOrderForSale,
   type ReceiptSettingsRow,
   receiptSettingsOf,

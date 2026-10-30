@@ -87,7 +87,14 @@ export async function merchantListPrices(
  */
 export function shownGames(db: Executor, earlyAccess = false, now = new Date()) {
   return db
-    .select({ id: catalogGames.id, slug: catalogGames.slug, nameAr: catalogGames.nameAr })
+    .select({
+      id: catalogGames.id,
+      slug: catalogGames.slug,
+      nameAr: catalogGames.nameAr,
+      categoryId: catalogCategories.id,
+      categoryNameAr: catalogCategories.nameAr,
+      coverFileId: catalogGames.coverFileId,
+    })
     .from(catalogGames)
     .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
     .where(

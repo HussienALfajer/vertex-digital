@@ -11,6 +11,7 @@ import {
   type MerchantGames,
   monthRange,
   NO_ALERT_SETTINGS,
+  type PinnedGames,
   type SellingPriceInput,
   type SellingPriceRow,
   type SellingPrices,
@@ -34,6 +35,7 @@ import {
   merchantAlertSettings,
   merchantEarlyAccess,
   merchantListPrices,
+  merchantPinnedGames,
   merchantSellingPrices,
   merchantSellingSettings,
   merchantWatches,
@@ -44,7 +46,7 @@ import {
   shownGames,
   watchSuggestions,
 } from '@vertex-digital/db';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
@@ -318,6 +320,54 @@ export class MerchantToolsService {
       if (rows.length > 0) await tx.insert(merchantWatches).values(rows);
     });
     return this.watches(customerId);
+  }
+
+  /** `GET /api/merchant/pinned-games`: the pinned games the store still shows them, in order. */
+  async pinnedGames(customerId: string): Promise<PinnedGames> {
+    await this.merchant(customerId);
+    const shown = new Set(
+      (await shownGames(this.db, await merchantEarlyAccess(this.db, customerId))).map(
+        (game) => game.id,
+      ),
+    );
+    // A game paused or archived since stays stored and comes back with it.
+    return {
+      gameIds: (await this.pinnedGameIds(customerId)).filter((gameId) => shown.has(gameId)),
+    };
+  }
+
+  /** The merchant's pinned games as stored, in their order (the price list's default too). */
+  async pinnedGameIds(customerId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ gameId: merchantPinnedGames.gameId })
+      .from(merchantPinnedGames)
+      .where(eq(merchantPinnedGames.customerId, customerId))
+      .orderBy(asc(merchantPinnedGames.position));
+    return rows.map((row) => row.gameId);
+  }
+
+  /**
+   * `PUT /api/merchant/pinned-games`: the whole ordered list, at most 20 games the store shows the
+   * merchant (the schema refuses more and duplicates); a frozen merchant cannot save it.
+   */
+  async savePinnedGames(customerId: string, input: PinnedGames): Promise<PinnedGames> {
+    await this.merchant(customerId, true);
+    const shown = new Set(
+      (await shownGames(this.db, await merchantEarlyAccess(this.db, customerId))).map(
+        (game) => game.id,
+      ),
+    );
+    if (input.gameIds.some((gameId) => !shown.has(gameId))) throw refusals.notFound('game');
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`pinned:${customerId}`}))`);
+      await tx.delete(merchantPinnedGames).where(eq(merchantPinnedGames.customerId, customerId));
+      if (input.gameIds.length > 0) {
+        await tx
+          .insert(merchantPinnedGames)
+          .values(input.gameIds.map((gameId, position) => ({ customerId, gameId, position })));
+      }
+    });
+    return { gameIds: input.gameIds };
   }
 
   /** `GET /api/merchant/alerts`: the last 90 days, newest first. */

@@ -1548,16 +1548,27 @@ export const checkoutLineSchema = createOrderSchema
 
 export type CheckoutLine = z.input<typeof checkoutLineSchema>;
 
-/** Where a checkout comes from: the cart, or a merchant's bulk list (S21 BK3). */
+/**
+ * Where a checkout came from: the cart, or a merchant's bulk list (S21 BK3). Bulk orders were
+ * removed by the owner on 2026-10-30: past `bulk` rows stay valid and readable, new checkouts are
+ * `cart` only (`NEW_CHECKOUT_SOURCES`).
+ */
 export const CHECKOUT_SOURCES = ['cart', 'bulk'] as const;
 
-export const checkoutSourceSchema = z.enum(CHECKOUT_SOURCES).meta({ id: 'CheckoutSource' });
+export type CheckoutSource = (typeof CHECKOUT_SOURCES)[number];
 
-export type CheckoutSource = z.infer<typeof checkoutSourceSchema>;
+/** The sources a new checkout may name. */
+export const NEW_CHECKOUT_SOURCES = ['cart'] as const satisfies readonly CheckoutSource[];
+
+export type NewCheckoutSource = (typeof NEW_CHECKOUT_SOURCES)[number];
+
+export const checkoutSourceSchema = z
+  .enum(NEW_CHECKOUT_SOURCES)
+  .meta({ id: 'CheckoutSource' });
 
 /**
- * `POST /api/checkouts` (rule CT5): all or nothing; 1–10 lines for a customer, up to 50 for a
- * merchant (S21 BK3, checked by the API).
+ * `POST /api/checkouts` (rule CT5): all or nothing; 1–10 lines for a customer, up to the tier's
+ * lines for a merchant (S23 TS5, checked by the API).
  */
 export const checkoutRequestSchema = z
   .object({

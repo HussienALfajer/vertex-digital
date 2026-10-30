@@ -1,9 +1,10 @@
 import type { SaleCurrency, SellingPriceRow } from '@vertex-digital/contracts';
 
 /*
- * S21 PS3: what a pack's card shows in the sale mode, from the integer amounts the API sends. Nothing
- * here converts: the selling price comes in both currencies from the selling-prices read, the
- * purchase price's SYP from the merchant's own prices of the game, both at the rate in force.
+ * S21 PS1a: what a pack's card shows in the sale mode, from the integer amounts the API sends.
+ * Nothing here converts: the selling price comes in both currencies from the selling-prices read,
+ * the purchase price's SYP from the merchant's own prices of the game, both at the rate in force.
+ * USD leads everywhere (owner, 2026-10-30): "بيعك $5.08 ≈ 730 ل.س".
  */
 
 export interface Amount {
@@ -11,52 +12,45 @@ export interface Amount {
   units: number;
 }
 
-/** A price in the currency the card leads with, and its equivalent after "≈" when there is one. */
+/** A USD figure and its SYP equivalent after "≈" when there is one. */
 export interface SalePrice {
-  main: Amount;
-  approx: Amount | null;
+  usdUnits: number;
+  sypUnits: number | null;
 }
 
 export interface SaleFigures {
   selling: SalePrice | null;
   purchase: SalePrice | null;
   /** Per unit, negative below cost; null without both prices. */
-  profit: Amount | null;
+  profit: SalePrice | null;
 }
 
-function priceIn(currency: SaleCurrency, usdUnits: number, sypUnits: number | null): SalePrice {
-  const usd: Amount = { currency: 'usd', units: usdUnits };
-  if (sypUnits === null) return { main: usd, approx: null };
-  const syp: Amount = { currency: 'syp', units: sypUnits };
-  return currency === 'syp' ? { main: syp, approx: usd } : { main: usd, approx: syp };
-}
+const sign = (units: number) => Math.sign(units);
 
 /**
- * The card leads with the currency the selling price was set in (a markup's is rounded in SYP), and
- * the purchase price follows it, so the two lines read side by side. The profit is one subtraction
- * in that currency, the figures on the card, unless their rounding says other than the exact USD
- * comparison the below-cost warning rests on: then the USD figures, never a contradiction.
+ * The selling and purchase prices in USD with their SYP after "≈", and the profit per unit: one
+ * integer subtraction of the USD units, the exact comparison the below-cost warning rests on. Its
+ * SYP is the subtraction of the two SYP figures on the card, shown only when both exist and their
+ * rounding agrees with the USD sign: never "+$0.01 ≈ -50 ل.س".
  */
 export function saleFigures(row: SellingPriceRow, purchaseSypUnits: number | null): SaleFigures {
   const { purchaseUsdUnits, sellingUsdUnits, sellingSypUnits } = row;
-  const currency: SaleCurrency =
-    row.ownPrice?.currency === 'usd' || sellingSypUnits === null ? 'usd' : 'syp';
   const selling =
-    sellingUsdUnits === null ? null : priceIn(currency, sellingUsdUnits, sellingSypUnits);
+    sellingUsdUnits === null ? null : { usdUnits: sellingUsdUnits, sypUnits: sellingSypUnits };
   const purchase =
-    purchaseUsdUnits === null ? null : priceIn(currency, purchaseUsdUnits, purchaseSypUnits);
-  if (sellingUsdUnits === null || purchaseUsdUnits === null) {
-    return { selling, purchase, profit: null };
-  }
-  if (currency === 'syp' && sellingSypUnits !== null && purchaseSypUnits !== null) {
-    const units = sellingSypUnits - purchaseSypUnits;
-    if (units < 0 === row.belowCost) {
-      return { selling, purchase, profit: { currency: 'syp', units } };
-    }
-  }
+    purchaseUsdUnits === null ? null : { usdUnits: purchaseUsdUnits, sypUnits: purchaseSypUnits };
+  if (selling === null || purchase === null) return { selling, purchase, profit: null };
+  const usdUnits = selling.usdUnits - purchase.usdUnits;
+  const sypUnits =
+    selling.sypUnits !== null && purchase.sypUnits !== null
+      ? selling.sypUnits - purchase.sypUnits
+      : null;
   return {
     selling,
     purchase,
-    profit: { currency: 'usd', units: sellingUsdUnits - purchaseUsdUnits },
+    profit: {
+      usdUnits,
+      sypUnits: sypUnits !== null && sign(sypUnits) === sign(usdUnits) ? sypUnits : null,
+    },
   };
 }

@@ -1,11 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import {
+  manualSalePrice,
   markupInput,
   parseAlertSettings,
   parseMarkup,
   parseSellingPrice,
+  salePriceStart,
   sellingPriceInput,
+  switchSaleCurrency,
 } from './form';
+
+describe('the selling price field (S21 PS3, owner 2026-10-30)', () => {
+  const ready = { usdUnits: 5_080_000, sypUnits: 73_000 };
+
+  it('starts in USD with the ready amount, and an untouched field saves nothing', () => {
+    const start = salePriceStart(ready);
+    expect(start).toEqual({ currency: 'usd', amount: '5.08', typed: false });
+    expect(manualSalePrice(start, ready)).toBeNull();
+    expect(salePriceStart({ usdUnits: null, sypUnits: null })).toMatchObject({ amount: '' });
+  });
+
+  it('shows the ready amount in the other currency while untouched, and still saves nothing', () => {
+    const syp = switchSaleCurrency(salePriceStart(ready), 'syp', ready);
+    expect(syp).toEqual({ currency: 'syp', amount: '730', typed: false });
+    expect(manualSalePrice(syp, ready)).toBeNull();
+    expect(switchSaleCurrency(syp, 'syp', ready)).toBe(syp);
+  });
+
+  it('clears a typed amount on a currency change: 730 SYP never becomes $730', () => {
+    const typed = { currency: 'syp' as const, amount: '730', typed: true };
+    const usd = switchSaleCurrency(typed, 'usd', ready);
+    expect(usd).toEqual({ currency: 'usd', amount: '', typed: true });
+    expect(manualSalePrice(usd, ready)).toBeNull();
+  });
+
+  it('saves a typed price as manual unless it is the ready one', () => {
+    expect(manualSalePrice({ currency: 'syp', amount: '750', typed: true }, ready)).toEqual({
+      currency: 'syp',
+      amountUnits: 75_000,
+    });
+    expect(manualSalePrice({ currency: 'usd', amount: '5.08', typed: true }, ready)).toBeNull();
+    expect(manualSalePrice({ currency: 'usd', amount: 'abc', typed: true }, ready)).toBeUndefined();
+  });
+});
 
 describe('the merchant area fields (S21 SP1, SP2, AL5)', () => {
   it('reads a markup in percent as basis points', () => {

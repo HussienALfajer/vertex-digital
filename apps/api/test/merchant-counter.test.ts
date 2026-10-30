@@ -2,7 +2,6 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import {
   applyOutcome,
   catalogCategories,
-  customerRateLimits,
   customers,
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -18,14 +17,12 @@ import {
   suppliers,
   transitionOrder,
 } from '@vertex-digital/db';
-import { FakeSupplierAdapter } from '@vertex-digital/suppliers';
 import { and, eq, sql } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
 import { FilesService } from '../src/modules/files/index.js';
-import { MerchantCounterService } from '../src/modules/merchant-tools/merchant-counter.service.js';
 import { RatesService } from '../src/modules/rates/index.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
@@ -41,8 +38,8 @@ import { startApp, type TestApp } from './start-app.js';
 
 /*
  * The counter tools (S21 PR 2) over HTTP against the test database with the `fake` supplier:
- * recent ids (PS2), the bulk check and its quota (BK1–BK4), 50-line checkouts (BK3), an order's
- * selling price (SP5), the printed receipt and the verification page (PR2, VF1–VF3, BR1), the
+ * recent ids (PS2), the gone bulk check (F33, removed 2026-10-30), merchant checkouts above 10 lines
+ * (BK3), an order's selling price (SP5), the printed receipt and the verification page (PR2, VF1–VF3, BR1), the
  * branded receipt link (BR2), receipt settings and the logo with the admin's removal (BR3), and
  * code releases' refusals (CR1). Supplier calls are spied on, never recorded on the fake.
  */
@@ -276,15 +273,11 @@ describe('access (S21 MA1, "Access")', () => {
         code: 'NOT_MERCHANT',
       });
     }
+    // F33 was removed by the owner on 2026-10-30: the route is gone for everyone.
     expect(
-      await json(
-        await send('POST', '/api/merchant/bulk/check', person.cookie, {
-          gameId: ids.gameId,
-          text: '51234,x',
-        }),
-        403,
-      ),
-    ).toMatchObject({ code: 'NOT_MERCHANT' });
+      (await send('POST', '/api/merchant/bulk/check', person.cookie, { gameId: ids.gameId }))
+        .status,
+    ).toBe(404);
     expect(
       await json(
         await send('PUT', `/api/orders/${randomUUID()}/sale`, person.cookie, {
@@ -305,7 +298,7 @@ describe('access (S21 MA1, "Access")', () => {
   });
 });
 
-describe('checkouts and recent ids (S21 BK3, PS2)', () => {
+describe('checkouts and recent ids (S21 BK3, S23 TS5, PS2)', () => {
   it('pays 12 lines for a merchant, refuses 11 for a customer, and lists recent ids', async () => {
     const shop = await merchant(usd(100));
     const person = await buyer(usd(100));
@@ -330,10 +323,7 @@ describe('checkouts and recent ids (S21 BK3, PS2)', () => {
       ),
     ).toMatchObject({ code: 'VALIDATION_FAILED' });
     const checkout = await json<{ orders: unknown[] }>(
-      await pay(shop.cookie, {
-        lines: lines(12, await priceFor(shop.cookie, item.id)),
-        source: 'bulk',
-      }),
+      await pay(shop.cookie, { lines: lines(12, await priceFor(shop.cookie, item.id)) }),
       201,
     );
     expect(checkout.orders).toHaveLength(12);
@@ -345,119 +335,6 @@ describe('checkouts and recent ids (S21 BK3, PS2)', () => {
     );
     expect(recent.items).toHaveLength(12);
     expect(recent.items[0]?.fields.player_id).toMatch(/^51000000\d\d$/);
-  });
-});
-
-describe('the bulk check (S21 BK1–BK4)', () => {
-  it('checks every line on the merchant’s list, each id once, and needs confirmations', async () => {
-    const shop = await merchant(usd(50));
-    const spy = vi
-      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
-      .mockImplementation(async (request) =>
-        request.fields.playerId === '7000000001'
-          ? { valid: true, playerName: 'Nour' }
-          : { valid: false },
-      );
-    const text = [
-      `# player_id, pack, quantity`,
-      `7000000001,${item.nameAr}`,
-      `7000000001;${item.nameAr};2`,
-      `7000000002\t${item.nameAr}`,
-      `7000000003,باقة لا توجد`,
-      `12,${item.nameAr}`,
-      `7000000004,${item.nameAr},101`,
-    ].join('\n');
-    const result = await json<{
-      lines: {
-        line: number;
-        errors: { code: string; field: string | null }[];
-        check: { result: string } | null;
-        needsConfirmation: boolean;
-        totalUsdUnits: number | null;
-      }[];
-      totalUsdUnits: number;
-      balanceUsdUnits: number;
-    }>(
-      await send('POST', '/api/merchant/bulk/check', shop.cookie, { gameId: ids.gameId, text }),
-      200,
-    );
-    // The same id is checked once (edge case 9).
-    const calls = spy.mock.calls.length;
-    spy.mockRestore();
-    expect(calls).toBe(2);
-    const unit = await priceFor(shop.cookie, item.id);
-    expect(result.lines.map((line) => [line.line, line.errors.map((e) => e.code)])).toEqual([
-      [2, []],
-      // A direct pack allows one unit per order.
-      [3, ['quantity_above_max']],
-      [4, []],
-      [5, ['pack_unknown']],
-      [6, ['field_invalid']],
-      [7, ['quantity_invalid']],
-    ]);
-    expect(result.lines.map((line) => line.check?.result ?? null)).toEqual([
-      'valid',
-      null,
-      'invalid',
-      null,
-      null,
-      null,
-    ]);
-    expect(result.lines.map((line) => line.needsConfirmation)).toEqual([
-      false,
-      false,
-      true,
-      false,
-      false,
-      false,
-    ]);
-    expect(result.totalUsdUnits).toBe(unit * 2);
-    expect(result.balanceUsdUnits).toBe(usd(50));
-
-    expect(
-      await json(
-        await send('POST', '/api/merchant/bulk/check', shop.cookie, {
-          gameId: ids.gameId,
-          text: Array.from({ length: 51 }, () => `7000000001,${item.nameAr}`).join('\n'),
-        }),
-        422,
-      ),
-    ).toMatchObject({ code: 'BULK_LINES_INVALID', details: { lines: 51, max: 50 } });
-  });
-
-  it('marks lines unchecked once the merchant’s quota is used, and refuses the check (BK4)', async () => {
-    const shop = await merchant(usd(10));
-    await test.db.insert(customerRateLimits).values({
-      id: newId(),
-      key: `player-check:customer:${shop.id}`,
-      count: 100,
-      lastRequest: Date.now(),
-    });
-    const spy = vi.spyOn(FakeSupplierAdapter.prototype, 'validatePlayer');
-    const result = await json<{ lines: { check: unknown; needsConfirmation: boolean }[] }>(
-      await send('POST', '/api/merchant/bulk/check', shop.cookie, {
-        gameId: ids.gameId,
-        text: `7100000001,${item.nameAr}`,
-      }),
-      200,
-    );
-    expect(result.lines[0]).toMatchObject({
-      check: { result: 'unavailable', reason: 'quota' },
-      needsConfirmation: true,
-    });
-    const refused = await json(
-      await send('POST', '/api/player-checks', shop.cookie, {
-        productId: item.id,
-        fields: { player_id: '7100000002' },
-      }),
-      429,
-    );
-    expect(refused).toMatchObject({
-      code: 'PLAYER_CHECK_QUOTA_EXCEEDED',
-      details: { retryAt: expect.any(String) },
-    });
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
   });
 });
 
@@ -911,113 +788,6 @@ describe('the verification page and the logo upload (S21 VF3, BR3)', () => {
 });
 
 describe('the counter tools after audit A06', () => {
-  /** A player id no earlier run has cached. */
-  const freshId = () => String(7_200_000_000 + Math.floor(Math.random() * 700_000_000));
-  const bulk = (cookie: string, text: string) =>
-    send('POST', '/api/merchant/bulk/check', cookie, { gameId: ids.gameId, text });
-
-  it('A06-32: checks a bulk list’s distinct ids five at a time, never one after another', async () => {
-    const shop = await merchant(usd(10));
-    let running = 0;
-    let most = 0;
-    const spy = vi
-      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
-      .mockImplementation(async () => {
-        running += 1;
-        most = Math.max(most, running);
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        running -= 1;
-        return { valid: true, playerName: 'Nour' };
-      });
-    const text = Array.from({ length: 10 }, () => `${freshId()},${item.nameAr}`).join('\n');
-    const result = await json<{ lines: { check: { result: string } | null }[] }>(
-      await bulk(shop.cookie, text),
-      200,
-    );
-    const calls = spy.mock.calls.length;
-    spy.mockRestore();
-    expect(calls).toBe(10);
-    expect(result.lines.map((line) => line.check?.result)).toEqual(Array(10).fill('valid'));
-    expect(most).toBeGreaterThan(1);
-    expect(most).toBeLessThanOrEqual(5);
-  });
-
-  it('A06-32: answers the ids not started within the time budget as not checked, spending no quota', async () => {
-    const shop = await merchant(usd(10));
-    const budget = vi
-      .spyOn(MerchantCounterService.prototype, 'bulkCheckBudgetMs')
-      .mockReturnValue(100);
-    const spy = vi
-      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
-      .mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        return { valid: true, playerName: 'Nour' };
-      });
-    const text = Array.from({ length: 10 }, () => `${freshId()},${item.nameAr}`).join('\n');
-    const result = await json<{
-      lines: { check: { result: string; reason?: string } | null; needsConfirmation: boolean }[];
-    }>(await bulk(shop.cookie, text), 200);
-    const calls = spy.mock.calls.length;
-    spy.mockRestore();
-    budget.mockRestore();
-    // The first five started at once; the others came after the budget.
-    expect(calls).toBe(5);
-    expect(result.lines.filter((line) => line.check?.result === 'valid')).toHaveLength(5);
-    expect(
-      result.lines.filter(
-        (line) =>
-          line.check?.result === 'unavailable' &&
-          line.check.reason === 'supplier' &&
-          line.needsConfirmation,
-      ),
-    ).toHaveLength(5);
-    const [hits] = await test.db
-      .select({ count: customerRateLimits.count })
-      .from(customerRateLimits)
-      .where(eq(customerRateLimits.key, `player-check:customer:${shop.id}`));
-    expect(hits?.count).toBe(5);
-  });
-
-  it('A06-34: refuses the bulk check of a frozen merchant, before the terms, and past 30 an hour', async () => {
-    const frozen = await merchant(0);
-    await test.db
-      .update(customers)
-      .set({ frozenAt: new Date() })
-      .where(eq(customers.id, frozen.id));
-    expect(await json(await bulk(frozen.cookie, `51234567,${item.nameAr}`), 403)).toMatchObject({
-      code: 'ACCOUNT_FROZEN',
-    });
-
-    const unsigned = await seedCustomer(test.db);
-    seeded.push(unsigned.id);
-    await test.db
-      .update(customers)
-      .set({ accountType: 'merchant' })
-      .where(eq(customers.id, unsigned.id));
-    await test.db.insert(merchantProfiles).values({
-      customerId: unsigned.id,
-      tradeName: 'محل النور',
-      governorate: 'aleppo',
-      city: 'اعزاز',
-      grantedAt: new Date(Date.now() - 60_000),
-    });
-    const unsignedCookie = await client.signInCustomer(unsigned.email);
-    expect(await json(await bulk(unsignedCookie, `51234567,${item.nameAr}`), 409)).toMatchObject({
-      code: 'MERCHANT_TERMS_REQUIRED',
-    });
-
-    const busy = await merchant(0);
-    await test.db.insert(customerRateLimits).values({
-      id: newId(),
-      key: `bulk-check:customer:${busy.id}`,
-      count: 30,
-      lastRequest: Date.now(),
-    });
-    expect(await json(await bulk(busy.cookie, `51234567,${item.nameAr}`), 429)).toMatchObject({
-      code: 'RATE_LIMITED',
-    });
-  });
-
   it('A06-34: refuses a sale price from a frozen merchant and from a revoked one', async () => {
     const sale = { currency: 'usd', amountUnits: usd(2) };
     const frozen = await merchant();

@@ -34,8 +34,7 @@
     "cartCount": "السلة، {count} بنود",
     "players": "معرّفاتي",
     "alerts": "تنبيهاتي",
-    "merchantTools": "أدوات التاجر",
-    "tierBadge": "تاجر {name}"
+    "merchantTools": "أدوات التاجر"
   },
   "stopBanner": {
     "deposits": "نجري صيانة قصيرة. الإيداع متوقف مؤقتًا، ورصيدك وطلباتك بأمان.",
@@ -637,7 +636,6 @@
     "MERCHANT_TIER_GRANT_OPEN": "تعذّر حفظ الفئة. حدّث الصفحة وأعد المحاولة.",
     "CERTIFICATE_REISSUE_LIMIT": "أعدت إصدار رمز الشهادة 3 مرات اليوم. حاول غداً.",
     "WATCHES_LIMIT_REACHED": "تتابع 200 لعبة وباقة، وهو الحد. ألغِ متابعة بعضها ثم أضف غيرها.",
-    "BULK_LINES_INVALID": "القائمة فارغة أو فيها أسطر أكثر مما تسمح به فئتك. قسّمها إلى قوائم أصغر.",
     "PLAYER_CHECK_QUOTA_EXCEEDED": "استخدمت كل فحوص المعرّفات المتاحة الآن. يمكنك الدفع بعد تأكيد المعرّفات، أو الفحص لاحقاً.",
     "CODES_NOT_DELIVERED": "لم تُسلَّم أكواد هذا الطلب بعد.",
     "APPLICATION_STATE_INVALID": "تغيّرت حالة طلبك. حدّث الصفحة.",
@@ -845,9 +843,17 @@
   "catalog": {
     "empty": "نجهّز المتجر، عُد قريبًا",
     "categories": "الفئات",
+    "browse": "تصفّح حسب الفئة",
     "viewAll": "عرض الكل",
     "viewAllOf": "عرض كل {name}",
-    "gameCount": "العدد: {count}",
+    "itemCount": {
+      "zero": "لا عناصر",
+      "one": "عنصر واحد",
+      "two": "عنصران",
+      "few": "{count} عناصر",
+      "many": "{count} عنصرًا",
+      "other": "{count} عنصر"
+    },
     "categoryMetaTitle": "{name} | VERTEX DIGITAL",
     "categoryDescription": "اشحن {name} من Vertex Digital خلال ثوانٍ.",
     "status": {

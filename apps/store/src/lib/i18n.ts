@@ -21,3 +21,27 @@ export function t(key: MessageKey, values?: Record<string, string | number>): st
     name in values ? String(values[name]) : match,
   );
 }
+
+/** A key of the catalog whose value holds a count's forms (`one`, `two`, `few`, `many`, `other`). */
+export type CountKey = MessageKey extends infer Key
+  ? Key extends `${infer Base}.other`
+    ? Base
+    : never
+  : never;
+
+const plurals = new Intl.PluralRules('ar');
+
+/**
+ * A count in words that agree with it (brand/identity.md §10): `tc('catalog.itemCount', 147)` is
+ * "147 عنصرًا". The form follows Arabic's plural rules, `other` where the catalog has no own form.
+ */
+export function tc(key: CountKey, count: number, values?: Record<string, string | number>): string {
+  const forms = key
+    .split('.')
+    .reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], ar) as Record<
+    string,
+    string
+  >;
+  const form = plurals.select(count);
+  return t(`${key}.${form in forms ? form : 'other'}` as MessageKey, { count, ...values });
+}

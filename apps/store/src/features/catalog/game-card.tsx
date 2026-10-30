@@ -7,6 +7,7 @@ import {
 import { Gamepad2Icon } from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
+import { PinStarSlot } from '@/features/merchant-tools/pin-star-slot';
 import { CatalogPicture } from './catalog-picture';
 import { GameStatusChip } from './service-status';
 
@@ -32,7 +33,7 @@ export function accentStyle(accentColor: string | null): CSSProperties {
 /**
  * A game on the home page (S09 screens): the cover in the brand frame, the Arabic name, the
  * English name muted and the status chip; the accent on the border on hover. An `unavailable`
- * game is greyed, still linked: its page says why.
+ * game is greyed, still linked: its page says why. A merchant sees a star over the cover.
  */
 export function GameCard({
   game,
@@ -45,33 +46,37 @@ export function GameCard({
 }) {
   const unavailable = game.status === 'unavailable';
   return (
-    <Link
-      href={`/games/${game.slug}`}
-      style={accentStyle(game.accentColor)}
-      className={`group flex h-full flex-col gap-3 rounded-lg border border-border bg-surface p-2 transition-colors duration-150 hover:border-(--game-accent-light) focus-visible:border-(--game-accent-light) dark:hover:border-(--game-accent) dark:focus-visible:border-(--game-accent) ${unavailable ? 'opacity-60' : ''}`}
-    >
-      {game.cover ? (
-        <CatalogPicture
-          image={game.cover}
-          sizes={sizes}
-          priority={priority}
-          className="aspect-square w-full"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="flex aspect-square w-full items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground"
-        >
-          <Gamepad2Icon className="size-8" />
+    <div className="relative h-full">
+      <Link
+        href={`/games/${game.slug}`}
+        style={accentStyle(game.accentColor)}
+        className={`group flex h-full flex-col gap-3 rounded-lg border border-border bg-surface p-2 transition-colors duration-150 hover:border-(--game-accent-light) focus-visible:border-(--game-accent-light) dark:hover:border-(--game-accent) dark:focus-visible:border-(--game-accent) ${unavailable ? 'opacity-60' : ''}`}
+      >
+        {game.cover ? (
+          <CatalogPicture
+            image={game.cover}
+            sizes={sizes}
+            priority={priority}
+            className="aspect-square w-full"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex aspect-square w-full items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground"
+          >
+            <Gamepad2Icon className="size-8" />
+          </span>
+        )}
+        <span className="flex flex-col gap-1 px-1 pb-1">
+          <span className="font-bold break-words">{game.nameAr}</span>
+          <span dir="ltr" className="text-end text-xs text-muted-foreground">
+            {game.nameEn}
+          </span>
+          <GameStatusChip status={game.status} />
         </span>
-      )}
-      <span className="flex flex-col gap-1 px-1 pb-1">
-        <span className="font-bold break-words">{game.nameAr}</span>
-        <span dir="ltr" className="text-end text-xs text-muted-foreground">
-          {game.nameEn}
-        </span>
-        <GameStatusChip status={game.status} />
-      </span>
-    </Link>
+      </Link>
+      {/* A merchant's star over the cover (owner, 2026-10-30), loaded in the browser. */}
+      <PinStarSlot gameId={game.id} gameName={game.nameAr} variant="card" />
+    </div>
   );
 }

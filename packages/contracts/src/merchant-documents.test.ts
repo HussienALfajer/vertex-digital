@@ -6,6 +6,7 @@ import {
   priceListPages,
   statementBalances,
   statementMonths,
+  statementSales,
   statementTotals,
 } from './merchant-documents.js';
 
@@ -133,5 +134,23 @@ describe('statement (ST1, ST2)', () => {
     expect(statementTotals([])).toEqual([]);
     expect(statementBalances(USD, entries, 9 * USD)).toBe(true);
     expect(statementBalances(USD, entries, 8 * USD)).toBe(false);
+  });
+});
+
+describe('the statement screen\'s sales (owner, 2026-10-30)', () => {
+  it('derives the cost from the sales and the estimated profit, in integer units', () => {
+    expect(
+      statementSales({ salesUsdUnits: 5_080_000, profitUsdUnits: 470_000, ordersWithoutSale: 2 }),
+    ).toEqual({
+      salesUsdUnits: 5_080_000,
+      costUsdUnits: 4_610_000,
+      profitUsdUnits: 470_000,
+      ordersWithoutSale: 2,
+    });
+    // Sold below cost: a negative profit, a cost above the sales.
+    expect(
+      statementSales({ salesUsdUnits: 900_000, profitUsdUnits: -100_000, ordersWithoutSale: 0 })
+        .costUsdUnits,
+    ).toBe(1_000_000);
   });
 });

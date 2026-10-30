@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@vertex-digital/ui/components/button';
+import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import { Sheet, SheetContent, SheetTitle } from '@vertex-digital/ui/components/sheet';
 import {
   SidebarPanel,
@@ -46,10 +47,7 @@ const GROUPS: readonly {
   {
     label: 'nav.groups.selling',
     icon: StoreIcon,
-    links: [
-      { href: SALE_HOME, label: 'nav.saleMode' },
-      { href: '/merchant/bulk', label: 'nav.bulk' },
-    ],
+    links: [{ href: SALE_HOME, label: 'nav.saleMode' }],
   },
   {
     label: 'nav.groups.pricing',
@@ -159,6 +157,47 @@ function MerchantLinks({
         );
       })}
     </>
+  );
+}
+
+/** Each merchant page's own description, by its link's label. */
+const SECTION_TEXT: Partial<Record<MerchantMessageKey, MerchantMessageKey>> = {
+  'nav.dashboard': 'sections.dashboard',
+  'nav.tier': 'sections.tier',
+  'nav.prices': 'sections.prices',
+  'nav.priceList': 'sections.priceList',
+  'nav.alerts': 'sections.alerts',
+  'nav.receipt': 'sections.receipt',
+  'nav.statements': 'sections.statements',
+};
+
+function SectionHeader({ pathname, back }: { pathname: string | null; back: ReactNode }) {
+  const link = GROUPS.flatMap((group) => group.links).find((item) =>
+    isCurrent(item.href, pathname, false),
+  );
+  const text = link && SECTION_TEXT[link.label];
+  return (
+    <PageHeader
+      back={back}
+      title={link ? tm(link.label) : tm('title')}
+      description={text ? tm(text) : tm('subtitle')}
+    />
+  );
+}
+
+function CurrentSectionHeader({ back }: { back: ReactNode }) {
+  return <SectionHeader pathname={usePathname()} back={back} />;
+}
+
+/**
+ * The merchant page's header: its section's name and what it is for (owner, 2026-10-30), never
+ * "أدوات التاجر" on every page. A dynamic page knows its URL only at request time, hence the boundary.
+ */
+export function MerchantPageHeader({ back }: { back: ReactNode }) {
+  return (
+    <Suspense fallback={<SectionHeader pathname={null} back={back} />}>
+      <CurrentSectionHeader back={back} />
+    </Suspense>
   );
 }
 

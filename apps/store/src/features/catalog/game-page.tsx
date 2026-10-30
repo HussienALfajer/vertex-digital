@@ -3,6 +3,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Gamepad2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PageBackLink } from '@/components/page-back-link';
+import { PinStarSlot } from '@/features/merchant-tools/pin-star-slot';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
 import { getGame, getStorefront } from './data';
@@ -47,7 +48,7 @@ export async function GamePage({
         <PageBackLink href={category ? `/categories/${category.slug}` : '/'}>
           {category?.nameAr ?? t('back.home')}
         </PageBackLink>
-        <header className="flex items-start gap-4">
+        <header className="flex flex-wrap items-start gap-4">
           {game.cover ? (
             <CatalogPicture
               image={game.cover}
@@ -73,6 +74,10 @@ export async function GamePage({
                 {game.regionNotesAr}
               </p>
             )}
+          </div>
+          {/* A merchant's "ثبّت في ألعابك" (owner, 2026-10-30), loaded in the browser. */}
+          <div className="ms-auto empty:hidden">
+            <PinStarSlot gameId={game.id} gameName={game.nameAr} variant="page" />
           </div>
         </header>
         <HowItWorks direct={data.fields.length > 0} />

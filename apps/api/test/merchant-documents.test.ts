@@ -18,7 +18,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { renderPriceListImage } from '../src/modules/merchant-tools/price-list-image.js';
+import { priceText, renderPriceListImage } from '../src/modules/merchant-tools/price-list-image.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import { api, PASSWORD, removeAccounts, seedCustomer, setSwitches, totp } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -332,7 +332,9 @@ describe('the price list (S21 PL1–PL3)', () => {
       sypUnits: null,
     });
 
-    // Without games, the followed ones (PL1).
+    // Without games (owner, 2026-10-30): never the whole catalog, and a follow is no choice.
+    const unchosen = async () =>
+      json<List>(await client.get('/api/merchant/price-list', { cookie: shop.cookie }), 200);
     await json(
       await send('PUT', '/api/merchant/watches', shop.cookie, {
         gameIds: [ids.gameId],
@@ -340,11 +342,20 @@ describe('the price list (S21 PL1–PL3)', () => {
       }),
       200,
     );
-    const followed = await json<List>(
-      await client.get('/api/merchant/price-list', { cookie: shop.cookie }),
+    expect(await unchosen()).toMatchObject({ gameIds: [], games: [] });
+    // "ألعابك" first.
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
       200,
     );
-    expect(followed.gameIds).toEqual([ids.gameId]);
+    expect((await unchosen()).gameIds).toEqual([ids.gameId]);
+    // Else the games the merchant sold lately.
+    const seller = await merchant(usd(10));
+    await buy(seller.cookie, '5100000066');
+    expect(
+      (await json<List>(await client.get('/api/merchant/price-list', { cookie: seller.cookie }), 200))
+        .gameIds,
+    ).toEqual([ids.gameId]);
     expect(
       (await client.get('/api/merchant/price-list?mode=cost', { cookie: shop.cookie })).status,
     ).toBe(400);
@@ -416,6 +427,8 @@ describe('the statement (S21 ST1–ST3)', () => {
       email: shop.email,
       // S23 ID9: this month's tier block (no level live here: no next tier).
       tier: { tier: 'bronze', savingsUsdUnits: null },
+      // The screen's sales (owner, 2026-10-30): nothing delivered yet, nothing counted.
+      sales: { salesUsdUnits: 0, costUsdUnits: 0, profitUsdUnits: 0, ordersWithoutSale: 0 },
     });
     expect(statement.tier?.netPurchasesUsdUnits).toBe(-(statement.entries[1]?.amountUnits ?? 0));
     expect(statement.entries.map((entry) => entry.kind)).toEqual(['adjustment', 'purchase']);
@@ -545,6 +558,7 @@ describe('the documents after audit A06', () => {
       currency: 'usd' as const,
       tier: 'gold' as const,
       largeLogo: true,
+      whatsapp: null,
       games: [
         {
           gameId: randomUUID(),
@@ -559,10 +573,28 @@ describe('the documents after audit A06', () => {
         },
       ],
     };
-    await expect(renderPriceListImage(list, { page: 1, pages: 1 }, null, 1)).rejects.toThrow(
-      /price list image/,
+    await expect(
+      renderPriceListImage(list, { page: 1, pages: 1 }, null, new Map(), 1),
+    ).rejects.toThrow(/price list image/);
+    // The game's cover beside its name and the shop's WhatsApp in the footer (owner, 2026-10-30).
+    const cover = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: '#B9A87A' },
+    })
+      .png()
+      .toBuffer();
+    const image = await renderPriceListImage(
+      { ...list, whatsapp: '+963933123456' },
+      { page: 1, pages: 2 },
+      null,
+      new Map([[list.games[0]?.gameId as string, cover]]),
     );
-    const image = await renderPriceListImage(list, { page: 1, pages: 1 }, null);
     expect((await sharp(image).metadata()).width).toBe(1080);
+    // USD leads when both currencies show.
+    const both = priceText(
+      { productId: randomUUID(), nameAr: '60', available: true, usdUnits: usd(5.08), sypUnits: 73_000 },
+      'both',
+    );
+    expect(both.indexOf('5.08')).toBeLessThan(both.indexOf('730'));
+    expect(priceText({ productId: randomUUID(), nameAr: '60', available: false, usdUnits: null, sypUnits: null }, 'both')).toBe('غير متوفر');
   });
 });

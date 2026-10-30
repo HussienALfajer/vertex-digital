@@ -554,12 +554,11 @@ describe('the direct grant, the terms and the revocation (MA6, MA7, MT2)', () =>
       },
     });
     expect(await json(purchase, 409)).toMatchObject({ code: 'MERCHANT_TERMS_REQUIRED' });
-    // A checkout (the cart and the bulk payment) is refused the same way (A06-25).
+    // A checkout is refused the same way (A06-25).
     const checkout = await client.post('/api/checkouts', {
       cookie: shop.cookie,
       headers: { 'idempotency-key': randomUUID() },
       body: {
-        source: 'bulk',
         lines: [
           {
             productId: randomUUID(),
