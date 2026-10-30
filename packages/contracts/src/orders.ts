@@ -1562,9 +1562,7 @@ export const NEW_CHECKOUT_SOURCES = ['cart'] as const satisfies readonly Checkou
 
 export type NewCheckoutSource = (typeof NEW_CHECKOUT_SOURCES)[number];
 
-export const checkoutSourceSchema = z
-  .enum(NEW_CHECKOUT_SOURCES)
-  .meta({ id: 'CheckoutSource' });
+export const checkoutSourceSchema = z.enum(NEW_CHECKOUT_SOURCES).meta({ id: 'CheckoutSource' });
 
 /**
  * `POST /api/checkouts` (rule CT5): all or nothing; 1–10 lines for a customer, up to the tier's

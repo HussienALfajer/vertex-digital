@@ -25072,6 +25072,9 @@
                 "$ref": "#/components/schemas/StatementTier"
               }
             ]
+          },
+          "sales": {
+            "$ref": "#/components/schemas/StatementSales"
           }
         },
         "required": [
@@ -25084,7 +25087,8 @@
           "closingUsdUnits",
           "entries",
           "totals",
-          "tier"
+          "tier",
+          "sales"
         ],
         "additionalProperties": false
       },
@@ -25331,6 +25335,38 @@
           "netPurchasesUsdUnits",
           "savingsUsdUnits",
           "next"
+        ],
+        "additionalProperties": false
+      },
+      "StatementSales": {
+        "type": "object",
+        "properties": {
+          "salesUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "costUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "profitUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ordersWithoutSale": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "salesUsdUnits",
+          "costUsdUnits",
+          "profitUsdUnits",
+          "ordersWithoutSale"
         ],
         "additionalProperties": false
       },

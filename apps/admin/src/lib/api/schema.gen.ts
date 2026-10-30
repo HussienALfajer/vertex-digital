@@ -7833,6 +7833,7 @@ export interface components {
             entries: components["schemas"]["StatementEntry"][];
             totals: components["schemas"]["StatementTotal"][];
             tier: components["schemas"]["StatementTier"] | null;
+            sales: components["schemas"]["StatementSales"];
         };
         StatementEntry: {
             /** Format: date-time */
@@ -7885,6 +7886,12 @@ export interface components {
                 tier: components["schemas"]["LevelTier"];
                 missingUsdUnits: number;
             } | null;
+        };
+        StatementSales: {
+            salesUsdUnits: number;
+            costUsdUnits: number;
+            profitUsdUnits: number;
+            ordersWithoutSale: number;
         };
         SupportChannels: {
             telegramUrl: string | null;

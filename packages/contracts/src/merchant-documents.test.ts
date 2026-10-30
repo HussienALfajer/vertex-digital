@@ -137,7 +137,7 @@ describe('statement (ST1, ST2)', () => {
   });
 });
 
-describe('the statement screen\'s sales (owner, 2026-10-30)', () => {
+describe("the statement screen's sales (owner, 2026-10-30)", () => {
   it('derives the cost from the sales and the estimated profit, in integer units', () => {
     expect(
       statementSales({ salesUsdUnits: 5_080_000, profitUsdUnits: 470_000, ordersWithoutSale: 2 }),

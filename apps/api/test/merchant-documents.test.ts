@@ -353,8 +353,12 @@ describe('the price list (S21 PL1–PL3)', () => {
     const seller = await merchant(usd(10));
     await buy(seller.cookie, '5100000066');
     expect(
-      (await json<List>(await client.get('/api/merchant/price-list', { cookie: seller.cookie }), 200))
-        .gameIds,
+      (
+        await json<List>(
+          await client.get('/api/merchant/price-list', { cookie: seller.cookie }),
+          200,
+        )
+      ).gameIds,
     ).toEqual([ids.gameId]);
     expect(
       (await client.get('/api/merchant/price-list?mode=cost', { cookie: shop.cookie })).status,
@@ -591,10 +595,21 @@ describe('the documents after audit A06', () => {
     expect((await sharp(image).metadata()).width).toBe(1080);
     // USD leads when both currencies show.
     const both = priceText(
-      { productId: randomUUID(), nameAr: '60', available: true, usdUnits: usd(5.08), sypUnits: 73_000 },
+      {
+        productId: randomUUID(),
+        nameAr: '60',
+        available: true,
+        usdUnits: usd(5.08),
+        sypUnits: 73_000,
+      },
       'both',
     );
     expect(both.indexOf('5.08')).toBeLessThan(both.indexOf('730'));
-    expect(priceText({ productId: randomUUID(), nameAr: '60', available: false, usdUnits: null, sypUnits: null }, 'both')).toBe('غير متوفر');
+    expect(
+      priceText(
+        { productId: randomUUID(), nameAr: '60', available: false, usdUnits: null, sypUnits: null },
+        'both',
+      ),
+    ).toBe('غير متوفر');
   });
 });

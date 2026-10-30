@@ -11,6 +11,7 @@ import {
   type MerchantGames,
   monthRange,
   NO_ALERT_SETTINGS,
+  PINNED_GAMES_MAX,
   type PinnedGames,
   type SellingPriceInput,
   type SellingPriceRow,
@@ -347,8 +348,11 @@ export class MerchantToolsService {
   }
 
   /**
-   * `PUT /api/merchant/pinned-games`: the whole ordered list, at most 20 games the store shows the
-   * merchant (the schema refuses more and duplicates); a frozen merchant cannot save it.
+   * `PUT /api/merchant/pinned-games`: the whole ordered list of the games the store shows the
+   * merchant, at most 20 (the schema refuses more and duplicates); a frozen merchant cannot save it.
+   * A pinned game the store hides now (paused, archived) is not in the list the merchant sees, so
+   * it is kept after the saved ones, in its order, while the 20 places allow: it comes back with
+   * the game.
    */
   async savePinnedGames(customerId: string, input: PinnedGames): Promise<PinnedGames> {
     await this.merchant(customerId, true);
@@ -360,11 +364,20 @@ export class MerchantToolsService {
     if (input.gameIds.some((gameId) => !shown.has(gameId))) throw refusals.notFound('game');
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`pinned:${customerId}`}))`);
+      const stored = await tx
+        .select({ gameId: merchantPinnedGames.gameId })
+        .from(merchantPinnedGames)
+        .where(eq(merchantPinnedGames.customerId, customerId))
+        .orderBy(asc(merchantPinnedGames.position));
+      const hidden = stored
+        .map((row) => row.gameId)
+        .filter((gameId) => !shown.has(gameId) && !input.gameIds.includes(gameId));
+      const gameIds = [...input.gameIds, ...hidden].slice(0, PINNED_GAMES_MAX);
       await tx.delete(merchantPinnedGames).where(eq(merchantPinnedGames.customerId, customerId));
-      if (input.gameIds.length > 0) {
+      if (gameIds.length > 0) {
         await tx
           .insert(merchantPinnedGames)
-          .values(input.gameIds.map((gameId, position) => ({ customerId, gameId, position })));
+          .values(gameIds.map((gameId, position) => ({ customerId, gameId, position })));
       }
     });
     return { gameIds: input.gameIds };

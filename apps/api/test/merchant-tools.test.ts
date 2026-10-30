@@ -517,6 +517,21 @@ describe('pinned games, "ألعابك" (owner, 2026-10-30)', () => {
     expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
     await test.db.execute(sql`update catalog_games set status = 'active' where id = ${second.id}`);
     expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+    // A save while it is paused keeps it: the merchant never saw it to remove it (S21 amendment 4).
+    await test.db.execute(sql`update catalog_games set status = 'paused' where id = ${second.id}`);
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
+      200,
+    );
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
+    await test.db.execute(sql`update catalog_games set status = 'active' where id = ${second.id}`);
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+    // Saved while shown and left out, it is unpinned for real.
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
+      200,
+    );
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
     const games = await json<{ items: { id: string; categoryNameAr: string }[] }>(
       await client.get('/api/merchant/games', { cookie: shop.cookie }),
       200,
