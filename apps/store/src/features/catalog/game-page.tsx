@@ -112,7 +112,7 @@ function HowItWorks({ direct }: { direct: boolean }) {
   return (
     <ol
       aria-label={t('game.steps.label')}
-      className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface p-3 sm:gap-3"
+      className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface p-3 sm:gap-3 [[data-sale-mode-hint]_&]:hidden"
     >
       {steps.map((step, index) => (
         <li

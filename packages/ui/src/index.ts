@@ -32,6 +32,7 @@ export * from './components/progress';
 export * from './components/rich-text';
 export * from './components/select';
 export * from './components/sheet';
+export * from './components/sidebar';
 export * from './components/skeleton';
 export * from './components/slide-to-pay';
 export * from './components/sparkline';

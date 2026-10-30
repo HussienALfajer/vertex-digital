@@ -12,11 +12,11 @@ import type {
 import tools from '../src/features/merchant-tools/messages.ar.json' with { type: 'json' };
 import orderTexts from '../src/features/orders/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
-import { PUBG } from './catalog';
+import { PUBG, searchIndex } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
 
 /*
- * S21 PR 2, the counter tools in the store: the point of sale with its keyboard and confirmation
+ * S21 PR 2, the counter tools in the store: the sale mode with its keyboard and confirmation
  * (F32), the bulk check and its payment (F33), the order page's merchant tools and the printed
  * receipt and codes (F34, PR1–PR3), the verification page and the branded receipt link (F35), and
  * the receipt settings with the logo (BR3).
@@ -194,6 +194,42 @@ const print = (changes: Partial<OrderPrint> = {}): OrderPrint => ({
   ...changes,
 });
 
+/** The merchant's own prices of the game: the SYP of the purchase price, at the rate in force. */
+const own = {
+  priceKind: 'wholesale' as const,
+  products: PUBG.products.map((product) => {
+    const paid = product.id === P60.id ? 1_050_000 : product.id === P325.id ? 5_200_000 : null;
+    return {
+      id: product.id,
+      available: paid !== null,
+      priceUsdUnits: paid,
+      priceSypUnits: product.id === P60.id ? 1_370_000 : product.id === P325.id ? 6_770_000 : null,
+      savings: null,
+      perHundredUsdUnits: null,
+      bestValue: false,
+      earlyAccess: false,
+    };
+  }),
+  earlyProducts: [],
+  rateId: PUBG.rateId,
+};
+
+/** The sale mode as the switch leaves it on this browser; once: a test may turn it off. */
+function saleModeOn(page: Page) {
+  return page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('vd-merchant', '1');
+    localStorage.setItem('vd-sale-mode', '1');
+  });
+}
+
+/** The sale mode on, on the game's page. */
+async function openCounter(page: Page) {
+  await saleModeOn(page);
+  await page.goto('/games/pubg-mobile');
+}
+
 function pos(api: MockApi): MockApi {
   return signedIn(api)
     .on('GET /api/merchant/games', 200, {
@@ -207,7 +243,7 @@ function pos(api: MockApi): MockApi {
       products: [],
       suggestions: { games: [], products: [] },
     })
-    .on('GET /api/catalog/games/pubg-mobile', 200, PUBG)
+    .on('GET /api/catalog/games/pubg-mobile/prices', 200, own)
     .on('GET /api/merchant/selling-prices', 200, prices)
     .on('GET /api/merchant/recent-players', 200, {
       items: [
@@ -230,18 +266,167 @@ function pos(api: MockApi): MockApi {
     });
 }
 
-test.describe('the point of sale (F32, PS1–PS5)', () => {
-  test('keeps its pack tiles wide beside the sidebar', async ({ page, api }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'the sidebar starts at this width');
-    pos(api);
-    await page.setViewportSize({ width: 1024, height: 768 });
-    await page.goto('/merchant/pos');
+test.describe('the sale mode (F32, PS1–PS6)', () => {
+  test('shows each pack in both currencies with its profit, and hides the cost', async ({
+    page,
+    api,
+  }, testInfo) => {
+    pos(api).on('POST /api/player-checks', 200, {
+      result: 'valid',
+      playerName: 'Nour',
+      region: null,
+    });
+    await openCounter(page);
     const tile = page.getByRole('button', { name: /60 UC/ });
-    await expect(tile).toBeVisible();
-    expect((await tile.boundingBox())?.width).toBeGreaterThan(160);
-    await page.setViewportSize({ width: 1280, height: 768 });
+    await expect(tile).toContainText(`${tools.sale.selling}15,100 ل.س≈ $1.16`);
+    await expect(tile).toContainText(`${tools.sale.purchase}13,700 ل.س≈ $1.05`);
+    await expect(tile).toContainText('ربحك +1,400 ل.س');
     expect((await tile.boundingBox())?.width).toBeGreaterThan(150);
-    await screenshot(page, testInfo, 'merchant-pos-sidebar');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      page.viewportSize()?.width ?? 0,
+    );
+    await screenshot(page, testInfo, 'merchant-sale-game');
+
+    // One press: the customer sees the selling price alone, here and in the confirmation.
+    await page.getByRole('button', { name: tools.sale.hideCost }).click();
+    await expect(tile).toContainText('15,100 ل.س');
+    await expect(tile).not.toContainText(tools.sale.purchase);
+    await expect(tile).not.toContainText('ربحك');
+    await screenshot(page, testInfo, 'merchant-sale-game-cost-hidden');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    await tile.click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(tools.sale.sellingPrice)).toBeVisible();
+    await expect(dialog.getByText(tools.sale.total)).toHaveCount(0);
+    await expect(dialog.getByText('$1.05')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // It stays hidden across a reload, and the shortcut brings it back.
+    await page.reload();
+    await expect(tile).toContainText('15,100 ل.س');
+    await expect(tile).not.toContainText('ربحك');
+    await page.locator('body').click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press('h');
+    await expect(tile).toContainText('ربحك');
+  });
+
+  test('shows the game page in the light theme', async ({ page, api }, testInfo) => {
+    await page.addInitScript(lightTheme);
+    pos(api);
+    await openCounter(page);
+    await expect(page.getByRole('button', { name: /60 UC/ })).toContainText('ربحك');
+    await screenshot(page, testInfo, 'merchant-sale-game-light');
+  });
+
+  test('warns below cost, and leads with USD for a price set in USD', async ({ page, api }) => {
+    pos(api).on('GET /api/merchant/selling-prices', 200, {
+      ...prices,
+      products: [
+        row(P60, { sellingUsdUnits: 900_000, sellingSypUnits: 1_180_000, belowCost: true }),
+        row(P325, {
+          purchaseUsdUnits: 5_200_000,
+          ownPrice: { currency: 'usd', amountUnits: 6_000_000 },
+          sellingUsdUnits: 6_000_000,
+          sellingSypUnits: 7_800_000,
+          source: 'product',
+        }),
+      ],
+    });
+    await openCounter(page);
+    const low = page.getByRole('button', { name: /60 UC/ });
+    await expect(low).toContainText(tools.prices.belowCost);
+    await expect(low).toContainText('ربحك -1,900 ل.س');
+    const own_ = page.getByRole('button', { name: /325 UC/ });
+    await expect(own_).toContainText(`${tools.sale.selling}$6.00≈ 78,000 ل.س`);
+    await expect(own_).toContainText(`${tools.sale.purchase}$5.20≈ 67,700 ل.س`);
+    await expect(own_).toContainText('ربحك +$0.80');
+  });
+
+  test('a customer sees no switch and no counter on the game page', async ({ page, api }) => {
+    api.on('GET /api/auth/get-session', 200, {
+      user: { name: 'علي', email: 'ali@example.com', emailVerified: true, accountType: 'customer' },
+      session: { token: 'this-device' },
+    });
+    api.on('GET /api/catalog/games/pubg-mobile/prices', 200, { ...own, priceKind: 'retail' });
+    // A sale mode left on this browser counts for nobody else.
+    await page.addInitScript(() => localStorage.setItem('vd-sale-mode', '1'));
+    await page.goto('/games/pubg-mobile');
+    await expect(page.getByRole('button', { name: /^60 UC/ })).toBeVisible();
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: tools.sale.hideCost })).toHaveCount(0);
+  });
+
+  test('turns off on the game page and shows it as to a customer, at merchant prices', async ({
+    page,
+    api,
+  }) => {
+    pos(api);
+    await openCounter(page);
+    await expect(page.getByRole('button', { name: tools.sale.hideCost })).toBeVisible();
+    await page.getByRole('switch', { name: tools.nav.saleMode }).click();
+    await expect(page.getByRole('button', { name: tools.sale.hideCost })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^60 UC/ })).toContainText('$1.05');
+    await expect(page.locator('html')).not.toHaveAttribute('data-sale-mode-hint', '');
+    await page.reload();
+    await expect(page.getByRole('button', { name: /^60 UC/ })).toContainText('$1.05');
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).not.toBeChecked();
+  });
+
+  test('a link for the buy box opens it even with the mode on', async ({ page, api }) => {
+    pos(api);
+    await saleModeOn(page);
+    await page.goto(`/games/pubg-mobile?pack=${P60.id}&via=q`);
+    await expect(page.getByRole('button', { name: ar.purchase.cart.add })).toBeVisible();
+    await expect(page.getByRole('button', { name: tools.sale.hideCost })).toHaveCount(0);
+  });
+
+  test('while the cost is hidden a link for the buy box waits, then opens (PS1b)', async ({
+    page,
+    api,
+  }) => {
+    pos(api);
+    await saleModeOn(page);
+    await page.addInitScript(() => localStorage.setItem('vd-hide-cost', '1'));
+    await page.goto(`/games/pubg-mobile?pack=${P60.id}&via=q`);
+    await expect(page.getByText(tools.sale.linkNeedsCost)).toBeVisible();
+    const tile = page.getByRole('button', { name: /60 UC/ });
+    await expect(tile).not.toContainText(tools.sale.purchase);
+    await expect(page).toHaveURL(/via=q/);
+    await page.getByRole('button', { name: tools.sale.showCost }).click();
+    await expect(page.getByRole('button', { name: ar.purchase.cart.add })).toBeVisible();
+  });
+
+  test('a changed price shows its total even with the cost hidden (A06-2, PS1b)', async ({
+    page,
+    api,
+  }) => {
+    pos(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
+      .on('POST /api/orders', 409, {
+        code: 'PRICE_CHANGED',
+        message: 'Price changed',
+        details: { unitPriceUsdUnits: 5_400_000 },
+      });
+    await saleModeOn(page);
+    await page.addInitScript(() => localStorage.setItem('vd-hide-cost', '1'));
+    await page.goto('/games/pubg-mobile');
+    await page.getByRole('button', { name: /5123456789/ }).click();
+    await page.keyboard.press('2');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(tools.sale.total)).toHaveCount(0);
+    await expect(dialog.getByText(tools.sale.checkedName.replace('{name}', 'Nour'))).toBeVisible();
+    await dialog.getByRole('button', { name: tools.sale.confirm }).click();
+    await expect(dialog.getByText('$5.40')).toBeVisible();
+  });
+
+  test('a search result for a pack opens its sale, asking for the id first', async ({
+    page,
+    api,
+  }) => {
+    pos(api);
+    await saleModeOn(page);
+    await page.goto(`/games/pubg-mobile?pack=${P60.id}`);
+    await expect(page.getByText(tools.sale.fillPlayer)).toBeVisible();
   });
 
   test('fills a recent id, picks a pack by its number and sells it', async ({
@@ -251,18 +436,18 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
     pos(api)
       .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
       .on('POST /api/orders', 201, { ...order(), stage: 'processing' });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await expect(page.getByRole('button', { name: /60 UC/ })).toBeVisible();
     await page.getByRole('button', { name: /5123456789/ }).click();
-    await screenshot(page, testInfo, 'merchant-pos');
+    await screenshot(page, testInfo, 'merchant-sale-recent');
 
     await page.keyboard.press('2');
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(tools.pos.confirmTitle)).toBeVisible();
-    await expect(dialog.getByText(tools.pos.checkedName.replace('{name}', 'Nour'))).toBeVisible();
-    await screenshot(page, testInfo, 'merchant-pos-confirm');
-    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
-    await expect(page.getByText(tools.pos.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
+    await expect(dialog.getByText(tools.sale.confirmTitle)).toBeVisible();
+    await expect(dialog.getByText(tools.sale.checkedName.replace('{name}', 'Nour'))).toBeVisible();
+    await screenshot(page, testInfo, 'merchant-sale-confirm');
+    await dialog.getByRole('button', { name: tools.sale.confirm }).click();
+    await expect(page.getByText(tools.sale.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
     const sent = api.last('POST /api/orders');
     expect(sent?.body).toEqual({
       productId: P325.id,
@@ -282,7 +467,7 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
 
   test('a typed player id survives a reload until the sale goes through', async ({ page, api }) => {
     pos(api);
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.locator('input[name="player_id"]').fill('5123456789');
     await page.reload();
     await expect(page.locator('input[name="player_id"]')).toHaveValue('5123456789');
@@ -290,20 +475,20 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
 
   test('asks for the id first, and shows the shortcuts (PS3, PS4)', async ({ page, api }) => {
     pos(api);
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.getByRole('button', { name: /60 UC/ }).click();
-    await expect(page.getByText(tools.pos.fillPlayer)).toBeVisible();
+    await expect(page.getByText(tools.sale.fillPlayer)).toBeVisible();
     await page.locator('body').click({ position: { x: 1, y: 1 } });
     await page.keyboard.press('?');
-    await expect(page.getByRole('dialog').getByText(tools.pos.keys.print)).toBeVisible();
+    await expect(page.getByRole('dialog').getByText(tools.sale.keys.print)).toBeVisible();
   });
 
   /** Fills the recent id, opens 325 UC by its number and confirms in the sheet. */
   async function sell(page: Page) {
     await page.keyboard.press('2');
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(tools.pos.checkedName.replace('{name}', 'Nour'))).toBeVisible();
-    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
+    await expect(dialog.getByText(tools.sale.checkedName.replace('{name}', 'Nour'))).toBeVisible();
+    await dialog.getByRole('button', { name: tools.sale.confirm }).click();
     return dialog;
   }
 
@@ -319,7 +504,7 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
     pos(api)
       .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
       .on('POST /api/orders', 500, { code: 'INTERNAL_ERROR' });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.getByRole('button', { name: /5123456789/ }).click();
     const dialog = await sell(page);
     await expect(dialog.getByText(ar.errors.UNKNOWN)).toBeVisible();
@@ -328,7 +513,7 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
 
     api.on('POST /api/orders', 201, { ...order(), stage: 'processing' });
     await sell(page);
-    await expect(page.getByText(tools.pos.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
+    await expect(page.getByText(tools.sale.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
     const keys = orderKeys(api);
     expect(keys).toHaveLength(2);
     expect(keys[1]).toBe(keys[0]);
@@ -345,15 +530,15 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
         message: 'Price changed',
         details: { unitPriceUsdUnits: 5_400_000 },
       });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.getByRole('button', { name: /5123456789/ }).click();
     const dialog = await sell(page);
     await expect(dialog.getByText(ar.errors.PRICE_CHANGED)).toBeVisible();
     await expect(dialog.getByText('$5.40')).toBeVisible();
 
     api.on('POST /api/orders', 201, { ...order(), stage: 'processing' });
-    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
-    await expect(page.getByText(tools.pos.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
+    await dialog.getByRole('button', { name: tools.sale.confirm }).click();
+    await expect(page.getByText(tools.sale.placed.replace('{number}', 'VO-SHOP23'))).toBeVisible();
     expect(api.last('POST /api/orders')?.body).toMatchObject({
       expectedUnitPriceUsdUnits: 5_400_000,
     });
@@ -373,14 +558,14 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
         termsVersionId: '0199e200-0000-7000-8000-0000000000f1',
       })
       .on('POST /api/merchant/terms', 204, null);
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.getByRole('button', { name: /5123456789/ }).click();
     const dialog = await sell(page);
     const sheet = page.getByTestId('terms-sheet');
     await expect(sheet).toBeVisible();
     await sheet.getByRole('checkbox', { name: ar.merchant.terms.check }).check();
     await sheet.getByRole('button', { name: ar.merchant.terms.accept }).click();
-    await expect(dialog.getByText(tools.pos.termsAccepted)).toBeVisible();
+    await expect(dialog.getByText(tools.sale.termsAccepted)).toBeVisible();
     expect(api.last('POST /api/merchant/terms')?.body).toEqual({
       versionId: '0199e200-0000-7000-8000-0000000000f1',
     });
@@ -400,7 +585,7 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
       },
       session: { token: 'this-device' },
     });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await expect(page.getByText(tools.common.frozen)).toBeVisible();
     await page.getByRole('button', { name: /5123456789/ }).click();
     await expect(page.getByRole('button', { name: /325 UC/ })).toBeDisabled();
@@ -419,7 +604,7 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
       purchasesStopped: true,
       depositsStopped: false,
     });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await expect(page.getByText(ar.purchase.stopped)).toBeVisible();
     await page.getByRole('button', { name: /5123456789/ }).click();
     await expect(page.getByRole('button', { name: /325 UC/ })).toBeDisabled();
@@ -433,16 +618,16 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
       .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Nour', region: null })
       .on('POST /api/orders', 201, { ...order(), stage: 'processing' })
       .on(`PUT /api/orders/${ORDER_ID}/sale`, 500, { code: 'INTERNAL_ERROR' });
-    await page.goto('/merchant/pos');
+    await openCounter(page);
     await page.getByRole('button', { name: /5123456789/ }).click();
     await page.keyboard.press('2');
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('textbox', { name: tools.pos.sellingPrice }).fill('16000');
-    await dialog.getByRole('button', { name: tools.pos.confirm }).click();
+    await dialog.getByRole('textbox', { name: tools.sale.sellingPrice }).fill('16000');
+    await dialog.getByRole('button', { name: tools.sale.confirm }).click();
     await expect(
-      page.getByText(tools.pos.saleNotSaved.replace('{number}', 'VO-SHOP23')),
+      page.getByText(tools.sale.saleNotSaved.replace('{number}', 'VO-SHOP23')),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: tools.pos.saleSetOnOrder })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: tools.sale.saleSetOnOrder })).toHaveAttribute(
       'href',
       `/orders/${ORDER_ID}`,
     );
@@ -450,28 +635,11 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
 
   test('a failed read of the last orders offers a retry (A06-8)', async ({ page, api }) => {
     pos(api).on('GET /api/orders', 500, { code: 'INTERNAL_ERROR' });
-    await page.goto('/merchant/pos');
-    await expect(page.getByText(tools.pos.stripFailed)).toBeVisible();
+    await openCounter(page);
+    await expect(page.getByText(tools.sale.stripFailed)).toBeVisible();
     api.on('GET /api/orders', 200, { items: [summary()], nextCursor: null, checkout: null });
     await page.getByRole('button', { name: tools.common.retry }).click();
     await expect(page.getByText('VO-SHOP23')).toBeVisible();
-  });
-
-  test('orders the game bar followed first, then by the 30-day units (PS1, Q27)', async ({
-    page,
-    api,
-  }) => {
-    const id = (last: string) => PUBG.game.id.replace(/.$/, last);
-    pos(api).on('GET /api/merchant/games', 200, {
-      items: [
-        { id: id('a'), slug: 'free-fire', nameAr: 'فري فاير', recentUnits: 0 },
-        { id: id('b'), slug: 'yalla-ludo', nameAr: 'يلا لودو', recentUnits: 12 },
-        { id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', recentUnits: 0 },
-      ],
-    });
-    await page.goto('/merchant/pos');
-    const bar = page.getByRole('navigation', { name: tools.pos.games });
-    await expect(bar.getByRole('button')).toHaveText(['ببجي موبايل', 'يلا لودو', 'فري فاير']);
   });
 
   test('a delivered code pack prints its codes from the strip (PS5, Q27)', async ({
@@ -486,14 +654,134 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
       nextCursor: null,
       checkout: null,
     });
-    await page.goto('/merchant/pos');
-    const codes = page.getByRole('link', { name: tools.pos.printCodes });
+    await openCounter(page);
+    const codes = page.getByRole('link', { name: tools.sale.printCodes });
     await expect(codes).toHaveCount(1);
     await expect(codes).toHaveAttribute(
       'href',
       `/orders/${CODE_ORDER_ID}/print?paper=58&content=codes`,
     );
-    await expect(page.getByRole('link', { name: tools.pos.printReceipt })).toHaveCount(2);
+    await expect(page.getByRole('link', { name: tools.sale.printReceipt })).toHaveCount(2);
+  });
+});
+
+test.describe('the home page for a merchant (PS1, PS7, PS8)', () => {
+  function home(api: MockApi): MockApi {
+    const id = (last: string) => PUBG.game.id.replace(/.$/, last);
+    return pos(api)
+      .on('GET /api/merchant/games', 200, {
+        items: [
+          { id: id('a'), slug: 'free-fire', nameAr: 'فري فاير', recentUnits: 0 },
+          { id: id('b'), slug: 'yalla-ludo', nameAr: 'يلا لودو', recentUnits: 12 },
+          { id: GAME, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', recentUnits: 0 },
+        ],
+      })
+      .on('GET /api/catalog/search-index', 200, searchIndex());
+  }
+
+  for (const scheme of ['dark', 'light'] as const) {
+    test(`turns the mode on from the home page, with "ألعابك" first (${scheme})`, async ({
+      page,
+      api,
+    }, testInfo) => {
+      if (scheme === 'light') await page.addInitScript(lightTheme);
+      home(api);
+      await page.goto('/');
+      const toggle = page.getByRole('switch', { name: tools.nav.saleMode });
+      await expect(toggle).not.toBeChecked();
+      await expect(page.getByRole('heading', { name: tools.sale.yourGames })).toHaveCount(0);
+      await screenshot(page, testInfo, `merchant-home-${scheme}`);
+
+      await toggle.click();
+      const row = page.getByRole('region', { name: tools.sale.yourGames });
+      // PS1: followed first, then the 30-day units, then the store's order.
+      await expect(row.getByRole('link')).toHaveCount(3);
+      await expect(row.getByRole('link').first()).toContainText('ببجي موبايل');
+      await expect(row.getByRole('link').nth(1)).toContainText('يلا لودو');
+      await expect(row.getByRole('link').nth(2)).toContainText('فري فاير');
+      await expect(page.getByRole('heading', { level: 1 })).toBeAttached();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        page.viewportSize()?.width ?? 0,
+      );
+      await screenshot(page, testInfo, `merchant-home-sale-${scheme}`);
+
+      // It stays on across pages until turned off, and the search still opens with Ctrl+K.
+      await row.getByRole('link').first().click();
+      await expect(page).toHaveURL('/games/pubg-mobile');
+      await expect(page.getByRole('button', { name: tools.sale.hideCost })).toBeVisible();
+      await page.keyboard.press('Control+K');
+      await expect(page.getByRole('dialog')).toBeVisible();
+    });
+  }
+
+  test('shows the sidebar on a wide screen and in a sheet on a phone (PS8)', async ({
+    page,
+    api,
+  }, testInfo) => {
+    home(api);
+    await page.goto('/');
+    const nav = page.getByRole('navigation', { name: tools.title });
+    if (testInfo.project.name === 'phone') {
+      await expect(nav).toBeHidden();
+      await page
+        .getByRole('button', { name: tools.nav.open.replace('{section}', tools.title) })
+        .click();
+      await expect(nav).toBeVisible();
+      await screenshot(page, testInfo, 'merchant-home-sheet');
+      await nav.getByRole('link', { name: tools.nav.saleMode }).click();
+      await expect(nav).toBeHidden();
+    } else {
+      await expect(nav).toBeVisible();
+      await expect(page.getByRole('complementary')).toContainText('سارة الأحمد');
+      await nav.getByRole('link', { name: tools.nav.saleMode }).click();
+      await expect(nav.locator('[aria-current="page"]')).toHaveText(tools.nav.saleMode);
+    }
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toBeChecked();
+    await expect(page).toHaveURL('/');
+  });
+
+  test('the old address opens the home page with the mode on (PS7)', async ({ page, api }) => {
+    home(api);
+    await page.goto('/merchant/pos');
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toBeChecked();
+    await expect(page).toHaveURL('/');
+    // Turned off, it stays off: the address does not hold it on.
+    await page.getByRole('switch', { name: tools.nav.saleMode }).click();
+    await page.reload();
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).not.toBeChecked();
+  });
+
+  test('the old address asks a visitor to sign in and comes back to it (PS7)', async ({
+    page,
+    api: _api,
+  }) => {
+    await page.goto('/merchant/pos');
+    await expect(page).toHaveURL(`/sign-in?next=${encodeURIComponent('/?sale=1')}`);
+  });
+
+  test('a customer and a visitor see the home page as it was, with no room kept', async ({
+    page,
+    api,
+  }) => {
+    const width = async () =>
+      (
+        await page
+          .getByRole('heading', { level: 1 })
+          .locator('xpath=ancestor::section')
+          .boundingBox()
+      )?.width;
+    await page.goto('/');
+    await expect(page.getByRole('complementary')).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toHaveCount(0);
+    expect(await width()).toBe(page.viewportSize()?.width);
+
+    api.on('GET /api/auth/get-session', 200, {
+      user: { name: 'علي', email: 'ali@example.com', emailVerified: true, accountType: 'customer' },
+      session: { token: 'this-device' },
+    });
+    await page.reload();
+    await expect(page.getByRole('switch', { name: tools.nav.saleMode })).toHaveCount(0);
+    expect(await width()).toBe(page.viewportSize()?.width);
   });
 });
 

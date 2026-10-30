@@ -222,8 +222,8 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 #### F31 — Merchant's own selling prices
 - The merchant sets the price they charge their own customers per product, in SYP or USD; profit per order and per period is computed from it; used by F34, F35 and F36.
 
-#### F32 — Point-of-sale mode
-- A fast counter screen for merchants: product grid, keyboard shortcuts, recent player IDs, a purchase in two taps (still confirmed).
+#### F32 — Sale mode
+- A switch a merchant turns on from the home page; the game page, the one purchase screen, then works as a fast counter: each pack's selling and purchase price in SYP and USD with the profit, a button to hide the cost from a customer watching the screen, keyboard shortcuts, recent player IDs, a purchase in two taps (still confirmed). The home page leads with the merchant's games. Customers see no change.
 
 #### F33 — Bulk orders
 - Paste a list (or upload a CSV) of player IDs and packs, check it, pay it once, and follow each line's status.

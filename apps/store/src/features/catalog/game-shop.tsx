@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { useCostHidden, useSaleMode } from '@/features/merchant-tools/sale-mode';
 import type { Buyable, BuyBoxIntent, GameTyped } from '@/features/purchase/buy-box';
 import { useCustomer } from '@/features/purchase/session';
 import { takeQuickLinkCookie } from '@/features/quick-links/handoff';
@@ -30,6 +31,27 @@ const PrivatePackContent = dynamic(() =>
 const AlertButton = dynamic(() =>
   import('@/features/product-alerts/alert-button').then((module) => module.AlertButton),
 );
+
+/** S21 PS1: a merchant's switch and counter, for nobody else; `sale-mode.ts` is all others load. */
+const SaleSwitch = dynamic(
+  () => import('@/features/merchant-tools/sale-switch').then((module) => module.SaleSwitch),
+  { loading: () => <div className="h-11" /> },
+);
+
+const SaleCounter = dynamic(
+  () => import('@/features/merchant-tools/sale-counter').then((module) => module.SaleCounter),
+  { loading: () => <SaleSkeleton /> },
+);
+
+function SaleSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-hidden="true">
+      {['a', 'b', 'c', 'd', 'e', 'f'].map((key) => (
+        <Skeleton key={key} className="h-36" />
+      ))}
+    </div>
+  );
+}
 
 const BuyBox = dynamic(
   () => import('@/features/purchase/buy-box').then((module) => module.BuyBox),
@@ -122,8 +144,28 @@ export function GameShop({
   // What the URL asks of the buy box: read when the page opens and again when a search command
   // changes it on this same page (S22 SC3, audit A03-9); `choose` drops these keys.
   const asked = ['repeat', 'player', 'line', 'via'].map((key) => searchParams.get(key)).join('|');
+  // S21 PS1: a merchant's sale mode replaces this page's packs and buy box, except when a link
+  // asked the buy box for something the counter has no step for (a repeat, a cart line); PS1b: then
+  // the box waits while the cost is hidden, since it would show it.
+  const saleOn = useSaleMode();
+  const costHidden = useCostHidden();
+  const askedBox = asked !== '|||';
+  const merchant = customer.status === 'signedIn' && customer.merchant && customer.verified;
+  const counter = merchant && saleOn && (!askedBox || costHidden);
+  // What the URL asks waits for the counter: nothing may open the box or leave the link behind it.
+  const held = customer.status === 'loading' ? saleOn : counter;
+  // Before the session is known the hint decides, so the customer's packs never flash.
+  const saleWaiting = customer.status === 'loading' && !askedBox;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `asked` holds the parameters read.
   useEffect(() => {
+    // The hint too: `held` starts false until the first render after hydration.
+    if (
+      held ||
+      (customer.status === 'loading' &&
+        document.documentElement.hasAttribute('data-sale-mode-hint'))
+    ) {
+      return;
+    }
     const repeat = searchParams.get('repeat');
     const player = searchParams.get('player');
     const line = searchParams.get('line');
@@ -151,7 +193,7 @@ export function GameShop({
         if (!product || !buyable(product)) return setRepeatFailed(true);
         choose(product.id, 1, next);
       });
-  }, [asked]);
+  }, [asked, held]);
 
   const box = open && (
     <BuyBox
@@ -170,106 +212,140 @@ export function GameShop({
   // at once: its `toggle` may fire before hydration, so it cannot be waited for.
   const restingDefaultOpen = ready.length === 0 || resting.some((product) => product.id === packId);
 
+  if (counter) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="self-start">
+          <SaleSwitch />
+        </div>
+        <SaleCounter
+          key={data.game.id}
+          data={data}
+          pack={packId}
+          frozen={customer.frozen}
+          linkWaiting={askedBox}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="flex flex-col gap-6">
-        {repeatFailed && <FormAlert>{t('purchase.repeat.unavailable')}</FormAlert>}
-        {prices.status === 'failed' && (
-          <div className="flex flex-wrap items-center gap-3">
-            <FormAlert>{t('game.privatePrices.failed')}</FormAlert>
-            <Button variant="outline" size="xl" onClick={prices.retry}>
-              {t('game.privatePrices.retry')}
-            </Button>
-          </div>
-        )}
-        <section aria-labelledby="packs-title" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="packs-title" className="text-lg font-bold">
-              {t('game.packs')}
-            </h2>
-            {prices.status === 'ready' && (
-              <Badge tone="gold">{t(`game.privatePrices.kinds.${prices.kind}`)}</Badge>
+    <div className="flex flex-col gap-4">
+      {merchant && (
+        <div className="self-start">
+          <SaleSwitch />
+        </div>
+      )}
+      {customer.status === 'loading' && (
+        <div className="hidden h-11 [[data-merchant-hint]_&]:block" aria-hidden="true" />
+      )}
+      {saleWaiting && (
+        <div className="hidden [[data-sale-mode-hint]_&]:block">
+          <SaleSkeleton />
+        </div>
+      )}
+      <div
+        className={`grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] ${saleWaiting ? '[[data-sale-mode-hint]_&]:hidden' : ''}`}
+      >
+        <div className="flex flex-col gap-6">
+          {repeatFailed && <FormAlert>{t('purchase.repeat.unavailable')}</FormAlert>}
+          {prices.status === 'failed' && (
+            <div className="flex flex-wrap items-center gap-3">
+              <FormAlert>{t('game.privatePrices.failed')}</FormAlert>
+              <Button variant="outline" size="xl" onClick={prices.retry}>
+                {t('game.privatePrices.retry')}
+              </Button>
+            </div>
+          )}
+          <section aria-labelledby="packs-title" className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="packs-title" className="text-lg font-bold">
+                {t('game.packs')}
+              </h2>
+              {prices.status === 'ready' && (
+                <Badge tone="gold">{t(`game.privatePrices.kinds.${prices.kind}`)}</Badge>
+              )}
+            </div>
+            {data.products.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('game.noPacks')}</p>
+            ) : (
+              ready.length > 0 && (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {ready.map((product) => (
+                    <li key={product.id}>
+                      <PackButton
+                        available={!waiting}
+                        selected={product.id === open?.id}
+                        onSelect={() => choose(product.id)}
+                      >
+                        {card(product)}
+                      </PackButton>
+                    </li>
+                  ))}
+                </ul>
+              )
             )}
-          </div>
-          {data.products.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('game.noPacks')}</p>
-          ) : (
-            ready.length > 0 && (
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {ready.map((product) => (
-                  <li key={product.id}>
-                    <PackButton
-                      available={!waiting}
-                      selected={product.id === open?.id}
-                      onSelect={() => choose(product.id)}
-                    >
+          </section>
+          {packs.length >= 2 && !waiting && (
+            <CalculatorCard
+              packs={packs}
+              onBuy={(id, count) => choose(id, count)}
+              onAddAll={(lines) => {
+                const first = lines[0];
+                if (!first) return;
+                choose(first.product.id, 1, { kind: 'bundle', lines });
+              }}
+            />
+          )}
+          {resting.length > 0 && (
+            <details
+              className="group rounded-lg border border-border bg-surface"
+              open={restingDefaultOpen}
+              onToggle={(event) => setRestingOpen(event.currentTarget.open)}
+            >
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                {t('game.unavailable', { count: resting.length })}
+                <ChevronDownIcon
+                  className="size-4 transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <ul className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3">
+                {resting.map((product) => (
+                  <li key={product.id} className="flex flex-col gap-2">
+                    <PackButton available={false} selected={false} onSelect={() => {}}>
                       {card(product)}
                     </PackButton>
+                    {/* Loaded once the list is open: the game page's first load stays in budget. */}
+                    {(restingOpen || restingDefaultOpen) && (
+                      <AlertButton productId={product.id} gameId={data.game.id} kind="available" />
+                    )}
                   </li>
                 ))}
               </ul>
-            )
+            </details>
           )}
-        </section>
-        {packs.length >= 2 && !waiting && (
-          <CalculatorCard
-            packs={packs}
-            onBuy={(id, count) => choose(id, count)}
-            onAddAll={(lines) => {
-              const first = lines[0];
-              if (!first) return;
-              choose(first.product.id, 1, { kind: 'bundle', lines });
-            }}
-          />
-        )}
-        {resting.length > 0 && (
-          <details
-            className="group rounded-lg border border-border bg-surface"
-            open={restingDefaultOpen}
-            onToggle={(event) => setRestingOpen(event.currentTarget.open)}
-          >
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
-              {t('game.unavailable', { count: resting.length })}
-              <ChevronDownIcon
-                className="size-4 transition-transform group-open:rotate-180"
-                aria-hidden="true"
-              />
-            </summary>
-            <ul className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3">
-              {resting.map((product) => (
-                <li key={product.id} className="flex flex-col gap-2">
-                  <PackButton available={false} selected={false} onSelect={() => {}}>
-                    {card(product)}
-                  </PackButton>
-                  {/* Loaded once the list is open: the game page's first load stays in budget. */}
-                  {(restingOpen || restingDefaultOpen) && (
-                    <AlertButton productId={product.id} gameId={data.game.id} kind="available" />
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
+        </div>
+        {desktop === null ? null : desktop ? (
+          <aside className="sticky top-4" aria-label={t('game.buyBox')}>
+            <div className="rounded-xl border border-border bg-surface p-5">
+              {box || (
+                <p className="flex items-center gap-2 text-base text-muted-foreground">
+                  <MousePointerClickIcon className="size-5" aria-hidden="true" />
+                  {t('game.choosePack')}
+                </p>
+              )}
+            </div>
+          </aside>
+        ) : (
+          <Sheet open={!!open} guardTyped={false} onOpenChange={(next) => !next && choose(null)}>
+            <SheetContent side="bottom" className="bg-surface p-5 pb-8">
+              <SheetTitle className="sr-only">{t('game.buyBox')}</SheetTitle>
+              {box}
+            </SheetContent>
+          </Sheet>
         )}
       </div>
-      {desktop === null ? null : desktop ? (
-        <aside className="sticky top-4" aria-label={t('game.buyBox')}>
-          <div className="rounded-xl border border-border bg-surface p-5">
-            {box || (
-              <p className="flex items-center gap-2 text-base text-muted-foreground">
-                <MousePointerClickIcon className="size-5" aria-hidden="true" />
-                {t('game.choosePack')}
-              </p>
-            )}
-          </div>
-        </aside>
-      ) : (
-        <Sheet open={!!open} guardTyped={false} onOpenChange={(next) => !next && choose(null)}>
-          <SheetContent side="bottom" className="bg-surface p-5 pb-8">
-            <SheetTitle className="sr-only">{t('game.buyBox')}</SheetTitle>
-            {box}
-          </SheetContent>
-        </Sheet>
-      )}
     </div>
   );
 }

@@ -260,6 +260,10 @@ test('the point of sale opens a game in early access (OP5)', async ({ page, api 
     })
     .on('GET /api/merchant/recent-players', 200, { items: [] })
     .on('GET /api/orders', 200, { items: [], nextCursor: null, checkout: null });
-  await page.goto('/merchant/pos');
+  await page.addInitScript(() => {
+    localStorage.setItem('vd-merchant', '1');
+    localStorage.setItem('vd-sale-mode', '1');
+  });
+  await page.goto('/games/early-game');
   await expect(page.getByRole('button', { name: /8100 UC/ })).toBeVisible();
 });

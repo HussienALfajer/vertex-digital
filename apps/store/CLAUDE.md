@@ -6,7 +6,7 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 - `src/app/`: routes, thin (data loading and layout only). `layout.tsx` sets `lang="ar" dir="rtl"`, the `dark` class, the inline head scripts, header and footer. `globals.css` = Tailwind + `@vertex-digital/ui/styles.css`.
 - `src/app/%5Finternal/revalidate/route.ts` is `POST /_internal/revalidate` (a folder starting with `_` is private in the App Router, so it is written `%5F`); the worker's `store.revalidate` job calls it.
 - `src/components/bottom-nav.tsx` is the phone's bar (S24 NH4), `page-back-link.tsx` the store's `BackLink`: a fixed parent per route, never `history.back()` (the table in S24 NH6). At phone width the header's search and cart live in the bar; the search button stays mounted, it holds the dialog.
-- Merchant routes: `app/merchant/(area)/` (layout with `MerchantNav`) and `app/merchant/(print)/` (print pages without that frame).
+- Merchant routes: `app/merchant/(area)/` (layout with `MerchantSidebar`, the shared `SidebarPanel` of `packages/ui`) and `app/merchant/(print)/` (print pages without that frame). The sale mode (S21 PS1) is not a route: `features/merchant-tools/sale-mode.ts` (light, on the home and game pages) holds the switch, `home-slot.tsx` the home page's slots, `sale-counter.tsx` the game page's counter; `/merchant/pos` redirects to `/?sale=1` (`next.config.ts`).
 - Route handlers that must keep `no-cache` (`sw.js/route.ts`, `offline/route.ts`, `q/[code]/route.ts`) read per request.
 - `src/features/<area>/`: one area's components, server data functions and request functions. `src/components/`: app-wide pieces (header, footer, banners, account menu, `FormAlert`, `InvalidAlert` in its own file so pages showing only a `FormAlert` don't ship it).
 - `src/lib/`: `api.ts` (`apiRequest`), `idempotency.ts`, `session.ts`, `i18n.ts` (`t()`), `errors.ts` (`errorText`), `format.ts` (`ltr()`), `server-clock.ts`, `server-env.ts`, `cache-tags.ts`, `altcha.ts`, `safe-redirect.ts`, `use-search-param.ts`.
@@ -41,11 +41,11 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 
 ## Money, idempotency and session
 - Every money and ticket form follows `lib/idempotency.ts`: keep the key while the body is the same; keep it whatever the body after an answer that may follow a write (no answer, server fault, `IDEMPOTENCY_KEY_REUSED`) or while an attempt is in flight, until a success; new key only for a changed body after a clear refusal.
-- One form: `useIdempotentRequest`. Buy box, cart, POS, bulk, support tickets: `features/purchase/attempt.ts` `sendAttempt` (key in session storage per slot), so a lost answer keeps its key across a reload or a re-opened sheet. Checkout key release: `features/cart/checkout-key.ts`.
+- One form: `useIdempotentRequest`. Buy box, cart, sale mode, bulk, support tickets: `features/purchase/attempt.ts` `sendAttempt` (key in session storage per slot), so a lost answer keeps its key across a reload or a re-opened sheet. Checkout key release: `features/cart/checkout-key.ts`.
 - `apiRequest` calls same-origin `/api/...` (nginx in production, a rewrite in dev), never throws, answers a code and `details`; `FormData` goes multipart. Customer auth is Better Auth at `/api/auth`.
 - Countdowns to a server-set time use `serverNow()` (`lib/server-clock.ts`), never `Date.now()`.
 - No buy while a signed-in account's private prices (`features/catalog/private-prices.ts`) are unknown; the cart checks lines against them too. `useCustomer().frozen` disables the buy box, the cart's slide, the player check and the deposit wizard.
-- `readSession()` shares one `get-session` request; the `vd-signed-in` / `vd-private-prices` hints (no personal data) become `data-*-hint` on `<html>` before paint via `SESSION_HINT_SCRIPT`. Hints are never an access decision.
+- `readSession()` shares one `get-session` request; the `vd-signed-in` / `vd-private-prices` / `vd-merchant` / `vd-sale-mode` hints (no personal data) become `data-*-hint` on `<html>` before paint via `SESSION_HINT_SCRIPT`. Hints are never an access decision.
 - Every way a session ends calls `features/account/signed-out.ts` `forgetThisBrowser()` (push subscription, cart, hints).
 - Token pages (share links `/g/<token>`, verification) send `noindex` and `no-referrer`. Order codes stay masked until revealed (`revealCode`).
 - Browser reads keep shown data after a failed background read, and only the newest read lands (copy `features/support/` and the merchant reads).

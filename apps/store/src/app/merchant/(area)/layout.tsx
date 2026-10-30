@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { PageBackLink } from '@/components/page-back-link';
 import { tm } from '@/features/merchant-tools/i18n';
-import { MerchantNav } from '@/features/merchant-tools/merchant-nav';
+import { MerchantPhoneBar, MerchantSidebar } from '@/features/merchant-tools/merchant-nav';
 import { MerchantTierProvider } from '@/features/merchant-tools/tier-state';
 import { t } from '@/lib/i18n';
 
@@ -15,22 +15,24 @@ export const metadata: Metadata = {
 };
 
 /**
- * S21: the merchant area's frame; everything about the merchant loads in the browser. The sections
- * sit between the title and the page on a phone, and beside both on a wide screen. S23 ID2, ID4:
- * the tier's badge beside the sections, and the celebration after a rise on any page of it.
+ * S21: the merchant area's frame; everything about the merchant loads in the browser. The sidebar
+ * on a wide screen, its button between the title and the page on a phone. S23 ID2, ID4: the tier's
+ * badge, and the celebration after a rise on any page of it.
  */
 export default function MerchantLayout({ children }: { children: ReactNode }) {
   return (
     <MerchantTierProvider>
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-4 py-10 md:py-16 lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8">
-        <PageHeader
-          className="lg:col-start-2 lg:row-start-1"
-          back={<PageBackLink href="/account">{t('back.account')}</PageBackLink>}
-          title={tm('title')}
-          description={tm('subtitle')}
-        />
-        <MerchantNav />
-        <div className="min-w-0 lg:col-start-2 lg:row-start-2">{children}</div>
+      <div className="flex w-full">
+        <MerchantSidebar />
+        <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 py-10 md:py-16 lg:px-8">
+          <PageHeader
+            back={<PageBackLink href="/account">{t('back.account')}</PageBackLink>}
+            title={tm('title')}
+            description={tm('subtitle')}
+          />
+          <MerchantPhoneBar />
+          <div className="min-w-0">{children}</div>
+        </div>
       </div>
     </MerchantTierProvider>
   );

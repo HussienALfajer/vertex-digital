@@ -217,7 +217,7 @@ test.describe('back links (NH6)', () => {
     ['/forgot-password', '/sign-in'],
     ['/verify-email', '/sign-in'],
     ['/merchant', '/account'],
-    ['/merchant/pos', '/account'],
+    ['/merchant/bulk', '/account'],
     ['/games/pubg-mobile', '/categories/games'],
     ['/categories/games', '/'],
     [`${CONTENT_STORE_URL}/terms`, '/'],
