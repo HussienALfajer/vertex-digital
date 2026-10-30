@@ -372,10 +372,13 @@ test('the entry pages send a signed-in customer on, never to a second sign-in (A
 test('the code page without a waiting address links back to sign-in', async ({ page }) => {
   await page.goto('/verify-email');
   await expect(page.getByText(ar.verifyEmail.missingTitle)).toBeVisible();
-  await expect(page.getByRole('main').getByRole('link', { name: ar.signIn.title })).toHaveAttribute(
-    'href',
-    '/sign-in',
-  );
+  // The panel's own button, beside the page's back link to the same place.
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('link', { name: ar.signIn.title })
+      .and(page.locator(':not([data-slot="back-link"])')),
+  ).toHaveAttribute('href', '/sign-in');
 });
 
 test.describe('account', () => {
