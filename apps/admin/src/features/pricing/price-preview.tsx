@@ -6,7 +6,7 @@ import {
   type PricingPreviewRequest,
   savingsWarning,
 } from '@vertex-digital/contracts';
-import { Button, Skeleton } from '@vertex-digital/ui';
+import { Badge, Button, Skeleton } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +97,12 @@ export function PricePreview({ request }: { request: PricingPreviewRequest | nul
       </dl>
       <div className="flex flex-col gap-1 text-sm">
         {data.ruleScope && (
-          <p>{t('pricing.preview.from', { source: ruleSource(t, data.ruleScope) })}</p>
+          <p className="flex flex-wrap items-center gap-2">
+            {t('pricing.preview.from', { source: ruleSource(t, data.ruleScope) })}
+            {data.source && data.source !== 'rule' && (
+              <Badge tone="gold">{t(`pricing.priceSources.${data.source}`)}</Badge>
+            )}
+          </p>
         )}
         {data.officialPriceUsdUnits !== null && (
           <p>

@@ -10409,6 +10409,7 @@ export interface components {
             ruleScope: components["schemas"]["MarginScope"] | null;
             /** Format: uuid */
             ruleId: string | null;
+            source: components["schemas"]["PriceSource"] | null;
             costUsdUnits: number;
             priceUsdUnits: number;
             marginUsdUnits: number;
@@ -10418,6 +10419,8 @@ export interface components {
             officialPriceUsdUnits: number | null;
             savings: components["schemas"]["Savings"] | null;
         };
+        /** @enum {string} */
+        PriceSource: "rule" | "fixed" | "fixed_fallback" | "retail_cap" | "parent_cap";
         Savings: {
             amountUsdUnits: number;
             percent: number | null;
@@ -10542,8 +10545,6 @@ export interface components {
             marginUsdUnits: number | null;
             marginBp: number | null;
         };
-        /** @enum {string} */
-        PriceSource: "rule" | "fixed" | "fixed_fallback" | "retail_cap" | "parent_cap";
         PriceListAccount: {
             /** Format: uuid */
             id: string;
@@ -10561,10 +10562,25 @@ export interface components {
             /** Format: uuid */
             gameId?: string;
             q?: string;
+            /** Format: uuid */
+            categoryId?: string;
             listIds?: string[];
+            status?: components["schemas"]["PriceMatrixStatus"];
+            supplier?: components["schemas"]["SupplierCode"];
+            sort?: components["schemas"]["PriceMatrixSort"];
+            /** Format: uuid */
+            sortList?: string;
             /** @enum {string} */
-            warnings?: "true" | "false";
+            direction?: "asc" | "desc";
+            /** Format: uuid */
+            marginList?: string;
+            marginBelowBp?: number;
+            page?: number;
         };
+        /** @enum {string} */
+        PriceMatrixStatus: "unavailable" | "no_price" | "low_margin" | "fixed" | "held" | "paused";
+        /** @enum {string} */
+        PriceMatrixSort: "margin" | "price" | "cost" | "difference";
         PriceMatrix: {
             lists: {
                 /** Format: uuid */
@@ -10589,6 +10605,18 @@ export interface components {
                 held: boolean;
                 cells: components["schemas"]["PriceMatrixCell"][];
             }[];
+            page: number;
+            pageCount: number;
+            total: number;
+            counts: {
+                all: number;
+                unavailable: number;
+                no_price: number;
+                low_margin: number;
+                fixed: number;
+                held: number;
+                paused: number;
+            };
         };
         PriceMatrixCell: {
             priceUsdUnits: number | null;
@@ -18610,8 +18638,16 @@ export interface operations {
             query?: {
                 gameId?: string;
                 q?: string;
+                categoryId?: string;
                 listIds?: string[];
-                warnings?: "true" | "false";
+                status?: "unavailable" | "no_price" | "low_margin" | "fixed" | "held" | "paused";
+                supplier?: "wdgzone" | "fazercards" | "manual" | "fake";
+                sort?: "margin" | "price" | "cost" | "difference";
+                sortList?: string;
+                direction?: "asc" | "desc";
+                marginList?: string;
+                marginBelowBp?: number;
+                page?: number;
             };
             header?: never;
             path?: never;

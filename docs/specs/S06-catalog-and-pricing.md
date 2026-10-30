@@ -141,7 +141,7 @@ None. No worker job, supplier call, email or Telegram message. The `catalog` mod
 None in S06. S09 builds the store pages on this catalog, with CT6, CT9 and PR7–PR8.
 
 ### Admin (Arabic, RTL; light and dark)
-- **Navigation:** "الكتالوج" (`/catalog`) and "التسعير" (`/pricing`).
+- **Navigation:** "الكتالوج" (`/catalog`) and "التسعير" (`/pricing/lists`; `/pricing` redirects to the retail list's page).
 - **`/catalog`:** category tabs (with "إدارة الفئات"), then the category's games as cards in their order: cover, Arabic and English names, status chip (نشطة، متوقفة), product count; filters for status and archived, a name search; "إضافة لعبة". Move up / move down buttons reorder (keyboard reachable; no drag only). Empty: "لا توجد ألعاب في هذه الفئة بعد" with the add button. Loading: skeleton cards. Error: retry.
 - **Categories dialog:** list with rename, order, archive / restore (`CATALOG_NOT_EMPTY` explains which games are left), add.
 - **`/catalog/games/new` and `/catalog/games/$id`:** tabs:
@@ -149,7 +149,7 @@ None in S06. S09 builds the store pages on this catalog, with CT6, CT9 and PR7�
   - "حقول الإدخال": fields in order (label, key, type, required), add / edit dialog (type-specific bounds or options editor), order, archive / restore. Empty: "أضف حقل معرّف اللاعب قبل تفعيل باقات الشحن المباشر".
   - "الباقات": table in order (name, kind, in-game amount, official price, max quantity, status, availability "غير متوفرة: لا مورد مرتبط" until S07); add / edit dialog by kind (code products show region and redemption instructions); pause / resume; order; archive / restore with an archived filter.
   - "التسعير": the rule that applies to this game and where it comes from, "تخصيص هامش لهذه اللعبة" (opens the rule form), and per product the rule in force, with "تخصيص" per product.
-- **`/pricing`:** the global rule (editable), category rules, then game and product overrides (target, values, products governed), each editable and archivable (not the global one); the rule form (percent, fixed, minimum margin) with a live preview for a sample cost (default $1.00) showing price, margin and SYP; a standalone calculator ("جرّب تكلفة") choosing a product, game or category and a cost. Saving opens re-authentication.
+- **The retail list's page (`/pricing/lists/<retail id>`, S20):** the global rule (editable), category rules, then game and product overrides (target, values, products governed), each editable and archivable (not the global one); the rule form (percent, fixed, minimum margin) with a live preview for a sample cost (default $1.00) showing price, margin and SYP; a standalone calculator ("جرّب تكلفة", on every list's page, computed on that list's chain) choosing a product, game or category and a cost. Saving opens re-authentication.
 - Every error shows the translation of its code; forms keep their values on error.
 
 ## Audit and notifications
@@ -197,7 +197,7 @@ The owner's browser check (local, `pnpm dev`, signed in to the panel):
 3. "الباقات": add a direct product "60 UC" (amount 60, official price $0.99). Activate the game: refused, "ينقصها: حقل إدخال مطلوب". Add the field `player_id` "معرّف اللاعب" (digits, 5–15, required). Activate: done.
 4. Add "325 UC" and "660 UC", reorder them, pause one, archive one and restore it. The availability column says "غير متوفرة: لا مورد مرتبط".
 5. Add a game "آيتونز" in بطاقات هدايا with a code product "بطاقة 10$" (region "الولايات المتحدة", redemption instructions); max quantity shows 10.
-6. `/pricing`: the global rule shows 10%، $0.00، حد أدنى $0.10. The calculator with cost $0.89 shows $0.99 (margin $0.10), with $8.50 shows $9.35, both with the SYP price at the current rate.
+6. The retail list's page: the global rule shows 10%، $0.00، حد أدنى $0.10. The calculator with cost $0.89 shows $0.99 (margin $0.10), with $8.50 shows $9.35, both with the SYP price at the current rate.
 7. Set a rule for ألعاب at 12% with a $0.15 minimum: re-authentication first. Preview "60 UC" at cost $0.89: $1.04, the rule shown as coming from the category, no savings against $0.99 ("لا توفير"). Set a product rule on "60 UC" at 5% with a $0.05 minimum: $0.94, savings 5%.
 8. Archive the product rule: the category rule applies again. Try to archive the global rule: refused.
 9. Archive the category ألعاب: refused while PUBG Mobile is in it.
@@ -209,7 +209,7 @@ Tests:
 - Concurrency (real PostgreSQL): two rule sets for the same target in parallel leave one live rule (unique index), two reorders of one game serialize to a consistent order, two creations with the same name leave one.
 - Database: the partial unique indexes, the checks (whole cents, bounds, `target_id` null only for global, code-only fields), the seeds (three categories, the global rule), the new file kind.
 - Unit (contracts, 100% coverage): PR3 across boundaries (1 unit, sub-cent costs, exact cents, the minimum governing and not, 0% and 100%, large costs), PR4–PR5 with the boundary at exactly the minimum, PR2 resolution order, PR7 rounding and thresholds, `contrastRatio` against known WCAG pairs, the schemas' bounds.
-- E2E with RTL screenshots (admin, light and dark): `/catalog` with games and empty, the game page tabs (data with the contrast readout, fields, products with the archived filter, pricing), the categories dialog, `/pricing` with the preview, the re-authentication dialog on a rule save.
+- E2E with RTL screenshots (admin, light and dark): `/catalog` with games and empty, the game page tabs (data with the contrast readout, fields, products with the archived filter, pricing), the categories dialog, the retail list's page with the preview, the re-authentication dialog on a rule save.
 
 ## Implementation notes
 - Suggested split, each leaving `main` green:

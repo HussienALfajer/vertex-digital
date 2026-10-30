@@ -4,6 +4,7 @@ import {
   listPrice,
   needsReview,
   type PriceChangeCause,
+  type PricingPath,
   ROOT_PRICE_LIST_IDS,
   resolveListEntry,
 } from '@vertex-digital/contracts';
@@ -222,6 +223,12 @@ export type ListTargetRow = Pick<
   | 'minMarginUsdUnits'
 >;
 
+/** What a list's target reads of a product: its path and the basis (a draft cost in a preview). */
+export interface ListTargetState extends PricingPath {
+  productId: string;
+  basis: { id: string; costUsdUnits: number | null } | null;
+}
+
 /**
  * S20 LP1–LP4 for one list but retail: the list's entry (LS4) at the basis cost, capped at the
  * parent list's figures on a tier list (S23 PX2, `parent`) and at the retail figures. Null with no
@@ -230,7 +237,7 @@ export type ListTargetRow = Pick<
 export function listTarget(
   facts: Pick<ListPricingFacts, 'rules' | 'fixedPrices'>,
   chain: readonly string[],
-  state: Pick<ProductRoutingState, 'productId' | 'gameId' | 'categoryId' | 'basis'>,
+  state: ListTargetState,
   retail: RetailFigures,
   parent: RetailFigures | null = null,
 ): ListTargetRow | null {
@@ -273,7 +280,7 @@ export function listTarget(
  */
 export function listTargets(
   facts: ListPricingFacts,
-  state: Pick<ProductRoutingState, 'productId' | 'gameId' | 'categoryId' | 'basis'>,
+  state: ListTargetState,
   retail: RetailFigures,
 ): Map<string, ListTargetRow> {
   const decided = new Map<string, ListTargetRow>();

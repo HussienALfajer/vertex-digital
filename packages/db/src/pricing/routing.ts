@@ -168,6 +168,8 @@ export interface ProductRoutingState {
   openReview: ReviewRow | null;
   /** On the list read (S20 PO1). */
   availability: ProductAvailability;
+  /** All `availability` reads but the price, so another list's follows from its row. */
+  availabilityFacts: Omit<Parameters<typeof productAvailability>[0], 'price'>;
   /** S23 OP5: the end of the running early-access window (the product's or its game's), or null. */
   earlyAccessUntil: Date | null;
 }
@@ -500,6 +502,13 @@ export async function productRoutingStates(
     }
   }
 
+  const routesOf = new Map<string, typeof routeRows>();
+  for (const row of routeRows) {
+    const routes = routesOf.get(row.route.productId);
+    if (routes) routes.push(row);
+    else routesOf.set(row.route.productId, [row]);
+  }
+
   for (const { product, ...where } of products) {
     const earlyAccessWindow = runningEarlyAccess(
       [product.earlyAccessUntil, where.gameEarlyAccessUntil],
@@ -507,63 +516,61 @@ export async function productRoutingStates(
     );
     const liveFieldKeys = keysOf.get(product.gameId) ?? [];
     const liveSelectOptions = selectsOf.get(product.gameId) ?? {};
-    const routes: RouteState[] = routeRows
-      .filter(({ route }) => route.productId === product.id)
-      .map(({ route, offer }) => {
-        const supplier = supplierOf.get(route.supplierId) as SupplierState;
-        const balance = supplier.balance;
-        const unusableReason = routeUnusableReason(
-          {
-            archived: route.archivedAt !== null,
-            enabled: route.enabled,
-            supplierCode: supplier.code,
-            supplierAvailable: supplier.available,
-            supplierConfigured: supplier.configured,
-            supplierPaused: supplier.paused || supplier.subscriptionInactive,
-            health: supplier.health,
-            offerMissing: offer.missingSince !== null,
-            offerUnsupported: offer.unsupportedReason !== null,
-            kindMismatch: offer.kind !== null && offer.kind !== product.kind,
-            offerMinQuantity: offer.minQuantity,
-            offerMaxQuantity: offer.maxQuantity,
-            productMaxQuantity: product.maxQuantity,
-            inStock: offer.inStock,
-            costUsdUnits: offer.costUsdUnits,
-            costConfirmedAt: offer.costConfirmedAt,
-            requiredFields: offer.requiredFields,
-            fieldMap: route.fieldMap,
-            optionMap: route.optionMap,
-            fieldSpecs: offer.fieldSpecs,
-            liveFieldKeys,
-            liveSelectOptions,
-            balanceUsdUnits: balance?.currency === 'USD' ? balance.amountUnits : null,
-          },
-          context.now,
-          policy,
-        );
-        return {
-          id: route.id,
-          productId: route.productId,
-          supplier,
-          supplierCode: supplier.code,
-          health: supplier.health,
-          offer,
-          costUsdUnits: offer.costUsdUnits,
-          priority: route.priority,
+    const routes: RouteState[] = (routesOf.get(product.id) ?? []).map(({ route, offer }) => {
+      const supplier = supplierOf.get(route.supplierId) as SupplierState;
+      const balance = supplier.balance;
+      const unusableReason = routeUnusableReason(
+        {
+          archived: route.archivedAt !== null,
           enabled: route.enabled,
+          supplierCode: supplier.code,
+          supplierAvailable: supplier.available,
+          supplierConfigured: supplier.configured,
+          supplierPaused: supplier.paused || supplier.subscriptionInactive,
+          health: supplier.health,
+          offerMissing: offer.missingSince !== null,
+          offerUnsupported: offer.unsupportedReason !== null,
+          kindMismatch: offer.kind !== null && offer.kind !== product.kind,
+          offerMinQuantity: offer.minQuantity,
+          offerMaxQuantity: offer.maxQuantity,
+          productMaxQuantity: product.maxQuantity,
+          inStock: offer.inStock,
+          costUsdUnits: offer.costUsdUnits,
+          costConfirmedAt: offer.costConfirmedAt,
+          requiredFields: offer.requiredFields,
           fieldMap: route.fieldMap,
           optionMap: route.optionMap,
-          priceBasis: route.priceBasis,
-          expectedDeliveryMinutes: route.expectedDeliveryMinutes,
-          hardLimitMinutes: route.hardLimitMinutes,
-          archivedAt: route.archivedAt,
-          createdAt: route.createdAt,
-          updatedAt: route.updatedAt,
-          unusableReason,
-          tier: unusableReason === null ? routeTier(supplier.code, supplier.health) : null,
-          deliveryMedianMs: medians.get(supplier.id) ?? null,
-        };
-      });
+          fieldSpecs: offer.fieldSpecs,
+          liveFieldKeys,
+          liveSelectOptions,
+          balanceUsdUnits: balance?.currency === 'USD' ? balance.amountUnits : null,
+        },
+        context.now,
+        policy,
+      );
+      return {
+        id: route.id,
+        productId: route.productId,
+        supplier,
+        supplierCode: supplier.code,
+        health: supplier.health,
+        offer,
+        costUsdUnits: offer.costUsdUnits,
+        priority: route.priority,
+        enabled: route.enabled,
+        fieldMap: route.fieldMap,
+        optionMap: route.optionMap,
+        priceBasis: route.priceBasis,
+        expectedDeliveryMinutes: route.expectedDeliveryMinutes,
+        hardLimitMinutes: route.hardLimitMinutes,
+        archivedAt: route.archivedAt,
+        createdAt: route.createdAt,
+        updatedAt: route.updatedAt,
+        unusableReason,
+        tier: unusableReason === null ? routeTier(supplier.code, supplier.health) : null,
+        deliveryMedianMs: medians.get(supplier.id) ?? null,
+      };
+    });
     const usable = orderRoutes(routes.filter((route) => route.unusableReason === null));
     const others = [
       ...routes.filter((route) => route.unusableReason !== null && route.archivedAt === null),
@@ -594,6 +601,15 @@ export async function productRoutingStates(
         ? Math.max(current.minMarginUsdUnits, rule.values.minMarginUsdUnits)
         : current.minMarginUsdUnits
       : rule.values.minMarginUsdUnits;
+    const availabilityFacts = {
+      categoryArchived: where.categoryArchivedAt !== null,
+      gameArchived: where.gameArchivedAt !== null,
+      productArchived: product.archivedAt !== null,
+      gameStatus: where.gameStatus,
+      productStatus: product.status,
+      usableRouteCostsUsdUnits: usable.map((route) => route.costUsdUnits as number),
+      earlyAccessHidden: earlyAccessWindow !== null && context.earlyAccess !== true,
+    };
     states.set(product.id, {
       productId: product.id,
       nameAr: product.nameAr,
@@ -614,17 +630,12 @@ export async function productRoutingStates(
       openReview: reviewOf.get(product.id) ?? null,
       earlyAccessUntil: earlyAccessWindow,
       availability: productAvailability({
-        categoryArchived: where.categoryArchivedAt !== null,
-        gameArchived: where.gameArchivedAt !== null,
-        productArchived: product.archivedAt !== null,
-        gameStatus: where.gameStatus,
-        productStatus: product.status,
+        ...availabilityFacts,
         price: current
           ? { priceUsdUnits: current.priceUsdUnits, minMarginUsdUnits: currentMinMarginUsdUnits }
           : null,
-        usableRouteCostsUsdUnits: usable.map((route) => route.costUsdUnits as number),
-        earlyAccessHidden: earlyAccessWindow !== null && context.earlyAccess !== true,
       }),
+      availabilityFacts,
     });
   }
   return states;

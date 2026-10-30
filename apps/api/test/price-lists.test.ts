@@ -260,6 +260,7 @@ describe('access (S20 "Access")', () => {
       ['GET', '/api/admin/pricing/lists'],
       ['GET', `/api/admin/pricing/lists/${list}`],
       ['GET', `/api/admin/pricing/matrix?gameId=${ids.gameId}`],
+      ['GET', '/api/admin/pricing/matrix'],
     ];
     const changes: [string, string, unknown][] = [
       ['POST', '/api/admin/pricing/lists', { name: 'VIP', parentListId: wholesale }],
@@ -326,6 +327,19 @@ describe('lists (S20 LS1–LS6)', () => {
       ready: true,
       archivedAt: null,
     });
+    // Every game on a page, the counts from the same read; a pair the query refuses.
+    const paged = await json<{
+      rows: { gameId: string }[];
+      page: number;
+      pageCount: number;
+      total: number;
+      counts: { all: number; fixed: number };
+    }>(await adminGet(`/api/admin/pricing/matrix?listIds=${created.id}&status=fixed`), 200);
+    expect(paged.page).toBe(1);
+    expect(paged.total).toBe(paged.counts.fixed);
+    expect(paged.counts.all).toBeGreaterThanOrEqual(paged.counts.fixed);
+    await json(await adminGet(`/api/admin/pricing/matrix?gameId=${ids.gameId}&q=x`), 400);
+
     // RP3: with no rule of its own it prices as its parent, from its creation.
     const matrix = await json<{
       rows: { cells: { priceListId: string; priceUsdUnits: number }[] }[];
@@ -421,6 +435,98 @@ describe('lists (S20 LS1–LS6)', () => {
 });
 
 describe('rules and fixed prices per list (S20 LS2, LS4, LP1)', () => {
+  it('previews a cost on a list as a stored row: capped at retail, a draft uncapped', async () => {
+    const list = await createList(`معاينة ${run}`);
+    const values = { percentBp: 5000, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.02) };
+    await json(
+      await adminSend('PUT', '/api/admin/pricing/rules', {
+        priceListId: list.id,
+        scope: 'global',
+        ...values,
+      }),
+      200,
+    );
+    const target = { scope: 'global' };
+    const costUsdUnits = usd(1);
+    const retail = await json<{ priceUsdUnits: number; source: string }>(
+      await adminSend('POST', '/api/admin/pricing/preview', { target, costUsdUnits }),
+      200,
+    );
+    expect(retail.source).toBe('rule');
+    const capped = await json<{ priceUsdUnits: number; source: string; ruleScope: string }>(
+      await adminSend('POST', '/api/admin/pricing/preview', {
+        target,
+        costUsdUnits,
+        priceListId: list.id,
+      }),
+      200,
+    );
+    expect(capped).toMatchObject({
+      priceUsdUnits: retail.priceUsdUnits,
+      source: 'retail_cap',
+      ruleScope: 'global',
+    });
+    const draft = await json<{ priceUsdUnits: number; source: string | null }>(
+      await adminSend('POST', '/api/admin/pricing/preview', {
+        target,
+        costUsdUnits,
+        priceListId: list.id,
+        values,
+      }),
+      200,
+    );
+    expect(draft).toMatchObject({ priceUsdUnits: usd(1.5), source: null });
+    await json(
+      await adminSend('POST', '/api/admin/pricing/preview', {
+        target,
+        costUsdUnits,
+        priceListId: newId(),
+      }),
+      404,
+    );
+  });
+
+  it('previews a product as its stored rows: fixed, fallback, and retail’s fixed price', async () => {
+    const list = await createList(`معاينة ثابت ${run}`);
+    const pack = await product(1);
+    const fixedPath = (listId: string) =>
+      `/api/admin/pricing/lists/${listId}/fixed-prices/${pack.id}`;
+    const stored = async (listId: string) => {
+      const matrix = await json<{
+        rows: {
+          productId: string;
+          cells: { priceListId: string; priceUsdUnits: number; source: string }[];
+        }[];
+      }>(await adminGet(`/api/admin/pricing/matrix?gameId=${ids.gameId}&listIds=${listId}`), 200);
+      const row = matrix.rows.find((candidate) => candidate.productId === pack.id);
+      const cell = row?.cells.find((candidate) => candidate.priceListId === listId);
+      return { priceUsdUnits: cell?.priceUsdUnits, source: cell?.source };
+    };
+    const previewed = async (priceListId: string) => {
+      const { priceUsdUnits, source } = await json<{ priceUsdUnits: number; source: string }>(
+        await adminSend('POST', '/api/admin/pricing/preview', {
+          target: { scope: 'product', targetId: pack.id },
+          costUsdUnits: usd(1),
+          priceListId,
+        }),
+        200,
+      );
+      return { priceUsdUnits, source };
+    };
+    for (const [price, source] of [
+      [usd(1.07), 'fixed'],
+      [usd(1.02), 'fixed_fallback'],
+    ] as const) {
+      await json(await adminSend('PUT', fixedPath(list.id), { priceUsdUnits: price }), 200);
+      expect((await previewed(list.id)).source).toBe(source);
+      expect(await previewed(list.id)).toEqual(await stored(list.id));
+    }
+    // Retail's fixed price moves retail, and every list's cap with it.
+    await json(await adminSend('PUT', fixedPath(retail), { priceUsdUnits: usd(1.15) }), 200);
+    expect(await previewed(retail)).toEqual({ priceUsdUnits: usd(1.15), source: 'fixed' });
+    expect(await previewed(retail)).toEqual(await stored(retail));
+  });
+
   it('sets a list’s rules, archives a custom list’s global rule, never a root’s', async () => {
     const list = await createList(`قواعد ${run}`);
     const rule = await json<{ id: string; priceListId: string; productCount: number }>(

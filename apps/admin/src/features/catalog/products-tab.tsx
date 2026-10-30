@@ -6,7 +6,6 @@ import {
   type GameDetail,
   marginPercent,
   PRICE_MATRIX_MAX_LISTS,
-  PRICE_MATRIX_MAX_PRODUCTS,
   type PriceMatrix,
   type Product,
   ROOT_PRICE_LIST_IDS,
@@ -14,7 +13,6 @@ import {
 import {
   Badge,
   Button,
-  Callout,
   cn,
   Dialog,
   EmptyState,
@@ -138,12 +136,6 @@ export function ProductsTab({ game }: { game: GameDetail }) {
       {failure && <FormAlert>{failure}</FormAlert>}
       {!archived && listsFailure && (
         <ReadFailure error={listsFailure.error} onRetry={() => listsFailure.refetch()} />
-      )}
-      {!archived && (matrix.data?.rows.length ?? 0) >= PRICE_MATRIX_MAX_PRODUCTS && (
-        <Callout
-          tone="info"
-          title={t('pricing.matrix.truncated', { max: PRICE_MATRIX_MAX_PRODUCTS })}
-        />
       )}
       {products.length === 0 ? (
         <EmptyState

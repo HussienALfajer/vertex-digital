@@ -102,6 +102,19 @@ export const setMarginRuleSchema = marginRuleValuesSchema
 
 export type SetMarginRule = z.input<typeof setMarginRuleSchema>;
 
+/** Where a list's price comes from (S20 LP1, LP2; S23 PX2). */
+export const PRICE_SOURCES = [
+  'rule',
+  'fixed',
+  'fixed_fallback',
+  'retail_cap',
+  'parent_cap',
+] as const;
+
+export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' });
+
+export type PriceSource = z.infer<typeof priceSourceSchema>;
+
 /** `POST /api/admin/pricing/preview` (rule PR10). */
 export const pricingPreviewRequestSchema = z
   .object({
@@ -109,7 +122,7 @@ export const pricingPreviewRequestSchema = z
     costUsdUnits: z.int().min(1).max(PREVIEW_MAX_COST_USD_UNITS),
     /** Draft values from the rule form; without them the rule that applies to the target. */
     values: marginRuleValuesSchema.optional(),
-    /** S20: the list whose rules apply (LS4, fixed prices aside), retail by default. */
+    /** S20: the list whose entry prices the cost (LS4, LP1–LP4), retail by default. */
     priceListId: z.uuid().optional(),
   })
   .meta({ id: 'PricingPreviewRequest' });
@@ -134,6 +147,8 @@ export const pricingPreviewSchema = z
     /** Where the rule comes from: the scope of the live rule found, or null for a draft. */
     ruleScope: marginScopeSchema.nullable(),
     ruleId: z.uuid().nullable(),
+    /** How the list prices it (LP1–LP4): a fixed price or a cap; null for a draft. */
+    source: priceSourceSchema.nullable(),
     costUsdUnits: z.int().positive(),
     priceUsdUnits: z.int().positive(),
     marginUsdUnits: z.int().positive(),
@@ -465,19 +480,6 @@ export function accountPriceKind(kind: PriceListKind, tierList: boolean): PriceK
   return tierList ? 'wholesale' : priceKindOf(kind);
 }
 
-/** Where a list's price comes from (S20 LP1, LP2; S23 PX2). */
-export const PRICE_SOURCES = [
-  'rule',
-  'fixed',
-  'fixed_fallback',
-  'retail_cap',
-  'parent_cap',
-] as const;
-
-export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' });
-
-export type PriceSource = z.infer<typeof priceSourceSchema>;
-
 export {
   ACCOUNT_TYPES,
   type AccountType,
@@ -747,8 +749,41 @@ export type PriceListDetail = z.infer<typeof priceListDetailSchema>;
 /** The matrix's columns at most, retail included (S20 API). */
 export const PRICE_MATRIX_MAX_LISTS = 8;
 
-/** The matrix's rows at most for a search. */
-export const PRICE_MATRIX_MAX_PRODUCTS = 200;
+/** Games on a page of the matrix while it is grouped by game. */
+export const PRICE_MATRIX_GAMES_PER_PAGE = 20;
+
+/** Rows on a page of the matrix while it is sorted (flat, across games). */
+export const PRICE_MATRIX_ROWS_PER_PAGE = 100;
+
+/** A margin below this share of the price is "هامش منخفض", in the chip and the range filter. */
+export const LOW_MARGIN_BP = 500;
+
+/** The margin rule of the matrix: a known margin below the threshold. */
+export function isLowMargin(marginBp: number | null, thresholdBp: number = LOW_MARGIN_BP): boolean {
+  return marginBp !== null && marginBp < thresholdBp;
+}
+
+/** The status chips of the matrix. */
+export const PRICE_MATRIX_STATUSES = [
+  'unavailable',
+  'no_price',
+  'low_margin',
+  'fixed',
+  'held',
+  'paused',
+] as const;
+
+export const priceMatrixStatusSchema = z
+  .enum(PRICE_MATRIX_STATUSES)
+  .meta({ id: 'PriceMatrixStatus' });
+
+export type PriceMatrixStatus = z.infer<typeof priceMatrixStatusSchema>;
+
+export const PRICE_MATRIX_SORTS = ['margin', 'price', 'cost', 'difference'] as const;
+
+export const priceMatrixSortSchema = z.enum(PRICE_MATRIX_SORTS).meta({ id: 'PriceMatrixSort' });
+
+export type PriceMatrixSort = z.infer<typeof priceMatrixSortSchema>;
 
 const listIdsSchema = z.preprocess(
   (value) =>
@@ -756,21 +791,31 @@ const listIdsSchema = z.preprocess(
   z.array(z.uuid()).min(1).max(PRICE_MATRIX_MAX_LISTS),
 );
 
-/** `GET /api/admin/pricing/matrix`: a game's products or a search, on the chosen lists. */
+/**
+ * `GET /api/admin/pricing/matrix`: a game's products, or every game's (a category's, or a
+ * search's), on the chosen lists, with the filters and the sort applied to the whole scope.
+ */
 export const priceMatrixQuerySchema = z
   .object({
     gameId: z.uuid().optional(),
     q: z.string().trim().min(1).max(100).optional(),
+    categoryId: z.uuid().optional(),
     /** Comma-separated; retail is always the first column. Default: retail, wholesale, cost. */
     listIds: listIdsSchema.optional(),
-    /** Only rows with a warning. */
-    warnings: z
-      .enum(['true', 'false'])
-      .transform((value) => value === 'true')
-      .optional(),
+    status: priceMatrixStatusSchema.optional(),
+    /** The basis route's supplier. */
+    supplier: supplierCodeSchema.optional(),
+    sort: priceMatrixSortSchema.optional(),
+    /** The list `sort` reads, retail by default. */
+    sortList: z.uuid().optional(),
+    direction: z.enum(['asc', 'desc']).optional(),
+    /** The list the margin filter and the `low_margin` chip read, retail by default. */
+    marginList: z.uuid().optional(),
+    marginBelowBp: z.coerce.number().int().min(1).max(BASIS_POINTS).optional(),
+    page: z.coerce.number().int().min(1).optional(),
   })
-  .refine((value) => (value.gameId === undefined) !== (value.q === undefined), {
-    message: 'Expected a gameId or a q',
+  .refine((value) => value.gameId === undefined || (value.q ?? value.categoryId) === undefined, {
+    message: 'A gameId takes no q or categoryId',
     path: ['gameId'],
   })
   .meta({ id: 'PriceMatrixQuery' });
@@ -840,6 +885,20 @@ export const priceMatrixSchema = z
         cells: z.array(priceMatrixCellSchema),
       }),
     ),
+    page: z.int().positive(),
+    pageCount: z.int().positive(),
+    /** The rows the filters leave, on every page. */
+    total: z.int().nonnegative(),
+    /** Each chip's rows in the scope and the other filters: `all` is the chips' "الكل". */
+    counts: z.object({
+      all: z.int().nonnegative(),
+      unavailable: z.int().nonnegative(),
+      no_price: z.int().nonnegative(),
+      low_margin: z.int().nonnegative(),
+      fixed: z.int().nonnegative(),
+      held: z.int().nonnegative(),
+      paused: z.int().nonnegative(),
+    }),
   })
   .meta({ id: 'PriceMatrix' });
 
@@ -871,6 +930,119 @@ export function matrixCellWarnings(cell: {
   if (cell.priceUsdUnits === null) warnings.push('no_row');
   else if (!cell.available) warnings.push('unavailable');
   return warnings;
+}
+
+type MatrixRow = PriceMatrix['rows'][number];
+
+const cellOn = (row: MatrixRow, listId: string) =>
+  row.cells.find((cell) => cell.priceListId === listId);
+
+/**
+ * The chips a row counts under: a state of any shown list, but `low_margin`, which reads the margin
+ * list alone (the cost list's margin is low by design). A paused pack is not also `unavailable`.
+ */
+export function matrixRowStatuses(row: MatrixRow, marginListId: string): PriceMatrixStatus[] {
+  const statuses: PriceMatrixStatus[] = [];
+  const paused = row.cells.some((cell) => cell.availability === 'paused');
+  if (paused) statuses.push('paused');
+  else if (row.cells.some((cell) => cell.warnings.includes('unavailable'))) {
+    statuses.push('unavailable');
+  }
+  if (row.cells.some((cell) => cell.warnings.includes('no_row'))) statuses.push('no_price');
+  if (isLowMargin(cellOn(row, marginListId)?.marginBp ?? null)) statuses.push('low_margin');
+  if (row.cells.some((cell) => cell.fixedPriceUsdUnits !== null)) statuses.push('fixed');
+  if (row.held) statuses.push('held');
+  return statuses;
+}
+
+function matrixSortValue(row: MatrixRow, sort: PriceMatrixSort, listId: string): number | null {
+  if (sort === 'cost') return row.costUsdUnits;
+  const cell = cellOn(row, listId);
+  if (sort === 'margin') return cell?.marginBp ?? null;
+  if (sort === 'price') return cell?.priceUsdUnits ?? null;
+  return cell?.marginUsdUnits ?? null;
+}
+
+/**
+ * The matrix's filters, chips, sort and page over its rows in game order, so the counts always
+ * match the rows. A chip's count takes every filter but the chip. Unsorted, a page holds whole
+ * games; sorted, it is a flat page of rows, unknown values last in either direction.
+ */
+export function selectMatrixRows(
+  rows: readonly MatrixRow[],
+  query: Pick<
+    Partial<PriceMatrixQuery>,
+    | 'status'
+    | 'supplier'
+    | 'sort'
+    | 'sortList'
+    | 'direction'
+    | 'marginList'
+    | 'marginBelowBp'
+    | 'page'
+  >,
+): Pick<PriceMatrix, 'rows' | 'page' | 'pageCount' | 'total' | 'counts'> {
+  const marginList = query.marginList ?? ROOT_PRICE_LIST_IDS.retail;
+  const { marginBelowBp, supplier } = query;
+  const scoped = rows.filter(
+    (row) =>
+      (supplier === undefined || row.supplierCode === supplier) &&
+      (marginBelowBp === undefined ||
+        isLowMargin(cellOn(row, marginList)?.marginBp ?? null, marginBelowBp)),
+  );
+  const counts: PriceMatrix['counts'] = {
+    all: scoped.length,
+    unavailable: 0,
+    no_price: 0,
+    low_margin: 0,
+    fixed: 0,
+    held: 0,
+    paused: 0,
+  };
+  const chosen: MatrixRow[] = [];
+  for (const row of scoped) {
+    const statuses = matrixRowStatuses(row, marginList);
+    for (const status of statuses) counts[status] += 1;
+    if (query.status === undefined || statuses.includes(query.status)) chosen.push(row);
+  }
+  const total = chosen.length;
+  const asked = query.page ?? 1;
+  const { sort } = query;
+  if (sort) {
+    const sign = query.direction === 'desc' ? -1 : 1;
+    const listId = query.sortList ?? ROOT_PRICE_LIST_IDS.retail;
+    const sorted = chosen
+      .map((row) => ({ row, value: matrixSortValue(row, sort, listId) }))
+      .sort((a, b) => {
+        if (a.value === null || b.value === null) {
+          return Number(a.value === null) - Number(b.value === null);
+        }
+        return sign * (a.value - b.value);
+      })
+      .map((entry) => entry.row);
+    const pageCount = Math.max(1, Math.ceil(total / PRICE_MATRIX_ROWS_PER_PAGE));
+    const page = Math.min(asked, pageCount);
+    const start = (page - 1) * PRICE_MATRIX_ROWS_PER_PAGE;
+    return {
+      rows: sorted.slice(start, start + PRICE_MATRIX_ROWS_PER_PAGE),
+      page,
+      pageCount,
+      total,
+      counts,
+    };
+  }
+  const games = [...new Set(chosen.map((row) => row.gameId))];
+  const pageCount = Math.max(1, Math.ceil(games.length / PRICE_MATRIX_GAMES_PER_PAGE));
+  const page = Math.min(asked, pageCount);
+  const start = (page - 1) * PRICE_MATRIX_GAMES_PER_PAGE;
+  const shown = new Set(games.slice(start, start + PRICE_MATRIX_GAMES_PER_PAGE));
+  return {
+    rows: chosen.filter((row) => shown.has(row.gameId)),
+    page,
+    pageCount,
+    total,
+    counts,
+  };
 }
 
 /**

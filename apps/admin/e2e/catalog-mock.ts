@@ -816,7 +816,16 @@ export class CatalogMock {
         ? null
         : this.ruleFor(request.priceListId ?? ROOT_PRICE_LIST_IDS.retail, target.path);
       const rule = request.values ?? (found as StoredRule);
-      const price = priceFromCost(request.costUsdUnits, rule);
+      const own = priceFromCost(request.costUsdUnits, rule);
+      // A stored list's row is capped at retail (LP2); a draft is the form's own figures.
+      const retail =
+        found && found.priceListId !== ROOT_PRICE_LIST_IDS.retail
+          ? priceFromCost(
+              request.costUsdUnits,
+              this.ruleFor(ROOT_PRICE_LIST_IDS.retail, target.path),
+            )
+          : null;
+      const price = retail !== null && own > retail ? retail : own;
       const rate = this.rate();
       return {
         status: 200,
@@ -828,6 +837,7 @@ export class CatalogMock {
           },
           ruleScope: found?.scope ?? null,
           ruleId: found?.id ?? null,
+          source: found ? (price < own ? 'retail_cap' : 'rule') : null,
           costUsdUnits: request.costUsdUnits,
           priceUsdUnits: price,
           marginUsdUnits: price - request.costUsdUnits,

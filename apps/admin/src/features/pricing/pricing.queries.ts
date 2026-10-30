@@ -163,25 +163,24 @@ export const priceListQuery = (id: string) =>
     queryFn: () => call(api.GET('/api/admin/pricing/lists/{id}', { params: { path: { id } } })),
   });
 
-/** The matrix of a game or a search on the chosen lists; the previous answer stays meanwhile. */
+/** The matrix of a game, or of every game on pages, on the chosen lists; the answer stays meanwhile. */
 export const priceMatrixQuery = (search: MatrixSearch) =>
   queryOptions({
     queryKey: ['pricing', 'matrix', search],
-    queryFn: () =>
-      call(
+    queryFn: () => {
+      const { lists, ...filters } = search;
+      return call(
         api.GET('/api/admin/pricing/matrix', {
           params: {
             query: {
-              gameId: search.gameId,
-              q: search.q,
+              ...filters,
               // Retail is always shown; naming it lets no other list ask for retail alone (A05-33).
-              listIds: search.lists && [ROOT_PRICE_LIST_IDS.retail, ...search.lists],
-              warnings: search.warnings ? 'true' : undefined,
+              listIds: lists && [ROOT_PRICE_LIST_IDS.retail, ...lists],
             },
           },
         }),
-      ),
-    enabled: !!search.gameId || !!search.q,
+      );
+    },
     placeholderData: keepPreviousData,
   });
 

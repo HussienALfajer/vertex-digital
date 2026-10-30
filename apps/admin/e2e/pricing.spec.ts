@@ -4,7 +4,7 @@ import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './test';
 
 /*
- * Pricing (S06, F10): the global rule, the calculator (PR3, PR8, PR10), a category and a product
+ * Pricing (S06, F10) on the retail list's page: the global rule, the calculator (PR3, PR8, PR10), a category and a product
  * rule after re-authentication (PR2, PR7, PR9), archiving them (PR2), against the mocked API.
  */
 
@@ -61,7 +61,9 @@ test.describe('pricing', () => {
   }) => {
     seed(admin);
     await page.goto('/pricing');
-    await expect(page.getByRole('heading', { name: ar.pricing.title, level: 1 })).toBeVisible();
+    // The old address lands on the retail list's page, which holds the rules and the calculator.
+    await expect(page).toHaveURL(`/pricing/lists/${ROOT_PRICE_LIST_IDS.retail}`);
+    await expect(page.getByRole('heading', { name: 'التجزئة', level: 1 })).toBeVisible();
     await expect(page.getByText('10%', { exact: true })).toBeVisible();
     await expect(page.getByText('$0.10', { exact: true }).first()).toBeVisible();
 
@@ -78,6 +80,24 @@ test.describe('pricing', () => {
     admin.rates = [];
     await field(page, ar.pricing.calculator.cost).fill('8.51');
     await expect(preview(page)).toContainText(ar.pricing.preview.noRate);
+  });
+
+  test('the calculator of a list prices on its chain, capped at retail, without a second rules page', async ({
+    page,
+    admin,
+  }) => {
+    seed(admin);
+    const list = admin.priceLists.addList('خاصة', ROOT_PRICE_LIST_IDS.wholesale, 3000);
+    await page.goto(`/pricing/lists/${list.id}`);
+    // 30% on $1.00 is above retail's $1.10.
+    await expect(preview(page)).toContainText('$1.10');
+    await expect(preview(page)).toContainText(ar.pricing.priceSources.retail_cap);
+    expect(admin.lastBody('POST /api/admin/pricing/preview')).toMatchObject({
+      priceListId: list.id,
+    });
+    await page.goto(`/pricing/lists/${ROOT_PRICE_LIST_IDS.wholesale}`);
+    await expect(preview(page)).toContainText('$1.05');
+    await expect(page.getByRole('link', { name: 'قواعد التسعير' })).toHaveCount(0);
   });
 
   test('typing a cost reads the preview once it pauses, dimmed until then (A05-32)', async ({

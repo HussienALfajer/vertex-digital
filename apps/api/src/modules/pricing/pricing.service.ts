@@ -3,6 +3,7 @@ import {
   type DecideReviews,
   type DecideReviewsResult,
   type ErrorResponse,
+  listPrice,
   type MarginRule,
   type MarginRuleValues,
   type MarginScope,
@@ -30,6 +31,7 @@ import {
   type Database,
   listIsPriced,
   listPricingFacts,
+  listTargets,
   lockProductsForPricing,
   marginRules,
   newId,
@@ -286,30 +288,16 @@ export class PricingService {
       target = await this.catalog.pricingTarget(scope, input.target.targetId as string);
       if (!target) throw notFound('catalog target');
     }
-    let found: RuleRow | null = null;
-    if (!input.values) {
-      const facts = await listPricingFacts(this.db, []);
-      const chain = facts.lists.find(
-        (list) => list.id === (input.priceListId ?? ROOT_PRICE_LIST_IDS.retail),
-      )?.chain;
-      if (!chain) throw notFound('price list');
-      if (!listIsPriced(facts, chain)) {
-        throw new CodedException(409, 'PRICE_LIST_NOT_READY', 'The price list is not priced yet');
-      }
-      found = resolveListEntry(
-        chain,
-        { rules: facts.rules, fixedPrices: [] },
-        { ...target?.path, productId: target?.path.productId ?? '' },
-      ).rule;
-    }
-    const rule = input.values ?? valuesOf(found as RuleRow);
-    const price = priceFromCost(input.costUsdUnits, rule);
+    const listed = input.values ? null : await this.listPreview(input, target);
+    const rule = input.values ?? (listed as NonNullable<typeof listed>).rule;
+    const price = listed?.priceUsdUnits ?? priceFromCost(input.costUsdUnits, rule);
     const rate = await this.rates.current();
     const official = target?.officialPriceUsdUnits ?? null;
     return {
       rule,
-      ruleScope: found?.scope ?? null,
-      ruleId: found?.id ?? null,
+      ruleScope: listed?.found.scope ?? null,
+      ruleId: listed?.found.id ?? null,
+      source: listed?.source ?? null,
       costUsdUnits: input.costUsdUnits,
       priceUsdUnits: price,
       marginUsdUnits: price - input.costUsdUnits,
@@ -318,6 +306,54 @@ export class PricingService {
       rate: rate?.sypPerUsd ?? null,
       officialPriceUsdUnits: official,
       savings: savings(price, official),
+    };
+  }
+
+  /**
+   * The list's price for a cost, as the repricing path decides it (LS4, LP1–LP4): retail's entry,
+   * then on another list its own entry capped at its parent's (S23 PX2) and at the retail price.
+   */
+  private async listPreview(input: PricingPreviewRequest, target: PricingTarget | null) {
+    const productId = target?.path.productId ?? '';
+    const facts = await listPricingFacts(this.db, productId ? [productId] : []);
+    const listId = input.priceListId ?? ROOT_PRICE_LIST_IDS.retail;
+    const chain = facts.lists.find((list) => list.id === listId)?.chain;
+    if (!chain) throw notFound('price list');
+    if (!listIsPriced(facts, chain)) {
+      throw new CodedException(409, 'PRICE_LIST_NOT_READY', 'The price list is not priced yet');
+    }
+    const path = { ...target?.path, productId };
+    const retailEntry = resolveListEntry([ROOT_PRICE_LIST_IDS.retail], facts, path);
+    const retail = listPrice(
+      input.costUsdUnits,
+      {
+        fixedPriceUsdUnits: retailEntry.fixed?.priceUsdUnits ?? null,
+        rule: valuesOf(retailEntry.rule),
+      },
+      null,
+    );
+    if (listId === ROOT_PRICE_LIST_IDS.retail) {
+      const { rule: found } = retailEntry;
+      return { ...retail, found, rule: valuesOf(found) };
+    }
+    const row = listTargets(
+      facts,
+      { ...path, basis: { id: 'preview', costUsdUnits: input.costUsdUnits } },
+      {
+        priceUsdUnits: retail.priceUsdUnits,
+        minMarginUsdUnits: retail.minMarginUsdUnits,
+        ruleId: retailEntry.rule.id,
+        percentBp: retailEntry.rule.percentBp,
+        fixedUsdUnits: retailEntry.rule.fixedUsdUnits,
+      },
+    ).get(listId);
+    if (!row) throw notFound('price list');
+    const { rule: found } = resolveListEntry(chain, facts, path);
+    return {
+      priceUsdUnits: row.priceUsdUnits,
+      source: row.source,
+      found,
+      rule: valuesOf(found),
     };
   }
 

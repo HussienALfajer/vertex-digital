@@ -1,6 +1,13 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { PricingPage } from '../../features/pricing/pricing-page';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 
+/** The retail list's page holds the rules this address once showed; old links still land there. */
 export const Route = createFileRoute('/_app/pricing/')({
-  component: PricingPage,
+  beforeLoad: () => {
+    throw redirect({
+      to: '/pricing/lists/$id',
+      params: { id: ROOT_PRICE_LIST_IDS.retail },
+      replace: true,
+    });
+  },
 });

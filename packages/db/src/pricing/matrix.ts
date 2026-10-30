@@ -3,11 +3,13 @@ import {
   marginBasisPoints,
   matrixCellWarnings,
   PRICE_MATRIX_MAX_LISTS,
-  PRICE_MATRIX_MAX_PRODUCTS,
   type PriceMatrix,
   type PriceMatrixCell,
+  type PriceMatrixQuery,
+  productAvailability,
   ROOT_PRICE_LIST_IDS,
   resolveListEntry,
+  selectMatrixRows,
 } from '@vertex-digital/contracts';
 import { and, asc, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 import { type Executor, readAll } from '../client.js';
@@ -19,7 +21,6 @@ import {
   type RetailFigures,
 } from './reprice.js';
 import {
-  type PriceRow,
   type ProductRoutingState,
   productRoutingStates,
   type RouteState,
@@ -32,18 +33,35 @@ import {
  * its current price, margin, source and availability (PO1), its fixed price, the target it would
  * take while a review holds every list (RP2), and its warnings. Reads only. A list without a row
  * shows the price it would take, and a product with no usable route its cheapest known route's
- * cost and why it cannot serve, so a paused pack still shows its prices (display only).
+ * cost and why it cannot serve, so a paused pack still shows its prices (display only). The whole
+ * scope is read, so the chips' counts match the rows; `selectMatrixRows` filters and pages it.
  */
 
 const DEFAULT_COLUMNS = [ROOT_PRICE_LIST_IDS.wholesale, ROOT_PRICE_LIST_IDS.cost];
 
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (char) => `\\${char}`);
 
+export type MatrixScopeQuery = Pick<
+  Partial<PriceMatrixQuery>,
+  'gameId' | 'q' | 'categoryId' | 'listIds'
+>;
+
+/** The filtered, paged answer of a query, read once by `matrixScope` and selected here. */
 export async function priceMatrix(
   db: Executor,
-  query: { gameId?: string; q?: string; listIds?: readonly string[]; warnings?: boolean },
+  query: Partial<PriceMatrixQuery>,
   context: RoutingContext,
 ): Promise<PriceMatrix> {
+  const { lists, rows } = await matrixScope(db, query, context);
+  return { lists, ...selectMatrixRows(rows, query) };
+}
+
+/** Every row of a scope; a wide scope is thousands, so callers bound how many run at once. */
+export async function matrixScope(
+  db: Executor,
+  query: MatrixScopeQuery,
+  context: RoutingContext,
+): Promise<Pick<PriceMatrix, 'lists' | 'rows'>> {
   // Retail first, then at most the other columns the contract allows (audit A05-69).
   const wanted = [
     ROOT_PRICE_LIST_IDS.retail,
@@ -73,24 +91,35 @@ export async function priceMatrix(
             isNull(catalogProducts.archivedAt),
             isNull(catalogGames.archivedAt),
             query.gameId ? eq(catalogProducts.gameId, query.gameId) : undefined,
+            query.categoryId ? eq(catalogGames.categoryId, query.categoryId) : undefined,
             pattern
               ? or(ilike(catalogProducts.nameAr, pattern), ilike(catalogGames.nameAr, pattern))
               : undefined,
           ),
         )
-        .orderBy(asc(catalogGames.nameAr), asc(catalogProducts.sortOrder), asc(catalogProducts.id))
-        .limit(PRICE_MATRIX_MAX_PRODUCTS);
+        .orderBy(asc(catalogGames.nameAr), asc(catalogProducts.sortOrder), asc(catalogProducts.id));
     },
   ]);
   const lists = wanted.flatMap((id) => listRows.filter((list) => list.id === id));
   const ids = products.map((product) => product.id);
   if (ids.length === 0) return { lists, rows: [] };
-  const [states, facts, currentRows, ...listStates] = await readAll(db, [
+  // One read of the routes: each list's availability follows from its row (audit A05-70).
+  const [states, facts, currentRows] = await readAll(db, [
     () => productRoutingStates(db, ids, context),
     () => listPricingFacts(db, ids),
     () =>
       db
-        .selectDistinctOn([productPrices.productId, productPrices.priceListId])
+        .selectDistinctOn([productPrices.productId, productPrices.priceListId], {
+          productId: productPrices.productId,
+          priceListId: productPrices.priceListId,
+          priceUsdUnits: productPrices.priceUsdUnits,
+          costUsdUnits: productPrices.costUsdUnits,
+          source: productPrices.source,
+          minMarginUsdUnits: productPrices.minMarginUsdUnits,
+          ruleId: productPrices.ruleId,
+          percentBp: productPrices.percentBp,
+          fixedUsdUnits: productPrices.fixedUsdUnits,
+        })
         .from(productPrices)
         .where(inArray(productPrices.productId, ids))
         .orderBy(
@@ -99,17 +128,10 @@ export async function priceMatrix(
           desc(productPrices.createdAt),
           desc(productPrices.id),
         ),
-    ...lists
-      .filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail)
-      .map((list) => () => productRoutingStates(db, ids, context, list.id)),
   ]);
-  const availabilityOf = new Map(
-    lists
-      .filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail)
-      .map((list, index) => [list.id, listStates[index]] as const),
-  );
-  const currentOf = new Map<string, PriceRow>(
-    currentRows.map((row) => [`${row.productId}:${row.priceListId}`, row]),
+  const currentOf = new Map(currentRows.map((row) => [`${row.productId}:${row.priceListId}`, row]));
+  const fixedOf = new Map(
+    facts.fixedPrices.map((row) => [`${row.productId}:${row.priceListId}`, row]),
   );
   const rows: PriceMatrix['rows'] = [];
   for (const product of products) {
@@ -144,7 +166,13 @@ export async function priceMatrix(
       const parent = parentId ? (currentOf.get(`${product.id}:${parentId}`) ?? null) : null;
       const availability = retail
         ? state.availability
-        : (availabilityOf.get(list.id)?.get(product.id)?.availability ?? 'out_of_stock');
+        : productAvailability({
+            ...state.availabilityFacts,
+            price: current && {
+              priceUsdUnits: current.priceUsdUnits,
+              minMarginUsdUnits: current.minMarginUsdUnits,
+            },
+          });
       let target: number | null = null;
       if (held && state.targetPriceUsdUnits !== null) {
         target = retail
@@ -159,9 +187,7 @@ export async function priceMatrix(
           : (estimates?.get(list.id)?.priceUsdUnits ?? null);
       }
       const marginCost = cost ?? current?.costUsdUnits ?? null;
-      const fixed = facts.fixedPrices.find(
-        (candidate) => candidate.priceListId === list.id && candidate.productId === product.id,
-      );
+      const fixed = fixedOf.get(`${product.id}:${list.id}`);
       return {
         priceListId: list.id,
         priceUsdUnits: price,
@@ -182,7 +208,6 @@ export async function priceMatrix(
         }),
       };
     });
-    if (query.warnings && cells.every((cell) => cell.warnings.length === 0)) continue;
     rows.push({
       productId: product.id,
       productNameAr: product.nameAr,

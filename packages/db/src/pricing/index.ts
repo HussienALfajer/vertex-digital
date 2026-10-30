@@ -1,5 +1,5 @@
 export { fixedPriceFallbacks, listFixedPrices, seedRootListRules } from './lists.js';
-export { priceMatrix } from './matrix.js';
+export { type MatrixScopeQuery, matrixScope, priceMatrix } from './matrix.js';
 export {
   appendProductPrice,
   type ListPricingFacts,
