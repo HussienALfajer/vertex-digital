@@ -145,6 +145,15 @@ const RENDERERS: Renderers = {
     url: '/wallet',
     tag: 'merchant-low-balance',
   }),
+  // S23 PG3: the tier only; the amount stays in the app and the email (PT2).
+  merchant_tier_reminder: (params) => ({
+    body:
+      params.kind === 'reach'
+        ? `اقتربت من الفئة ال${TIER_NAMES_AR[params.tier]}ة قبل نهاية الشهر`
+        : `اشترِ قبل نهاية الشهر لتحتفظ بالفئة ال${TIER_NAMES_AR[params.tier]}ة`,
+    url: '/merchant/tier',
+    tag: 'merchant-tier',
+  }),
   merchant_statement_ready: (params) => ({
     body: 'كشف حساب الشهر الماضي جاهز',
     url: `/merchant/statements/${params.month}`,

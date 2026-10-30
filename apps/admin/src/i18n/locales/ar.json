@@ -365,6 +365,7 @@
       "MERCHANT_TIER_UNAVAILABLE": "لا مستوى فعّالاً لهذه الفئة.",
       "MERCHANT_TIER_GRANT_NOT_HIGHER": "الفئة الممنوحة يجب أن تكون أعلى من الفئة التي يستحقها التاجر.",
       "MERCHANT_TIER_GRANT_OPEN": "لدى التاجر فئة ممنوحة سارية. أنهِها أولاً.",
+      "CERTIFICATE_REISSUE_LIMIT": "أُعيد إصدار رمز الشهادة 3 مرات اليوم.",
       "WATCHES_LIMIT_REACHED": "لا يمكن متابعة أكثر من 200 لعبة وباقة.",
       "BULK_LINES_INVALID": "قائمة الطلبات فارغة أو تتجاوز أسطر فئة التاجر.",
       "PLAYER_CHECK_QUOTA_EXCEEDED": "استُنفدت فحوص المعرّفات المسموحة حالياً. حاول لاحقاً.",
@@ -827,6 +828,8 @@
       "merchant.logo_removed": "حذف شعار تاجر",
       "merchant.tier_granted": "منح فئة لتاجر",
       "merchant.tier_grant_ended": "انتهاء فئة ممنوحة لتاجر",
+      "merchant.certificate_reissued": "إعادة إصدار رمز شهادة التاجر",
+      "merchant.welcome_text_removed": "حذف سطر ترحيب تاجر",
       "merchant_application.submitted": "تقديم طلب تاجر",
       "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
       "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
@@ -5237,7 +5240,12 @@
       "removeLogo": "حذف الشعار",
       "removeTitle": "حذف شعار المحل",
       "removeDescription": "تُطبع إيصالات التاجر وروابطها بلا شعار من الآن. يُسجَّل السبب في السجل.",
-      "removeSubmit": "حذف الشعار"
+      "removeSubmit": "حذف الشعار",
+      "welcomeText": "سطر الترحيب:",
+      "noWelcomeText": "بلا سطر ترحيب",
+      "removeWelcome": "حذف سطر الترحيب",
+      "removeWelcomeTitle": "حذف سطر الترحيب",
+      "removeWelcomeDescription": "تُطبع إيصالات التاجر وروابطها بلا سطر الترحيب من الآن. يُسجَّل السبب في السجل."
     },
     "list": {
       "title": "التجّار",

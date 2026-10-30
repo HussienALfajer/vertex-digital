@@ -127,6 +127,7 @@ async function brandingOf(db: Executor, customerId: string) {
     showWhatsapp: settings?.showWhatsapp ?? false,
     whatsapp: settings?.whatsapp ?? null,
     logoFileId: settings?.logoFileId ?? null,
+    welcomeText: settings?.welcomeText ?? null,
   };
 }
 

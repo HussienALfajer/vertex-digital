@@ -55,11 +55,6 @@ const dashboard = (changes: Partial<MerchantDashboard> = {}): MerchantDashboard 
       salesUsdUnits: 27_000_000,
     },
   ],
-  level: {
-    current: { id: '0199e100-0000-7000-8000-0000000000c1', nameAr: 'فضي' },
-    thisMonthUsdUnits: 64 * USD,
-    next: { nameAr: 'ذهبي', monthlyThresholdUsdUnits: 200 * USD, missingUsdUnits: 136 * USD },
-  },
   sellingConfigured: true,
   ...changes,
 });
@@ -137,8 +132,8 @@ test.describe('the merchant area (S21 PR 1)', () => {
     await expect(board).toContainText('$48.60');
     await expect(board).toContainText('$7.35');
     await expect(board).toContainText(tools.dashboard.withoutSale.replace('{count}', '2'));
-    await expect(page.getByTestId('merchant-level')).toContainText('فضي');
-    await expect(page.getByTestId('merchant-level')).toContainText('ذهبي');
+    // S23 ID3: the tier card in place of S21's level card.
+    await expect(page.getByTestId('tier-card')).toContainText(tools.tier.badge.bronze);
     await screenshot(page, testInfo, 'merchant-dashboard');
 
     api.on('GET /api/merchant/dashboard', 200, dashboard({ period: 'month' }));
@@ -161,7 +156,6 @@ test.describe('the merchant area (S21 PR 1)', () => {
         profitUsdUnits: 0,
         ordersWithoutSale: 0,
         topProducts: [],
-        level: null,
         sellingConfigured: false,
       }),
     );

@@ -53,6 +53,8 @@ export interface ReceiptSettingsRow {
   showWhatsapp: boolean;
   whatsapp: string | null;
   logoFileId: string | null;
+  /** S23 RC1. */
+  welcomeText: string | null;
 }
 
 /**
@@ -82,6 +84,7 @@ export async function receiptSettingsOf(
     showWhatsapp: row.saved?.showWhatsapp ?? false,
     whatsapp: row.saved ? row.saved.whatsapp : row.applicationWhatsapp,
     logoFileId: row.saved?.logoFileId ?? null,
+    welcomeText: row.saved?.welcomeText ?? null,
   };
 }
 
@@ -116,6 +119,27 @@ export async function removeMerchantLogo(
     .set({ logoFileId: null })
     .where(eq(merchantReceiptSettings.customerId, customerId));
   return row.logoFileId;
+}
+
+/**
+ * S23 RC1: the admin removes a merchant's welcome line in the caller's transaction, the row
+ * locked; answers the removed line, or null when there was none.
+ */
+export async function removeWelcomeText(
+  tx: Transaction,
+  customerId: string,
+): Promise<string | null> {
+  const [row] = await tx
+    .select({ welcomeText: merchantReceiptSettings.welcomeText })
+    .from(merchantReceiptSettings)
+    .where(eq(merchantReceiptSettings.customerId, customerId))
+    .for('update');
+  if (!row?.welcomeText) return null;
+  await tx
+    .update(merchantReceiptSettings)
+    .set({ welcomeText: null })
+    .where(eq(merchantReceiptSettings.customerId, customerId));
+  return row.welcomeText;
 }
 
 /**

@@ -11,7 +11,6 @@ import {
   type MerchantGames,
   monthRange,
   NO_ALERT_SETTINGS,
-  nextLevel,
   type SellingPriceInput,
   type SellingPriceRow,
   type SellingPrices,
@@ -31,16 +30,13 @@ import {
   findCustomerWallet,
   gameProducts,
   liveGames,
-  liveLevels,
   liveProducts,
   merchantAlertSettings,
-  merchantLevelOf,
   merchantListPrices,
   merchantSellingPrices,
   merchantSellingSettings,
   merchantWatches,
   merchantWatchRows,
-  monthsPurchases,
   netPurchases,
   recentGameUnits,
   sellingSettingsOf,
@@ -89,22 +85,6 @@ export class MerchantToolsService {
     const facts = await dashboardFacts(this.db, customerId, from, now, DASHBOARD_TOP_PRODUCTS);
     const wallet = await findCustomerWallet(this.db, customerId);
     const rate = await this.rates.current();
-    const levels = await liveLevels(this.db);
-    let level: MerchantDashboard['level'] = null;
-    if (levels.length > 0) {
-      const months = await monthsPurchases(this.db, customerId, now);
-      const reached = Math.max(months.previousMonthUsdUnits, months.thisMonthUsdUnits);
-      const next = nextLevel(levels, reached);
-      level = {
-        current: await merchantLevelOf(this.db, customerId),
-        thisMonthUsdUnits: months.thisMonthUsdUnits,
-        next: next && {
-          nameAr: next.level.nameAr,
-          monthlyThresholdUsdUnits: next.level.monthlyThresholdUsdUnits,
-          missingUsdUnits: next.missingUsdUnits,
-        },
-      };
-    }
     return {
       period: query.period,
       from: from.toISOString(),
@@ -117,7 +97,6 @@ export class MerchantToolsService {
       ordersWithoutSale: facts.ordersWithoutSale,
       balanceUsdUnits: wallet === null ? 0 : await accountBalance(this.db, wallet),
       topProducts: facts.topProducts,
-      level,
       sellingConfigured: await this.sellingConfigured(customerId),
     };
   }

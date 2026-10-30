@@ -294,6 +294,8 @@ export const ERROR_CODES = [
   'MERCHANT_TIER_GRANT_NOT_HIGHER',
   /** S23 MG1: the merchant has an open grant already; `details.grantId`. */
   'MERCHANT_TIER_GRANT_OPEN',
+  /** S23 ID7: the certificate code was reissued 3 times in the last 24 hours. */
+  'CERTIFICATE_REISSUE_LIMIT',
   /** S21 AL1: more than 200 follows. */
   'WATCHES_LIMIT_REACHED',
   /** S21 BK1: the bulk list has no line or more than the merchant tier's lines (S23 TS5); `details.lines`, `details.max`. */

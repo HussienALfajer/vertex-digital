@@ -76,6 +76,8 @@ export const QUEUES = {
   merchantsLevelSchedule: 'merchants.level-schedule',
   /** Ends the manual tier grants past their end and reminds the admin of the ending ones, every 10 minutes (S23 MG4, MG5). */
   merchantsTierGrants: 'merchants.tier-grants',
+  /** Reminds merchants near the next tier or below their own, the 25th at 10:00 `Asia/Damascus` (S23 PG3). */
+  merchantsTierReminders: 'merchants.tier-reminders',
   /** Compares followed products with what each merchant was told, at :05 every hour (S21 AL2). */
   merchantsWatchAlerts: 'merchants.watch-alerts',
   /** The daily alert email at 09:00 `Asia/Damascus` (S21 AL4). */

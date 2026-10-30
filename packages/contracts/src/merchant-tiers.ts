@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { amountUnitsSchema, CURRENCY_SCALE, isWholeCents, USD_CENT } from './money.js';
+import {
+  amountUnitsSchema,
+  CURRENCY_SCALE,
+  floorToWholeCents,
+  isWholeCents,
+  USD_CENT,
+} from './money.js';
 import {
   LEVEL_TIERS,
   type LevelTier,
@@ -514,3 +520,275 @@ export const adminMerchantTierSchema = z
   .meta({ id: 'AdminMerchantTier' });
 
 export type AdminMerchantTier = z.infer<typeof adminMerchantTierSchema>;
+
+/* Progress (PG1, PG3, PG4, PG7, TR7) --------------------------------------------------------- */
+
+/**
+ * PG1: the next live tier above the effective tier, its threshold, the amount this month misses
+ * and the share reached (per mille); at the highest live tier, the amount this month still needs
+ * to keep it next month (`keep`). Negative months (refunds) count as zero.
+ */
+export function tierProgress(
+  levels: readonly TierLevel[],
+  thisMonthUsdUnits: number,
+  effectiveTier: MerchantTier,
+): {
+  next: { tier: LevelTier; thresholdUsdUnits: number; missingUsdUnits: number } | null;
+  reachedPermille: number;
+  keep: { thresholdUsdUnits: number; missingUsdUnits: number } | null;
+} {
+  const reached = Math.max(thisMonthUsdUnits, 0);
+  const permille = (threshold: number) =>
+    Math.min(1_000, Math.floor(Number((BigInt(reached) * 1_000n) / BigInt(threshold))));
+  const next = [...levels]
+    .filter((level) => tierRank(level.tier) > tierRank(effectiveTier))
+    .sort((a, b) => tierRank(a.tier) - tierRank(b.tier))[0];
+  if (next) {
+    const threshold = next.monthlyThresholdUsdUnits;
+    return {
+      next: {
+        tier: next.tier,
+        thresholdUsdUnits: threshold,
+        missingUsdUnits: Math.max(threshold - reached, 0),
+      },
+      reachedPermille: permille(threshold),
+      keep: null,
+    };
+  }
+  const own = levels.find((level) => level.tier === effectiveTier);
+  if (!own) return { next: null, reachedPermille: 0, keep: null };
+  const threshold = own.monthlyThresholdUsdUnits;
+  return {
+    next: null,
+    reachedPermille: permille(threshold),
+    keep: { thresholdUsdUnits: threshold, missingUsdUnits: Math.max(threshold - reached, 0) },
+  };
+}
+
+/** The last day of a `YYYY-MM` month, `YYYY-MM-DD`. */
+function lastDayOf(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const number = Number(month.slice(5, 7));
+  const day = new Date(Date.UTC(year, number, 0)).getUTCDate();
+  return `${month}-${String(day).padStart(2, '0')}`;
+}
+
+/** The month after a `YYYY-MM` month. */
+function nextMonthOf(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const number = Number(month.slice(5, 7));
+  return number === 12 ? `${year + 1}-01` : `${year}-${String(number + 1).padStart(2, '0')}`;
+}
+
+/**
+ * TR7, PG7: the last Damascus day the earned tier is held (`YYYY-MM-DD`): the end of next month
+ * when this month has reached its threshold, else the end of this month (the previous month
+ * carried it). Null for Bronze, or for a tier whose level is gone.
+ */
+export function tierKeptUntil(
+  levels: readonly TierLevel[],
+  thisMonthUsdUnits: number,
+  earnedTier: MerchantTier,
+  month: string,
+): string | null {
+  const own = levels.find((level) => level.tier === earnedTier);
+  if (!own) return null;
+  return lastDayOf(thisMonthUsdUnits >= own.monthlyThresholdUsdUnits ? nextMonthOf(month) : month);
+}
+
+/** PG4: no forecast before the 5th of the month. */
+export const TIER_FORECAST_FROM_DAY = 5;
+
+export type TierForecast =
+  | { kind: 'reach'; day: number }
+  | { kind: 'total'; projectedUsdUnits: number };
+
+/**
+ * PG4: this month at its daily pace so far. `reach` with the day of the month the next threshold
+ * is reached when that falls within the month; else `total` with the projected month. Null before
+ * the 5th or with nothing bought. The projection is floored to whole cents, as it is shown.
+ */
+export function tierForecast(
+  thisMonthUsdUnits: number,
+  dayOfMonth: number,
+  daysInMonth: number,
+  nextThresholdUsdUnits: number | null,
+): TierForecast | null {
+  if (dayOfMonth < TIER_FORECAST_FROM_DAY || thisMonthUsdUnits <= 0) return null;
+  const total = BigInt(thisMonthUsdUnits);
+  if (nextThresholdUsdUnits !== null && nextThresholdUsdUnits > thisMonthUsdUnits) {
+    const scaled = BigInt(nextThresholdUsdUnits) * BigInt(dayOfMonth);
+    const day = Number((scaled + total - 1n) / total);
+    if (day <= daysInMonth) return { kind: 'reach', day };
+  }
+  return {
+    kind: 'total',
+    projectedUsdUnits: floorToWholeCents(
+      Number((total * BigInt(daysInMonth)) / BigInt(dayOfMonth)),
+    ),
+  };
+}
+
+/** PG3: a reminder goes to a merchant within 30% of the next tier's threshold. */
+export const TIER_REMINDER_REACH_PERCENT = 30;
+
+export type TierReminder =
+  | { kind: 'keep'; tier: LevelTier; missingUsdUnits: number }
+  | { kind: 'reach'; tier: LevelTier; missingUsdUnits: number };
+
+/**
+ * PG3: `keep` when the earned tier came from the previous month only (this month below its
+ * threshold); else `reach` when this month misses the next tier above the earned one by at most
+ * 30% of its threshold; else null (edge cases 11, 12).
+ */
+export function tierReminder(
+  levels: readonly TierLevel[],
+  previousMonthUsdUnits: number,
+  thisMonthUsdUnits: number,
+  earnedTier: MerchantTier,
+): TierReminder | null {
+  const reached = Math.max(thisMonthUsdUnits, 0);
+  const own = levels.find((level) => level.tier === earnedTier);
+  if (
+    own &&
+    reached < own.monthlyThresholdUsdUnits &&
+    previousMonthUsdUnits >= own.monthlyThresholdUsdUnits
+  ) {
+    return {
+      kind: 'keep',
+      tier: own.tier,
+      missingUsdUnits: own.monthlyThresholdUsdUnits - reached,
+    };
+  }
+  const next = [...levels]
+    .filter((level) => tierRank(level.tier) > tierRank(earnedTier))
+    .sort((a, b) => tierRank(a.tier) - tierRank(b.tier))[0];
+  if (!next) return null;
+  const missing = next.monthlyThresholdUsdUnits - reached;
+  if (missing <= 0) return null;
+  if (missing * 100 > next.monthlyThresholdUsdUnits * TIER_REMINDER_REACH_PERCENT) return null;
+  return { kind: 'reach', tier: next.tier, missingUsdUnits: missing };
+}
+
+/* The merchant's tier (ID3, PG1–PG6) --------------------------------------------------------- */
+
+/** TS2: a tier's privileges as the merchant reads them (ID3, PG2). */
+export const tierPrivilegesSchema = z
+  .object(tierSettingsInputSchema.shape)
+  .meta({ id: 'MerchantTierPrivileges' });
+
+export type TierPrivileges = z.infer<typeof tierPrivilegesSchema>;
+
+const progressSchema = z.object({
+  /** The next live tier; null at the highest live tier. */
+  next: z
+    .object({
+      tier: levelTierSchema,
+      thresholdUsdUnits: amountUnitsSchema,
+      missingUsdUnits: amountUnitsSchema,
+    })
+    .nullable(),
+  /** This month against the next threshold (or the own one at the top), 0–1000. */
+  reachedPermille: z.int().min(0).max(1_000),
+  /** At the highest live tier: what this month still needs to keep it next month. */
+  keep: z
+    .object({ thresholdUsdUnits: amountUnitsSchema, missingUsdUnits: amountUnitsSchema })
+    .nullable(),
+});
+
+const forecastSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('reach'), day: z.int().min(1).max(31) }),
+  z.object({ kind: z.literal('total'), projectedUsdUnits: amountUnitsSchema }),
+]);
+
+/**
+ * `GET /api/merchant/tier` (ID3, PG1, PG4, PG6, TR7): the effective tier, never where it comes
+ * from (decision 13). `keptUntil` is null for Bronze and while a grant sets the tier above the
+ * earned one; `savingsUsdUnits` is null unless the account is priced by a tier's list.
+ */
+export const merchantTierSummarySchema = z
+  .object({
+    tier: merchantTierSchema,
+    since: z.iso.datetime(),
+    keptUntil: z.iso.date().nullable(),
+    month: z.string(),
+    thisMonthUsdUnits: z.int(),
+    progress: progressSchema,
+    forecast: forecastSchema.nullable(),
+    savingsUsdUnits: amountUnitsSchema.nullable(),
+    privileges: tierPrivilegesSchema,
+    /** ID4: the celebration sheet is due. */
+    celebrate: z.boolean(),
+  })
+  .meta({ id: 'MerchantTierSummary' });
+
+export type MerchantTierSummary = z.infer<typeof merchantTierSummarySchema>;
+
+/** PG2: the three packs whose prices the tier table shows. */
+export const TIER_TABLE_PACKS = 3;
+
+/**
+ * `GET /api/merchant/tier/table` (PG2, decision 8): per tier its threshold (null: Bronze, or a
+ * tier without a live level), its privileges and the prices of three packs on its list; never a
+ * list's name, rule or cost.
+ */
+export const merchantTierTableSchema = z
+  .object({
+    current: merchantTierSchema,
+    packs: z
+      .array(z.object({ productId: z.uuid(), gameNameAr: z.string(), nameAr: z.string() }))
+      .max(TIER_TABLE_PACKS),
+    tiers: z.array(
+      z.object({
+        tier: merchantTierSchema,
+        available: z.boolean(),
+        thresholdUsdUnits: amountUnitsSchema.nullable(),
+        privileges: tierPrivilegesSchema,
+        /** In the packs' order; null where the pack has no price on the list. */
+        prices: z.array(amountUnitsSchema.nullable()),
+      }),
+    ),
+  })
+  .meta({ id: 'MerchantTierTable' });
+
+export type MerchantTierTable = z.infer<typeof merchantTierTableSchema>;
+
+/** `GET /api/merchant/tier/history` (PG5): newest first, this month live on top. */
+export const merchantTierHistorySchema = z
+  .object({
+    items: z.array(
+      z.object({
+        month: z.string(),
+        netPurchasesUsdUnits: z.int(),
+        tier: merchantTierSchema,
+        current: z.boolean(),
+      }),
+    ),
+  })
+  .meta({ id: 'MerchantTierHistory' });
+
+export type MerchantTierHistory = z.infer<typeof merchantTierHistorySchema>;
+
+/* Receipt welcome line (RC1) ----------------------------------------------------------------- */
+
+/** RC1: 2–60 characters after trimming. */
+export const WELCOME_TEXT_MAX = 60;
+
+// No control characters. Links and contacts are read on the NFKC form, so fullwidth or other
+// lookalike forms count as the plain ones: no scheme, `www`, `name.tld` (spaces around the dot
+// included) or `@handle`; no run of 7 or more digits of any script, whatever separates them but
+// letters, so no phone number hides in it (reviewer, S23 PR 2).
+const CONTROL = /\p{Cc}|\p{Cf}/u;
+const LINK =
+  /(?:[a-z][a-z0-9+.-]*:\/\/|www\s*\.|[a-z0-9-]+\s*[.。．]\s*[a-z]{2,}|@[a-z0-9_]{3,})/iu;
+const DIGIT_RUN = /(?:\p{Nd}[^\p{L}]*){7,}/u;
+
+/** RC1: the receipt's welcome line. */
+export const welcomeTextSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(WELCOME_TEXT_MAX)
+  .refine((text) => !CONTROL.test(text), 'Control characters are not allowed')
+  .refine((text) => !LINK.test(text.normalize('NFKC')), 'Links are not allowed')
+  .refine((text) => !DIGIT_RUN.test(text.normalize('NFKC')), 'Long digit runs are not allowed');

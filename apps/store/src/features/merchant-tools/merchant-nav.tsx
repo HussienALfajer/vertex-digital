@@ -6,6 +6,7 @@ import { tm } from './i18n';
 
 const LINKS = [
   { href: '/merchant', label: 'nav.dashboard' },
+  { href: '/merchant/tier', label: 'nav.tier' },
   { href: '/merchant/pos', label: 'nav.pos' },
   { href: '/merchant/bulk', label: 'nav.bulk' },
   { href: '/merchant/prices', label: 'nav.prices' },

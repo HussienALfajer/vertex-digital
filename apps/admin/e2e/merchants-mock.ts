@@ -23,6 +23,7 @@ import {
   priceKindOf,
   ROOT_PRICE_LIST_IDS,
   removeMerchantLogoSchema,
+  removeWelcomeTextSchema,
   revokeMerchantSchema,
   TIER_LIST_NAMES,
   TIER_SETTINGS_DEFAULTS,
@@ -88,7 +89,12 @@ interface StoredProfile {
   previousMonthUsdUnits: number;
   watchCount: number;
   /** S21 BR3: the receipt branding; a test sets a logo with `setBranding`. */
-  branding: { showWhatsapp: boolean; whatsapp: string | null; logoFileId: string | null };
+  branding: {
+    showWhatsapp: boolean;
+    whatsapp: string | null;
+    logoFileId: string | null;
+    welcomeText: string | null;
+  };
 }
 
 const EVENTS: Record<ApplicationAction, MerchantApplicationEventKind> = {
@@ -277,6 +283,17 @@ export class MerchantsMock {
         return { status: 204 };
       }
     }
+    // S23 RC1: the welcome line's removal (a reason, re-authentication).
+    const welcome = path.match(/^\/api\/admin\/customers\/([^/]+)\/merchant\/welcome-text$/);
+    if (welcome && method === 'DELETE') {
+      const profile = this.profiles.get(welcome[1] as string);
+      if (!profile?.branding.welcomeText) return error(404, 'NOT_FOUND');
+      const refused = sensitive();
+      if (refused) return refused;
+      if (!removeWelcomeTextSchema.safeParse(body).success) return error(400, 'VALIDATION_FAILED');
+      profile.branding = { ...profile.branding, welcomeText: null };
+      return { status: 204 };
+    }
     const grant = path.match(/^\/api\/admin\/customers\/([^/]+)\/merchant(\/revoke)?$/);
     if (grant && method === 'POST') {
       const refused = sensitive();
@@ -380,7 +397,7 @@ export class MerchantsMock {
       thisMonthUsdUnits: 180 * USD,
       previousMonthUsdUnits: 95 * USD,
       watchCount: 0,
-      branding: { showWhatsapp: false, whatsapp: null, logoFileId: null },
+      branding: { showWhatsapp: false, whatsapp: null, logoFileId: null, welcomeText: null },
     });
     this.priceLists.assign(
       customerId,

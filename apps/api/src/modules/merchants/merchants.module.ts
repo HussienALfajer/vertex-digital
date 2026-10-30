@@ -4,6 +4,8 @@ import { AuthModule } from '../auth/index.js';
 import { CustomersModule } from '../customers/index.js';
 import { DepositsModule } from '../deposits/index.js';
 import { FilesModule } from '../files/index.js';
+import { MerchantTierController } from './merchant-tier.controller.js';
+import { MerchantTierService } from './merchant-tier.service.js';
 import { MerchantTiersAdminController } from './merchant-tiers.admin.controller.js';
 import { MerchantTiersService } from './merchant-tiers.service.js';
 import { MerchantsAdminController } from './merchants.admin.controller.js';
@@ -20,12 +22,18 @@ import { MerchantsAdminService } from './merchants-admin.service.js';
  * count through `MerchantsAdminService`. S21 F39, S23 F43: `merchant_levels` (one per tier
  * above Bronze), `merchant_tier_settings`, `merchant_tier_grants`, `merchant_tier_changes`,
  * `merchant_tier_months` (the panel's tiers and grants; the recomputation is the worker's
- * `merchants.level`).
+ * `merchants.level`). S23 PR 2: the merchant's tier card, table, history, celebration and
+ * certificate, and the certificate's public page (`merchant-tier.service.ts`).
  */
 @Module({
   imports: [AuthModule, AdminModule, CustomersModule, DepositsModule, FilesModule],
-  controllers: [MerchantsController, MerchantsAdminController, MerchantTiersAdminController],
-  providers: [MerchantsService, MerchantsAdminService, MerchantTiersService],
+  controllers: [
+    MerchantsController,
+    MerchantTierController,
+    MerchantsAdminController,
+    MerchantTiersAdminController,
+  ],
+  providers: [MerchantsService, MerchantsAdminService, MerchantTiersService, MerchantTierService],
   exports: [MerchantsAdminService],
 })
 export class MerchantsModule {}

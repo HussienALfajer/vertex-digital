@@ -256,6 +256,18 @@ export const merchantProfiles = pgTable(
     earnedLevelId: uuid('earned_level_id').references(() => merchantLevels.id),
     /** S23 TR3: where the effective level comes from; null with no level. */
     levelSource: merchantLevelSourceEnum('level_source'),
+    /** S23 ID4: the celebration sheet is due; set on a rise by the recomputation, cleared by the merchant. */
+    celebratePending: boolean('celebrate_pending').notNull().default(false),
+    /**
+     * S23 ID7: the certificate's public code, 22 base64url characters from the same generator as
+     * the orders' verification codes (migration 0086); the default backfills existing profiles.
+     * The merchant reissues it (`certificate_reissued_at`).
+     */
+    certificateCode: text('certificate_code')
+      .notNull()
+      .unique()
+      .default(sql`order_verification_code()`),
+    certificateReissuedAt: timestamp('certificate_reissued_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()

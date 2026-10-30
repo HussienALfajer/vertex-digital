@@ -12,17 +12,24 @@ import {
   STATEMENT_EXPORTS_PER_HOUR,
   type Statement,
   type StatementMonths,
+  type StatementTier,
   statementBalances,
   statementMonths,
   statementTotals,
+  tierProgress,
 } from '@vertex-digital/contracts';
 import {
   type Database,
+  liveTierLevels,
+  merchantPrivileges,
   merchantWatchRows,
+  monthsPurchases,
   receiptSettingsOf,
   shownGames,
   statementAccount,
   statementFacts,
+  tierMonthOf,
+  tierSavings,
   withinLimits,
 } from '@vertex-digital/db';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -60,7 +67,8 @@ export class MerchantDocumentsService {
   async priceList(customerId: string, query: MerchantPriceListQuery): Promise<MerchantPriceList> {
     await requireMerchant(this.db, customerId);
     const branding = await receiptSettingsOf(this.db, customerId);
-    if (!branding) throw refusals.notMerchant();
+    const privileges = await merchantPrivileges(this.db, customerId);
+    if (!branding || !privileges) throw refusals.notMerchant();
     const games = await shownGames(this.db);
     const gameIds = await this.listGames(
       customerId,
@@ -90,6 +98,8 @@ export class MerchantDocumentsService {
     return {
       tradeName: branding.tradeName,
       logoFileId: branding.logoFileId,
+      tier: privileges.tier,
+      largeLogo: privileges.settings.receiptLargeLogo,
       generatedAt: new Date().toISOString(),
       mode: query.mode,
       currency: query.currency,
@@ -193,6 +203,38 @@ export class MerchantDocumentsService {
       closingUsdUnits: facts.closingUsdUnits,
       entries: facts.entries,
       totals: statementTotals(facts.entries),
+      tier: await this.statementTier(customerId, month, now),
+    };
+  }
+
+  /**
+   * S23 ID9: the tier held at the month's end (now for this month), its net purchases, the savings
+   * (PG6; none at Bronze) and the next tier with what was missing; null before the history starts.
+   */
+  private async statementTier(
+    customerId: string,
+    month: string,
+    now: Date,
+  ): Promise<StatementTier | null> {
+    let held: StatementTier['tier'];
+    let net: number;
+    if (month === damascusMonth(now)) {
+      const privileges = await merchantPrivileges(this.db, customerId);
+      if (!privileges) return null;
+      held = privileges.tier;
+      net = (await monthsPurchases(this.db, customerId, now)).thisMonthUsdUnits;
+    } else {
+      const row = await tierMonthOf(this.db, customerId, month);
+      if (!row) return null;
+      held = row.heldTier;
+      net = row.netPurchasesUsdUnits;
+    }
+    const next = tierProgress(await liveTierLevels(this.db), net, held).next;
+    return {
+      tier: held,
+      netPurchasesUsdUnits: net,
+      savingsUsdUnits: held === 'bronze' ? null : await tierSavings(this.db, customerId, month),
+      next: next && { tier: next.tier, missingUsdUnits: next.missingUsdUnits },
     };
   }
 

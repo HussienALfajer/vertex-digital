@@ -32,6 +32,7 @@ import {
   receiptSettingsOf,
   recordAudit,
   removeMerchantLogo,
+  removeWelcomeText,
   revokeMerchant,
   termsVersionNumber,
 } from '@vertex-digital/db';
@@ -183,6 +184,30 @@ export class MerchantsAdminService {
         ipAddress: actor.meta.ipAddress,
         userAgent: actor.meta.userAgent,
         details: { fileId, reason },
+      });
+    });
+  }
+
+  /**
+   * S23 RC1: the admin removes a merchant's welcome line with a reason, audited in the same
+   * transaction (a line used for scam contacts).
+   */
+  async removeWelcomeText(customerId: string, reason: string, actor: MerchantActor): Promise<void> {
+    if (!isUuid(customerId)) throw refusals.notFound('customer');
+    await this.db.transaction(async (tx) => {
+      const welcomeText = await removeWelcomeText(tx, customerId);
+      if (welcomeText === null) throw refusals.notFound('welcome line');
+      await recordAudit(tx, {
+        action: 'merchant.welcome_text_removed',
+        actorKind: 'admin',
+        actorId: actor.adminId,
+        channel: 'admin',
+        entityType: 'customer',
+        entityId: customerId,
+        reason,
+        ipAddress: actor.meta.ipAddress,
+        userAgent: actor.meta.userAgent,
+        details: { welcomeText },
       });
     });
   }

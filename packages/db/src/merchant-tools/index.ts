@@ -6,6 +6,7 @@ export {
   type ReceiptSettingsRow,
   receiptSettingsOf,
   removeMerchantLogo,
+  removeWelcomeText,
   saveReceiptSettings,
   setMerchantLogo,
 } from './counter.js';

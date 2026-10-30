@@ -141,10 +141,16 @@ export function notificationText(notification: CustomerNotification): string {
       return t('notifications.events.merchant_application_expired');
     case 'merchant_revoked':
       return t('notifications.events.merchant_revoked');
-    // S21: the level's name and the price kind, never a list's name.
+    // S21: the level's name and the price kind, never a list's name; S23: the tier.
     case 'merchant_level_changed': {
       const { params } = notification;
       const kind = t(`merchant.priceKinds.${params.priceKind}`);
+      if (params.tier !== undefined) {
+        return t(`notifications.events.merchant_tier_${params.direction}`, {
+          tier: t(`merchant.tierNames.${params.tier}`),
+          kind,
+        });
+      }
       return params.levelNameAr === null
         ? t('notifications.events.merchant_level_none', { kind })
         : t(`notifications.events.merchant_level_${params.direction}`, {
@@ -168,6 +174,12 @@ export function notificationText(notification: CustomerNotification): string {
     case 'merchant_statement_ready':
       return t('notifications.events.merchant_statement_ready', {
         month: ltr(notification.params.month),
+      });
+    // S23 PG3: the amount missing to reach or keep a tier.
+    case 'merchant_tier_reminder':
+      return t(`notifications.events.merchant_tier_reminder_${notification.params.kind}`, {
+        amount: ltr(formatUsd(notification.params.missingUsdUnits)),
+        tier: t(`merchant.tierNames.${notification.params.tier}`),
       });
     // S22 PA4: the customer's own prices only.
     case 'product_available':
@@ -215,6 +227,8 @@ export function notificationHref(notification: CustomerNotification): string {
       return '/wallet';
     case 'merchant_statement_ready':
       return `/merchant/statements/${notification.params.month}`;
+    case 'merchant_tier_reminder':
+      return '/merchant/tier';
     case 'product_available':
     case 'product_price_dropped':
       return `/games/${notification.params.gameSlug}?pack=${notification.params.productId}`;

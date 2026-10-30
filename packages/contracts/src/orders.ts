@@ -17,7 +17,7 @@ import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
 import { TIER_QUANTITY_CEILING } from './merchant-tiers.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
-import { priceKindSchema } from './price-kinds.js';
+import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
 import {
   fieldMapSchema,
   optionMapSchema,
@@ -547,7 +547,16 @@ export const publicShareSchema = z
       .nullable(),
     /** S21 BR1: a merchant's branded receipt: the shop's name, its WhatsApp when shown, a logo. */
     branding: z
-      .object({ tradeName: z.string(), whatsapp: z.string().nullable(), hasLogo: z.boolean() })
+      .object({
+        tradeName: z.string(),
+        whatsapp: z.string().nullable(),
+        hasLogo: z.boolean(),
+        /** S23 ID5: the merchant's current tier; null once revoked. */
+        tier: merchantTierSchema.nullable(),
+        /** S23 RC1, RC2. */
+        welcomeText: z.string().nullable(),
+        largeLogo: z.boolean(),
+      })
       .nullable(),
     /** S21 BR1: a branded receipt's selling price (with `showPrice`); never the price paid. */
     sellingPrice: z
@@ -1657,7 +1666,12 @@ export function verificationStage(status: OrderStatus): VerificationStage {
 export const receiptIssuerSchema = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('store') }),
-    z.object({ kind: z.literal('merchant'), tradeName: z.string() }),
+    z.object({
+      kind: z.literal('merchant'),
+      tradeName: z.string(),
+      /** S23 ID5: the merchant's current effective tier; null once revoked (no tier line). */
+      tier: merchantTierSchema.nullable(),
+    }),
   ])
   .meta({ id: 'ReceiptIssuer' });
 
@@ -1716,6 +1730,10 @@ export const orderPrintSchema = z
     /** Shown on a merchant's receipt when the merchant chose to (BR3). */
     whatsapp: z.string().nullable(),
     logoFileId: z.uuid().nullable(),
+    /** S23 RC1: printed under the shop name while the tier grants it; else null. */
+    welcomeText: z.string().nullable(),
+    /** S23 RC2: the logo at twice the size on 80 mm and A4. */
+    largeLogo: z.boolean(),
     price: z
       .object({
         kind: z.enum(['selling', 'retail']),

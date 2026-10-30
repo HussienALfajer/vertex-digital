@@ -5,6 +5,7 @@ import {
   type OrderPrint,
   type ReceiptSettings,
   updateReceiptSettingsSchema,
+  WELCOME_TEXT_MAX,
 } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card } from '@vertex-digital/ui/components/card';
@@ -26,31 +27,34 @@ import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { ReceiptPrint } from './print-page';
 import { getReceiptSettings, logoPath, saveReceiptSettings, uploadLogo } from './requests';
+import { useMerchantTier } from './tier-state';
 
 /** The 58 mm preview's order (S21 screens): sample facts, never a real order. */
-const SAMPLE: Omit<OrderPrint, 'issuer' | 'whatsapp' | 'logoFileId'> = {
-  orderId: '00000000-0000-7000-8000-000000000000',
-  orderNumber: 'VO-7Q2M4K',
-  stage: 'delivered',
-  createdAt: '2026-10-21T09:30:00.000Z',
-  game: { nameAr: 'ببجي موبايل' },
-  product: { nameAr: '60 شدة', kind: 'direct', redemptionAr: null },
-  quantity: 1,
-  deliveredQuantity: 1,
-  fields: [{ labelAr: 'معرّف اللاعب', value: '••••6789' }],
-  price: {
-    kind: 'selling',
-    currency: 'syp',
-    unitAmountUnits: 15_000_00,
-    totalAmountUnits: 15_000_00,
-  },
-  verificationCode: 'AAAAAAAAAAAAAAAAAAAAAA',
-};
+const SAMPLE: Omit<OrderPrint, 'issuer' | 'whatsapp' | 'logoFileId' | 'welcomeText' | 'largeLogo'> =
+  {
+    orderId: '00000000-0000-7000-8000-000000000000',
+    orderNumber: 'VO-7Q2M4K',
+    stage: 'delivered',
+    createdAt: '2026-10-21T09:30:00.000Z',
+    game: { nameAr: 'ببجي موبايل' },
+    product: { nameAr: '60 شدة', kind: 'direct', redemptionAr: null },
+    quantity: 1,
+    deliveredQuantity: 1,
+    fields: [{ labelAr: 'معرّف اللاعب', value: '••••6789' }],
+    price: {
+      kind: 'selling',
+      currency: 'syp',
+      unitAmountUnits: 15_000_00,
+      totalAmountUnits: 15_000_00,
+    },
+    verificationCode: 'AAAAAAAAAAAAAAAAAAAAAA',
+  };
 
 /**
  * "إيصال محلّك" (S21 BR3): the approved trade name with "اطلب تعديلاً" (a ticket), the WhatsApp
  * number and whether receipts show it, the logo (uploaded on pick, removed by a save), and a live
- * preview of the 58 mm receipt.
+ * preview of the 58 mm receipt. S23 RC1: the welcome line from Silver up (shown disabled below it,
+ * with the kept line), printed with the tier's line in the preview.
  */
 export function ReceiptPage() {
   const read = useCallback(() => getReceiptSettings(), []);
@@ -80,7 +84,10 @@ function ReceiptForm({
 }) {
   const [whatsapp, setWhatsapp] = useState(saved.whatsapp ?? '');
   const [showWhatsapp, setShowWhatsapp] = useState(saved.showWhatsapp);
+  const [welcome, setWelcome] = useState(saved.welcomeText ?? '');
   const [invalid, setInvalid] = useState(false);
+  const [welcomeInvalid, setWelcomeInvalid] = useState(false);
+  const { tier } = useMerchantTier();
   const [failure, setFailure] = useState<string | null>(null);
   const [logoFailure, setLogoFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -96,13 +103,22 @@ function ReceiptForm({
       showWhatsapp,
       whatsapp: whatsapp.trim() === '' ? null : whatsapp,
       logoFileId,
+      welcomeText: welcome.trim() === '' ? null : welcome,
     });
-    setInvalid(!parsed.success);
+    const paths = parsed.success ? [] : parsed.error.issues.map((issue) => issue.path[0]);
+    setInvalid(paths.includes('whatsapp'));
+    setWelcomeInvalid(paths.includes('welcomeText'));
     if (!parsed.success) return focusInvalid();
     setPending(true);
     const result = await saveReceiptSettings(parsed.data);
     setPending(false);
-    if (!result.ok) return setFailure(errorText(result.reason));
+    if (!result.ok) {
+      if (result.reason === 'VALIDATION_FAILED' && welcome.trim() !== '') {
+        setWelcomeInvalid(true);
+        return focusInvalid();
+      }
+      return setFailure(errorText(result.reason));
+    }
     setDone(true);
     onSaved(result.data);
   }
@@ -126,9 +142,11 @@ function ReceiptForm({
 
   const preview: OrderPrint = {
     ...SAMPLE,
-    issuer: { kind: 'merchant', tradeName: saved.tradeName },
+    issuer: { kind: 'merchant', tradeName: saved.tradeName, tier: tier?.tier ?? null },
     whatsapp: showWhatsapp && whatsapp.trim() ? whatsapp.trim() : null,
     logoFileId: saved.logoFileId,
+    welcomeText: saved.welcomeAllowed && welcome.trim() ? welcome.trim() : null,
+    largeLogo: false,
   };
 
   return (
@@ -180,6 +198,30 @@ function ReceiptForm({
             <span className="text-base">{tm('receipt.showWhatsapp')}</span>
             <Switch id={switchId} checked={showWhatsapp} onCheckedChange={setShowWhatsapp} />
           </label>
+          <Field invalid={welcomeInvalid} disabled={!saved.welcomeAllowed}>
+            <FieldLabel>{tm('tier.welcome.label')}</FieldLabel>
+            <Input
+              name="welcomeText"
+              className="h-11 text-md"
+              maxLength={WELCOME_TEXT_MAX}
+              disabled={!saved.welcomeAllowed}
+              value={welcome}
+              onChange={(event) => setWelcome(event.target.value)}
+            />
+            <FieldDescription>
+              {saved.welcomeAllowed
+                ? tm('tier.welcome.hint')
+                : saved.welcomeText
+                  ? tm('tier.welcome.kept')
+                  : tm('tier.welcome.locked')}
+              {saved.welcomeAllowed && (
+                <span className="ms-2 tabular-nums" dir="ltr">
+                  {tm('tier.welcome.count', { count: welcome.trim().length })}
+                </span>
+              )}
+            </FieldDescription>
+            <FieldError match={welcomeInvalid}>{tm('tier.welcome.invalid')}</FieldError>
+          </Field>
           <Field>
             <FieldLabel>{tm('receipt.logo')}</FieldLabel>
             <div className="flex flex-wrap items-center gap-3">

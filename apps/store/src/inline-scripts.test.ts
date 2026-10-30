@@ -13,7 +13,7 @@ const ALLOWED = new Set([
   'REGISTRATION_SCRIPT',
   'SESSION_HINT_SCRIPT',
   'DISMISSED_SCRIPT',
-  'A4_RULE',
+  'A4_RULES[orientation]',
   'PAGE_RULES[paper]',
 ]);
 

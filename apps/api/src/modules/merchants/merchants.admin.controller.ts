@@ -34,10 +34,12 @@ import {
   merchantSettingsSchema,
   type RejectApplication,
   type RemoveMerchantLogo,
+  type RemoveWelcomeText,
   type RequestApplicationInfo,
   type RevokeMerchant,
   rejectApplicationSchema,
   removeMerchantLogoSchema,
+  removeWelcomeTextSchema,
   requestApplicationInfoSchema,
   revokeMerchantSchema,
 } from '@vertex-digital/contracts';
@@ -235,6 +237,24 @@ export class MerchantsAdminController {
     @Req() request: Request,
   ) {
     await this.merchants.removeLogo(id, body.reason, {
+      adminId: admin.id,
+      meta: requestMeta(request),
+    });
+  }
+
+  /** S23 RC1: removes the merchant's receipt welcome line, with a reason, audited. */
+  @Delete('customers/:id/merchant/welcome-text')
+  @AdminRoute()
+  @Sensitive()
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'The receipts carry no welcome line from now on' })
+  async removeWelcomeText(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @Body({ schema: removeWelcomeTextSchema }) body: RemoveWelcomeText,
+    @Req() request: Request,
+  ) {
+    await this.merchants.removeWelcomeText(id, body.reason, {
       adminId: admin.id,
       meta: requestMeta(request),
     });

@@ -13,7 +13,6 @@ import {
   merchantLevelInputSchema,
   monthRange,
   monthSchema,
-  nextLevel,
   orderQuantityMax,
   parseBulkLines,
   previousMonth,
@@ -179,13 +178,6 @@ describe('levelFor (LV3)', () => {
     expect(levelFor(levels, -5 * USD, 60 * USD)?.id).toBe('silver');
   });
 
-  it('names the next level and the amount missing (DB5)', () => {
-    expect(nextLevel(levels, 30 * USD)).toEqual({ level: levels[0], missingUsdUnits: 20 * USD });
-    expect(nextLevel([...levels].reverse(), 60 * USD)?.level.id).toBe('gold');
-    expect(nextLevel(levels, -10 * USD)?.missingUsdUnits).toBe(50 * USD);
-    expect(nextLevel(levels, 200 * USD)).toBeNull();
-  });
-
   it('takes whole-dollar thresholds of at least $1', () => {
     const parse = (body: object) => merchantLevelInputSchema.safeParse(body).success;
     const level = { nameAr: ' فضي ', monthlyThresholdUsdUnits: 50 * USD, priceListId: ID };
@@ -333,14 +325,18 @@ describe('parseBulkLines (BK1)', () => {
 
 describe('receipt settings (BR3)', () => {
   it('needs a number to show and normalizes it', () => {
-    const shown = { showWhatsapp: true, logoFileId: null };
+    const shown = { showWhatsapp: true, logoFileId: null, welcomeText: null };
     expect(updateReceiptSettingsSchema.safeParse({ ...shown, whatsapp: null }).success).toBe(false);
     expect(updateReceiptSettingsSchema.parse({ ...shown, whatsapp: '0933 123 456' }).whatsapp).toBe(
       '+963933123456',
     );
     expect(
-      updateReceiptSettingsSchema.safeParse({ showWhatsapp: false, whatsapp: null, logoFileId: ID })
-        .success,
+      updateReceiptSettingsSchema.safeParse({
+        showWhatsapp: false,
+        whatsapp: null,
+        logoFileId: ID,
+        welcomeText: null,
+      }).success,
     ).toBe(true);
   });
 });

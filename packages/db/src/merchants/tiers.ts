@@ -3,6 +3,7 @@ import {
   MERCHANT_TIERS,
   type MerchantTier,
   type TierChangeSource,
+  type TierPrivileges,
   type TierQuantities,
   tierOf,
 } from '@vertex-digital/contracts';
@@ -109,6 +110,26 @@ export async function merchantPrivileges(
     .limit(1);
   if (!settings) throw new Error(`The ${tier} tier settings are not seeded`);
   return { tier, settings };
+}
+
+/** TS2: a settings row's privileges, as the admin's tiers page and the merchant read them. */
+export function tierPrivileges(row: TierSettingsRow): TierPrivileges {
+  return {
+    perDepositUsdUnits: row.perDepositUsdUnits,
+    dailyDepositUsdUnits: row.dailyDepositUsdUnits,
+    playerChecksPerHour: row.playerChecksPerHour,
+    playerChecksPerDay: row.playerChecksPerDay,
+    bulkLinesMax: row.bulkLinesMax,
+    orderUnitsMax: row.orderUnitsMax,
+    depositPriority: row.depositPriority,
+    supportPriority: row.supportPriority,
+    supportReplyMinutes: row.supportReplyMinutes,
+    directContact: row.directContact,
+    earlyAccess: row.earlyAccess,
+    fastAlerts: row.fastAlerts,
+    receiptWelcome: row.receiptWelcome,
+    receiptLargeLogo: row.receiptLargeLogo,
+  };
 }
 
 /** TS5: a tier's quantities. */

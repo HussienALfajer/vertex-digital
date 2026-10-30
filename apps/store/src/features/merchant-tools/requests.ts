@@ -5,9 +5,13 @@ import {
   ERROR_CODES,
   type ErrorCode,
   type MerchantAlertPage,
+  type MerchantCertificate,
   type MerchantDashboard,
   type MerchantGames,
   type MerchantPriceList,
+  type MerchantTierHistory,
+  type MerchantTierSummary,
+  type MerchantTierTable,
   type OrderPrint,
   type OrderSale,
   PRICE_LIST_CURRENCIES,
@@ -207,6 +211,37 @@ export function uploadLogo(file: File, fetcher: Fetcher = fetch) {
   const body = new FormData();
   body.append('file', file);
   return apiRequest<UploadedLogo>('/api/merchant/logo', { method: 'POST', body, fetcher });
+}
+
+/* Tiers (S23 ID3, ID4, ID7, PG1–PG7) */
+
+export function getTier(fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantTierSummary>('/api/merchant/tier', { fetcher });
+}
+
+export function getTierTable(fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantTierTable>('/api/merchant/tier/table', { fetcher });
+}
+
+export function getTierHistory(fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantTierHistory>('/api/merchant/tier/history', { fetcher });
+}
+
+/** ID4: the celebration was seen. */
+export function markCelebrated(fetcher: Fetcher = fetch) {
+  return apiRequest<null>('/api/merchant/tier/celebrated', { method: 'POST', fetcher });
+}
+
+export function getCertificate(fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantCertificate>('/api/merchant/certificate', { fetcher });
+}
+
+/** ID7: a new code; old prints stop resolving. 3 a day. */
+export function reissueCertificate(fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantCertificate>('/api/merchant/certificate/reissue', {
+    method: 'POST',
+    fetcher,
+  });
 }
 
 /** The merchant's own logo, for the receipt preview and the printed receipt. */

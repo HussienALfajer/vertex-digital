@@ -11,6 +11,7 @@ import type {
   MerchantSettingsInput,
   MerchantTier,
   RemoveMerchantLogo,
+  RemoveWelcomeText,
   RevokeMerchant,
   TierGrantEndInput,
   TierGrantInput,
@@ -166,6 +167,17 @@ export const useRemoveMerchantLogo = (customerId: string) =>
   useMerchantsMutation((body: RemoveMerchantLogo) =>
     call(
       api.DELETE('/api/admin/customers/{id}/merchant/logo', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
+  );
+
+/** S23 RC1: removes a merchant's receipt welcome line, with a reason (re-authenticated, audited). */
+export const useRemoveWelcomeText = (customerId: string) =>
+  useMerchantsMutation((body: RemoveWelcomeText) =>
+    call(
+      api.DELETE('/api/admin/customers/{id}/merchant/welcome-text', {
         params: { path: { id: customerId } },
         body,
       }),

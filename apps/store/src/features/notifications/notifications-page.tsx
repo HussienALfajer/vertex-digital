@@ -27,6 +27,7 @@ import {
   StoreIcon,
   TagIcon,
   TrendingDownIcon,
+  TrophyIcon,
   Undo2Icon,
   WalletIcon,
   WalletMinimalIcon,
@@ -78,6 +79,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   merchant_watch_digest: BellRingIcon,
   merchant_low_balance: WalletMinimalIcon,
   merchant_statement_ready: FileSpreadsheetIcon,
+  merchant_tier_reminder: TrophyIcon,
   product_available: PackagePlusIcon,
   product_price_dropped: TrendingDownIcon,
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  BULK_LINES_MAX,
   BULK_TEXT_MAX_BYTES,
   type BulkCheckLine,
   type BulkCheckResult,
@@ -41,6 +42,7 @@ import { t } from '@/lib/i18n';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { checkBulk, getMerchantGames } from './requests';
+import { useMerchantTier } from './tier-state';
 
 // S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
 const TermsSheet = dynamic(() =>
@@ -94,7 +96,7 @@ function stateOf(line: BulkCheckLine, confirmed: boolean): 'ok' | 'confirm' | 'i
 const STATE_TONES = { ok: 'success', confirm: 'warning', invalid: 'danger' } as const;
 
 /**
- * "طلبات بالجملة" (S21 F33, BK1–BK5): a game, then up to 50 lines pasted or from a CSV with the
+ * "طلبات بالجملة" (S21 F33, BK1–BK5): a game, then up to the tier's lines (S23 TS5) pasted or from a CSV with the
  * game's template; "فحص" checks every line on the merchant's list with each id checked once
  * (the merchant's quota); the table marks errors and asks a tick for ids not known valid; the
  * total against the balance; "ادفع الكل" pays all or nothing through the S10 checkout, then
@@ -128,6 +130,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const game = games.find((item) => item.id === gameId) ?? null;
+  const bulkLinesMax = useMerchantTier().tier?.privileges.bulkLinesMax ?? BULK_LINES_MAX;
 
   async function check() {
     if (!gameId || text.trim() === '') return;
@@ -234,7 +237,9 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
       <Card className="gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-bold">{tm('bulk.title')}</h2>
-          <p className="text-sm text-muted-foreground">{tm('bulk.body')}</p>
+          <p className="text-sm text-muted-foreground">
+            {tm('bulk.body', { count: bulkLinesMax })}
+          </p>
         </div>
         {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
         {stopped && <FormAlert>{t('purchase.stopped')}</FormAlert>}

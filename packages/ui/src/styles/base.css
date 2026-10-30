@@ -64,3 +64,13 @@
     transform: scaleY(1);
   }
 }
+
+/* The tier celebration (S23 ID4): the badge appears once, after the mark's strokes. */
+@keyframes vd-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -96,6 +96,22 @@ createServer((request, response) => {
     forwardedFor.set(verification[1], seen);
     if (verifications[verification[1]]) return json(response, 200, verifications[verification[1]]);
   }
+  // S23 ID7: certificates by code: a Gold merchant and a revoked one.
+  const certificate = /^\/api\/certificates\/([A-Za-z0-9_-]{22})$/.exec(path);
+  if (certificate) {
+    const found = {
+      CertGold0123456789abcd: {
+        status: 'active',
+        tradeName: 'محل النور للاتصالات',
+        city: 'اعزاز',
+        governorate: 'aleppo',
+        tier: 'gold',
+        since: '2026-09-01T09:00:00.000Z',
+      },
+      CertGone0123456789abcd: { status: 'revoked' },
+    }[certificate[1]];
+    if (found) return json(response, 200, found);
+  }
   // S22 DL2: direct buy links; `K7M2QX` is PUBG's 660 UC, `G2MEXX` a paused game's pack. The
   // visitor's address is kept per code, as for the shares.
   const quick = /^\/api\/q\/([2-9A-HJKMNP-Z]{6})$/.exec(path);

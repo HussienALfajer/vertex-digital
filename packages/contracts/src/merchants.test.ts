@@ -4,6 +4,7 @@ import {
   type ApplicationAction,
   applicationTransition,
   approveApplicationSchema,
+  certificatePath,
   grantMerchantSchema,
   infoRequestExpiresAt,
   isOpenApplication,
@@ -14,6 +15,7 @@ import {
   merchantApplyRefusal,
   merchantMessageSchema,
   merchantSettingsInputSchema,
+  publicCertificateSchema,
   reapplyAvailableAt,
 } from './merchants.js';
 
@@ -222,5 +224,14 @@ describe('merchant settings', () => {
         ordersPerTenMinutes: 9,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('the certificate (ID7)', () => {
+  it('points the QR at the public page and shows a revoked merchant as nothing else', () => {
+    expect(certificatePath('abcdefghijklmnopqrstuv')).toBe('/m/abcdefghijklmnopqrstuv');
+    expect(publicCertificateSchema.parse({ status: 'revoked', tradeName: 'x' })).toEqual({
+      status: 'revoked',
+    });
   });
 });

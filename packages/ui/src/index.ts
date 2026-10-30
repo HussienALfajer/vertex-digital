@@ -38,6 +38,7 @@ export * from './components/switch';
 export * from './components/table';
 export * from './components/tabs';
 export * from './components/textarea';
+export * from './components/tier-badge';
 export * from './components/toast';
 export * from './components/toggle-group';
 export * from './components/tooltip';

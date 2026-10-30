@@ -6,6 +6,7 @@ import {
   type SellingPriceRow,
 } from './merchant-tools.js';
 import { amountUnitsSchema, sypDisplayPrice } from './money.js';
+import { levelTierSchema, merchantTierSchema } from './price-kinds.js';
 import { JOURNAL_KINDS, journalKindSchema, walletEntrySchema } from './wallet.js';
 
 /*
@@ -124,6 +125,10 @@ export const merchantPriceListSchema = z
   .object({
     tradeName: z.string(),
     logoFileId: z.uuid().nullable(),
+    /** S23 ID6: the merchant's effective tier, for the header's line and badge. */
+    tier: merchantTierSchema,
+    /** S23 RC2: the logo at twice the size. */
+    largeLogo: z.boolean(),
     generatedAt: z.iso.datetime(),
     mode: z.enum(PRICE_LIST_MODES),
     currency: z.enum(PRICE_LIST_CURRENCIES),
@@ -223,6 +228,21 @@ export const statementTotalSchema = z
 
 export type StatementTotal = z.infer<typeof statementTotalSchema>;
 
+/**
+ * S23 ID9: the tier held at the month's end (now for this month), the month's net purchases, the
+ * savings (PG6; null unless priced by a tier's list) and the next tier with what was missing.
+ */
+export const statementTierSchema = z
+  .object({
+    tier: merchantTierSchema,
+    netPurchasesUsdUnits: z.int(),
+    savingsUsdUnits: amountUnitsSchema.nullable(),
+    next: z.object({ tier: levelTierSchema, missingUsdUnits: amountUnitsSchema }).nullable(),
+  })
+  .meta({ id: 'StatementTier' });
+
+export type StatementTier = z.infer<typeof statementTierSchema>;
+
 /** `GET /api/merchant/statements/:month` (ST2). */
 export const statementSchema = z
   .object({
@@ -236,6 +256,8 @@ export const statementSchema = z
     closingUsdUnits: z.int(),
     entries: z.array(statementEntrySchema),
     totals: z.array(statementTotalSchema),
+    /** S23 ID9: "فئتك هذا الشهر"; null for a month before the tier history starts. */
+    tier: statementTierSchema.nullable(),
   })
   .meta({ id: 'Statement' });
 

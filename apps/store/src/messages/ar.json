@@ -34,7 +34,8 @@
     "cartCount": "السلة، {count} بنود",
     "players": "معرّفاتي",
     "alerts": "تنبيهاتي",
-    "merchantTools": "أدوات التاجر"
+    "merchantTools": "أدوات التاجر",
+    "tierBadge": "تاجر {name}"
   },
   "stopBanner": {
     "deposits": "نجري صيانة قصيرة. الإيداع متوقف مؤقتًا، ورصيدك وطلباتك بأمان.",
@@ -192,10 +193,11 @@
         "merchant_rejected": "عند رفض طلب التاجر",
         "merchant_application_expired": "عند انتهاء طلب التاجر",
         "merchant_revoked": "عند تغيّر نوع حسابك",
-        "merchant_level_changed": "عند تغيّر مستوى حساب التاجر",
+        "merchant_level_changed": "عند تغيّر فئة حساب التاجر",
         "merchant_low_balance": "عند انخفاض الرصيد عن الحد الذي حددته",
         "merchant_watch_digest": "تغيّرات الباقات التي تتابعها",
         "merchant_statement_ready": "كشف الحساب الشهري",
+        "merchant_tier_reminder": "تذكير الفئة قبل نهاية الشهر",
         "product_available": "عند توفر باقة طلبت التنبيه عنها",
         "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها"
       },
@@ -535,6 +537,10 @@
       "merchant_level_up": "بلغت مشترياتك مستوى {level}، وتظهر لك {kind} الآن.",
       "merchant_level_down": "أصبح مستوى حسابك {level} بحسب مشتريات الشهر الماضي، وتظهر لك {kind}.",
       "merchant_level_none": "لم يعد حسابك ضمن أي مستوى، وتظهر لك {kind}.",
+      "merchant_tier_up": "ارتقت فئة حسابك إلى تاجر {tier}، وتظهر لك {kind}.",
+      "merchant_tier_down": "أصبحت فئة حسابك تاجر {tier}، وتظهر لك {kind}.",
+      "merchant_tier_reminder_reach": "ينقصك {amount} لتصل إلى الفئة ال{tier}ة قبل نهاية الشهر.",
+      "merchant_tier_reminder_keep": "اشترِ بـ {amount} قبل نهاية الشهر لتحتفظ بالفئة ال{tier}ة.",
       "merchant_watch_digest": "تغيّرات على باقات تتابعها: أسعار {prices}، عادت للتوفر {back}، نفدت {out}.",
       "merchant_low_balance": "أصبح رصيدك {balance}، أقل من الحد الذي حددته ({threshold}). اشحن رصيدك لتتابع البيع.",
       "merchant_statement_ready": "كشف حساب شهر {month} جاهز.",
@@ -609,6 +615,7 @@
     "MERCHANT_TIER_UNAVAILABLE": "تعذّر حفظ الفئة. حدّث الصفحة وأعد المحاولة.",
     "MERCHANT_TIER_GRANT_NOT_HIGHER": "تعذّر حفظ الفئة. حدّث الصفحة وأعد المحاولة.",
     "MERCHANT_TIER_GRANT_OPEN": "تعذّر حفظ الفئة. حدّث الصفحة وأعد المحاولة.",
+    "CERTIFICATE_REISSUE_LIMIT": "أعدت إصدار رمز الشهادة 3 مرات اليوم. حاول غداً.",
     "WATCHES_LIMIT_REACHED": "تتابع 200 لعبة وباقة، وهو الحد. ألغِ متابعة بعضها ثم أضف غيرها.",
     "BULK_LINES_INVALID": "القائمة فارغة أو فيها أسطر أكثر مما تسمح به فئتك. قسّمها إلى قوائم أصغر.",
     "PLAYER_CHECK_QUOTA_EXCEEDED": "استخدمت كل فحوص المعرّفات المتاحة الآن. يمكنك الدفع بعد تأكيد المعرّفات، أو الفحص لاحقاً.",
@@ -1270,6 +1277,12 @@
       "priceKind": "تظهر لك: {kind}",
       "termsBanner": "وافق على شروط حساب التاجر لتتمكن من الشراء بأسعار التاجر.",
       "termsAction": "قراءة الشروط والموافقة"
+    },
+    "tierNames": {
+      "bronze": "برونزي",
+      "silver": "فضي",
+      "gold": "ذهبي",
+      "diamond": "ماسي"
     },
     "priceKinds": {
       "retail": "أسعار التجزئة",

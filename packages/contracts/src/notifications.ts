@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
+import { tierPrivilegesSchema } from './merchant-tiers.js';
 import { alertLineSchema, monthSchema, WATCH_DIGEST_LINES } from './merchant-tools.js';
 import {
   ADMIN_ORDER_NOTE_MAX_LENGTH,
@@ -9,7 +10,7 @@ import {
   refundReasonSchema,
   STORE_PLACED_PURPOSES,
 } from './orders.js';
-import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
+import { levelTierSchema, merchantTierSchema, priceKindSchema } from './price-kinds.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -73,6 +74,8 @@ export const EMAIL_TEMPLATES = [
   'customer_merchant_daily_digest',
   /** S21 ST4: last month's statement is ready, with its link. */
   'customer_merchant_statement_ready',
+  /** S23 PG3: near the next tier, or below the own tier's threshold, before the month ends. */
+  'customer_merchant_tier_reminder',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -139,6 +142,8 @@ export const NOTIFICATION_EVENTS = [
   'merchant_low_balance',
   /** S21 ST4: last month's statement. */
   'merchant_statement_ready',
+  /** S23 PG3: the month-end tier reminder. */
+  'merchant_tier_reminder',
   /** S22 PA4: a pack the customer asked about is available, or cheaper (center and push). */
   'product_available',
   'product_price_dropped',
@@ -255,6 +260,8 @@ export const NOTIFICATION_PARAMS = {
     direction: z.enum(['up', 'down']),
     /** S23 TR6: the effective tier now (missing on notifications sent before S23). */
     tier: merchantTierSchema.optional(),
+    /** S23 ID4: what the new tier grants (missing before S23 PR 2). */
+    privileges: tierPrivilegesSchema.optional(),
   }),
   // S21 AL3: the counts of the hour's changes and up to five of them.
   merchant_watch_digest: z.object({
@@ -271,6 +278,13 @@ export const NOTIFICATION_PARAMS = {
   }),
   // S21 ST4: the month, `YYYY-MM`.
   merchant_statement_ready: z.object({ month: monthSchema }),
+  // S23 PG3: `reach` the next tier, or `keep` the own tier next month, with the amount missing.
+  merchant_tier_reminder: z.object({
+    kind: z.enum(['reach', 'keep']),
+    tier: levelTierSchema,
+    missingUsdUnits: z.int().positive(),
+    month: monthSchema,
+  }),
   // S22 PA4: the pack and its game; a drop adds the customer's own old and new unit prices.
   product_available: productAlertParams,
   product_price_dropped: productAlertParams.extend({
@@ -327,6 +341,7 @@ export const EMAIL_PARAMS = {
     lines: z.array(alertLineSchema).max(MERCHANT_DAILY_DIGEST_LINES),
   }),
   customer_merchant_statement_ready: NOTIFICATION_PARAMS.merchant_statement_ready,
+  customer_merchant_tier_reminder: NOTIFICATION_PARAMS.merchant_tier_reminder,
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -373,6 +388,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_watch_digest: null,
   merchant_low_balance: 'customer_merchant_low_balance',
   merchant_statement_ready: 'customer_merchant_statement_ready',
+  merchant_tier_reminder: 'customer_merchant_tier_reminder',
   product_available: null,
   product_price_dropped: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
@@ -445,6 +461,7 @@ export const customerNotificationSchema = z
     notification('merchant_watch_digest'),
     notification('merchant_low_balance'),
     notification('merchant_statement_ready'),
+    notification('merchant_tier_reminder'),
     notification('product_available'),
     notification('product_price_dropped'),
   ])

@@ -27,6 +27,7 @@ import {
   findCustomerWallet,
   lockActiveCustomer,
   merchantListPrices,
+  merchantPrivileges,
   OrderError,
   ownOrderForSale,
   receiptSettingsOf,
@@ -243,15 +244,24 @@ export class MerchantCounterService {
     return BULK_CHECK_BUDGET_MS;
   }
 
-  /** `GET /api/merchant/receipt-settings` (BR3). */
+  /**
+   * `GET /api/merchant/receipt-settings` (BR3); S23 RC1: whether the tier prints a welcome line.
+   */
   async receiptSettings(customerId: string): Promise<ReceiptSettings> {
     await requireMerchant(this.db, customerId);
     const settings = await receiptSettingsOf(this.db, customerId);
     if (!settings) throw refusals.notMerchant();
-    return settings;
+    return { ...settings, welcomeAllowed: await this.welcomeAllowed(customerId) };
   }
 
-  /** `PUT /api/merchant/receipt-settings` (BR3): a logo the merchant uploaded, or none. */
+  private async welcomeAllowed(customerId: string): Promise<boolean> {
+    return (await merchantPrivileges(this.db, customerId))?.settings.receiptWelcome ?? false;
+  }
+
+  /**
+   * `PUT /api/merchant/receipt-settings` (BR3): a logo the merchant uploaded, or none. S23 RC1: a
+   * new welcome line needs a tier that prints it; a kept or cleared one never does.
+   */
   async saveReceiptSettings(
     customerId: string,
     input: UpdateReceiptSettings,
@@ -260,6 +270,12 @@ export class MerchantCounterService {
     // The logo is kept or removed here; a new one arrives through the upload.
     if (input.logoFileId !== null && !(await this.ownLogo(customerId, input.logoFileId))) {
       throw refusals.invalid('logoFileId', 'Not the logo of this merchant');
+    }
+    if (input.welcomeText !== null && !(await this.welcomeAllowed(customerId))) {
+      const saved = await receiptSettingsOf(this.db, customerId);
+      if (saved?.welcomeText !== input.welcomeText) {
+        throw refusals.invalid('welcomeText', 'The tier prints no welcome line');
+      }
     }
     await saveReceiptSettings(this.db, customerId, input);
     return this.receiptSettings(customerId);

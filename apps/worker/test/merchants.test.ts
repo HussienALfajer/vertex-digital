@@ -1,4 +1,9 @@
-import { damascusMonth, monthRange, TIER_NAMES_AR } from '@vertex-digital/contracts';
+import {
+  damascusMonth,
+  monthRange,
+  TIER_NAMES_AR,
+  TIER_SETTINGS_DEFAULTS,
+} from '@vertex-digital/contracts';
 import {
   createDatabase,
   customers,
@@ -21,6 +26,7 @@ import { ExpireApplicationsJob } from '../src/jobs/merchants/expire-applications
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
 import { MerchantStatementEmailsJob } from '../src/jobs/merchants/statement-emails.job.js';
 import { MerchantTierGrantsJob } from '../src/jobs/merchants/tier-grants.job.js';
+import { MerchantTierRemindersJob } from '../src/jobs/merchants/tier-reminders.job.js';
 import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
 import { renderPush } from '../src/jobs/push/push-texts.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
@@ -434,6 +440,118 @@ describe('merchant tiers in the worker (S23 TR6, MG4, MG5, PG5)', () => {
       'Merchant level schedule failed for 1 merchants',
     );
     expect(state.calls).toBeGreaterThanOrEqual(merchants);
+  });
+
+  it('merchants.tier-reminders reminds a merchant near Silver once a month, never a frozen one (PG3)', async () => {
+    const [near, far, frozen] = [await merchant(), await merchant(), await merchant()];
+    await db.update(customers).set({ frozenAt: new Date() }).where(eq(customers.id, frozen));
+    await inRollback(async (tx) => {
+      const [list] = (
+        await tx.execute<{ id: string }>(
+          sql`select id from price_lists where kind = 'wholesale' and archived_at is null limit 1`,
+        )
+      ).rows;
+      await tx.execute(sql`insert into merchant_levels
+        (id, tier, name_ar, monthly_threshold_usd_units, price_list_id)
+        values (${newId()}, 'silver', ${TIER_NAMES_AR.silver}, 10000000, ${list?.id})`);
+      // $8 of purchases this month: $2 short of Silver's $10, within 30% (edge case 11: none at $0).
+      for (const shop of [near, frozen]) {
+        await postJournal(tx, {
+          idempotencyKey: `test:${newId()}`,
+          kind: 'adjustment',
+          postings: [
+            { accountId: await ensureCustomerWallet(tx, shop), amountUnits: 8_000_000 },
+            {
+              accountId: await ensureSystemAccount(tx, {
+                code: 'adjustments:test_funds',
+                kind: 'adjustments',
+                currency: 'USD',
+              }),
+              amountUnits: -8_000_000,
+            },
+          ],
+        });
+        await postJournal(tx, {
+          idempotencyKey: `test:${newId()}`,
+          kind: 'purchase',
+          postings: [
+            { accountId: await ensureCustomerWallet(tx, shop), amountUnits: -8_000_000 },
+            {
+              accountId: await ensureSystemAccount(tx, {
+                code: 'sales_revenue:USD',
+                kind: 'sales_revenue',
+                currency: 'USD',
+              }),
+              amountUnits: 8_000_000,
+            },
+          ],
+        });
+      }
+      const job = new MerchantTierRemindersJob(pgBoss, tx as unknown as Database);
+      const now = new Date();
+      expect(await job.sendAll(now)).toBeGreaterThanOrEqual(1);
+      await job.sendAll(now);
+      const told = async (shop: string) =>
+        (
+          await tx.execute<{ params: Record<string, unknown> }>(
+            sql`select params from customer_notifications where customer_id = ${shop}
+              and event = 'merchant_tier_reminder'`,
+          )
+        ).rows;
+      expect(await told(near)).toEqual([
+        {
+          params: {
+            kind: 'reach',
+            tier: 'silver',
+            missingUsdUnits: 2_000_000,
+            month: damascusMonth(now),
+          },
+        },
+      ]);
+      expect(await told(far)).toEqual([]);
+      expect(await told(frozen)).toEqual([]);
+    });
+  });
+
+  it('names the reach and keep reminders and what a tier grants (PG3, ID4)', () => {
+    const store = 'https://digital.example';
+    const reach = renderEmail(
+      'customer_merchant_tier_reminder',
+      { kind: 'reach', tier: 'gold', missingUsdUnits: 280_000_000, month: '2030-01' },
+      store,
+    );
+    expect(reach.text).toContain('ينقصك');
+    expect(reach.text).toContain('$280.00');
+    expect(reach.text).toContain('الفئة الذهبية');
+    expect(reach.text).toContain('https://digital.example/merchant/tier');
+    const keep = renderEmail(
+      'customer_merchant_tier_reminder',
+      { kind: 'keep', tier: 'silver', missingUsdUnits: 50_000_000, month: '2030-01' },
+      store,
+    );
+    expect(keep.text).toContain('لتحتفظ');
+    expect(
+      renderPush('merchant_tier_reminder', {
+        kind: 'reach',
+        tier: 'gold',
+        missingUsdUnits: 280_000_000,
+        month: '2030-01',
+      }),
+    ).toMatchObject({ url: '/merchant/tier' });
+    const changed = renderEmail(
+      'customer_merchant_level_changed',
+      {
+        levelNameAr: 'ذهبي',
+        priceKind: 'wholesale',
+        direction: 'up',
+        tier: 'gold',
+        privileges: TIER_SETTINGS_DEFAULTS.gold,
+      },
+      store,
+    );
+    expect(changed.text).toContain('ما تمنحك إياه فئتك');
+    expect(changed.text).toMatch(/100\D{0,3} سطراً في الطلب الجماعي/);
+    expect(changed.text).toContain('شعار محلك بحجم أكبر');
   });
 
   it('names the tier in the Telegram messages and the summary line (TR8, MG5, AD6)', () => {
