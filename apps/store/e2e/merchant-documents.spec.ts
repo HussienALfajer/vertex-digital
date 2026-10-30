@@ -229,12 +229,12 @@ test.describe('the price list (F36, PL1–PL3)', () => {
     page,
     api,
   }, testInfo) => {
-    signedIn(api).on('GET /api/merchant/price-list', 200, longList(70, { imagePages: 2 }));
+    signedIn(api).on('GET /api/merchant/price-list', 200, longList(60, { imagePages: 2 }));
     api.image('GET /api/merchant/price-list.png');
     await page.goto('/merchant/price-list');
-    await expect(page.getByText(/صفحة 1 من 3/)).toBeVisible();
+    await expect(page.getByText(/^صفحة 1 من 3 ·/)).toBeVisible();
     await page.getByRole('button', { name: tools.priceList.next }).click();
-    await expect(page.getByText(/صفحة 2 من 3/)).toBeVisible();
+    await expect(page.getByText(/^صفحة 2 من 3 ·/)).toBeVisible();
     await expect(page.getByTestId('price-list-document')).toContainText('17 UC');
     await screenshot(page, testInfo, 'merchant-price-list-pages');
 
@@ -317,7 +317,9 @@ test.describe('the statements (F38, ST1–ST3)', () => {
       .on(`GET /api/merchant/statements/${MONTH}/export`, 200, {});
     await page.goto('/merchant/statements');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(tools.nav.statements);
-    await expect(page.getByRole('heading', { name: 'تشرين الأول 2026' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'تشرين الأول 2026', exact: true }),
+    ).toBeVisible();
     await expect
       .poll(async () => plain(await page.getByTestId('statement-summary').textContent()))
       .toBe('بدأت الشهر بـ $12.00، أضيف $50.00، ودفعت $22.20، فرصيدك الآن $39.80.');
@@ -333,7 +335,7 @@ test.describe('the statements (F38, ST1–ST3)', () => {
     const movements = page.getByTestId('statement-movements');
     await expect(movements.getByText('9 تشرين الأول 2026')).toBeVisible();
     await expect(movements.getByText('إيداع عبر شام كاش')).toBeVisible();
-    await expect(movements.getByText('شراء 660 UC')).toBeVisible();
+    await expect(movements.getByText(/^شراء\W*660 UC/)).toBeVisible();
     await expect(movements.getByRole('link', { name: 'الطلب VO-SHOP23' })).toHaveAttribute(
       'href',
       '/orders/0199e300-0000-7000-8000-0000000000c1',
@@ -343,13 +345,13 @@ test.describe('the statements (F38, ST1–ST3)', () => {
     // Search by a player id, chips by kind.
     await page.getByRole('searchbox', { name: tools.statements.screen.search }).fill('99887');
     await expect(movements.getByText('شراء سلة بطلب واحد')).toBeVisible();
-    await expect(movements.getByText('شراء 660 UC')).toHaveCount(0);
+    await expect(movements.getByText(/^شراء\W*660 UC/)).toHaveCount(0);
     await page.getByRole('searchbox', { name: tools.statements.screen.search }).fill('');
     await page
       .getByRole('button', { name: new RegExp(`^${tools.statements.screen.chips.deposit}`) })
       .click();
     await expect(movements.getByText('إيداع عبر شام كاش')).toBeVisible();
-    await expect(movements.getByText('شراء 660 UC')).toHaveCount(0);
+    await expect(movements.getByText(/^شراء\W*660 UC/)).toHaveCount(0);
 
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: tools.statements.excel }).click();
@@ -370,9 +372,12 @@ test.describe('the statements (F38, ST1–ST3)', () => {
     await page.goto('/merchant/statements');
     await page.getByRole('link', { name: tools.statements.screen.monthPrev }).click();
     await expect(page).toHaveURL('/merchant/statements/2026-09');
-    await expect(page.getByRole('heading', { name: 'أيلول 2026' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'أيلول 2026', exact: true })).toBeVisible();
     await expect
-      .poll(async () => plain(await page.getByTestId('statement-summary').textContent()))
+      .poll(async () =>
+        // The month left stays mounted, hidden, after a client navigation.
+        plain(await page.getByTestId('statement-summary').filter({ visible: true }).textContent()),
+      )
       .toContain('فبقي $12.00');
     await expect(page.getByText(tools.statements.entriesEmpty)).toBeVisible();
     await expect(

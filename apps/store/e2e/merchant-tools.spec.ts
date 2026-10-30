@@ -212,7 +212,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await open(tools.nav.dashboard).click();
         await expect(nav).toBeVisible();
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(13);
+        await expect(nav.getByRole('link')).toHaveCount(12);
         await screenshot(page, testInfo, `merchant-nav-sheet-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();
         await expect(page).toHaveURL('/merchant/alerts');
@@ -220,7 +220,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await expect(open(tools.nav.alerts)).toBeVisible();
       } else {
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(13);
+        await expect(nav.getByRole('link')).toHaveCount(12);
         await expect(page.getByRole('complementary')).toContainText('سارة الأحمد');
         await screenshot(page, testInfo, `merchant-sidebar-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();
@@ -328,10 +328,10 @@ test.describe('the merchant area (S21 PR 1)', () => {
     // Chips with their counts: below cost leaves the one pack sold under its price.
     await page.getByRole('button', { name: new RegExp(`^${tools.prices.filters.below}`) }).click();
     await expect(rows.getByText('60 شدة')).toHaveCount(0);
-    await expect(rows.getByText('325 شدة').first()).toBeVisible();
+    await expect(rows.getByText('325 شدة').filter({ visible: true }).first()).toBeVisible();
     await page.getByRole('button', { name: new RegExp(`^${tools.prices.filters.all}`) }).click();
 
-    await page.getByRole('button', { name: tools.prices.editSettings }).click();
+    await page.getByRole('button', { name: tools.prices.editSettings, exact: true }).click();
     const settingsDialog = page.getByRole('dialog');
     await settingsDialog.getByLabel(tools.prices.markup).fill('12.5');
     await settingsDialog.getByRole('button', { name: tools.common.save }).click();

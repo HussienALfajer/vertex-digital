@@ -261,19 +261,29 @@ const sypText = (units: number) => tm('common.syp', { amount: formatSyp(units) }
 
 const sign = (units: number) => (units > 0 ? '+' : units < 0 ? '-' : '');
 
-/** PS1a: "ربحك +$0.47 ≈ 70 ل.س", USD alone without a SYP figure. */
-function profitText(profit: SalePrice): string {
+/**
+ * PS1a: "ربحك +$0.47 ≈ 70 ل.س", USD alone without a SYP figure; the two halves each kept whole, so
+ * a narrow card breaks the line at "≈" only.
+ */
+function Profit({ profit }: { profit: SalePrice }) {
   const usd = ltr(`${sign(profit.usdUnits)}${formatUsd(Math.abs(profit.usdUnits))}`);
-  const syp =
-    profit.sypUnits === null
-      ? ''
-      : ` ${tm('common.approx', {
-          amount: tm('common.syp', {
-            // "+$0.47 ≈ 70 ل.س": only a loss signs its pounds.
-            amount: ltr(`${profit.sypUnits < 0 ? '-' : ''}${formatSyp(Math.abs(profit.sypUnits))}`),
-          }),
-        })}`;
-  return tm('sale.profit', { amount: `${usd}${syp}` });
+  return (
+    <>
+      <span className="whitespace-nowrap">{tm('sale.profit', { amount: usd })}</span>
+      {profit.sypUnits !== null && (
+        <span className="whitespace-nowrap">
+          {tm('common.approx', {
+            amount: tm('common.syp', {
+              // "+$0.47 ≈ 70 ل.س": only a loss signs its pounds.
+              amount: ltr(
+                `${profit.sypUnits < 0 ? '-' : ''}${formatSyp(Math.abs(profit.sypUnits))}`,
+              ),
+            }),
+          })}
+        </span>
+      )}
+    </>
+  );
 }
 
 /**
@@ -344,9 +354,10 @@ function SaleCard({
                   tone={
                     profit.usdUnits > 0 ? 'success' : profit.usdUnits < 0 ? 'danger' : 'neutral'
                   }
-                  className="mt-auto self-start"
+                  // Two currencies may not fit a phone's narrow card on one line.
+                  className="mt-auto h-auto min-h-6 flex-wrap gap-x-1 self-start py-0.5 whitespace-normal"
                 >
-                  {profitText(profit)}
+                  <Profit profit={profit} />
                 </Badge>
               )}
               {row.belowCost && (

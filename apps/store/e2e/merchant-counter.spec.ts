@@ -32,7 +32,8 @@ const CODE_ORDER_ID = '0199e200-0000-7000-8000-0000000000a2';
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
 
 /** Text without the bidi isolates that keep amounts whole inside Arabic sentences. */
-const plain = (text: string | null) => (text ?? '').replace(/[\u2066-\u2069]/g, '');
+const plain = (text: string | null) =>
+  (text ?? '').replace(/[\u2066-\u2069]/g, '').replace(/\s*≈\s*/g, ' ≈ ');
 
 /** Slides the confirmation's handle to its end from the keyboard (`End`), once it can slide. */
 async function slide(dialog: ReturnType<Page['getByRole']>) {
@@ -468,7 +469,7 @@ test.describe('the sale mode (F32, PS1–PS6)', () => {
 
     await page.keyboard.press('2');
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(tools.sale.confirmTitle)).toBeVisible();
+    await expect(dialog.getByText(tools.sale.confirmTitle, { exact: true })).toBeVisible();
     await expect(dialog.getByText(tools.sale.checkedName.replace('{name}', 'Nour'))).toBeVisible();
     await screenshot(page, testInfo, 'merchant-sale-confirm');
     await slide(dialog);

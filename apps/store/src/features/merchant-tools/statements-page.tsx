@@ -357,7 +357,10 @@ function titleOf(entry: StatementEntry): string {
         : tm('statements.screen.titles.deposit');
     case 'purchase':
       return title.productNameAr
-        ? tm('statements.screen.titles.purchaseOf', { product: title.productNameAr })
+        ? // A first-strong isolate: "660 UC" keeps its own order inside the Arabic title.
+          tm('statements.screen.titles.purchaseOf', {
+            product: `\u2068${title.productNameAr}\u2069`,
+          })
         : tm('statements.screen.titles.purchase');
     case 'checkout':
       return tmc('statements.screen.titles.checkout', title.count);
