@@ -94,6 +94,12 @@ export const merchantTiersQuery = queryOptions({
   queryFn: () => call(api.GET('/api/admin/merchant-tiers')),
 });
 
+/** S23 PX5: the Diamond best-sellers helper. */
+export const merchantTierBestSellersQuery = queryOptions({
+  queryKey: ['merchants', 'tiers', 'best-sellers'],
+  queryFn: () => call(api.GET('/api/admin/merchant-tiers/best-sellers')),
+});
+
 export const merchantSettingsQuery = queryOptions({
   queryKey: ['merchants', 'settings'],
   queryFn: () => call(api.GET('/api/admin/merchant-settings')),

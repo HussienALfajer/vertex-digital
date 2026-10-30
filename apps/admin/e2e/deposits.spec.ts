@@ -650,6 +650,46 @@ const telegramDecision = (): AuditEntry => ({
   userAgent: null,
 });
 
+/** S23 OP1: a Gold merchant's Sham Cash deposit, newer than the others. */
+function priorityQueue(admin: AdminApi) {
+  queue(admin);
+  admin.deposits.push(
+    deposit({
+      id: '0199a000-0000-7000-8000-0000000000c1',
+      referenceCode: 'VD-GLD7Q',
+      currency: 'USD',
+      declaredAmountUnits: 500 * USD,
+      declaredUsdUnits: 500 * USD,
+      quote: null,
+      rateFixedAt: null,
+      submittedAt: minutesAgo(2),
+      customer: {
+        ...(deposit({ id: 'x' }).customer as Record<string, unknown>),
+        id: '0199a000-0000-7000-8000-0000000000c2',
+        name: 'صالة الألعاب الذهبية',
+        email: 'gold@example.com',
+        isTest: false,
+        tier: 'gold',
+      },
+    }),
+  );
+}
+
+test.describe('deposit priority (S23 OP1)', () => {
+  test("a Gold merchant's deposit leads the queue with the tier, and its page names it", async ({
+    page,
+    admin,
+  }) => {
+    priorityQueue(admin);
+    await open(page, admin, '/deposits');
+    await expect(rows(page).nth(1)).toContainText('VD-GLD7Q');
+    await expect(rows(page).nth(1)).toContainText(ar.merchants.tierNames.gold);
+    await expect(rows(page).nth(2)).toContainText('VD-7KQ2M');
+    await page.goto('/deposits/0199a000-0000-7000-8000-0000000000c1');
+    await expect(page.getByText(ar.merchants.tierNames.gold).first()).toBeVisible();
+  });
+});
+
 // RTL screenshots of the S03 screens in both themes: the design review evidence (ADR 0011).
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
@@ -660,6 +700,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await open(page, admin, '/deposits');
       await expect(rows(page)).toHaveCount(3);
       await screenshot(page, testInfo, `deposits-queue-${colorScheme}`);
+      // S23 OP1: a Gold merchant first, with the tier.
+      priorityQueue(admin);
+      await page.reload();
+      await expect(rows(page).nth(1)).toContainText(ar.merchants.tierNames.gold);
+      await screenshot(page, testInfo, `deposits-queue-priority-${colorScheme}`);
 
       await page.goto(`/deposits/${SYP_DEPOSIT}`);
       await field(page, ar.deposits.approve.transaction).fill('TEST-001');

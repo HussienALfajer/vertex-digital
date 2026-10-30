@@ -50,6 +50,7 @@ import {
 } from './form';
 import { ImagePicker } from './image-picker';
 import { categoryText, newTicketHref, STATUS_TONES, statusText } from './labels';
+import { MerchantSupport } from './merchant-support';
 import { OnTicketReplied } from './on-ticket-replied';
 import { attachmentUrl, closeTicket, getTicket, replyToTicket } from './requests';
 
@@ -231,6 +232,7 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
       <h2 className="text-xl font-bold break-words">
         <bdi>{ticket.subject}</bdi>
       </h2>
+      {ticket.status === 'open' && <MerchantSupport />}
       <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
         <span>{categoryText(ticket.category)}</span>
         {ticket.order && (

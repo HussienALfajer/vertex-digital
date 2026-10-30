@@ -215,6 +215,7 @@ export class CatalogMock {
       accentColor: null,
       regionNotesAr: null,
       bestValueEnabled: true,
+      earlyAccessUntil: null,
       sortOrder: this.games.filter((item) => item.categoryId === category.id).length + 1,
       archivedAt: null,
       createdAt: NOW,
@@ -234,6 +235,7 @@ export class CatalogMock {
       kind,
       quickCode,
       quickLinkUrl: `https://digital.vertexmedia.pro/q/${quickCode}`,
+      earlyAccessUntil: null,
       gameAmount: null,
       officialPriceUsdUnits: null,
       maxQuantity: DEFAULT_MAX_QUANTITY[kind],
@@ -658,6 +660,20 @@ export class CatalogMock {
         return error(409, 'CATALOG_INCOMPLETE', { missing });
       }
       return { status: 201, json: this.product(product) };
+    }
+    // S23 OP5: a window of 24 hours from now, or ended now.
+    const early = /^\/api\/admin\/catalog\/(games|products)\/([^/]+)\/early-access$/.exec(path);
+    if (early && method === 'PUT') {
+      const rows: { id: string; earlyAccessUntil: string | null }[] =
+        early[1] === 'games' ? this.games : this.products;
+      const row = rows.find((item) => item.id === early[2]);
+      if (!row) return notFound();
+      row.earlyAccessUntil = body?.on
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : null;
+      return early[1] === 'games'
+        ? { status: 200, json: this.detail(row as StoredGame) }
+        : { status: 200, json: this.product(row as Row<Product>) };
     }
     const gameId = match(/^\/api\/admin\/catalog\/games\/([^/]+)(?:\/(?:archive|restore))?$/);
     if (gameId) {

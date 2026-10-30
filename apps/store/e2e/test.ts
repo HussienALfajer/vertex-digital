@@ -232,7 +232,10 @@ export class MockApi {
         : null) ??
       // S20 AT4: a signed-in account reads its own prices of a game: retail unless a test says.
       (/^GET \/api\/catalog\/games\/[^/]+\/prices$/.test(key)
-        ? { status: 200, body: { priceKind: 'retail', products: [], rateId: null } }
+        ? {
+            status: 200,
+            body: { priceKind: 'retail', products: [], earlyProducts: [], rateId: null },
+          }
         : null);
     if (!answer) {
       this.unexpected.push(key);

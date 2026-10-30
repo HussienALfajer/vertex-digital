@@ -42,6 +42,7 @@ import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { CHIP_TONES } from '../customers/customer-labels';
 import { customerQuery } from '../customers/customers.queries';
+import { TierChip } from '../merchants/tier-chip';
 import { ticketListQuery } from './support.queries';
 import { type SupportSearch, tabOf, withFilter } from './support-search';
 import { TICKET_STATUS_TONES } from './ticket-labels';
@@ -320,6 +321,8 @@ export function TicketTable({
                 <span className="flex flex-col gap-1">
                   <span className="flex flex-wrap items-center gap-2">
                     {ticket.customer.name}
+                    {/* S23 OP2: a merchant's tier; priority tiers come first. */}
+                    {ticket.customer.tier && <TierChip tier={ticket.customer.tier} />}
                     {ticket.customer.status !== 'active' && (
                       <Badge tone={CHIP_TONES[ticket.customer.status]}>
                         {t(`customers.chips.${ticket.customer.status}`)}

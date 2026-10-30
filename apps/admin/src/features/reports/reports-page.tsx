@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   REPORT_BREAKDOWNS,
@@ -81,10 +82,16 @@ export function ReportsPage({
         title={t('reports.title')}
         description={t('reports.subtitle')}
         actions={
-          <Button variant="outline" onClick={exportReport} disabled={exporter.isPending}>
-            <DownloadIcon aria-hidden="true" />
-            {exporter.isPending ? t('reports.exporting') : t('reports.export')}
-          </Button>
+          <>
+            {/* S23 AD4: the report by tier, a month at a time. */}
+            <Button variant="ghost" render={<Link to="/reports/merchant-tiers" />}>
+              {t('reports.merchantTiers.title')}
+            </Button>
+            <Button variant="outline" onClick={exportReport} disabled={exporter.isPending}>
+              <DownloadIcon aria-hidden="true" />
+              {exporter.isPending ? t('reports.exporting') : t('reports.export')}
+            </Button>
+          </>
         }
       />
       <PeriodPicker

@@ -133,6 +133,57 @@ export class MerchantsMock {
     private readonly profile: (customerId: string) => AdminCustomer | null,
   ) {}
 
+  /** S23 PX5: the helper's packs, a cost and each live tier's price, Diamond's fixed on one. */
+  bestSellers() {
+    const packs = [
+      { productId: nextId(), nameAr: '660 UC', units: 140, cost: 8_870_000 },
+      { productId: nextId(), nameAr: '325 UC', units: 96, cost: 4_430_000 },
+    ];
+    const step = { bronze: 5, silver: 4, gold: 3, diamond: 2 } as const;
+    return {
+      diamondListId: this.levels.diamond?.priceListId ?? null,
+      items: packs.map((pack, index) => ({
+        productId: pack.productId,
+        gameId: '0199a000-0000-7000-8000-000000000301',
+        gameNameAr: 'ببجي موبايل',
+        nameAr: pack.nameAr,
+        deliveredUnits: pack.units,
+        costUsdUnits: pack.cost,
+        tiers: MERCHANT_TIERS.map((tier) => {
+          const live = tier === 'bronze' || this.levels[tier] !== undefined;
+          const margin = Math.ceil((pack.cost * step[tier]) / 100 / 10_000) * 10_000;
+          return {
+            tier,
+            priceUsdUnits: live ? pack.cost + margin : null,
+            marginUsdUnits: live ? margin : null,
+            fixed: tier === 'diamond' && index === 0 && live,
+          };
+        }),
+      })),
+    };
+  }
+
+  /** S23 AD4: the report by tier of `month`, from the merchants and their months. */
+  tierReport(month: string) {
+    const rows = this.tierRows();
+    return {
+      month,
+      current: month === '2026-10',
+      generatedAt: '2026-10-20T09:00:00.000Z',
+      rows: rows.map((row, index) => ({
+        tier: row.tier,
+        merchants: row.merchants.earned + row.merchants.granted,
+        netPurchasesUsdUnits: (index + 1) * 450_000_000,
+        delivered: (4 - index) * 12,
+        salesUsdUnits: (index + 1) * 480_000_000,
+        costUsdUnits: (index + 1) * 462_000_000,
+        profitUsdUnits: (index + 1) * 18_000_000,
+        rises: index === 2 ? 1 : 0,
+        falls: index === 1 ? 1 : 0,
+      })),
+    };
+  }
+
   /** S21 BR3: the merchant's receipt branding, for a test. */
   setBranding(customerId: string, branding: Partial<StoredProfile['branding']>): void {
     const profile = this.profiles.get(customerId);
@@ -325,6 +376,10 @@ export class MerchantsMock {
       );
       if (open) this.move(open, 'grant', null);
       return { status: 200, json: this.profile(customerId) };
+    }
+    // S23 PX5: two best sellers priced on every tier's list.
+    if (key === 'GET /api/admin/merchant-tiers/best-sellers') {
+      return { status: 200, json: this.bestSellers() };
     }
     if (key === 'GET /api/admin/merchant-tiers') {
       return { status: 200, json: { items: this.tierRows(), minDepositUsdUnits: MIN_DEPOSIT } };

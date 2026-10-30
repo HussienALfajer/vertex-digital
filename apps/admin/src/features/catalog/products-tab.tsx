@@ -48,9 +48,15 @@ import { priceListsQuery, priceMatrixQuery } from '../pricing/pricing.queries';
 import { StockChip } from '../suppliers/offer-cells';
 import { RoutesDrawer } from '../suppliers/routes-drawer';
 import { UnusableReason } from '../suppliers/supplier-parts';
-import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
+import {
+  useArchiveProduct,
+  useProductEarlyAccess,
+  useReorderProducts,
+  useUpdateProduct,
+} from './catalog.queries';
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
 import { moved } from './catalog-search';
+import { EarlyAccessBadge, EarlyAccessButton } from './early-access';
 import { ProductDialog } from './product-dialog';
 import { QuickLinkDialog } from './quick-link-dialog';
 
@@ -74,6 +80,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
   const [failure, setFailure] = useState<string | null>(null);
   const reorder = useReorderProducts(game.id);
   const archive = useArchiveProduct();
+  const earlyAccess = useProductEarlyAccess();
   const update = useUpdateProduct();
   const products = game.products.filter((product) => (product.archivedAt !== null) === archived);
   const live = game.products.filter((product) => product.archivedAt === null);
@@ -211,7 +218,10 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                 </TableCell>
                 <TableCell className="tabular-nums">{product.maxQuantity}</TableCell>
                 <TableCell>
-                  <StatusBadge status={product.status} />
+                  <span className="flex flex-col items-start gap-1">
+                    <StatusBadge status={product.status} />
+                    <EarlyAccessBadge until={product.earlyAccessUntil} />
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="flex flex-col items-start gap-1">
@@ -321,6 +331,12 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                             ? t('catalog.actions.pause')
                             : t('catalog.actions.resume')}
                         </Button>
+                        <EarlyAccessButton
+                          name={product.nameAr}
+                          until={product.earlyAccessUntil}
+                          size="sm"
+                          onSet={(on) => earlyAccess.mutateAsync({ id: product.id, on })}
+                        />
                         <Button
                           variant="ghost"
                           size="sm"

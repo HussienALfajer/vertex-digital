@@ -175,6 +175,17 @@ export const useArchiveGame = (id: string) =>
     ),
   );
 
+/** S23 OP5: "وصول مبكر 24 ساعة" (`on`) or "إنهاء الآن". */
+export const useGameEarlyAccess = (id: string) =>
+  useCatalogMutation((on: boolean) =>
+    call(
+      api.PUT('/api/admin/catalog/games/{id}/early-access', {
+        params: { path: { id } },
+        body: { on },
+      }),
+    ),
+  );
+
 export const useReorderGames = (categoryId: string) =>
   useCatalogMutation((ids: string[]) =>
     call(
@@ -246,6 +257,17 @@ export const useArchiveProduct = () =>
       archive
         ? api.POST('/api/admin/catalog/products/{id}/archive', { params: { path: { id } } })
         : api.POST('/api/admin/catalog/products/{id}/restore', { params: { path: { id } } }),
+    ),
+  );
+
+/** S23 OP5: a pack's early access, as the game's. */
+export const useProductEarlyAccess = () =>
+  useCatalogMutation(({ id, on }: { id: string; on: boolean }) =>
+    call(
+      api.PUT('/api/admin/catalog/products/{id}/early-access', {
+        params: { path: { id } },
+        body: { on },
+      }),
     ),
   );
 

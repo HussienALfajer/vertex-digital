@@ -199,7 +199,8 @@
         "merchant_statement_ready": "كشف الحساب الشهري",
         "merchant_tier_reminder": "تذكير الفئة قبل نهاية الشهر",
         "product_available": "عند توفر باقة طلبت التنبيه عنها",
-        "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها"
+        "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها",
+        "merchant_early_access": "عند فتح لعبة أو باقة لك مبكراً"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -545,7 +546,9 @@
       "merchant_low_balance": "أصبح رصيدك {balance}، أقل من الحد الذي حددته ({threshold}). اشحن رصيدك لتتابع البيع.",
       "merchant_statement_ready": "كشف حساب شهر {month} جاهز.",
       "product_available": "عادت باقة {product} في {game} إلى التوفر.",
-      "product_price_dropped": "انخفض سعر {product} في {game} من {old} إلى {new}."
+      "product_price_dropped": "انخفض سعر {product} في {game} من {old} إلى {new}.",
+      "merchant_early_access_game": "وصول مبكر: {game} متاحة لك قبل الجميع لمدة 24 ساعة.",
+      "merchant_early_access_pack": "وصول مبكر: {product} في {game} متاحة لك قبل الجميع لمدة 24 ساعة."
     }
   },
   "errors": {
@@ -839,7 +842,8 @@
       "savings": "وفّر {percent}",
       "bestValue": "أفضل قيمة",
       "perHundred": "{amount} لكل 100"
-    }
+    },
+    "earlyAccess": "وصول مبكر"
   },
   "search": {
     "open": "ابحث عن لعبة أو باقة",
@@ -1192,6 +1196,13 @@
     "faqCallout": {
       "title": "قبل أن تكتب لنا",
       "link": "اقرأ الأسئلة الشائعة"
+    },
+    "promise": {
+      "minutes": "نرد عادةً خلال {minutes} دقيقة",
+      "hour": "نرد عادةً خلال ساعة",
+      "twoHours": "نرد عادةً خلال ساعتين",
+      "hours": "نرد عادةً خلال {hours} ساعات",
+      "manyHours": "نرد عادةً خلال {hours} ساعة"
     }
   },
   "content": {
@@ -1459,6 +1470,11 @@
       "accepted": "شكراً، يمكنك الشراء الآن.",
       "slideAgain": "قبلت الشروط ولم يُدفع شيء بعد. اسحب للدفع.",
       "check": "قرأت شروط حساب التاجر وأوافق عليها"
+    },
+    "contact": {
+      "title": "تواصل مباشر مع فريقنا",
+      "whatsapp": "واتساب",
+      "telegram": "تيليغرام"
     }
   }
 }

@@ -842,7 +842,12 @@
       "merchant_level.updated": "تعديل مستوى تاجر",
       "merchant_level.archived": "أرشفة مستوى تاجر",
       "merchant_tier.level_changed": "تعديل حدّ أو قائمة فئة تجّار",
-      "merchant_tier.settings_changed": "تعديل امتيازات فئة تجّار"
+      "merchant_tier.settings_changed": "تعديل امتيازات فئة تجّار",
+      "catalog_game.early_access_set": "فتح وصول مبكر للعبة",
+      "catalog_game.early_access_ended": "إنهاء الوصول المبكر للعبة",
+      "catalog_product.early_access_set": "فتح وصول مبكر لباقة",
+      "catalog_product.early_access_ended": "إنهاء الوصول المبكر لباقة",
+      "report.merchant_tiers_exported": "تصدير تقرير فئات التجار"
     }
   },
   "testCustomers": {
@@ -1397,7 +1402,8 @@
       "fixed_price_fallback": "سعر ثابت تحت الهامش",
       "merchant_application": "طلب تاجر جديد",
       "merchant_tier_changed": "تغيّر فئة تاجر",
-      "merchant_tier_grant_ending": "قرب انتهاء فئة ممنوحة"
+      "merchant_tier_grant_ending": "قرب انتهاء فئة ممنوحة",
+      "ticket_overdue": "تذكرة تجاوزت وعد الرد"
     }
   },
   "rates": {
@@ -2202,6 +2208,15 @@
         "30": "آخر 30 يوماً",
         "90": "آخر 90 يوماً"
       }
+    },
+    "earlyAccess": {
+      "until": "وصول مبكر حتى {{time}}",
+      "start": "وصول مبكر 24 ساعة",
+      "end": "إنهاء الآن",
+      "startTitle": "وصول مبكر لـ «{{name}}»؟",
+      "startBody": "يراه ويشتريه لمدة 24 ساعة التجار الذهبيون والماسيون فقط، ويُبلَّغ من يتابعه منهم أو اشترى منه خلال 30 يوماً. يبقى مخفياً عن الجميع غيرهم حتى ينتهي.",
+      "endTitle": "إنهاء الوصول المبكر لـ «{{name}}»؟",
+      "endBody": "يصبح ظاهراً للجميع الآن ويتحدّث المتجر خلال ثوانٍ."
     }
   },
   "pricing": {
@@ -4751,6 +4766,22 @@
       "value": "القيمة بسعر المتجر",
       "cost": "التكلفة",
       "profit": "الربح"
+    },
+    "merchantTiers": {
+      "title": "حسب فئة التاجر",
+      "subtitle": "لكل فئة: التجار في نهاية الشهر وصافي مشترياتهم، ومبيعات وأرباح طلبات قائمتها، والصعود والهبوط. دون الحسابات التجريبية.",
+      "month": "الشهر",
+      "tier": "الفئة",
+      "merchants": "التجار",
+      "net": "صافي المشتريات",
+      "delivered": "الطلبات المسلّمة",
+      "sales": "المبيعات",
+      "profit": "الربح",
+      "rises": "صعود",
+      "falls": "هبوط",
+      "current": "الشهر جارٍ: التجار بفئاتهم اليوم.",
+      "ended": "الشهر منتهٍ: التجار بفئاتهم في آخره.",
+      "generated": "أُعدّ في {{time}}."
     }
   },
   "content": {
@@ -5275,17 +5306,23 @@
       "fields": {
         "ordersPerTenMinutes": "الطلبات خلال 10 دقائق",
         "reapplyWaitDays": "أيام الانتظار بعد الرفض",
-        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)"
+        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)",
+        "directContactWhatsapp": "واتساب التواصل المباشر (للماسي)",
+        "directContactTelegram": "تيليغرام التواصل المباشر (للماسي)"
       },
       "hints": {
         "ordersPerTenMinutes": "من 10 إلى 500. العميل العادي: 10.",
         "reapplyWaitDays": "من 0 إلى 365.",
-        "infoExpiryDays": "من 1 إلى 60."
+        "infoExpiryDays": "من 1 إلى 60.",
+        "directContactWhatsapp": "رقم بأي صيغة، مثل 0933123456. فارغ يخفي الزر.",
+        "directContactTelegram": "اسم المستخدم دون @، من 5 إلى 32 حرفاً لاتينياً أو رقماً أو _. فارغ يخفي الزر."
       },
       "errors": {
         "ordersPerTenMinutes": "اكتب عدداً من 10 إلى 500.",
         "reapplyWaitDays": "اكتب عدداً من 0 إلى 365.",
-        "infoExpiryDays": "اكتب عدداً من 1 إلى 60."
+        "infoExpiryDays": "اكتب عدداً من 1 إلى 60.",
+        "directContactWhatsapp": "رقم هاتف غير صالح.",
+        "directContactTelegram": "اسم مستخدم غير صالح: من 5 إلى 32 حرفاً لاتينياً أو رقماً أو _."
       },
       "tiersNote": "حدود الإيداع وفحوص اللاعبين لكل فئة تُضبط في"
     },
@@ -5425,6 +5462,17 @@
           "tier_archived": "أُوقفت الفئة"
         },
         "history": "سجل المنح"
+      },
+      "bestSellers": {
+        "title": "الأكثر مبيعاً للتجار",
+        "subtitle": "أكثر 20 باقة اشتراها التجار خلال 30 يوماً، بسعرها وهامشها في كل فئة. ثبّت سعراً للماسي على أي منها.",
+        "empty": "لا مبيعات للتجار خلال 30 يوماً",
+        "pack": "الباقة",
+        "units": "الوحدات المسلّمة",
+        "cost": "التكلفة",
+        "margin": "الهامش {{margin}}",
+        "fixed": "سعر ثابت",
+        "fix": "سعر ثابت للماسي"
       }
     }
   }

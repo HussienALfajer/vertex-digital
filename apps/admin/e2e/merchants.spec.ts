@@ -263,6 +263,18 @@ test.describe('merchants', () => {
     expect(admin.merchants.settings.ordersPerTenMinutes).toBe(80);
     // S23 TS2: the deposit limits and player checks moved to the tiers page.
     await expect(page.getByRole('link', { name: ar.nav.merchantTiers }).last()).toBeVisible();
+    // S23 OP4: the Diamond contact, a bad username refused, the number normalized.
+    await field(page, m.settings.fields.directContactTelegram).fill('@shop');
+    await page.getByRole('button', { name: m.settings.save }).click();
+    await expect(page.getByText(m.settings.errors.directContactTelegram)).toBeVisible();
+    await field(page, m.settings.fields.directContactTelegram).fill('vertex_shop');
+    await field(page, m.settings.fields.directContactWhatsapp).fill('0933 123 456');
+    await page.getByRole('button', { name: m.settings.save }).click();
+    await expect(page.getByText(m.settings.saved)).toBeVisible();
+    expect(admin.merchants.settings).toMatchObject({
+      directContactWhatsapp: '+963933123456',
+      directContactTelegram: 'vertex_shop',
+    });
   });
 });
 

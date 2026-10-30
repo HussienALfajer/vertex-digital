@@ -509,6 +509,50 @@ test.describe('the game form (audit A03)', () => {
   });
 });
 
+/** S23 OP5: a pack opened early for 24 hours, then ended; screenshots in both themes. */
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`opens a pack early, shows its end, then ends it (S23 OP5, ${colorScheme})`, async ({
+    page,
+    admin,
+  }, testInfo) => {
+    await page.emulateMedia({ colorScheme });
+    const game = admin.catalog.addGame({
+      categorySlug: 'games',
+      slug: 'pubg-mobile',
+      nameAr: 'ببجي موبايل',
+      nameEn: 'PUBG Mobile',
+      status: 'active',
+      cover: true,
+    });
+    admin.catalog.addField(game.id, { key: 'player_id', labelAr: 'معرّف اللاعب' });
+    const pack = admin.catalog.addProduct(game.id, { nameAr: '60 UC', gameAmount: 60 });
+    await open(page, admin, `/catalog/games/${game.id}?tab=products`);
+    const early = ar.catalog.earlyAccess;
+    await page
+      .getByRole('group', { name: '60 UC' })
+      .getByRole('button', { name: early.start })
+      .click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(fill(early.startTitle, { name: '60 UC' }));
+    await screenshot(page, testInfo, `catalog-early-access-confirm-${colorScheme}`);
+    await dialog.getByRole('button', { name: early.start }).click();
+    await expect(page.getByText(/وصول مبكر حتى/)).toBeVisible();
+    expect(admin.lastBody(`PUT /api/admin/catalog/products/${pack.id}/early-access`)).toEqual({
+      on: true,
+    });
+    await screenshot(page, testInfo, `catalog-early-access-${colorScheme}`);
+    await page
+      .getByRole('group', { name: '60 UC' })
+      .getByRole('button', { name: early.end })
+      .click();
+    await page.getByRole('alertdialog').getByRole('button', { name: early.end }).click();
+    await expect(page.getByText(/وصول مبكر حتى/)).toHaveCount(0);
+    expect(admin.lastBody(`PUT /api/admin/catalog/products/${pack.id}/early-access`)).toEqual({
+      on: false,
+    });
+  });
+}
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });

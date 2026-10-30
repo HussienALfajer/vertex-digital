@@ -22,5 +22,6 @@ export const tierSummary = (changes: Partial<MerchantTierSummary> = {}): Merchan
   savingsUsdUnits: null,
   privileges: TIER_SETTINGS_DEFAULTS.bronze,
   celebrate: false,
+  contact: null,
   ...changes,
 });
