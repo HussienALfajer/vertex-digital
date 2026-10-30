@@ -14,7 +14,9 @@ import { sql } from 'drizzle-orm';
  * The catalog of `db:seed-local`: the production snapshot written by
  * `scripts/pull-catalog-snapshot.sh` (categories, games, fields, products, margin rules, the price
  * history, the real suppliers' offers, tree and routes, the newest policies, the games' images),
- * loaded as it is. Then every live WDGZone route gets a twin on the fake supplier (`mirror-<id>`,
+ * loaded as it is, but for the rows of price lists this database lacks: production's merchant tier
+ * lists are created here later, with ids of their own, by `setupMerchantTiers`, which writes their
+ * rules and prices. Then every live WDGZone route gets a twin on the fake supplier (`mirror-<id>`,
  * same cost, fields and maps, a lower priority) that becomes the price basis, so the local store
  * sells the production catalog through the fake while WDGZone stays paused.
  */
@@ -129,8 +131,14 @@ export async function loadCatalog(
 
   const result: CatalogResult = { rows: {}, mirrored: 0, repriced: 0, mirroredOffers: [] };
   await db.transaction(async (tx) => {
+    const lists = new Set(
+      (await tx.execute<{ id: string }>(sql`SELECT id FROM price_lists`)).rows.map((row) => row.id),
+    );
     for (const table of TABLES) {
-      const rows = tables.get(table) ?? [];
+      // A snapshot taken before S20 has no list column: its rows take the retail default.
+      const rows = (tables.get(table) ?? []).filter(
+        (row) => row.price_list_id === undefined || lists.has(row.price_list_id as string),
+      );
       await upsert(tx, table, rows);
       result.rows[table] = rows.length;
     }

@@ -605,6 +605,20 @@ describe('the documents after audit A06', () => {
       'both',
     );
     expect(both.indexOf('5.08')).toBeLessThan(both.indexOf('730'));
+    // The line opens right to left, or Pango draws the dollars after the pounds.
+    expect(both.startsWith('‏')).toBe(true);
+    expect(
+      priceText(
+        {
+          productId: randomUUID(),
+          nameAr: '60',
+          available: true,
+          usdUnits: usd(5.08),
+          sypUnits: 73_000,
+        },
+        'syp',
+      ).startsWith('‏'),
+    ).toBe(true);
     expect(
       priceText(
         { productId: randomUUID(), nameAr: '60', available: false, usdUnits: null, sypUnits: null },
