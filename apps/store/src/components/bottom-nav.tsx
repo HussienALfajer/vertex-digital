@@ -62,7 +62,9 @@ const customerHref = (path: string, signedOut: boolean) =>
   signedOut ? `/sign-in?next=${encodeURIComponent(path)}` : path;
 
 function Bar({ pathname }: { pathname: string | null }) {
-  const cartCount = useSyncExternalStore(subscribeCart, storedLineCount, () => null);
+  // In the server's HTML with no count: appearing after hydration would move the other items. Only
+  // a browser without storage then drops it (CT1).
+  const cartCount = useSyncExternalStore(subscribeCart, storedLineCount, () => 0);
   const [signedOut, setSignedOut] = useState(false);
   useEffect(() => {
     let live = true;
