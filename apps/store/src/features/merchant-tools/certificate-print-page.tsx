@@ -17,8 +17,8 @@ import { approvedLine } from './tier-parts';
 /**
  * `/merchant/certificate/print` (S23 ID7): the certificate on A4 landscape, printed by the browser:
  * the trade name, city and governorate, "تاجر ذهبي معتمد" (Bronze "تاجر معتمد"), since when, the
- * print date, the Vertex mark and the QR of the certificate's public page. Black on white with the
- * tier's mark in its own color.
+ * print date, the Vertex mark and the QR of the certificate's public page. Black on white, the
+ * tier's icon included (sand on white fails contrast, `brand/identity.md` §2).
  */
 export function CertificatePrintPage() {
   const read = useCallback(() => getCertificate(), []);
@@ -68,7 +68,7 @@ function CertificateDocument({ certificate }: { certificate: MerchantCertificate
           })}
         </p>
         <p className="flex items-center gap-2 text-2xl font-bold">
-          {certificate.tier !== 'bronze' && <TierIcon tier={certificate.tier} className="size-8" />}
+          {certificate.tier !== 'bronze' && <TierIcon tier={certificate.tier} className="size-8 text-neutral-950" />}
           {approvedLine(certificate.tier, true)}
         </p>
         <p>{tm('tier.certificate.since', { date: formatDate(certificate.since) })}</p>

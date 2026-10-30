@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { amountUnitsSchema, CURRENCY_SCALE, isWholeCents, USD_CENT } from './money.js';
+import {
+  amountUnitsSchema,
+  CURRENCY_SCALE,
+  floorToWholeCents,
+  isWholeCents,
+  USD_CENT,
+} from './money.js';
 import {
   LEVEL_TIERS,
   type LevelTier,
@@ -600,7 +606,7 @@ export type TierForecast =
 /**
  * PG4: this month at its daily pace so far. `reach` with the day of the month the next threshold
  * is reached when that falls within the month; else `total` with the projected month. Null before
- * the 5th or with nothing bought.
+ * the 5th or with nothing bought. The projection is floored to whole cents, as it is shown.
  */
 export function tierForecast(
   thisMonthUsdUnits: number,
@@ -617,7 +623,9 @@ export function tierForecast(
   }
   return {
     kind: 'total',
-    projectedUsdUnits: Number((total * BigInt(daysInMonth)) / BigInt(dayOfMonth)),
+    projectedUsdUnits: floorToWholeCents(
+      Number((total * BigInt(daysInMonth)) / BigInt(dayOfMonth)),
+    ),
   };
 }
 

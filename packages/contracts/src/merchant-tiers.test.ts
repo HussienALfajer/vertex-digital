@@ -237,6 +237,13 @@ describe('tierForecast (PG4)', () => {
     });
   });
 
+  it('floors the projection to whole cents', () => {
+    expect(tierForecast(10_000_001, 7, 30, null)).toEqual({
+      kind: 'total',
+      projectedUsdUnits: 42_850_000,
+    });
+  });
+
   it('projects the month without a next threshold or when it is reached', () => {
     expect(tierForecast(700 * USD, 7, 30, null)).toEqual({
       kind: 'total',

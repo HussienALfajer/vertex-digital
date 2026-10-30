@@ -1,5 +1,4 @@
 import {
-  formatUsd,
   NOTIFICATION_PARAMS,
   type NotificationParams,
   type PushNotificationEvent,
