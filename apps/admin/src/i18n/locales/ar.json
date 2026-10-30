@@ -79,7 +79,8 @@
     "merchantSettings": "إعدادات التجّار",
     "catalogGames": "الألعاب والباقات",
     "quickLinks": "روابط الشراء المباشر",
-    "merchantApplicationsBadge": "طلبات تاجر بانتظار المراجعة: {{waiting}}"
+    "merchantApplicationsBadge": "طلبات تاجر بانتظار المراجعة: {{waiting}}",
+    "merchantTiers": "فئات التجّار"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -4064,7 +4065,8 @@
         "default_established": "الافتراضي: حساب موثوق",
         "custom": "مخصّص",
         "none": "الافتراضي: بلا حد",
-        "default_merchant": "الافتراضي: تاجر"
+        "default_merchant": "الافتراضي: تاجر",
+        "default_merchant_tier": "الافتراضي: {{tier}}"
       },
       "aboveDaily": "حد الإيداع الواحد أعلى من الحد اليومي",
       "aboveDailyBody": "الحد اليومي الساري {{daily}}، فيُرفض كل إيداع يتجاوزه مهما كان حد الإيداع الواحد."
@@ -4195,7 +4197,7 @@
       "list": "قائمة الأسعار",
       "assigned": "مُسندة",
       "default": "الافتراضي",
-      "fromLevel": "من المستوى «{{name}}»",
+      "fromTier": "من فئة {{tier}}",
       "kind": "ما يراه العميل",
       "kinds": {
         "retail": "سعر التجزئة",
@@ -5111,8 +5113,8 @@
       "list": "قائمة الأسعار",
       "since": "تاجر منذ",
       "sales30d": "مبيعات 30 يوماً",
-      "level": "المستوى",
-      "actions": "إجراءات"
+      "actions": "إجراءات",
+      "tier": "الفئة"
     },
     "flags": {
       "frozen": "مجمّد",
@@ -5222,9 +5224,6 @@
       "termsAccepted": "وافق على النسخة {{version}}",
       "termsPending": "لم يوافق بعد",
       "openApplication": "عرض الطلب",
-      "level": "المستوى",
-      "levelSince": "منذ {{date}}",
-      "noLevel": "بلا مستوى (أسعار الجملة)",
       "watches": "المتابعات",
       "thisMonth": "مشتريات هذا الشهر",
       "previousMonth": "مشتريات الشهر الماضي",
@@ -5247,11 +5246,11 @@
       "searchSubmit": "بحث",
       "listFilter": "قائمة الأسعار",
       "allLists": "كل القوائم",
-      "levelFilter": "المستوى",
-      "allLevels": "كل المستويات",
-      "noLevel": "بلا مستوى",
       "empty": "لا تجّار بعد.",
-      "emptyFiltered": "لا تجّار يطابقون البحث."
+      "emptyFiltered": "لا تجّار يطابقون البحث.",
+      "tierFilter": "الفئة",
+      "allTiers": "كل الفئات",
+      "granted": "ممنوحة يدوياً"
     },
     "tierNames": {
       "bronze": "تاجر برونزي",
@@ -5261,36 +5260,163 @@
     },
     "settings": {
       "title": "إعدادات التجّار",
-      "subtitle": "حدود إيداع التجّار ومعدّل طلباتهم ومُهل طلبات التاجر.",
+      "subtitle": "معدل الطلبات ومهلة إعادة التقديم ومدة انتظار المعلومات.",
       "save": "حفظ",
       "saved": "حُفظت الإعدادات.",
       "stale": "تعذّر تحديث الإعدادات: المعروض آخر ما قُرئ.",
       "fields": {
-        "perDepositUsdUnits": "حد الإيداع الواحد ($)",
-        "dailyDepositUsdUnits": "حد الإيداع خلال 24 ساعة ($)",
         "ordersPerTenMinutes": "الطلبات خلال 10 دقائق",
         "reapplyWaitDays": "أيام الانتظار بعد الرفض",
-        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)",
-        "playerChecksPerHour": "فحوص المعرّفات في الساعة",
-        "playerChecksPerDay": "فحوص المعرّفات في اليوم"
+        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)"
       },
       "hints": {
-        "perDepositUsdUnits": "لا يقل عن أدنى إيداع ({{minimum}}) ولا يزيد على حد الـ24 ساعة. تحل محله الحدود الخاصة بالعميل إن وُجدت.",
-        "dailyDepositUsdUnits": "حتى $100,000.",
         "ordersPerTenMinutes": "من 10 إلى 500. العميل العادي: 10.",
         "reapplyWaitDays": "من 0 إلى 365.",
-        "infoExpiryDays": "من 1 إلى 60.",
-        "playerChecksPerHour": "من 10 إلى 1000. العميل العادي: 10. يسري على كل فحص للتاجر وعلى عنوانه.",
-        "playerChecksPerDay": "من 30 إلى 5000. العميل العادي: 30."
+        "infoExpiryDays": "من 1 إلى 60."
       },
       "errors": {
-        "perDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز حد الـ24 ساعة.",
-        "dailyDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز $100,000.",
         "ordersPerTenMinutes": "اكتب عدداً من 10 إلى 500.",
         "reapplyWaitDays": "اكتب عدداً من 0 إلى 365.",
-        "infoExpiryDays": "اكتب عدداً من 1 إلى 60.",
-        "playerChecksPerHour": "اكتب عدداً من 10 إلى 1000.",
-        "playerChecksPerDay": "اكتب عدداً من 30 إلى 5000."
+        "infoExpiryDays": "اكتب عدداً من 1 إلى 60."
+      },
+      "tiersNote": "حدود الإيداع وفحوص اللاعبين لكل فئة تُضبط في"
+    },
+    "tiers": {
+      "title": "فئات التجّار",
+      "subtitle": "البرونزية لكل تاجر، ثم الفضية والذهبية والماسية بعتبة مشتريات شهرية وقائمة أسعار ترث من الفئة الأدنى. كل تعديل يعيد حساب فئة كل تاجر.",
+      "grantedMark": "ممنوحة",
+      "merchants": "{{earned}} مكتسبة · {{granted}} ممنوحة",
+      "off": "غير مفعّلة: لا عتبة ولا قائمة. لا يصل إليها أحد ولا تُمنح.",
+      "threshold": "العتبة الشهرية",
+      "everyMerchant": "كل تاجر",
+      "list": "قائمة الأسعار",
+      "gap": "قائمة الفئة لا ترث من قائمة الفئة الأدنى، فلا يُضمن أن تكون أسعار {{tier}} أقل منها. عدّل القائمة.",
+      "listArchived": "قائمة هذه الفئة مؤرشفة.",
+      "privileges": "الامتيازات",
+      "deposits": "الإيداع الواحد / 24 ساعة",
+      "checks": "فحوص اللاعبين",
+      "checksValue": "{{hour}} في الساعة · {{day}} في اليوم",
+      "quantities": "سطور الجملة / أكواد الطلب",
+      "quantitiesValue": "{{lines}} سطر · {{units}} كود",
+      "reply": "وعد الرد على التذاكر",
+      "replyValue": "خلال {{minutes}} دقيقة",
+      "noPromise": "بلا وعد",
+      "flags": "مزايا مفعّلة",
+      "updatedAt": "آخر تعديل للامتيازات: {{date}}",
+      "addLevel": "تفعيل الفئة",
+      "editLevel": "العتبة والقائمة",
+      "editSettings": "الامتيازات",
+      "archive": "إيقاف الفئة",
+      "archiveTitle": "إيقاف فئة {{tier}}",
+      "archiveBody_one": "ينزل تاجر واحد يحملها الآن إلى ما يستحقه، وتنتهي المنح المفتوحة لهذه الفئة. تبقى قائمتها كما هي.",
+      "archiveBody_other": "ينزل {{count}} تاجر يحملونها الآن إلى ما يستحقونه، وتنتهي المنح المفتوحة لهذه الفئة. تبقى قائمتها كما هي.",
+      "level": {
+        "addTitle": "تفعيل فئة {{tier}}",
+        "editTitle": "عتبة وقائمة {{tier}}",
+        "description": "يصل التاجر إلى الفئة حين تبلغ مشترياته الصافية العتبة في الشهر الماضي أو الحالي. يعاد تسعير القوائم وحساب كل التجّار عند الحفظ.",
+        "threshold": "العتبة الشهرية ($)",
+        "thresholdHint": "دولارات كاملة، أعلى من عتبة الفئة الأدنى وأقل من الأعلى.",
+        "thresholdError": "أدخل مبلغاً بدولارات كاملة، دولاراً واحداً على الأقل.",
+        "list": "قائمة الأسعار",
+        "listHint": "قائمة مخصّصة مسعّرة ترث من «{{parent}}».",
+        "listError": "اختر قائمة الفئة.",
+        "submit": "حفظ"
+      },
+      "settings": {
+        "title": "امتيازات {{tier}}",
+        "description": "تسري على كل تاجر يحمل الفئة من الآن. حدود العميل المخصّصة تبقى أولى.",
+        "submit": "حفظ الامتيازات",
+        "fields": {
+          "perDepositUsdUnits": "حد الإيداع الواحد ($)",
+          "dailyDepositUsdUnits": "حد الإيداعات خلال 24 ساعة ($)",
+          "playerChecksPerHour": "فحوص اللاعبين في الساعة",
+          "playerChecksPerDay": "فحوص اللاعبين في اليوم",
+          "bulkLinesMax": "سطور طلب الجملة",
+          "orderUnitsMax": "أكواد الطلب الواحد",
+          "supportReplyMinutes": "وعد الرد على التذاكر (دقيقة)",
+          "depositPriority": "أولوية في طابور الإيداعات",
+          "supportPriority": "أولوية في طابور التذاكر",
+          "directContact": "تواصل مباشر",
+          "earlyAccess": "وصول مبكر",
+          "fastAlerts": "تنبيهات أسرع",
+          "receiptWelcome": "سطر ترحيب على الإيصال",
+          "receiptLargeLogo": "شعار أكبر على الإيصال"
+        },
+        "hints": {
+          "perDepositUsdUnits": "لا يقل عن أعلى حد أدنى للإيداع ({{minimum}}) ولا يتجاوز حد الـ24 ساعة.",
+          "dailyDepositUsdUnits": "حتى $100,000.",
+          "playerChecksPerHour": "من 10 إلى 1000، ولا يتجاوز فحوص اليوم.",
+          "playerChecksPerDay": "من 30 إلى 5000.",
+          "bulkLinesMax": "من 10 إلى 100.",
+          "orderUnitsMax": "من 1 إلى 100.",
+          "supportReplyMinutes": "من 15 إلى 1440. اتركه فارغاً لعدم الوعد بوقت."
+        },
+        "errors": {
+          "perDepositUsdUnits": "أدخل مبلغاً لا يقل عن {{minimum}} ولا يتجاوز حد الـ24 ساعة.",
+          "dailyDepositUsdUnits": "أدخل مبلغاً لا يقل عن {{minimum}} ولا يتجاوز $100,000.",
+          "playerChecksPerHour": "أدخل عدداً من 10 إلى 1000 لا يتجاوز فحوص اليوم.",
+          "playerChecksPerDay": "أدخل عدداً من 30 إلى 5000.",
+          "bulkLinesMax": "أدخل عدداً من 10 إلى 100.",
+          "orderUnitsMax": "أدخل عدداً من 1 إلى 100.",
+          "supportReplyMinutes": "أدخل عدداً من 15 إلى 1440 أو اتركه فارغاً."
+        }
+      },
+      "preview": {
+        "open": "معاينة العتبات",
+        "title": "معاينة العتبات",
+        "description": "جرّب عتبات أخرى وشاهد من يحمل كل فئة ومن يصعد أو ينزل مقارنة باليوم. لا يُحفظ شيء.",
+        "threshold": "عتبة {{tier}} ($)",
+        "none": "بلا فئة",
+        "hint": "اترك الحقل فارغاً لمعاينة الفئة متوقفة.",
+        "order": "يجب أن ترتفع العتبات مع الفئة: الفضية أقل من الذهبية، والذهبية أقل من الماسية.",
+        "submit": "معاينة",
+        "result": "النتيجة",
+        "now": "اليوم",
+        "proposed": "بالعتبات المقترحة",
+        "rising_one": "يصعد تاجر واحد",
+        "rising_other": "يصعد {{count}} تاجر",
+        "falling_one": "ينزل تاجر واحد",
+        "falling_other": "ينزل {{count}} تاجر",
+        "noMovers": "لا أحد.",
+        "to": "إلى",
+        "more_one": "وتاجر آخر لا يظهر هنا.",
+        "more_other": "و{{count}} تاجر آخرون لا يظهرون هنا."
+      },
+      "profile": {
+        "title": "الفئة",
+        "effective": "الفئة الحالية",
+        "earned": "المكتسبة بالمشتريات",
+        "source": "المصدر",
+        "earnedSource": "مكتسبة",
+        "grantedUntil": "ممنوحة يدوياً حتى {{date}}",
+        "since": "منذ",
+        "grantIdle": "منحة {{tier}} مفتوحة حتى {{date}} بلا أثر: الفئة المكتسبة تساويها أو أعلى."
+      },
+      "grant": {
+        "action": "منح فئة",
+        "title": "منح فئة لـ{{name}}",
+        "description": "يحصل التاجر على شارة الفئة وأسعارها وامتيازاتها كأنه بلغها، ويعود إلى فئته المكتسبة عند انتهاء المدة مع إشعار. يُذكَّر المدير على تيليجرام قبل 3 أيام.",
+        "tier": "الفئة",
+        "tierHint": "أعلى من فئته المكتسبة ({{tier}}) ومفعّلة.",
+        "noTier": "لا فئة مفعّلة أعلى من فئته المكتسبة.",
+        "tierError": "اختر الفئة.",
+        "endsOn": "آخر يوم",
+        "endsOnHint": "بتوقيت دمشق؛ تنتهي المنحة في نهاية هذا اليوم.",
+        "endsOnError": "اختر يوماً بين الغد و{{max}} يوماً من اليوم.",
+        "submit": "منح الفئة",
+        "end": "إنهاء المنح",
+        "endTitle": "إنهاء منح الفئة",
+        "endDescription": "تنتهي منحة {{tier}} (حتى {{date}}) الآن، ويعود التاجر إلى {{earned}} مع إشعار.",
+        "endSubmit": "إنهاء المنح",
+        "running": "سارية",
+        "ended": "{{reason}} في {{date}}",
+        "endReasons": {
+          "expired": "انتهت مدتها",
+          "ended_by_admin": "أنهاها المدير",
+          "merchant_revoked": "سُحبت صفة التاجر",
+          "tier_archived": "أُوقفت الفئة"
+        },
+        "history": "سجل المنح"
       }
     }
   }

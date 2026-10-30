@@ -12,7 +12,6 @@ import {
   type MerchantApplicationStatus,
   merchantApplicationInputSchema,
   merchantApplyRefusal,
-  merchantLimitsBelowMinimum,
   merchantMessageSchema,
   merchantSettingsInputSchema,
   reapplyAvailableAt,
@@ -215,29 +214,13 @@ describe('admin inputs', () => {
 });
 
 describe('merchant settings', () => {
-  it('accept the defaults and keep per deposit within the day', () => {
+  it('accept the defaults within their bounds', () => {
     expect(merchantSettingsInputSchema.safeParse(MERCHANT_SETTINGS_DEFAULTS).success).toBe(true);
-    expect(
-      merchantSettingsInputSchema.safeParse({
-        ...MERCHANT_SETTINGS_DEFAULTS,
-        perDepositUsdUnits: MERCHANT_SETTINGS_DEFAULTS.dailyDepositUsdUnits + 10_000,
-      }).success,
-    ).toBe(false);
     expect(
       merchantSettingsInputSchema.safeParse({
         ...MERCHANT_SETTINGS_DEFAULTS,
         ordersPerTenMinutes: 9,
       }).success,
     ).toBe(false);
-  });
-
-  it('name the limits below the deposit minimum', () => {
-    expect(merchantLimitsBelowMinimum(MERCHANT_SETTINGS_DEFAULTS, 5_000_000)).toEqual([]);
-    expect(
-      merchantLimitsBelowMinimum(
-        { perDepositUsdUnits: 1_000_000, dailyDepositUsdUnits: 4_000_000 },
-        5_000_000,
-      ),
-    ).toEqual(['perDepositUsdUnits', 'dailyDepositUsdUnits']);
   });
 });

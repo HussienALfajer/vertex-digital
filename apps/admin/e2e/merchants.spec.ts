@@ -8,9 +8,9 @@ import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './
  * Merchants in the panel (S20 PR 3) against the mocked API: the applications queue, an
  * application's decisions (request information, then approval with re-authentication; a
  * rejection with its reason), the direct grant and the revocation from the customer's profile,
- * the merchants list, the settings refused below the deposit minimum, with RTL screenshots in
- * both themes. S21 PR 2: the player-check quota in the settings, and the receipt branding on the
- * profile with the logo's removal (BR3).
+ * the merchants list, the settings within their bounds, with RTL screenshots in both themes. S21
+ * PR 2: the receipt branding on the profile with the logo's removal (BR3). S23's tiers, grants and
+ * the tier filter: `merchant-tiers.spec.ts`.
  */
 
 const LOGO = '0199e300-0000-7000-8000-0000000000f1';
@@ -197,7 +197,8 @@ test.describe('merchants', () => {
     await expect(page.getByText(m.profile.title)).toBeVisible();
     await expect(page.getByText(m.profile.termsPending)).toBeVisible();
     await expect(
-      page.getByText(ar.customers.limits.sources.default_merchant).first(),
+      // S23 TS3: the default names the merchant's tier.
+      page.getByText(`الافتراضي: ${m.tierNames.bronze}`).first(),
     ).toBeVisible();
 
     await page.goto(`/merchants?listId=${ROOT_PRICE_LIST_IDS.wholesale}`);
@@ -228,31 +229,19 @@ test.describe('merchants', () => {
     await expect(page.getByText(m.profile.noLogo)).toBeVisible();
   });
 
-  test('saves the merchants’ player-check quota (S21 BK4)', async ({ page, admin }) => {
+  test('saves the order rate within its bounds (PO5)', async ({ page, admin }) => {
     admin.signedIn = true;
     await page.goto('/settings/merchants');
-    await expect(field(page, m.settings.fields.playerChecksPerHour)).toHaveValue('100');
-    await field(page, m.settings.fields.playerChecksPerHour).fill('5');
+    await expect(field(page, m.settings.fields.ordersPerTenMinutes)).toHaveValue('60');
+    await field(page, m.settings.fields.ordersPerTenMinutes).fill('5');
     await page.getByRole('button', { name: m.settings.save }).click();
-    await expect(field(page, m.settings.fields.playerChecksPerHour)).toBeFocused();
-    await field(page, m.settings.fields.playerChecksPerHour).fill('150');
-    await page.getByRole('button', { name: m.settings.save }).click();
-    await expect(page.getByText(m.settings.saved)).toBeVisible();
-    expect(admin.merchants.settings.playerChecksPerHour).toBe(150);
-  });
-
-  test('refuses merchant limits below the deposit minimum', async ({ page, admin }) => {
-    admin.signedIn = true;
-    await page.goto('/settings/merchants');
-    await expect(field(page, m.settings.fields.perDepositUsdUnits)).toHaveValue('2000');
-    await field(page, m.settings.fields.perDepositUsdUnits).fill('1');
-    await page.getByRole('button', { name: m.settings.save }).click();
-    await expect(field(page, m.settings.fields.perDepositUsdUnits)).toBeFocused();
-    await expect(page.getByText(/لا يقل عن/).last()).toBeVisible();
-    await field(page, m.settings.fields.perDepositUsdUnits).fill('1500');
+    await expect(field(page, m.settings.fields.ordersPerTenMinutes)).toBeFocused();
+    await field(page, m.settings.fields.ordersPerTenMinutes).fill('80');
     await page.getByRole('button', { name: m.settings.save }).click();
     await expect(page.getByText(m.settings.saved)).toBeVisible();
-    expect(admin.merchants.settings.perDepositUsdUnits).toBe(1_500_000_000);
+    expect(admin.merchants.settings.ordersPerTenMinutes).toBe(80);
+    // S23 TS2: the deposit limits and player checks moved to the tiers page.
+    await expect(page.getByRole('link', { name: ar.nav.merchantTiers }).last()).toBeVisible();
   });
 });
 

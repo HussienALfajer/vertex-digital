@@ -368,7 +368,11 @@ export type MerchantTierView = z.infer<typeof merchantTierViewSchema>;
 
 /** `GET /api/admin/merchant-tiers`: the four tiers, Bronze first. */
 export const merchantTierListSchema = z
-  .object({ items: z.array(merchantTierViewSchema) })
+  .object({
+    items: z.array(merchantTierViewSchema),
+    /** The highest deposit minimum (Sham Cash, USDT): both deposit limits must reach it. */
+    minDepositUsdUnits: amountUnitsSchema,
+  })
   .meta({ id: 'MerchantTierList' });
 
 export type MerchantTierList = z.infer<typeof merchantTierListSchema>;

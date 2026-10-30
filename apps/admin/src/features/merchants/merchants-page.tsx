@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type AdminMerchantRow, formatUsd } from '@vertex-digital/contracts';
+import { type AdminMerchantRow, formatUsd, MERCHANT_TIERS } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -26,14 +26,16 @@ import { errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import { Picker } from '../pricing/picker';
 import { RevokeMerchantDialog, useListItems } from './merchant-dialogs';
-import { merchantsQuery, merchantTiersQuery } from './merchants.queries';
+import { merchantsQuery } from './merchants.queries';
 import type { MerchantsSearch } from './merchants-search';
+import { TierChip } from './tier-chip';
 
 const ALL = 'all';
 
 /**
- * "التجّار" (S20 screens): the merchants with search and list filter in the URL, each with its
- * trade name, governorate, list, since when and 30 days of sales; revoke from the row.
+ * "التجّار" (S20 screens): the merchants with search, list and tier filters in the URL, each with
+ * its trade name, governorate, list, tier (S23 AD1, "ممنوحة" when granted), since when and 30 days
+ * of sales; revoke from the row.
  */
 export function MerchantsPage({
   search,
@@ -46,14 +48,11 @@ export function MerchantsPage({
   const list = useInfiniteQuery(merchantsQuery(search));
   const { items: listItems, lists: listsRead } = useListItems();
   const lists = [{ value: ALL, label: t('merchants.list.allLists') }, ...listItems];
-  // S23: the tiers' live levels, and the merchants without one (Bronze).
-  const levels = useQuery(merchantTiersQuery);
-  const levelItems = [
-    { value: ALL, label: t('merchants.list.allLevels') },
-    { value: 'none', label: t('merchants.list.noLevel') },
-    ...(levels.data?.items ?? []).flatMap((row) =>
-      row.level ? [{ value: row.level.id, label: t(`merchants.tierNames.${row.tier}`) }] : [],
-    ),
+  // S23 AD1: the four tiers and the granted ones.
+  const tierItems = [
+    { value: ALL, label: t('merchants.list.allTiers') },
+    ...MERCHANT_TIERS.map((tier) => ({ value: tier, label: t(`merchants.tierNames.${tier}`) })),
+    { value: 'granted', label: t('merchants.list.granted') },
   ];
   const rows = list.data?.pages.flatMap((page) => page.items) ?? [];
   const [revoking, setRevoking] = useState<AdminMerchantRow | null>(null);
@@ -83,15 +82,17 @@ export function MerchantsPage({
           />
         </Field>
         <Field className="w-52">
-          <FieldLabel render={<span />}>{t('merchants.list.levelFilter')}</FieldLabel>
+          <FieldLabel render={<span />}>{t('merchants.list.tierFilter')}</FieldLabel>
           <Picker
-            label={t('merchants.list.levelFilter')}
-            items={levelItems}
-            value={search.levelId ?? ALL}
+            label={t('merchants.list.tierFilter')}
+            items={tierItems}
+            value={search.tier ?? ALL}
             onChange={(value) =>
-              onSearch({ ...search, levelId: value === ALL ? undefined : value })
+              onSearch({
+                ...search,
+                tier: value === ALL ? undefined : (value as MerchantsSearch['tier']),
+              })
             }
-            read={levels}
           />
         </Field>
       </div>
@@ -114,7 +115,7 @@ export function MerchantsPage({
         <EmptyState
           icon={<InboxIcon />}
           title={
-            search.q || search.listId || search.levelId
+            search.q || search.listId || search.tier
               ? t('merchants.list.emptyFiltered')
               : t('merchants.list.empty')
           }
@@ -132,7 +133,7 @@ export function MerchantsPage({
               <TableHead>{t('merchants.columns.customer')}</TableHead>
               <TableHead>{t('merchants.columns.governorate')}</TableHead>
               <TableHead>{t('merchants.columns.list')}</TableHead>
-              <TableHead>{t('merchants.columns.level')}</TableHead>
+              <TableHead>{t('merchants.columns.tier')}</TableHead>
               <TableHead>{t('merchants.columns.since')}</TableHead>
               <TableHead>{t('merchants.columns.sales30d')}</TableHead>
               <TableHead>
@@ -174,11 +175,7 @@ export function MerchantsPage({
                   </Link>
                 </TableCell>
                 <TableCell>
-                  {row.level ? (
-                    <Badge tone="neutral">{row.level.nameAr}</Badge>
-                  ) : (
-                    <span className="text-muted-foreground">{t('merchants.list.noLevel')}</span>
-                  )}
+                  <TierChip tier={row.tier} granted={row.tierGranted} />
                 </TableCell>
                 <TableCell>{formatDate(row.grantedAt)}</TableCell>
                 <TableCell className="tabular-nums">

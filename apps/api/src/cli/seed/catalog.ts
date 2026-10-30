@@ -39,6 +39,14 @@ const TABLES = [
 /** Append-only tables: a row already there is kept, never updated. */
 const INSERT_ONLY = new Set(['stored_files', 'product_prices', 'supplier_policy', 'order_policy']);
 
+/**
+ * Columns a row keeps when the snapshot updates it: a margin rule keeps what it applies to and when
+ * it was made (guard 0099), so the migration's seeded wholesale rule takes only its values.
+ */
+const KEPT_ON_UPDATE: Record<string, ReadonlySet<string>> = {
+  margin_rules: new Set(['price_list_id', 'scope', 'target_id', 'created_at']),
+};
+
 /** Policies come in as the newest row, so they are stamped now. */
 const STAMPED_NOW = new Set(['supplier_policy', 'order_policy']);
 
@@ -79,7 +87,7 @@ async function upsert(tx: Transaction, table: string, rows: Row[]): Promise<void
   const conflict = INSERT_ONLY.has(table)
     ? 'DO NOTHING'
     : `DO UPDATE SET ${columns
-        .filter((column) => column !== 'id')
+        .filter((column) => column !== 'id' && !KEPT_ON_UPDATE[table]?.has(column))
         .map((column) => `"${column}" = EXCLUDED."${column}"`)
         .join(', ')}`;
   // Only the snapshot's own columns: one taken before a migration leaves the new columns to their

@@ -2,8 +2,10 @@ import {
   type CustomerLimitSource,
   type CustomerStatus,
   formatAmountInput,
+  type MerchantTier,
   parseUsd,
 } from '@vertex-digital/contracts';
+import type { TFunction } from 'i18next';
 
 /*
  * How the panel names a customer's state (S12 screens): the status chips, the limit sources
@@ -38,6 +40,23 @@ export const LIMIT_SOURCE_KEYS = {
   custom: 'customers.limits.sources.custom',
   none: 'customers.limits.sources.none',
 } as const satisfies Record<CustomerLimitSource, string>;
+
+/**
+ * A limit's source as the profile shows it; S23 TS3: a merchant's default names the tier
+ * ("الافتراضي: تاجر ذهبي").
+ */
+export function limitSourceLabel(
+  t: TFunction,
+  source: CustomerLimitSource,
+  tier: MerchantTier | null,
+): string {
+  if (source === 'default_merchant' && tier) {
+    return t('customers.limits.sources.default_merchant_tier', {
+      tier: t(`merchants.tierNames.${tier}`),
+    });
+  }
+  return t(LIMIT_SOURCE_KEYS[source]);
+}
 
 /** An override as its field shows it: dollars (`500`, `12.50`), empty when not set. */
 export const limitInput = (units: number | null): string =>

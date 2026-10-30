@@ -40,10 +40,11 @@ import { AuditDetailSheet } from '../audit/audit-detail-sheet';
 import { actorLabel } from '../audit/audit-labels';
 import { DepositTable } from '../deposits/deposits-page';
 import { MerchantBranding } from '../merchants/merchant-branding';
+import { MerchantTierCard } from '../merchants/merchant-tier';
 import { OrderTable } from '../orders/orders-page';
 import { ticketListQuery } from '../support/support.queries';
 import { TicketTable } from '../support/support-page';
-import { LIMIT_SOURCE_KEYS } from './customer-labels';
+import { limitSourceLabel } from './customer-labels';
 import {
   customerDepositsQuery,
   customerHistoryQuery,
@@ -126,10 +127,12 @@ export function SummarySection({
     ['customers.limits.dailyDeposit', limits.effective.dailyDeposit],
     ['customers.limits.dailyPurchase', limits.effective.dailyPurchase],
   ] as const;
-  // S21 LV5: with no assigned list, a merchant with a level pays the level's list (audit A06-50).
-  const levelOfList =
-    customer.pricing.assignedListId === null && customer.pricing.accountType === 'merchant'
-      ? (customer.merchant?.level ?? null)
+  // S21 LV5, S23: with no assigned list, a merchant above Bronze pays the tier's list (A06-50).
+  const tierOfList =
+    customer.pricing.assignedListId === null &&
+    customer.pricing.accountType === 'merchant' &&
+    customer.merchant?.level
+      ? customer.merchant.tier.tier
       : null;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -204,7 +207,7 @@ export function SummarySection({
                   )}
                 </span>
                 <Badge tone={limit.source === 'custom' ? 'gold' : 'neutral'}>
-                  {t(LIMIT_SOURCE_KEYS[limit.source])}
+                  {limitSourceLabel(t, limit.source, customer.merchant?.tier.tier ?? null)}
                 </Badge>
               </dd>
             </div>
@@ -237,8 +240,10 @@ export function SummarySection({
               <Badge tone={customer.pricing.assignedListId ? 'gold' : 'neutral'}>
                 {customer.pricing.assignedListId
                   ? t('customers.pricing.assigned')
-                  : levelOfList
-                    ? t('customers.pricing.fromLevel', { name: levelOfList.nameAr })
+                  : tierOfList
+                    ? t('customers.pricing.fromTier', {
+                        tier: t(`merchants.tierNames.${tierOfList}`),
+                      })
                     : t('customers.pricing.default')}
               </Badge>
             </span>
@@ -248,7 +253,11 @@ export function SummarySection({
           </Fact>
         </dl>
         {customer.merchant && (
-          <MerchantFacts customerId={customer.id} merchant={customer.merchant} />
+          <MerchantFacts
+            customerId={customer.id}
+            name={customer.name}
+            merchant={customer.merchant}
+          />
         )}
       </Card>
       <Card className="gap-4">
@@ -630,14 +639,16 @@ export function HistorySection({ customerId }: { customerId: string }) {
 
 /**
  * S20: the merchant profile under the pricing card: name, place, since, source and terms; S21: the
- * volume level and since when, the two months' net purchases and the follows count; S21 BR3: the
- * receipt branding with the logo's removal.
+ * two months' net purchases and the follows count; S23 AD5: the tier card with the grants; S21 BR3:
+ * the receipt branding with the logo's removal.
  */
 function MerchantFacts({
   customerId,
+  name,
   merchant,
 }: {
   customerId: string;
+  name: string;
   merchant: NonNullable<AdminCustomer['merchant']>;
 }) {
   const { t } = useTranslation();
@@ -676,20 +687,6 @@ function MerchantFacts({
             t('merchants.profile.termsAccepted', { version: merchant.termsVersion })
           )}
         </Fact>
-        <Fact label={t('merchants.profile.level')}>
-          {merchant.level ? (
-            <span className="flex flex-col gap-0.5">
-              <span>{merchant.level.nameAr}</span>
-              {merchant.levelChangedAt && (
-                <span className="text-muted-foreground text-xs">
-                  {t('merchants.profile.levelSince', { date: formatDate(merchant.levelChangedAt) })}
-                </span>
-              )}
-            </span>
-          ) : (
-            t('merchants.profile.noLevel')
-          )}
-        </Fact>
         <Fact label={t('merchants.profile.watches')}>
           <span className="tabular-nums">{merchant.watchCount}</span>
         </Fact>
@@ -704,6 +701,12 @@ function MerchantFacts({
           </bdi>
         </Fact>
       </dl>
+      <MerchantTierCard
+        customerId={customerId}
+        name={name}
+        revoked={merchant.revokedAt !== null}
+        tier={merchant.tier}
+      />
       <MerchantBranding customerId={customerId} branding={merchant.branding} />
     </div>
   );
