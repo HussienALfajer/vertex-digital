@@ -30,6 +30,7 @@ import { errorText } from '@/lib/errors';
 import { formatDamascusDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { useIdempotentRequest } from '@/lib/idempotency';
+import { FreshOnShow } from '@/lib/shown-again';
 import { useSearchParam } from '@/lib/use-search-param';
 import {
   amountFromCentsParam,
@@ -78,9 +79,17 @@ function unavailableReason(
 /**
  * "إيداع" (S03, S04 screens): the method picker (Sham Cash, USDT on TRC20 or BEP20), then the
  * method's form. A deposit already waiting for payment opens instead (rule SC4). Read in the
- * browser, never cached.
+ * browser, never cached; read again, on a new form, each time the page is shown again.
  */
 export function DepositFormPage() {
+  return (
+    <FreshOnShow>
+      <DepositForm />
+    </FreshOnShow>
+  );
+}
+
+function DepositForm() {
   const router = useRouter();
   // S22 BG2, BG3: what the customer lacks, for a reservation (its number and the way back) or
   // for a purchase still to make.
@@ -235,7 +244,7 @@ function MethodPicker({
           <ShamCashForm options={shamCash} initialCurrency={firstCurrency} gap={gap} />
         )
       ) : (
-        <UsdtForm key={method} options={usdt} method={method} gap={gap} />
+        <UsdtForm options={usdt} method={method} gap={gap} />
       )}
     </div>
   );

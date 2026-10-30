@@ -23,13 +23,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearFormDraft, readFormDraft, saveFormDraft, useLeaveWarning } from '@/lib/form-draft';
 import { t } from '@/lib/i18n';
+import { FreshOnShow } from '@/lib/shown-again';
 import {
   attemptSignature,
   BODY_MAX,
@@ -85,6 +87,9 @@ function draftFromUrl(): TicketDraft {
   };
 }
 
+/** The subject and message typed so far, never the images: survive the FAQ link and a reload. */
+const DRAFT = 'support-ticket';
+
 /** Sign-in, then back to this form with its type and link (audit A07-38). */
 function signInHref(): string {
   const next = `${window.location.pathname}${window.location.search}`;
@@ -100,6 +105,14 @@ function signInHref(): string {
  * customer can go on.
  */
 export function NewTicketPage() {
+  return (
+    <FreshOnShow>
+      <NewTicketForm />
+    </FreshOnShow>
+  );
+}
+
+function NewTicketForm() {
   const router = useRouter();
   const customer = useCustomer();
   const [draft, setDraft] = useState<TicketDraft>(EMPTY);
@@ -116,7 +129,12 @@ export function NewTicketPage() {
 
   useEffect(() => {
     const initial = draftFromUrl();
-    setDraft(initial);
+    const saved = readFormDraft<{ subject?: unknown; body?: unknown }>(DRAFT);
+    setDraft({
+      ...initial,
+      subject: typeof saved?.subject === 'string' ? saved.subject : '',
+      body: typeof saved?.body === 'string' ? saved.body : '',
+    });
     setPrefill({ order: initial.orderId, deposit: initial.depositId });
     setReady(true);
   }, []);
@@ -125,6 +143,16 @@ export function NewTicketPage() {
     if (customer.status !== 'signedOut') return;
     router.replace(signInHref());
   }, [customer.status, router]);
+
+  const dirty = draft.subject !== '' || draft.body !== '';
+  // Effects run again on a re-show: a sent ticket must not write its draft back.
+  const sent = useRef(false);
+  useEffect(() => {
+    if (!ready || sent.current) return;
+    if (dirty) saveFormDraft(DRAFT, { subject: draft.subject, body: draft.body });
+    else clearFormDraft(DRAFT);
+  }, [ready, dirty, draft.subject, draft.body]);
+  useLeaveWarning(dirty && !sending);
 
   const problems = new Set<DraftProblem>(showErrors ? draftProblems(draft, files.length) : []);
   const change = (changes: Partial<TicketDraft>) =>
@@ -150,6 +178,8 @@ export function NewTicketPage() {
       freesSupportKey,
     );
     if (result.ok) {
+      sent.current = true;
+      clearFormDraft(DRAFT);
       router.push(`/support/${result.data.id}`);
       return;
     }

@@ -35,6 +35,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
+import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { readCustomerPrices } from '@/features/catalog/customer-prices';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { type Balance, useBalance, usePurchasesStopped } from '@/features/purchase/customer';
@@ -46,6 +47,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { FreshOnShow } from '@/lib/shown-again';
 import { type CartLine, clearCart, readCart, removeLine, restoreLine, updateLine } from './cart';
 import { freesCheckoutKey } from './checkout-key';
 import { checkoutLine, lineRefusals, payCart } from './requests';
@@ -118,6 +120,14 @@ function priceNow(prices: Prices, line: CartLine): number | null | undefined {
  * paid one is cleared and its orders open live.
  */
 export function CartPage() {
+  return (
+    <FreshOnShow>
+      <Cart />
+    </FreshOnShow>
+  );
+}
+
+function Cart() {
   const router = useRouter();
   const lines = useCart();
   const customer = useCustomer();
@@ -576,14 +586,7 @@ function LineCard({
     <Card className={`gap-3 ${refusal || price === null ? 'border-status-warning' : ''}`}>
       <div className="flex items-start gap-3">
         {cover ? (
-          // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
-          <img
-            src={`${cover.url}?w=160`}
-            alt=""
-            width={cover.width}
-            height={cover.height}
-            className="size-12 shrink-0 rounded-md object-cover"
-          />
+          <CatalogPicture image={cover} sizes="56px" className="size-14 shrink-0" />
         ) : (
           <IconTile tone="muted">
             <PackageIcon />

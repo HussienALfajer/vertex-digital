@@ -31,8 +31,8 @@ const SignedInHeader = dynamic(
 
 /**
  * The header's account entry. Read in the browser, so every page stays static and cacheable:
- * "sign in" (and "create account" while registration is open, rule C16) until a session is known
- * to exist, then the wallet balance (rule W8 of S02), the notification bell (S05) and the
+ * "sign in" (beside the server's "create account", `SiteHeader`) until a session is known to exist,
+ * then the wallet balance (rule W8 of S02), the notification bell (S05) and the
  * customer's initial with the account menu. While the session is read, a browser that was signed
  * in last time (`data-signed-in-hint`, set before paint by SESSION_HINT_SCRIPT) shows the
  * signed-in placeholder instead of flashing "sign in".
@@ -40,7 +40,6 @@ const SignedInHeader = dynamic(
 export function AccountLink() {
   // Undefined while the read is under way.
   const [session, setSession] = useState<Session | undefined>(undefined);
-  const [canSignUp, setCanSignUp] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -49,7 +48,7 @@ export function AccountLink() {
     // sign-in button for a browser with no hint) and reads again, instead of telling a signed-in
     // customer to sign in until the next full page load.
     const read = () =>
-      readSessionResult().then(async ({ session: value, known }) => {
+      readSessionResult().then(({ session: value, known }) => {
         if (!active) return;
         if (!known) {
           clearTimeout(retry);
@@ -61,15 +60,6 @@ export function AccountLink() {
         if (value) return;
         // Signed out since the last visit: the phone header shows the theme switch again.
         document.documentElement.removeAttribute('data-signed-in-hint');
-        const registration = await fetch('/api/auth/registration', {
-          credentials: 'same-origin',
-          cache: 'no-store',
-        })
-          .then((response) =>
-            response.ok ? (response.json() as Promise<{ open: boolean }>) : null,
-          )
-          .catch(() => null);
-        if (active) setCanSignUp(registration?.open === true);
       });
     const onVisible = () => {
       if (document.visibilityState === 'visible') void read();
@@ -97,16 +87,6 @@ export function AccountLink() {
     <div
       className={`items-center gap-1 ${session === undefined ? 'flex [[data-signed-in-hint]_&]:hidden' : 'flex'}`}
     >
-      {canSignUp && (
-        <Button
-          variant="ghost"
-          size="xl"
-          className="hidden px-4 sm:inline-flex"
-          render={<Link href="/sign-up" prefetch={false} />}
-        >
-          {t('header.signUp')}
-        </Button>
-      )}
       {/* Not prefetched: the sign-in page carries the form validation (Zod), which every visitor
           of every page would otherwise download (the performance budget, e2e/store.spec.ts). */}
       <Button

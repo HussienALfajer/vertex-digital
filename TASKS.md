@@ -1,7 +1,21 @@
-# TASKS — Pricing admin UX (`feat/pricing-admin-ux`, owner, 2026-10-30)
+# TASKS — Store speed, state and navigation overhaul (owner, 2026-10-30)
 
-- [x] Part A: `/pricing` redirects to the retail list; "جرّب تكلفة" on every list's page, priced on the list's chain by the API (`source` in the preview)
-- [x] Part B: shared game picker; all-games mode with category; status chips with counts; supplier filter; column sort; margin filter (`LOW_MARGIN_BP`); URL, `/`, clear button, sticky headers
-- [x] `selectMatrixRows` in the contracts; `matrixScope` read once per wide scope, one at a time; `productRoutingStates` read once (A05-70)
-- [x] Tests, specs S06 and S20, reviewer findings
-- [x] Deploy and the deploy log line
+## PR 1 `fix/store-speed-and-state`
+- [x] nginx: catalog images from disk in the `vdimage` zone (`proxy_cache` cannot keep X-Accel answers; why in the site's comment); customer images in `vdimage`; the logo and photo's missing internal locations
+- [x] API: image route out of the per-address throttler
+- [x] `CatalogPicture`: retry, branded fallback, first row eager, plain `?w=160` covers
+- [x] Brotli in `provision.sh`; precompressed static files in `deploy.sh`
+- [x] Header sign-up in the cached HTML (`GET /api/content/site`), no waterfall
+- [x] `FreshOnShow` on every listed form; bulk's double payment fixed
+- [x] Typed input: buy box per game, sign-in draft taken once, merchant application, terms in a dialog, sign-up, ticket, POS, deposit network, prices dialog
+- [x] Storefront read: one array parameter, grouped status, reads together
+- [x] First load: the theme switch's tooltip out (about 30 KB of Base UI and Floating UI)
+- [x] `pnpm verify`, reviewer and its findings (in-flight writes, POS and draft clean-up, the shop photo's upload location)
+
+## PR 2 `feat/store-navigation-and-home`
+- [ ] Spec, roadmap
+- [ ] `BackLink` on inner pages
+- [ ] Phone bottom navigation
+- [ ] Category image (migration, admin upload, contract, OpenAPI)
+- [ ] New home page, `/categories/[slug]`, sitemap
+- [ ] `pnpm verify`, reviewer, PR, merge, deploy, production check, deploy log, report

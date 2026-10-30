@@ -43,6 +43,9 @@ export function QuickBuySlot() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
+    // Signed in last time: the row's code loads beside the session read, not after it.
+    if (document.documentElement.hasAttribute('data-signed-in-hint'))
+      void import('./quick-buy-row');
     void readSession().then((session) => {
       if (live) setSignedIn(!!session && session.user.emailVerified !== false);
     });

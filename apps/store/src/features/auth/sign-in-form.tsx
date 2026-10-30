@@ -16,6 +16,7 @@ import { errorText } from '@/lib/errors';
 import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
 import { safeRedirect, withNext } from '@/lib/safe-redirect';
+import { FreshOnShow } from '@/lib/shown-again';
 import { useSearchParam } from '@/lib/use-search-param';
 import { passkeysSupported } from '../passkeys/requests';
 import { holdPassword, savePendingEmail } from './pending-email';
@@ -36,6 +37,14 @@ const NOTICES = {
 } as const;
 
 export function SignInForm() {
+  return (
+    <FreshOnShow>
+      <SignInFields />
+    </FreshOnShow>
+  );
+}
+
+function SignInFields() {
   const router = useRouter();
   const next = useSearchParam('next');
   const notice = useSearchParam('notice');

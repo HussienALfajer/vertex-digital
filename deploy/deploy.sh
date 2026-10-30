@@ -182,6 +182,8 @@ ln -s "$SHARED/.env" "$release/.env"
   corepack pnpm install --frozen-lockfile --reporter=append-only
   # The store and the panel load the Madani Arabic faces only when their files are on the server.
   MADANI_FONTS_DIR="$SITE_DIR/fonts/madani" corepack pnpm build
+  # nginx sends these copies of the hashed files (`brotli_static`, `gzip_static`).
+  node deploy/precompress-static.mjs apps/store/.next/static apps/admin/dist/assets
 )
 
 # A snapshot right before migrating, restorable with `deploy.sh restore` if a migration goes wrong.

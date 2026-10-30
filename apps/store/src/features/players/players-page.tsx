@@ -36,6 +36,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { tq } from '@/features/quick-buy/i18n';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -137,14 +138,7 @@ export function PlayersPage() {
           <Card key={first.gameId} className="gap-3">
             <div className="flex items-center gap-3">
               {first.cover ? (
-                // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
-                <img
-                  src={`${first.cover.url}?w=160`}
-                  alt=""
-                  width={first.cover.width}
-                  height={first.cover.height}
-                  className="size-12 shrink-0 rounded-md object-cover"
-                />
+                <CatalogPicture image={first.cover} sizes="48px" className="size-12 shrink-0" />
               ) : (
                 <IconTile tone="muted">
                   <PackageIcon />

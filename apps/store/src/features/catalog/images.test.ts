@@ -1,5 +1,6 @@
+import { CATALOG_IMAGE_WIDTHS } from '@vertex-digital/contracts';
 import { describe, expect, it } from 'vitest';
-import { imageSources } from './images';
+import { IMAGE_WIDTHS, imageSources } from './images';
 
 const image = (width: number) => ({
   id: '0199c3a4-0000-7000-8000-000000000001',
@@ -9,6 +10,10 @@ const image = (width: number) => ({
 });
 
 describe('imageSources (rule SF5)', () => {
+  it('asks for the widths the API serves', () => {
+    expect(IMAGE_WIDTHS).toEqual(CATALOG_IMAGE_WIDTHS);
+  });
+
   it('lists every width of a large image', () => {
     const { src, srcSet } = imageSources(image(1600));
     expect(src).toBe(`${image(1).url}?w=320`);

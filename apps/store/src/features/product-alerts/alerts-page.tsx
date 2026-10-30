@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
@@ -152,14 +153,7 @@ function AlertCard({ alert, children }: { alert: ProductAlert; children?: React.
   return (
     <Card className={`flex-row items-center gap-3 ${ended ? 'opacity-80' : ''}`}>
       {alert.game.cover ? (
-        // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
-        <img
-          src={`${alert.game.cover.url}?w=160`}
-          alt=""
-          width={56}
-          height={56}
-          className="size-14 shrink-0 rounded-md object-cover"
-        />
+        <CatalogPicture image={alert.game.cover} sizes="56px" className="size-14 shrink-0" />
       ) : (
         <span className="flex size-14 shrink-0 items-center justify-center rounded-md bg-muted">
           <PackageIcon className="size-6 text-muted-foreground" aria-hidden="true" />

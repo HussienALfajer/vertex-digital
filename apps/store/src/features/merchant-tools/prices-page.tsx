@@ -39,7 +39,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { PackageIcon, PencilIcon } from 'lucide-react';
-import { type FormEvent, useCallback, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { errorText } from '@/lib/errors';
 import { markupInput, parseMarkup, parseSellingPrice, sellingPriceInput } from './form';
@@ -208,14 +208,27 @@ function GamePrices({ games, settingsKey }: { games: MerchantGame[]; settingsKey
           </SelectContent>
         </Select>
       </Field>
-      {gameId && <PackRows key={`${gameId}:${settingsKey}`} read={read} />}
+      {gameId && <PackRows key={gameId} read={read} settingsKey={settingsKey} />}
     </section>
   );
 }
 
-function PackRows({ read }: { read: () => ReturnType<typeof getSellingPrices> }) {
+function PackRows({
+  read,
+  settingsKey,
+}: {
+  read: () => ReturnType<typeof getSellingPrices>;
+  settingsKey: string;
+}) {
   const { state, setState, reload } = useMerchantRead(read);
   const [editing, setEditing] = useState<SellingPriceRow | null>(null);
+  // Saved settings change every selling price: read again, leaving an open dialog as it is.
+  const readSettings = useRef(settingsKey);
+  useEffect(() => {
+    if (readSettings.current === settingsKey) return;
+    readSettings.current = settingsKey;
+    void reload();
+  }, [settingsKey, reload]);
   if (state.status !== 'ready') {
     return (
       <MerchantPageStatus

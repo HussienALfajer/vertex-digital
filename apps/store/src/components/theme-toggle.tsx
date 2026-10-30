@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '@vertex-digital/ui/components/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@vertex-digital/ui/components/tooltip';
 import { MoonIcon, SunIcon } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -11,21 +10,17 @@ export function ThemeToggle() {
   const { theme, toggle } = useTheme();
   const label = theme === 'dark' ? t('theme.toLight') : t('theme.toDark');
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-11"
-            onClick={toggle}
-            aria-label={label}
-          />
-        }
-      >
-        {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    // `title`, not the design system's tooltip: that brought Base UI's tooltip and Floating UI, some
+    // 30 KB, into the first load of every page.
+    <Button
+      variant="ghost"
+      size="icon"
+      className="size-11"
+      onClick={toggle}
+      aria-label={label}
+      title={label}
+    >
+      {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+    </Button>
   );
 }

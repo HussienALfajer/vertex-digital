@@ -150,7 +150,7 @@ worker ── pg_notify ──> API ── SSE ──> live order timeline, live
 ## Runtime topology (production)
 
 ```
-nginx (TLS, rate limits, Brotli, proxy_cache, the only public listener)
+nginx (TLS, rate limits, Brotli, catalog images from disk, the only public listener)
 PM2 (system user of the site)
   ├── store   Next.js     127.0.0.1:<port>
   ├── api     NestJS      127.0.0.1:<port>

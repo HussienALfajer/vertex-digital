@@ -33,7 +33,7 @@ export function accentStyle(accentColor: string | null): CSSProperties {
  * English name muted and the status chip; the accent on the border on hover. An `unavailable`
  * game is greyed, still linked: its page says why.
  */
-export function GameCard({ game }: { game: StoreGameCard }) {
+export function GameCard({ game, priority = false }: { game: StoreGameCard; priority?: boolean }) {
   const unavailable = game.status === 'unavailable';
   return (
     <Link
@@ -45,6 +45,7 @@ export function GameCard({ game }: { game: StoreGameCard }) {
         <CatalogPicture
           image={game.cover}
           sizes="(min-width: 64rem) 220px, (min-width: 40rem) 30vw, 45vw"
+          priority={priority}
           className="aspect-square w-full"
         />
       ) : (

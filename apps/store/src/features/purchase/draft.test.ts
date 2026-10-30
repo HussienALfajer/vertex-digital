@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearDraft, readDraft, saveDraft } from './draft';
+import { clearDraft, saveDraft, takeDraft } from './draft';
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -16,16 +16,16 @@ describe('buy box draft (rule BB3)', () => {
   it('restores the fields for the same game and pack only', () => {
     vi.stubGlobal('sessionStorage', memoryStorage());
     saveDraft({ gameSlug: 'pubg', packId: 'p1', quantity: 2, fields: { player_id: '5123' } });
-    expect(readDraft('pubg', 'p1')).toEqual({
+    expect(takeDraft('pubg', 'p1')).toEqual({
       gameSlug: 'pubg',
       packId: 'p1',
       quantity: 2,
       fields: { player_id: '5123' },
     });
-    expect(readDraft('pubg', 'p2')).toBeNull();
-    expect(readDraft('free-fire', 'p1')).toBeNull();
+    expect(takeDraft('pubg', 'p2')).toBeNull();
+    expect(takeDraft('free-fire', 'p1')).toBeNull();
     clearDraft();
-    expect(readDraft('pubg', 'p1')).toBeNull();
+    expect(takeDraft('pubg', 'p1')).toBeNull();
   });
 
   it('drops what it cannot read', () => {
@@ -35,14 +35,14 @@ describe('buy box draft (rule BB3)', () => {
       'vd:buy-draft',
       JSON.stringify({ gameSlug: 'pubg', packId: 'p1', quantity: 'x', fields: { a: 1, b: 'b' } }),
     );
-    expect(readDraft('pubg', 'p1')).toEqual({
+    expect(takeDraft('pubg', 'p1')).toEqual({
       gameSlug: 'pubg',
       packId: 'p1',
       quantity: 1,
       fields: { b: 'b' },
     });
     storage.setItem('vd:buy-draft', '{broken');
-    expect(readDraft('pubg', 'p1')).toBeNull();
+    expect(takeDraft('pubg', 'p1')).toBeNull();
   });
 
   it('works without storage', () => {
@@ -60,7 +60,7 @@ describe('buy box draft (rule BB3)', () => {
     expect(() =>
       saveDraft({ gameSlug: 'pubg', packId: 'p1', quantity: 1, fields: {} }),
     ).not.toThrow();
-    expect(readDraft('pubg', 'p1')).toBeNull();
+    expect(takeDraft('pubg', 'p1')).toBeNull();
     expect(() => clearDraft()).not.toThrow();
   });
 });

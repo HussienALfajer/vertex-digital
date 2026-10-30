@@ -517,6 +517,16 @@ describe('pages (PG1–PG6)', () => {
     ).toBe(body);
   });
 
+  it('tells the store whether registration is open, for its cached header', async () => {
+    const site = async () =>
+      json<{ registrationOpen: boolean }>(await client.get('/api/content/site'), 200);
+    await setSwitches(test.db, { registration_open: true });
+    expect((await site()).registrationOpen).toBe(true);
+    await setSwitches(test.db, { registration_open: false });
+    expect((await site()).registrationOpen).toBe(false);
+    await setSwitches(test.db, { registration_open: true });
+  });
+
   it('refuses an empty body and restores a version into the draft (PG6, edge cases 1, 4)', async () => {
     const empty = await saveDraft('refund', '');
     expect(

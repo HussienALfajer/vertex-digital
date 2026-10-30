@@ -97,6 +97,21 @@ describe('sendAttempt (rule BB6)', () => {
     await first;
   });
 
+  it('sends one request for the same body, in flight and just after its success', async () => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    const request = vi.fn(async () => ok);
+    const first = sendAttempt('single-flight', 'a', request, frees);
+    const second = sendAttempt('single-flight', 'a', request, frees);
+    expect(await first).toBe(ok);
+    expect(await second).toBe(ok);
+    expect(await sendAttempt('single-flight', 'a', request, frees)).toBe(ok);
+    expect(request).toHaveBeenCalledTimes(1);
+    // Another body is another purchase.
+    await sendAttempt('single-flight', 'b', request, frees);
+    expect(request).toHaveBeenCalledTimes(2);
+    clearAttempt('single-flight');
+  });
+
   it('frees the key on a schema refusal when no answer was lost', async () => {
     vi.stubGlobal('sessionStorage', memoryStorage());
     const first = await keyOf('p8', 'body', refused('VALIDATION_FAILED'));

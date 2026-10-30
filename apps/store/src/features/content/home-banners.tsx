@@ -33,7 +33,7 @@ export async function HomeBanners() {
           const picture = (
             <CatalogPicture
               key={banner.id}
-              image={{ id: banner.imageId, url: catalogImagePath(banner.imageId), ...BANNER_SIZE }}
+              image={{ url: catalogImagePath(banner.imageId), ...BANNER_SIZE }}
               sizes={BANNER_SIZES}
               alt={banner.altText}
               priority={index === 0}

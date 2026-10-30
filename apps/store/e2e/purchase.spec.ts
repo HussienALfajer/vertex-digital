@@ -227,6 +227,84 @@ test.describe('buy box', () => {
     expect(sent?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  test('another pack keeps the typed id and checks it again', async ({ page, api }) => {
+    signedIn(api).on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Lina_99' });
+    await page.goto('/games/pubg-mobile');
+    await choose(page, '60 UC');
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText('Lina_99')).toBeVisible();
+    // The phone's bottom sheet closes first; the desktop's panel simply changes.
+    await page.keyboard.press('Escape');
+    await choose(page, '660 UC');
+    await expect(idField(page)).toHaveValue('51234567');
+    await idField(page).focus();
+    await idField(page).blur();
+    await expect
+      .poll(() => api.requests.filter((r) => r.key === 'POST /api/player-checks').length)
+      .toBe(2);
+    expect(api.last('POST /api/player-checks')?.body).toMatchObject({ productId: p660.id });
+  });
+
+  test('back after a purchase: a new buy box, never "paying" with a freed key', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Lina_99' })
+      .on('POST /api/orders', 201, order(p60))
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText('Lina_99')).toBeVisible();
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider', { name: p.slidePay }).focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+
+    await page.goBack();
+    await expect(page).toHaveURL(`/games/pubg-mobile?pack=${p60.id}`);
+    await expect(idField(page)).toHaveValue('');
+    await expect(buyBox(page).getByText(p.paying)).toHaveCount(0);
+    expect(api.requests.filter((r) => r.key === 'POST /api/orders')).toHaveLength(1);
+  });
+
+  test('leaving and coming back while paying never sends a second order', async ({ page, api }) => {
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Lina_99' })
+      .on('POST /api/orders', 201, order(p60))
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(p60))
+      .on('GET /api/catalog/search-index', 200, { games: [], products: [] });
+    let answer = () => {};
+    const held = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    await page.route('**/api/orders', async (route) => {
+      if (route.request().method() === 'POST') await held;
+      await route.fallback();
+    });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText('Lina_99')).toBeVisible();
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider', { name: p.slidePay }).focus();
+    await page.keyboard.press('End');
+    await expect(buyBox(page).getByText(p.paying)).toBeVisible();
+
+    // Away through the router and back, with the answer still on its way.
+    await page.evaluate(() =>
+      (window as unknown as { next: { router: { push(path: string): void } } }).next.router.push(
+        '/cart',
+      ),
+    );
+    await expect(page).toHaveURL('/cart');
+    await page.goBack();
+    await expect(page).toHaveURL(/\/games\/pubg-mobile/);
+
+    answer();
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    expect(api.requests.filter((r) => r.key === 'POST /api/orders')).toHaveLength(1);
+  });
+
   test('while purchases are stopped, a chosen pack says so instead of paying (BB7, A09-25)', async ({
     page,
     api,

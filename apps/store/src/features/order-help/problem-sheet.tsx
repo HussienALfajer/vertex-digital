@@ -14,7 +14,7 @@ import { Textarea } from '@vertex-digital/ui/components/textarea';
 import { LoaderCircleIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { attemptSignature } from '@/features/support/form';
 import { ImagePicker } from '@/features/support/image-picker';
@@ -23,6 +23,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { useIdempotentRequest } from '@/lib/idempotency';
+import { useShownAgain } from '@/lib/shown-again';
 import { th } from './i18n';
 import { problemLabel, problemTicket } from './problems';
 
@@ -48,6 +49,12 @@ export function ProblemSheet({
   onRefused: () => void;
 }) {
   const router = useRouter();
+  // Back on the order after the ticket opened: the sheet closes instead of showing "sending".
+  const shownAgain = useShownAgain();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closes on a re-show only.
+  useEffect(() => {
+    if (shownAgain > 0) onOpenChange(false);
+  }, [shownAgain]);
   // OP4's refund hint only names a refund that happened: an amount back and the order closed.
   const hint =
     option.hint === 'refund_returned' &&

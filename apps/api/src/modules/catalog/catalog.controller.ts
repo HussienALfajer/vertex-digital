@@ -1,5 +1,6 @@
 import { Controller, Get, Header, Param, Query, Res, SerializeOptions } from '@nestjs/common';
 import { ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   type CatalogImageQuery,
   catalogImageQuerySchema,
@@ -57,10 +58,13 @@ export class CatalogController {
 
   /**
    * Rule CT10: catalog images only, never cached as anything but immutable. S09 rule SF5: `w` is
-   * one of the store widths, the image fitted to it, never upscaled.
+   * one of the store widths, the image fitted to it, never upscaled. Out of the per-address count:
+   * one page asks for dozens, a carrier address holds many customers, and a variant is made once
+   * per image and width. nginx's `vdimage` zone still counts the address.
    */
   @Get('images/:id')
   @Public()
+  @SkipThrottle()
   @ApiProduces('image/webp')
   @ApiQueryOf(catalogImageQuerySchema)
   @ApiOkResponse({ description: 'A catalog image (WebP)' })

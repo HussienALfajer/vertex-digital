@@ -839,6 +839,29 @@ test.describe('quick buy (S22 F40)', () => {
     });
   });
 
+  test('back on the home page after paying: the sheet is gone and the cards are read again', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/quick-buy', 200, { items: [card(MINE, p660)] })
+      .on('POST /api/orders', 201, order(p660, { stage: 'processing' }))
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(p660, { stage: 'processing' }));
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await row.getByRole('button', { name: /^اشحن 660 UC/ }).click();
+    await page.getByRole('dialog').getByRole('slider', { name: p.slidePay }).focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+
+    await page.goBack();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(row.getByRole('button', { name: /^اشحن 660 UC/ })).toBeVisible();
+    expect(api.requests.filter((r) => r.key === 'GET /api/quick-buy').length).toBeGreaterThan(1);
+    expect(api.requests.filter((r) => r.key === 'POST /api/orders')).toHaveLength(1);
+  });
+
   test('a short balance in the sheet shows the gap; a card hides with an undo (BG2, QB5)', async ({
     page,
     api,

@@ -60,9 +60,10 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { trackFlight } from '@/lib/in-flight';
 import { sendAttempt } from './attempt';
 import { useBalance, usePurchasesStopped } from './customer';
-import { clearDraft, readDraft, saveDraft } from './draft';
+import { clearDraft, saveDraft, takeDraft } from './draft';
 import { FieldInput } from './field-input';
 import { checkFields, type FieldValues } from './fields';
 import { GapBlock } from './gap-block';
@@ -91,6 +92,12 @@ export type BuyBoxIntent =
   | { kind: 'link' }
   | { kind: 'edit'; lineId: string }
   | { kind: 'bundle'; lines: { product: Buyable; count: number }[] };
+
+/**
+ * What was typed on this game's page, kept by it across pack changes: the fields belong to the
+ * game, not the pack. The player check and its confirmation run again for the new pack.
+ */
+export type GameTyped = { fields: FieldValues; gift: GiftDraft; saveLabel: string };
 
 /** The fields as the server hashes them: equal keys mean the same player ID. */
 const fieldsKey = (values: Readonly<Record<string, string>>) =>
@@ -144,6 +151,7 @@ export function BuyBox({
   customer,
   initialQuantity = 1,
   intent,
+  typedOnPage,
 }: {
   game: StoreGame['game'];
   fields: StoreField[];
@@ -151,6 +159,7 @@ export function BuyBox({
   customer: Customer;
   initialQuantity?: number;
   intent?: BuyBoxIntent;
+  typedOnPage?: { current: GameTyped | null };
 }) {
   const router = useRouter();
   const signedIn = customer.status === 'signedIn' && customer.verified;
@@ -167,7 +176,9 @@ export function BuyBox({
   const stopped = usePurchasesStopped();
   const cart = useCart();
   const saved = useSavedPlayers(signedIn && fields.length > 0);
-  const [typed, setTyped] = useState<FieldValues>(editing?.fields ?? {});
+  const [typed, setTyped] = useState<FieldValues>(
+    editing?.fields ?? typedOnPage?.current?.fields ?? {},
+  );
   const [showErrors, setShowErrors] = useState<Set<string> | 'all'>(new Set());
   const [quantity, setQuantity] = useState(
     Math.min(editing?.quantity ?? initialQuantity, product.maxQuantity),
@@ -195,7 +206,10 @@ export function BuyBox({
   );
   const [save, setSave] = useState({
     on: !!editing?.savePlayer,
-    label: editing?.savePlayer?.label ?? t('purchase.save.defaultLabel'),
+    label:
+      editing?.savePlayer?.label ??
+      typedOnPage?.current?.saveLabel ??
+      t('purchase.save.defaultLabel'),
   });
   const [gift, setGift] = useState<GiftDraft>(
     editing?.gift
@@ -204,9 +218,12 @@ export function BuyBox({
           senderName: editing.gift.senderName ?? '',
           message: editing.gift.message ?? '',
         }
-      : NO_GIFT,
+      : (typedOnPage?.current?.gift ?? NO_GIFT),
   );
   const [added, setAdded] = useState<'added' | 'full' | null>(null);
+  // The cart line's edit went through; another press must not write it twice.
+  const lineSaved = useRef(false);
+  const orderPlaced = useRef(false);
   const lastBody = useRef<CreateOrder | null>(null);
   const preselected = useRef(false);
   const confirmId = useId();
@@ -215,11 +232,18 @@ export function BuyBox({
   // Rule BB3: the fields typed before signing in come back with the same pack.
   useEffect(() => {
     if (editing) return;
-    const draft = readDraft(game.slug, product.id);
+    const draft = takeDraft(game.slug, product.id);
     if (!draft) return;
     setTyped(draft.fields);
     setQuantity(Math.min(Math.max(1, draft.quantity), product.maxQuantity));
   }, [editing, game.slug, product.id, product.maxQuantity]);
+
+  useEffect(() => {
+    // Effects run again on a re-show: a paid box must not put back what its purchase cleared.
+    if (!editing && !bundle && typedOnPage && !orderPlaced.current) {
+      typedOnPage.current = { fields: typed, gift, saveLabel: save.label };
+    }
+  }, [editing, bundle, typedOnPage, typed, gift, save.label]);
 
   // A refused slide's new price stands until the page's refresh brings the product at that price,
   // with its SYP (F11-5).
@@ -470,8 +494,9 @@ export function BuyBox({
 
   /** Rules CT2, CT3: the line (or the calculator's lines) into the cart, or the edited line back. */
   async function addLines() {
+    if (lineSaved.current) return;
     const passed = await ready();
-    if (!passed || !fieldsCheck.ok) return;
+    if (!passed || !fieldsCheck.ok || lineSaved.current) return;
     const values = fieldsCheck.values;
     const { result } = passed;
     const confirmPlayer = isTrusted || (needsConfirm(result) && confirmed);
@@ -511,6 +536,7 @@ export function BuyBox({
       ...(giftValue && { gift: giftValue }),
     };
     if (editing) {
+      lineSaved.current = true;
       replaceLine(editing.id, single);
       router.push('/cart');
       return;
@@ -539,9 +565,11 @@ export function BuyBox({
     );
     if (result.ok) {
       clearDraft();
+      orderPlaced.current = true;
+      if (typedOnPage) typedOnPage.current = null;
       router.push(
         result.data.stage === 'awaiting_balance'
-          ? await gapDepositPath(result.data)
+          ? await trackFlight(gapDepositPath(result.data))
           : `/orders/${result.data.id}`,
       );
       return;

@@ -5,6 +5,7 @@ import { LifeBuoyIcon, LoaderCircleIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { t } from '@/lib/i18n';
+import { FreshOnShow } from '@/lib/shown-again';
 import { findOpenTicket } from './requests';
 
 /**
@@ -13,6 +14,14 @@ import { findOpenTicket } from './requests';
  * the press; when they cannot be, the new ticket opens (the API names an open one if any).
  */
 export function HelpButton({ link }: { link: { orderId: string } | { depositId: string } }) {
+  return (
+    <FreshOnShow>
+      <Press link={link} />
+    </FreshOnShow>
+  );
+}
+
+function Press({ link }: { link: { orderId: string } | { depositId: string } }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 

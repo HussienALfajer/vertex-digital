@@ -890,6 +890,8 @@ export const siteContentSchema = z
       z.object({ page: contentPageSchema, title: z.string(), updatedAt: z.iso.datetime() }),
     ),
     faqPublished: z.boolean(),
+    /** Rule C16: the sign-up switch, for the header in the cached HTML. */
+    registrationOpen: z.boolean(),
   })
   .meta({ id: 'SiteContent' });
 

@@ -261,6 +261,18 @@ test.describe('the point of sale (F32, PS1–PS5)', () => {
     expect(sent?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
     // The selling price was the pack's: no manual sale was written (SP4 wrote it).
     expect(api.last(`PUT /api/orders/${ORDER_ID}/sale`)).toBeUndefined();
+    // The next customer's sale never starts with this one's id, typed or restored.
+    await expect(page.locator('input[name="player_id"]')).toHaveValue('');
+    await page.reload();
+    await expect(page.locator('input[name="player_id"]')).toHaveValue('');
+  });
+
+  test('a typed player id survives a reload until the sale goes through', async ({ page, api }) => {
+    pos(api);
+    await page.goto('/merchant/pos');
+    await page.locator('input[name="player_id"]').fill('5123456789');
+    await page.reload();
+    await expect(page.locator('input[name="player_id"]')).toHaveValue('5123456789');
   });
 
   test('asks for the id first, and shows the shortcuts (PS3, PS4)', async ({ page, api }) => {
@@ -614,6 +626,44 @@ test.describe('bulk orders (F33, BK1–BK5)', () => {
       .map((request) => request.headers['idempotency-key']);
     expect(keys).toHaveLength(2);
     expect(keys[1]).toBe(keys[0]);
+  });
+
+  test('a paid list is not paid again: coming back shows a new, empty form', async ({
+    page,
+    api,
+  }) => {
+    bulk(api)
+      .on('POST /api/checkouts', 201, {
+        id: CHECKOUT_ID,
+        totalUsdUnits: 1_050_000,
+        totalSypUnits: null,
+        orders: [summary()],
+      })
+      .on('GET /api/orders', 200, {
+        items: [summary()],
+        nextCursor: null,
+        checkout: { id: CHECKOUT_ID, totalUsdUnits: 1_050_000, orderCount: 1, finishedAt: null },
+      });
+    await page.goto('/merchant/bulk');
+    await checkLines(page);
+    await page.getByRole('button', { name: tools.bulk.pay }).click();
+    await expect(page).toHaveURL(new RegExp(`/orders\\?checkout=${CHECKOUT_ID}`));
+
+    await page.goBack();
+    await expect(page).toHaveURL('/merchant/bulk');
+    const lines = page.getByRole('textbox', { name: tools.bulk.text });
+    await expect(lines).toHaveValue('');
+    await expect(page.getByRole('button', { name: tools.bulk.pay })).toHaveCount(0);
+    expect(api.requests.filter((request) => request.key === 'POST /api/checkouts')).toHaveLength(1);
+  });
+
+  test('pasted lines survive a reload until they are paid', async ({ page, api }) => {
+    bulk(api);
+    await page.goto('/merchant/bulk');
+    const lines = page.getByRole('textbox', { name: tools.bulk.text });
+    await lines.fill('7000000001,60');
+    await page.reload();
+    await expect(lines).toHaveValue('7000000001,60');
   });
 
   test('pay all names its total and waits for a top-up while the balance is short (A06-10)', async ({

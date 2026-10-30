@@ -1,5 +1,6 @@
 import type { Failure, Result } from '@/lib/api';
 import { type Attempt, afterAnswer, attemptFor } from '@/lib/idempotency';
+import { trackFlight } from '@/lib/in-flight';
 
 /*
  * The `Idempotency-Key` of a purchase attempt (S09 rule BB6), kept in this tab's session storage
@@ -12,6 +13,16 @@ import { type Attempt, afterAnswer, attemptFor } from '@/lib/idempotency';
 
 const PREFIX = 'vd:order-attempt:';
 const memory = new Map<string, Attempt>();
+
+/**
+ * How long a success answers the same body again without a request. A page can be left and come
+ * back as a new form while its write is answered and navigates (a re-show keeps a busy form, a
+ * remount cannot): a second press in that moment gets the first order, never a second one on a
+ * freed key.
+ */
+const SUCCESS_REPLAY_MS = 10_000;
+const inFlight = new Map<string, { body: string; answer: Promise<Result<unknown>> }>();
+const succeeded = new Map<string, { body: string; result: Result<unknown>; at: number }>();
 
 function load(productId: string): Attempt | null {
   let saved: { body?: unknown; key?: unknown; unsettled?: unknown } | null = null;
@@ -51,20 +62,31 @@ export async function sendAttempt<Data>(
   request: (key: string) => Promise<Result<Data>>,
   frees: (reason: Failure, unsettled: boolean) => boolean,
 ): Promise<Result<Data>> {
+  const running = inFlight.get(productId);
+  if (running?.body === body) return running.answer as Promise<Result<Data>>;
+  const done = succeeded.get(productId);
+  if (done?.body === body && Date.now() - done.at < SUCCESS_REPLAY_MS) {
+    return done.result as Result<Data>;
+  }
   const attempt = attemptFor(load(productId), body);
   // Unsettled while it is in flight: an edited body sent before this one answers keeps the key,
   // so it is refused or replayed instead of paid beside it (audit A04-1).
   save(productId, { ...attempt, unsettled: true });
-  const result = await request(attempt.key);
+  const answer = trackFlight(request(attempt.key));
+  inFlight.set(productId, { body, answer });
+  const result = await answer;
+  inFlight.delete(productId);
   save(
     productId,
     !result.ok && frees(result.reason, attempt.unsettled) ? null : afterAnswer(attempt, result),
   );
+  if (result.ok) succeeded.set(productId, { body, result, at: Date.now() });
   return result;
 }
 
 export function clearAttempt(productId: string): void {
   memory.delete(productId);
+  succeeded.delete(productId);
   try {
     sessionStorage.removeItem(PREFIX + productId);
   } catch {

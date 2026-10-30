@@ -36,7 +36,13 @@ const TELEGRAM_URL = 'https://t.me/vertex_support_test';
 /** Audit A03-7: game slugs whose read fails until `/_flaky?slug=&fail=0`; PUBG's data otherwise. */
 const failing = new Set();
 
-const NO_CONTENT = { announcement: null, banners: [], pages: [], faqPublished: false };
+const NO_CONTENT = {
+  announcement: null,
+  banners: [],
+  pages: [],
+  faqPublished: false,
+  registrationOpen: true,
+};
 const FIVE_MINUTES = 5 * 60 * 1000;
 
 /** S14 LA2–LA4: the feed, store-wide or one game's, below the minimum of 5 answering none. */

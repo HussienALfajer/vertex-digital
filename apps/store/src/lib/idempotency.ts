@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { Failure, Result } from './api';
+import { trackFlight } from './in-flight';
 
 /** An `Idempotency-Key` and the body it was last sent with. */
 export type Attempt = { key: string; body: string; unsettled: boolean };
@@ -60,7 +61,7 @@ export function createIdempotentRequest(newKey?: () => string): IdempotentReques
     const attempt = attemptFor(last, body, newKey);
     // Unsettled while in flight: an edited body sent before the answer keeps the key (A04-1).
     last = { ...attempt, unsettled: true };
-    const result = await request(attempt.key);
+    const result = await trackFlight(request(attempt.key));
     last = afterAnswer(attempt, result);
     return result;
   };

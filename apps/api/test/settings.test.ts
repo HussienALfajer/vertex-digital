@@ -1,6 +1,8 @@
+import { QUEUES } from '@vertex-digital/contracts';
 import { auditEntries, storeSwitchChanges } from '@vertex-digital/db';
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { JobsService } from '../src/core/jobs/index.js';
 import { SettingsService } from '../src/modules/settings/index.js';
 import {
   api,
@@ -258,6 +260,24 @@ describe('changing a switch (rules SW1, SW2)', () => {
       );
     expect(audits).toHaveLength(rows.length);
     await setSwitches(test.db);
+  });
+});
+
+describe('the store refresh', () => {
+  it('expires the store content when registration opens or closes (the header in cached HTML)', async () => {
+    const send = vi.spyOn(test.app.get(JobsService), 'send');
+    const refreshes = () => send.mock.calls.filter(([, queue]) => queue === QUEUES.storeRevalidate);
+    try {
+      await change({ switch: 'registration_open', value: true });
+      await change({ switch: 'registration_open', value: false });
+      expect(refreshes()).toHaveLength(2);
+      await change({ switch: 'deposits_stopped', value: true });
+      await change({ switch: 'deposits_stopped', value: false });
+      expect(refreshes()).toHaveLength(2);
+    } finally {
+      send.mockRestore();
+      await setSwitches(test.db);
+    }
   });
 });
 

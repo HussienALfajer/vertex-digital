@@ -4,9 +4,9 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { Checkbox } from '@vertex-digital/ui/components/checkbox';
 import { Sheet, SheetContent, SheetTitle } from '@vertex-digital/ui/components/sheet';
 import { LoaderCircleIcon } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useId, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { ContentDialogLink } from '@/features/content/content-dialog-link';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -14,7 +14,7 @@ import { acceptMerchantTerms, getMerchantApplication } from './requests';
 
 /**
  * S20 MT2, decision 10: the merchant terms acceptance of a directly granted merchant, as a bottom
- * sheet: the link to `/merchant-terms`, the box to tick and the acceptance of the version in force.
+ * sheet: the terms in a dialog over it, the box to tick and the acceptance of the version in force.
  * Opened from the account page's banner and by any buy action the API refused with
  * `MERCHANT_TERMS_REQUIRED`.
  */
@@ -59,14 +59,11 @@ export function TermsSheet({
         <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
           <SheetTitle className="text-lg font-bold">{t('merchant.terms.title')}</SheetTitle>
           <p className="text-base text-muted-foreground">{t('merchant.terms.body')}</p>
-          <Link
-            href="/merchant-terms"
-            target="_blank"
-            prefetch={false}
-            className="w-fit font-medium underline underline-offset-4"
-          >
-            {t('merchant.terms.read')}
-          </Link>
+          <ContentDialogLink
+            page="merchant_terms"
+            label={t('merchant.terms.read')}
+            className="min-h-11 w-fit text-start font-medium underline underline-offset-4"
+          />
           <label
             htmlFor={checkId}
             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2"

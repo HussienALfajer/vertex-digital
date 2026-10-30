@@ -142,7 +142,25 @@ test.describe('merchant accounts', () => {
     await expect(page.getByRole('img', { name: m.fields.shopPhoto })).toBeVisible();
     await page.getByRole('button', { name: m.review }).click();
     await expect(page.getByText(m.validation.terms)).toBeVisible();
+    // The terms open over the form: a link would replace it in an installed app.
+    api.on('GET /api/content/pages/merchant_terms', 200, {
+      page: 'merchant_terms',
+      title: 'شروط حساب التاجر',
+      body: 'نص الشروط.',
+      version: 1,
+      updatedAt: '2026-10-08T10:00:00.000Z',
+    });
+    await page.getByRole('button', { name: m.fields.termsLink }).click();
+    await expect(page.getByRole('dialog').getByText('نص الشروط.')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(
+      page.getByRole('checkbox', { name: new RegExp(m.fields.termsLink) }),
+    ).not.toBeChecked();
     await page.getByRole('checkbox', { name: new RegExp(m.fields.termsLink) }).check();
+    // A reload keeps the draft and its step (the browser asks first).
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.reload();
+    await expect(page.getByRole('img', { name: m.fields.shopPhoto })).toBeVisible();
     await page.getByRole('button', { name: m.review }).click();
     await expect(page.getByRole('heading', { name: m.summaryTitle })).toBeVisible();
     await screenshot(page, testInfo, 'merchant-summary');
