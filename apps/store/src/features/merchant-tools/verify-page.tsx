@@ -13,6 +13,7 @@ import { LocalTime } from '@/features/shares/local-time';
 import { t } from '@/lib/i18n';
 import { API_READ_TIMEOUT_MS, apiInternalUrl } from '@/lib/server-env';
 import { tm } from './i18n';
+import { TierLine } from './tier-parts';
 
 /*
  * The public verification page of a receipt's QR (S21 VF2, VF3), read by the store's server on
@@ -62,6 +63,8 @@ export async function VerifyPage({ params }: { params: Promise<{ code: string }>
             <p className="text-xl font-bold break-words">
               <bdi>{page.issuer.tradeName}</bdi>
             </p>
+            {/* S23 ID5: the merchant's current tier; none once revoked. */}
+            {page.issuer.tier && <TierLine tier={page.issuer.tier} />}
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <VertexMark className="w-4" />
               {tm('verify.verifiedBy')}

@@ -179,9 +179,11 @@ const print = (changes: Partial<OrderPrint> = {}): OrderPrint => ({
   quantity: 1,
   deliveredQuantity: 1,
   fields: [{ labelAr: 'معرّف اللاعب (ID)', value: '••••6789' }],
-  issuer: { kind: 'merchant', tradeName: 'محل النور للاتصالات' },
+  issuer: { kind: 'merchant', tradeName: 'محل النور للاتصالات', tier: 'silver' },
   whatsapp: '+963933123456',
   logoFileId: null,
+  welcomeText: 'أهلاً بكم في محل النور',
+  largeLogo: false,
   price: {
     kind: 'selling',
     currency: 'syp',
@@ -775,6 +777,9 @@ test.describe('the order page, printing and verification (F34, F35)', () => {
     signedIn(api).on(`GET /api/orders/${ORDER_ID}/print`, 200, print());
     await page.goto(`/orders/${ORDER_ID}/print?paper=58&content=receipt`);
     await expect(page.getByText('محل النور للاتصالات')).toBeVisible();
+    // S23 ID5, RC1: the tier's line and the welcome line under the shop's name.
+    await expect(page.getByTestId('tier-line')).toHaveText('تاجر فضي معتمد من Vertex Digital');
+    await expect(page.getByTestId('welcome-line')).toHaveText('أهلاً بكم في محل النور');
     await expect(page.getByRole('img', { name: tools.print.verify })).toBeVisible();
     await expect(page.getByText('$1.05')).toBeHidden();
     await expect(page.locator('header').first()).toBeHidden();
@@ -883,6 +888,8 @@ test.describe('receipt settings (BR3)', () => {
     showWhatsapp: false,
     whatsapp: '+963933123456',
     logoFileId: null,
+    welcomeText: null,
+    welcomeAllowed: false,
   };
 
   test('shows the WhatsApp on the preview and saves it', async ({ page, api }, testInfo) => {
@@ -899,6 +906,7 @@ test.describe('receipt settings (BR3)', () => {
       showWhatsapp: true,
       whatsapp: '+963933123456',
       logoFileId: null,
+      welcomeText: null,
     });
   });
 

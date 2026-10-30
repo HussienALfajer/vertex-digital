@@ -440,25 +440,6 @@ export async function liveLevelsOnList(db: Executor, priceListId: string): Promi
   return rows.length;
 }
 
-/** DB5: the merchant's live level by name, or null. */
-export async function merchantLevelOf(
-  db: Executor,
-  customerId: string,
-): Promise<{ id: string; nameAr: string } | null> {
-  const [row] = await db
-    .select({ id: merchantLevels.id, nameAr: merchantLevels.nameAr })
-    .from(merchantProfiles)
-    .innerJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
-    .where(
-      and(
-        eq(merchantProfiles.customerId, customerId),
-        isNull(merchantProfiles.revokedAt),
-        isNull(merchantLevels.archivedAt),
-      ),
-    );
-  return row ?? null;
-}
-
 /** LV1: every level with its list and the merchants on it, live levels first by threshold. */
 export function levelRows(db: Executor) {
   return db

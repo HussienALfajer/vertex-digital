@@ -1,4 +1,5 @@
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import { tierSummary } from './tier-fixtures';
 
 /*
  * The `test` every store spec uses: Playwright's, failing a test when the page throws, React or
@@ -137,6 +138,8 @@ export class MockApi {
         body: { application: null, canApply: false, availableAt: null, termsVersionId: null },
       },
     ],
+    // S23 ID2: the merchant area's layout reads the tier on every merchant page; Bronze here.
+    ['GET /api/merchant/tier', { status: 200, body: tierSummary() }],
     // S22 PK4: no passkey; the account page reads them once signed in.
     ['GET /api/account/passkeys', { status: 200, body: [] }],
     // S22 PK3: the sign-in page asks options for the browser's passkey suggestions.

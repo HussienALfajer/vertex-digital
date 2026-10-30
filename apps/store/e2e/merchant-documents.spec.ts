@@ -36,6 +36,8 @@ function signedIn(api: MockApi): MockApi {
 const list = (changes: Partial<MerchantPriceList> = {}): MerchantPriceList => ({
   tradeName: 'محل النور للاتصالات',
   logoFileId: null,
+  tier: 'gold',
+  largeLogo: true,
   generatedAt: '2026-10-21T09:30:00.000Z',
   mode: 'selling',
   currency: 'syp',
@@ -141,6 +143,12 @@ const statement = (changes: Partial<Statement> = {}): Statement => ({
     { kind: 'deposit', count: 1, amountUnits: 50 * USD },
     { kind: 'purchase', count: 2, amountUnits: -22_200_000 },
   ],
+  tier: {
+    tier: 'silver',
+    netPurchasesUsdUnits: 22_200_000,
+    savingsUsdUnits: 1_240_000,
+    next: { tier: 'gold', missingUsdUnits: 977_800_000 },
+  },
   ...changes,
 });
 

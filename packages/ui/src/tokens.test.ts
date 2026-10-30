@@ -10,10 +10,9 @@ const theme = readFileSync(new URL('./styles/theme.css', import.meta.url), 'utf8
 
 /** `--color-green-50: #e8fcf8;` → { 'green-50': '#e8fcf8' } */
 const themeColors = Object.fromEntries(
-  [...theme.matchAll(/--color-([a-z]+-\d+):\s*(#[0-9a-f]{6});/g)].map(([, name, hex]) => [
-    name,
-    hex,
-  ]),
+  [...theme.matchAll(/--color-([a-z]+(?:-[a-z]+)*-\d+):\s*(#[0-9a-f]{6});/g)].map(
+    ([, name, hex]) => [name, hex],
+  ),
 );
 
 /** Rows like "| 50 | `#E8FCF8` | `#FCF7E7` | ..." under a header naming the scales. */
@@ -82,6 +81,16 @@ describe('design tokens', () => {
     expect(c('neutral-500', '#ffffff')).toBeGreaterThanOrEqual(3); // input border, light
     expect(c('gold-500', 'neutral-50')).toBeGreaterThanOrEqual(3); // focus ring, light
     expect(c('gold-400', 'green-800')).toBeGreaterThanOrEqual(3); // sidebar focus and marker
+    // S23 ID1: the tier marks (≥ 3) and their text (≥ 4.5) on both surfaces.
+    for (const tier of ['tier-bronze-400', 'tier-silver-400', 'gold-400', 'tier-diamond-400']) {
+      expect(c(tier, 'green-900'), tier).toBeGreaterThanOrEqual(3);
+    }
+    for (const tier of ['tier-bronze-300', 'tier-silver-400', 'gold-400', 'tier-diamond-400']) {
+      expect(c(tier, 'green-900'), tier).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const tier of ['tier-bronze-700', 'tier-silver-700', 'gold-700', 'tier-diamond-700']) {
+      expect(c(tier, '#ffffff'), tier).toBeGreaterThanOrEqual(4.5);
+    }
     // Sand on white fails: it is never used for text or icons on light surfaces.
     expect(c('gold-400', '#ffffff')).toBeLessThan(3);
   });

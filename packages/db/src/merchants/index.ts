@@ -49,7 +49,6 @@ export {
   liveLevels,
   liveLevelsOnList,
   type MerchantLevelRow,
-  merchantLevelOf,
   monthsPurchases,
   netPurchases,
   queueAllMerchantLevels,

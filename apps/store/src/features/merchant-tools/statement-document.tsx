@@ -9,6 +9,7 @@ import {
 } from '@vertex-digital/contracts';
 import { formatDateTime } from '@/lib/format';
 import { tm } from './i18n';
+import { TierLine } from './tier-parts';
 
 const monthFormat = new Intl.DateTimeFormat('ar-SY-u-nu-latn', {
   timeZone: 'UTC',
@@ -113,6 +114,7 @@ export function StatementDocument({ statement }: { statement: Statement }) {
         <p className="text-xs text-neutral-600">
           {tm('statements.generatedAt', { time: formatDateTime(statement.generatedAt) })}
         </p>
+        {statement.tier && <TierLine tier={statement.tier.tier} print className="justify-start" />}
       </header>
       <dl className="flex max-w-md flex-col gap-1">
         <div className="flex justify-between gap-4 font-bold">
@@ -138,6 +140,7 @@ export function StatementDocument({ statement }: { statement: Statement }) {
           </dd>
         </div>
       </dl>
+      {statement.tier && <StatementTierBlock tier={statement.tier} />}
       <section className="flex flex-col gap-2">
         <h2 className="text-base font-bold">{tm('statements.entries')}</h2>
         {statement.entries.length === 0 ? (
@@ -209,5 +212,41 @@ export function StatementDocument({ statement }: { statement: Statement }) {
         )}
       </section>
     </article>
+  );
+}
+
+/**
+ * S23 ID9: "فئتك هذا الشهر": the tier held at the month's end (now for this month), the month's
+ * net purchases, the savings and what was missing to the next tier.
+ */
+function StatementTierBlock({ tier }: { tier: NonNullable<Statement['tier']> }) {
+  return (
+    <section className="flex max-w-md flex-col gap-1" data-testid="statement-tier">
+      <h2 className="text-base font-bold">{tm('tier.statement.title')}</h2>
+      <dl className="flex flex-col gap-1">
+        <div className="flex justify-between gap-4">
+          <dt>{tm('tier.statement.net')}</dt>
+          <dd>
+            <Money units={tier.netPurchasesUsdUnits} />
+          </dd>
+        </div>
+        {tier.savingsUsdUnits !== null && (
+          <div className="flex justify-between gap-4">
+            <dt>{tm('tier.statement.savings')}</dt>
+            <dd>
+              <Money units={tier.savingsUsdUnits} />
+            </dd>
+          </div>
+        )}
+        {tier.next && (
+          <div className="flex justify-between gap-4">
+            <dt>{tm('tier.statement.next', { name: tm(`tier.names.${tier.next.tier}`) })}</dt>
+            <dd>
+              <Money units={tier.next.missingUsdUnits} />
+            </dd>
+          </div>
+        )}
+      </dl>
+    </section>
   );
 }

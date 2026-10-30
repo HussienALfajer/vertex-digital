@@ -72,6 +72,7 @@ import {
   setOrderSale,
 } from './requests';
 import { SellingPriceField } from './selling-price-field';
+import { useMerchantTier } from './tier-state';
 
 // S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
 const TermsSheet = dynamic(() =>
@@ -536,7 +537,9 @@ function ConfirmSale({
 }) {
   const product = store.products.find((item) => item.id === row.productId);
   const code = product?.kind === 'code';
-  const max = code ? MERCHANT_CODE_QUANTITY_MAX : (product?.maxQuantity ?? 1);
+  // S23 TS5: a code pack takes up to the tier's units per order (the server enforces it too).
+  const unitsMax = useMerchantTier().tier?.privileges.orderUnitsMax ?? MERCHANT_CODE_QUANTITY_MAX;
+  const max = code ? unitsMax : (product?.maxQuantity ?? 1);
   const [quantity, setQuantity] = useState('1');
   const [check, setCheck] = useState<Check>({ status: code ? 'idle' : 'checking' });
   const [confirmed, setConfirmed] = useState(false);

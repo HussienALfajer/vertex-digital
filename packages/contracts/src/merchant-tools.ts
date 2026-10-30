@@ -4,7 +4,6 @@ import type { ProductKind } from './catalog.js';
 import { zoneDate, zoneDayStart, zoneMonthStart, zoneYearMonth } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING, welcomeTextSchema } from './merchant-tiers.js';
-import { merchantLevelRefSchema } from './merchants.js';
 import {
   amountUnitsSchema,
   CURRENCY_SCALE,
@@ -347,45 +346,12 @@ export const merchantDashboardSchema = z
         salesUsdUnits: amountUnitsSchema,
       }),
     ),
-    /** DB5: null when no live level exists. */
-    level: z
-      .object({
-        current: merchantLevelRefSchema.nullable(),
-        thisMonthUsdUnits: z.int(),
-        next: z
-          .object({
-            nameAr: z.string(),
-            monthlyThresholdUsdUnits: amountUnitsSchema,
-            missingUsdUnits: amountUnitsSchema,
-          })
-          .nullable(),
-      })
-      .nullable(),
     /** The empty state: neither a markup nor a product price is set. */
     sellingConfigured: z.boolean(),
   })
   .meta({ id: 'MerchantDashboard' });
 
 export type MerchantDashboard = z.infer<typeof merchantDashboardSchema>;
-
-/** DB5, LV3: the next level above what is reached and the amount missing to it, or null. */
-export function nextLevel<Level extends LevelThreshold>(
-  levels: readonly Level[],
-  reachedUsdUnits: number,
-): { level: Level; missingUsdUnits: number } | null {
-  let next: Level | null = null;
-  for (const level of levels) {
-    if (level.monthlyThresholdUsdUnits <= reachedUsdUnits) continue;
-    if (next === null || level.monthlyThresholdUsdUnits < next.monthlyThresholdUsdUnits) {
-      next = level;
-    }
-  }
-  if (next === null) return null;
-  return {
-    level: next,
-    missingUsdUnits: next.monthlyThresholdUsdUnits - Math.max(reachedUsdUnits, 0),
-  };
-}
 
 /* Follows and alerts (F37, AL1–AL7) ---------------------------------------------------------- */
 

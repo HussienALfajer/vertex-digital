@@ -4,6 +4,7 @@ import { Badge } from '@vertex-digital/ui/components/badge';
 import type { ReactNode } from 'react';
 import { accentStyle } from '@/features/catalog/game-card';
 import { tm } from '@/features/merchant-tools/i18n';
+import { TierLine } from '@/features/merchant-tools/tier-parts';
 import { LazyVerificationQr } from '@/features/orders/verification-qr-lazy';
 import { t } from '@/lib/i18n';
 import { LocalTime } from './local-time';
@@ -33,7 +34,8 @@ export function shareStageText(
  * is rendered as text (ADR 0015); IDs read left to right inside the Arabic text. A server
  * component, so the public pages ship no money code; only the times render in the browser.
  * S21 BR1: a merchant's branded receipt carries the shop's name, its WhatsApp and logo, and its
- * selling price; VF1: every receipt carries the verification QR.
+ * selling price; VF1: every receipt carries the verification QR. S23 ID5, RC1, RC2: the shop's
+ * current tier, its welcome line and the larger logo of a tier that grants them.
  */
 export function ShareCard({
   share,
@@ -65,9 +67,9 @@ export function ShareCard({
                 <img
                   src={logoUrl}
                   alt=""
-                  width={36}
-                  height={36}
-                  className="size-9 shrink-0 rounded-md bg-white object-contain grayscale"
+                  width={branding.largeLogo ? 72 : 36}
+                  height={branding.largeLogo ? 72 : 36}
+                  className={`${branding.largeLogo ? 'size-18' : 'size-9'} shrink-0 rounded-md bg-white object-contain grayscale`}
                 />
               )}
               <span className="text-base font-bold break-words">
@@ -84,6 +86,12 @@ export function ShareCard({
           )}
           <Badge tone={STAGE_TONES[share.stage]}>{shareStageText(share)}</Badge>
         </div>
+        {branding?.welcomeText && (
+          <p className="-mt-3 text-sm text-muted-foreground" data-testid="welcome-line">
+            <bdi>{branding.welcomeText}</bdi>
+          </p>
+        )}
+        {branding?.tier && <TierLine tier={branding.tier} className="-mt-3" />}
         <h2 className="text-2xl font-bold">
           {gift ? t('share.gift.title') : t('share.receipt.title')}
         </h2>

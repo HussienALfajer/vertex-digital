@@ -359,7 +359,14 @@ export function ReceiptSheet({
               priceOffered && showPrice,
               playerDisplay,
               brandedNow
-                ? { tradeName: to('share.branded'), whatsapp: null, hasLogo: false }
+                ? {
+                    tradeName: to('share.branded'),
+                    whatsapp: null,
+                    hasLogo: false,
+                    tier: null,
+                    welcomeText: null,
+                    largeLogo: false,
+                  }
                 : null,
             )}
           />

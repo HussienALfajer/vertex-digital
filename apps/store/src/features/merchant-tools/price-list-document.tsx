@@ -2,6 +2,7 @@ import { formatSyp, formatUsd, type MerchantPriceList } from '@vertex-digital/co
 import { formatDateTime } from '@/lib/format';
 import { tm } from './i18n';
 import { logoPath } from './requests';
+import { TierLine } from './tier-parts';
 
 type Row = MerchantPriceList['games'][number]['rows'][number];
 
@@ -30,7 +31,8 @@ function PriceCell({ row, currency }: { row: Row; currency: MerchantPriceList['c
  * The price list as printed (S21 PL2): the shop's name and logo, "قائمة الأسعار" with the date
  * and time and "الأسعار قابلة للتغيير", then each game's packs with their prices. Black on white
  * like every printed page (PR1); also the price list page's preview. Omitted packs are never
- * printed.
+ * printed. S23 ID6, RC2: the tier's line under the shop's name, the logo twice the size for a tier
+ * that grants it.
  */
 export function PriceListDocument({ list }: { list: MerchantPriceList }) {
   return (
@@ -43,6 +45,7 @@ export function PriceListDocument({ list }: { list: MerchantPriceList }) {
           <p className="text-xl font-bold">
             <bdi>{list.tradeName}</bdi>
           </p>
+          <TierLine tier={list.tier} print className="justify-start" />
           <p className="font-bold">
             {tm('priceList.title')} · {formatDateTime(list.generatedAt)}
           </p>
@@ -53,9 +56,9 @@ export function PriceListDocument({ list }: { list: MerchantPriceList }) {
           <img
             src={logoPath(list.logoFileId)}
             alt=""
-            width={72}
-            height={72}
-            className="size-18 object-contain"
+            width={list.largeLogo ? 144 : 72}
+            height={list.largeLogo ? 144 : 72}
+            className={`${list.largeLogo ? 'size-36' : 'size-18'} object-contain`}
           />
         )}
       </header>

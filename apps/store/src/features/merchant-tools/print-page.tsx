@@ -22,6 +22,7 @@ import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { tm } from './i18n';
 import { getOrderPrint, logoPath, releaseCodes } from './requests';
+import { TierLine } from './tier-parts';
 
 /**
  * The page rule of each paper (S21 PR1): thermal rolls are as long as the receipt, A4 is portrait
@@ -173,7 +174,7 @@ export function PrintPage() {
           {state.codes ? (
             <CodesPrint print={state.print} codes={state.codes} />
           ) : (
-            <ReceiptPrint print={state.print} />
+            <ReceiptPrint print={state.print} paper={paper} />
           )}
         </div>
       )}
@@ -181,10 +182,23 @@ export function PrintPage() {
   );
 }
 
-/** PR2: the receipt as the thermal printer or A4 prints it. Also the settings page's preview. */
-export function ReceiptPrint({ print, logoUrl }: { print: OrderPrint; logoUrl?: string | null }) {
+/**
+ * PR2: the receipt as the thermal printer or A4 prints it. Also the settings page's preview (58
+ * mm). S23 ID5, RC1, RC2: the tier's line and the welcome line under the shop's name; the logo at
+ * twice the size on 80 mm and A4 for a tier that grants it.
+ */
+export function ReceiptPrint({
+  print,
+  logoUrl,
+  paper = '58',
+}: {
+  print: OrderPrint;
+  logoUrl?: string | null;
+  paper?: PrintPaper;
+}) {
   const logo =
     logoUrl !== undefined ? logoUrl : print.logoFileId ? logoPath(print.logoFileId) : null;
+  const large = print.largeLogo && paper !== '58';
   return (
     <article className="flex flex-col gap-2 text-sm leading-snug text-neutral-950">
       <header className="flex flex-col items-center gap-1 border-b border-dashed border-neutral-950 pb-2 text-center">
@@ -193,9 +207,9 @@ export function ReceiptPrint({ print, logoUrl }: { print: OrderPrint; logoUrl?: 
           <img
             src={logo}
             alt=""
-            width={64}
-            height={64}
-            className="size-16 object-contain grayscale"
+            width={large ? 128 : 64}
+            height={large ? 128 : 64}
+            className={`${large ? 'size-32' : 'size-16'} object-contain grayscale`}
           />
         )}
         <p className="text-base font-bold">
@@ -205,6 +219,14 @@ export function ReceiptPrint({ print, logoUrl }: { print: OrderPrint; logoUrl?: 
             t('app.wordmark')
           )}
         </p>
+        {print.welcomeText && (
+          <p className="text-xs" data-testid="welcome-line">
+            <bdi>{print.welcomeText}</bdi>
+          </p>
+        )}
+        {print.issuer.kind === 'merchant' && print.issuer.tier && (
+          <TierLine tier={print.issuer.tier} print />
+        )}
         {print.whatsapp && (
           <p>
             {tm('print.whatsapp')} <bdi dir="ltr">{print.whatsapp}</bdi>

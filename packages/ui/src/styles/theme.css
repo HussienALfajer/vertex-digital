@@ -15,6 +15,20 @@
   --color-network-tron: #eb0029;
   --color-network-bnb: #f0b90b;
 
+  /*
+   * Merchant tiers (§2 "Merchant tiers", S23 ID1): quiet metals for the tier surfaces only (the
+   * badge, the tier card, the certificate and the sticker), never buttons, prices or status. The
+   * 400 step is the mark on dark surfaces, the 700 step the mark and text on light ones; Bronze's
+   * 300 step is its text on dark. Gold is the brand sand (gold-400, gold-700).
+   */
+  --color-tier-bronze-300: #c49373;
+  --color-tier-bronze-400: #b07a55;
+  --color-tier-bronze-700: #8a5a38;
+  --color-tier-silver-400: #a9b4b2;
+  --color-tier-silver-700: #5e6b69;
+  --color-tier-diamond-400: #8fd3c8;
+  --color-tier-diamond-700: #256b61;
+
   /* Tonal scales (§2). Vertex Green = green-800, Vertex Sand = gold-400. */
   --color-green-50: #e8fcf8;
   --color-green-100: #dbf3ee;
@@ -171,6 +185,16 @@
   --status-brand: var(--color-green-800);
   --status-brand-foreground: var(--color-white);
 
+  /* Merchant tiers: the mark and its text on light surfaces (≥ 4.5 on white). */
+  --tier-bronze: var(--color-tier-bronze-700);
+  --tier-bronze-text: var(--color-tier-bronze-700);
+  --tier-silver: var(--color-tier-silver-700);
+  --tier-silver-text: var(--color-tier-silver-700);
+  --tier-gold: var(--color-gold-700);
+  --tier-gold-text: var(--color-gold-700);
+  --tier-diamond: var(--color-tier-diamond-700);
+  --tier-diamond-text: var(--color-tier-diamond-700);
+
   color-scheme: light;
 }
 
@@ -223,6 +247,16 @@
   --status-brand: var(--color-green-700);
   --status-brand-foreground: var(--color-neutral-100);
 
+  /* Merchant tiers on dark surfaces: the mark ≥ 3, its text ≥ 4.5 on green-900. */
+  --tier-bronze: var(--color-tier-bronze-400);
+  --tier-bronze-text: var(--color-tier-bronze-300);
+  --tier-silver: var(--color-tier-silver-400);
+  --tier-silver-text: var(--color-tier-silver-400);
+  --tier-gold: var(--color-gold-400);
+  --tier-gold-text: var(--color-gold-400);
+  --tier-diamond: var(--color-tier-diamond-400);
+  --tier-diamond-text: var(--color-tier-diamond-400);
+
   color-scheme: dark;
 }
 
@@ -274,4 +308,13 @@
   --color-status-success-foreground: var(--status-success-foreground);
   --color-status-brand: var(--status-brand);
   --color-status-brand-foreground: var(--status-brand-foreground);
+
+  --color-tier-bronze: var(--tier-bronze);
+  --color-tier-bronze-text: var(--tier-bronze-text);
+  --color-tier-silver: var(--tier-silver);
+  --color-tier-silver-text: var(--tier-silver-text);
+  --color-tier-gold: var(--tier-gold);
+  --color-tier-gold-text: var(--tier-gold-text);
+  --color-tier-diamond: var(--tier-diamond);
+  --color-tier-diamond-text: var(--tier-diamond-text);
 }

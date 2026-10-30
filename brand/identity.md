@@ -66,6 +66,19 @@ Kept visibly distinct from the brand: success is a brighter emerald (not Vertex 
 | Accent as text | gold-300 `#C8BD9E` | gold-700 `#5D4E27` |
 | Focus ring | gold-400, 2 px, 2 px offset | gold-500 `#907F4F` |
 
+### Merchant tiers
+
+Quiet metals for the merchant tiers (S23), used only on tier surfaces: the badge, the tier card, the certificate and the shop sticker. Never on buttons, prices or status. Each tier has a different Lucide icon (Bronze `Shield`, Silver `Medal`, Gold `Crown`, Diamond `Gem`). Tier surfaces are a flat tint of the tier's mark (10% fill, 40% border), never a gradient (§9).
+
+| Tier | Mark on dark (`400`) | Text on dark | Mark and text on light (`700`) |
+|---|---|---|---|
+| Bronze (copper) | `#B07A55` | `#C49373` (`300`) | `#8A5A38` |
+| Silver (green-tinted grey) | `#A9B4B2` | `#A9B4B2` | `#5E6B69` |
+| Gold (the brand sand) | gold-400 `#B9A87A` | gold-400 | gold-700 `#5D4E27` |
+| Diamond (pale glacier green) | `#8FD3C8` | `#8FD3C8` | `#256B61` |
+
+Measured: on green-900 the dark marks are 4.06 (Bronze), 6.94, 6.30 and 8.67, Bronze's text 5.47; on white the light steps are 5.83, 5.55, 8.13 and 6.26. Generated images (the price list PNG) are dark and use the `400` marks.
+
 ### Measured contrast (WCAG 2.2)
 
 | Pair | Ratio | Verdict |

@@ -4,22 +4,23 @@ import { formatSyp, formatUsd, type MerchantDashboard } from '@vertex-digital/co
 import { Button } from '@vertex-digital/ui/components/button';
 import { Callout } from '@vertex-digital/ui/components/callout';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
-import { Meter } from '@vertex-digital/ui/components/meter';
+import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
-import { MedalIcon, PercentIcon, TrendingUpIcon } from 'lucide-react';
+import { PercentIcon, TrendingUpIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
-import { ltr } from '@/lib/format';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { getDashboard } from './requests';
+import { TierCard } from './tier-card';
+import { useMerchantTier } from './tier-state';
 
 type Period = MerchantDashboard['period'];
 
 /**
  * "لوحة التاجر" (S21 F30, DB1–DB5): today or this month in Damascus: sales at the merchant's own
  * prices, net spending, the estimated profit with the orders left without a selling price, the
- * balance, the products sold most and the level card. Read live, never cached.
+ * balance, the products sold most and the tier card (S23 ID3). Read live, never cached.
  */
 export function DashboardPage() {
   const [period, setPeriod] = useState<Period>('today');
@@ -141,7 +142,7 @@ function Dashboard({ data }: { data: MerchantDashboard }) {
             </ol>
           )}
         </Card>
-        {data.level && <LevelCard level={data.level} />}
+        <DashboardTier />
       </div>
     </div>
   );
@@ -182,46 +183,10 @@ function Figure({
   );
 }
 
-function LevelCard({ level }: { level: NonNullable<MerchantDashboard['level']> }) {
-  const reached = Math.max(level.thisMonthUsdUnits, 0);
-  return (
-    <Card data-testid="merchant-level">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <MedalIcon className="size-5" aria-hidden="true" />
-          {tm('dashboard.level')}
-        </CardTitle>
-        <CardDescription>{tm('dashboard.levelHint')}</CardDescription>
-      </CardHeader>
-      <span className="text-xl font-semibold">
-        {level.current?.nameAr ?? tm('dashboard.noLevel')}
-      </span>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{tm('dashboard.levelThisMonth')}</span>
-        <bdi dir="ltr" className="tabular-nums">
-          {formatUsd(level.thisMonthUsdUnits)}
-        </bdi>
-      </div>
-      {level.next ? (
-        <>
-          <Meter
-            aria-label={tm('dashboard.levelNext', {
-              amount: formatUsd(level.next.missingUsdUnits),
-              name: level.next.nameAr,
-            })}
-            value={Math.min(reached, level.next.monthlyThresholdUsdUnits)}
-            max={level.next.monthlyThresholdUsdUnits}
-          />
-          <span className="text-sm">
-            {tm('dashboard.levelNext', {
-              amount: ltr(formatUsd(level.next.missingUsdUnits)),
-              name: level.next.nameAr,
-            })}
-          </span>
-        </>
-      ) : (
-        <span className="text-sm text-muted-foreground">{tm('dashboard.levelTop')}</span>
-      )}
-    </Card>
-  );
+/** S23 ID3: the tier card in place of S21's level card, from the area's tier read. */
+function DashboardTier() {
+  const { tier, failed } = useMerchantTier();
+  if (failed) return null;
+  if (!tier) return <Skeleton className="h-64 w-full rounded-xl" aria-hidden="true" />;
+  return <TierCard tier={tier} />;
 }

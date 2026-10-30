@@ -2,7 +2,8 @@
   "VrfyShop0123456789abcd": {
     "issuer": {
       "kind": "merchant",
-      "tradeName": "محل النور للاتصالات"
+      "tradeName": "محل النور للاتصالات",
+      "tier": "gold"
     },
     "orderNumber": "VO-SHOP23",
     "game": {

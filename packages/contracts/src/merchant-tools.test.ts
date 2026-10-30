@@ -13,7 +13,6 @@ import {
   merchantLevelInputSchema,
   monthRange,
   monthSchema,
-  nextLevel,
   orderQuantityMax,
   parseBulkLines,
   previousMonth,
@@ -177,13 +176,6 @@ describe('levelFor (LV3)', () => {
     expect(levelFor(levels, 10 * USD, 250 * USD)?.id).toBe('gold');
     expect(levelFor([...levels].reverse(), 300 * USD, 0)?.id).toBe('gold');
     expect(levelFor(levels, -5 * USD, 60 * USD)?.id).toBe('silver');
-  });
-
-  it('names the next level and the amount missing (DB5)', () => {
-    expect(nextLevel(levels, 30 * USD)).toEqual({ level: levels[0], missingUsdUnits: 20 * USD });
-    expect(nextLevel([...levels].reverse(), 60 * USD)?.level.id).toBe('gold');
-    expect(nextLevel(levels, -10 * USD)?.missingUsdUnits).toBe(50 * USD);
-    expect(nextLevel(levels, 200 * USD)).toBeNull();
   });
 
   it('takes whole-dollar thresholds of at least $1', () => {
