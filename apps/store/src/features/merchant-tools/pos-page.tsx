@@ -336,7 +336,10 @@ function GamePanel({
 
   if (state.status === 'loading') {
     return (
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-hidden="true">
+      <div
+        className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3"
+        aria-hidden="true"
+      >
         {Array.from({ length: 8 }, (_, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed placeholders
           <Skeleton key={index} className="h-28" />
@@ -462,7 +465,7 @@ function GamePanel({
         {packs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{tm('pos.noPacks')}</p>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             {packs.map((row, index) => (
               <li key={row.productId}>
                 <button

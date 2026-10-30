@@ -165,6 +165,99 @@ test.describe('the merchant area (S21 PR 1)', () => {
     await screenshot(page, testInfo, 'merchant-dashboard-empty');
   });
 
+  for (const scheme of ['dark', 'light'] as const) {
+    test(`moves between the sections, ${scheme} theme`, async ({ page, api }, testInfo) => {
+      if (scheme === 'light') await page.addInitScript(lightTheme);
+      signedIn(api)
+        .on('GET /api/merchant/dashboard', 200, dashboard())
+        .on('GET /api/merchant/watches', 200, watches())
+        .on('GET /api/merchant/games', 200, games)
+        .on('GET /api/merchant/alert-settings', 200, settings)
+        .on('GET /api/merchant/alerts', 200, alerts);
+      await page.goto('/merchant');
+      await expect(page.getByTestId('merchant-dashboard')).toBeVisible();
+      await expect(page.getByTestId('merchant-tier')).toHaveText(tools.tier.badge.bronze);
+      const nav = page.getByRole('navigation', { name: tools.title });
+      const current = nav.locator('[aria-current="page"]');
+
+      if (testInfo.project.name === 'phone') {
+        // The sections open from a button naming the current one, over the bottom bar.
+        await expect(nav).toBeHidden();
+        const open = (section: string) =>
+          page.getByRole('button', { name: tools.nav.open.replace('{section}', section) });
+        await screenshot(page, testInfo, `merchant-nav-button-${scheme}`);
+        await open(tools.nav.dashboard).click();
+        await expect(nav).toBeVisible();
+        await expect(current).toHaveText(tools.nav.dashboard);
+        await expect(nav.getByRole('link')).toHaveCount(9);
+        await screenshot(page, testInfo, `merchant-nav-sheet-${scheme}`);
+        await nav.getByRole('link', { name: tools.nav.alerts }).click();
+        await expect(page).toHaveURL('/merchant/alerts');
+        await expect(nav).toBeHidden();
+        await expect(open(tools.nav.alerts)).toBeVisible();
+      } else {
+        await expect(current).toHaveText(tools.nav.dashboard);
+        await expect(nav.getByRole('link')).toHaveCount(9);
+        await expect(page.getByRole('complementary')).toContainText('سارة الأحمد');
+        await screenshot(page, testInfo, `merchant-sidebar-${scheme}`);
+        await nav.getByRole('link', { name: tools.nav.alerts }).click();
+        await expect(page).toHaveURL('/merchant/alerts');
+        await expect(current).toHaveText(tools.nav.alerts);
+        await expect(page.getByTestId('merchant-alerts')).toBeVisible();
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        page.viewportSize()?.width ?? 0,
+      );
+    });
+  }
+
+  test('closes the sections on Back', async ({ page, api }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone', 'the sheet is the phone pattern');
+    signedIn(api).on('GET /api/merchant/dashboard', 200, dashboard());
+    await page.goto('/');
+    await page.getByRole('button', { name: ar.header.menu }).click();
+    await page.getByRole('menuitem', { name: ar.header.merchantTools }).click();
+    await expect(page.getByTestId('merchant-dashboard')).toBeVisible();
+    await page
+      .getByRole('button', { name: tools.nav.open.replace('{section}', tools.nav.dashboard) })
+      .click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('keeps the dashboard readable beside the sidebar at its narrowest', async ({
+    page,
+    api,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the sidebar starts at this width');
+    await page.setViewportSize({ width: 1024, height: 768 });
+    signedIn(api).on(
+      'GET /api/merchant/dashboard',
+      200,
+      dashboard({ salesUsdUnits: 123_456 * USD, spendingUsdUnits: 123_456 * USD }),
+    );
+    await page.goto('/merchant');
+    await expect(page.getByTestId('merchant-dashboard')).toBeVisible();
+    await expect(page.getByRole('navigation', { name: tools.title })).toBeVisible();
+    await expect(page.getByTestId('merchant-dashboard').locator('bdi').first()).toBeVisible();
+    const fits = await page
+      .getByTestId('merchant-dashboard')
+      .locator('bdi')
+      .evaluateAll((amounts) =>
+        amounts.every((amount) => {
+          const card = amount.closest('[data-slot="card"]');
+          if (!card) return true;
+          const inner = card.getBoundingClientRect();
+          const box = amount.getBoundingClientRect();
+          return box.left >= inner.left && box.right <= inner.right;
+        }),
+      );
+    expect(fits).toBe(true);
+    await screenshot(page, testInfo, 'merchant-sidebar-1024');
+  });
+
   test('sets the markup and a pack’s own price (F31, SP1–SP3)', async ({ page, api }, testInfo) => {
     signedIn(api)
       .on('GET /api/merchant/selling-settings', 200, { markupBp: 1000, sypStepUnits: 50_000 })
