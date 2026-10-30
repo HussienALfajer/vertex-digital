@@ -1,5 +1,6 @@
 import {
   type CodeReleasePurpose,
+  type MerchantTier,
   maskFieldValue,
   type OrderPrint,
   orderTotal,
@@ -12,6 +13,7 @@ import {
 import { and, asc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
 import { newId } from '../id.js';
+import { merchantPrivileges } from '../merchants/tiers.js';
 import {
   catalogGames,
   catalogInputFields,
@@ -39,11 +41,19 @@ export interface MerchantBranding {
   /** The WhatsApp number when the merchant chose to show it. */
   whatsapp: string | null;
   logoFileId: string | null;
+  /** S23 ID5: the merchant's current effective tier; null once revoked (no tier line). */
+  tier: MerchantTier | null;
+  /** S23 RC1: the welcome line, while the current tier grants it. */
+  welcomeText: string | null;
+  /** S23 RC2: the logo at twice the size. */
+  largeLogo: boolean;
 }
 
 /**
  * BR1, VF2: the shop an order was bought for: the customer's merchant profile when the order was
  * placed while they were a merchant, with the receipt settings in force now; null otherwise.
+ * S23 ID5, RC1, RC2: the tier line, the welcome line and the logo size follow the merchant's
+ * current tier (edge case 17); a merchant revoked since shows none of them.
  */
 export async function merchantBranding(
   db: Executor,
@@ -56,6 +66,8 @@ export async function merchantBranding(
       showWhatsapp: merchantReceiptSettings.showWhatsapp,
       whatsapp: merchantReceiptSettings.whatsapp,
       logoFileId: merchantReceiptSettings.logoFileId,
+      welcomeText: merchantReceiptSettings.welcomeText,
+      revokedAt: merchantProfiles.revokedAt,
     })
     .from(merchantProfiles)
     .leftJoin(
@@ -70,10 +82,14 @@ export async function merchantBranding(
       ),
     );
   if (!row) return null;
+  const current = row.revokedAt === null ? await merchantPrivileges(db, order.customerId) : null;
   return {
     tradeName: row.tradeName,
     whatsapp: row.showWhatsapp ? row.whatsapp : null,
     logoFileId: row.logoFileId,
+    tier: current?.tier ?? null,
+    welcomeText: current?.settings.receiptWelcome ? row.welcomeText : null,
+    largeLogo: current?.settings.receiptLargeLogo ?? false,
   };
 }
 
@@ -139,7 +155,9 @@ export async function sellingPriceOf(
 }
 
 const issuerOf = (branding: MerchantBranding | null): ReceiptIssuer =>
-  branding ? { kind: 'merchant', tradeName: branding.tradeName } : { kind: 'store' };
+  branding
+    ? { kind: 'merchant', tradeName: branding.tradeName, tier: branding.tier }
+    : { kind: 'store' };
 
 /**
  * PR2, BR1 (`GET /api/orders/:id/print`): the customer's order as a printed receipt, or null when
@@ -190,6 +208,8 @@ export async function orderPrint(
     issuer: issuerOf(branding),
     whatsapp: branding?.whatsapp ?? null,
     logoFileId: branding?.logoFileId ?? null,
+    welcomeText: branding?.welcomeText ?? null,
+    largeLogo: branding?.largeLogo ?? false,
     price,
     verificationCode: order.verificationCode,
   };

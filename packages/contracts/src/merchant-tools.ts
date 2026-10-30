@@ -3,7 +3,7 @@ import { phoneSchema } from './auth.js';
 import type { ProductKind } from './catalog.js';
 import { zoneDate, zoneDayStart, zoneMonthStart, zoneYearMonth } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
-import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING } from './merchant-tiers.js';
+import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING, welcomeTextSchema } from './merchant-tiers.js';
 import { merchantLevelRefSchema } from './merchants.js';
 import {
   amountUnitsSchema,
@@ -810,6 +810,9 @@ export const receiptSettingsSchema = z
     /** E.164; the merchant application's number until the merchant changes it. */
     whatsapp: z.string().nullable(),
     logoFileId: z.uuid().nullable(),
+    /** S23 RC1: kept while the tier lacks the privilege, but printed only with it. */
+    welcomeText: z.string().nullable(),
+    welcomeAllowed: z.boolean(),
   })
   .meta({ id: 'ReceiptSettings' });
 
@@ -821,6 +824,7 @@ export const updateReceiptSettingsSchema = z
     showWhatsapp: z.boolean(),
     whatsapp: phoneSchema.nullable(),
     logoFileId: z.uuid().nullable(),
+    welcomeText: welcomeTextSchema.nullable(),
   })
   .refine((value) => !value.showWhatsapp || value.whatsapp !== null, {
     path: ['whatsapp'],

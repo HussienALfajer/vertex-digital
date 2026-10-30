@@ -53,6 +53,8 @@ export interface ReceiptSettingsRow {
   showWhatsapp: boolean;
   whatsapp: string | null;
   logoFileId: string | null;
+  /** S23 RC1. */
+  welcomeText: string | null;
 }
 
 /**
@@ -82,6 +84,7 @@ export async function receiptSettingsOf(
     showWhatsapp: row.saved?.showWhatsapp ?? false,
     whatsapp: row.saved ? row.saved.whatsapp : row.applicationWhatsapp,
     logoFileId: row.saved?.logoFileId ?? null,
+    welcomeText: row.saved?.welcomeText ?? null,
   };
 }
 

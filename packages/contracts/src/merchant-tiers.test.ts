@@ -9,13 +9,18 @@ import {
   TIER_SETTINGS_DEFAULTS,
   TIER_THRESHOLD_DEFAULTS,
   type TierLevel,
+  tierForecast,
   tierGrantInputSchema,
+  tierKeptUntil,
   tierLevelInputSchema,
   tierOf,
   tierPreviewInputSchema,
+  tierProgress,
   tierRank,
+  tierReminder,
   tierSettingsInputSchema,
   tierThresholdsRise,
+  welcomeTextSchema,
 } from './merchant-tiers.js';
 
 const USD = 1_000_000;
@@ -164,5 +169,136 @@ describe('grants (MG1)', () => {
         grants: [],
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('tierProgress (PG1)', () => {
+  it('measures this month against the next live tier above the effective one', () => {
+    expect(tierProgress(levels, 720 * USD, 'silver')).toEqual({
+      next: { tier: 'gold', thresholdUsdUnits: 1_000 * USD, missingUsdUnits: 280 * USD },
+      reachedPermille: 720,
+      keep: null,
+    });
+    expect(tierProgress(levels, -5 * USD, 'bronze')).toMatchObject({
+      next: { tier: 'silver', missingUsdUnits: 300 * USD },
+      reachedPermille: 0,
+    });
+    expect(tierProgress(levels, 2_000 * USD, 'silver').next).toMatchObject({ missingUsdUnits: 0 });
+    expect(tierProgress(levels, 2_000 * USD, 'silver').reachedPermille).toBe(1_000);
+  });
+
+  it('at the top tells what keeps it next month', () => {
+    expect(tierProgress(levels, 1_200 * USD, 'diamond')).toEqual({
+      next: null,
+      reachedPermille: 400,
+      keep: { thresholdUsdUnits: 3_000 * USD, missingUsdUnits: 1_800 * USD },
+    });
+    expect(tierProgress(levels, 4_000 * USD, 'diamond').keep?.missingUsdUnits).toBe(0);
+  });
+
+  it('has nothing to show without levels', () => {
+    expect(tierProgress([], 10 * USD, 'bronze')).toEqual({
+      next: null,
+      reachedPermille: 0,
+      keep: null,
+    });
+  });
+});
+
+describe('tierKeptUntil (TR7, PG7)', () => {
+  it('holds to the end of next month when this month reached the threshold', () => {
+    expect(tierKeptUntil(levels, 1_000 * USD, 'gold', '2026-10')).toBe('2026-11-30');
+    expect(tierKeptUntil(levels, 300 * USD, 'silver', '2026-12')).toBe('2027-01-31');
+  });
+
+  it('holds to the end of this month when only the previous month did', () => {
+    expect(tierKeptUntil(levels, 10 * USD, 'gold', '2028-02')).toBe('2028-02-29');
+  });
+
+  it('has no date for Bronze or a tier without a level', () => {
+    expect(tierKeptUntil(levels, 0, 'bronze', '2026-10')).toBeNull();
+    expect(tierKeptUntil([silver], 0, 'gold', '2026-10')).toBeNull();
+  });
+});
+
+describe('tierForecast (PG4)', () => {
+  it('waits for the 5th and a positive month', () => {
+    expect(tierForecast(500 * USD, 4, 30, 1_000 * USD)).toBeNull();
+    expect(tierForecast(0, 10, 30, 1_000 * USD)).toBeNull();
+  });
+
+  it('names the day the next threshold falls within the month', () => {
+    // $400 in 10 days: $40 a day reaches $1,000 on day 25.
+    expect(tierForecast(400 * USD, 10, 30, 1_000 * USD)).toEqual({ kind: 'reach', day: 25 });
+    // Rounded up: $300 in 10 days reaches $1,000 on day 33.3 → beyond a 31-day month.
+    expect(tierForecast(300 * USD, 10, 31, 1_000 * USD)).toEqual({
+      kind: 'total',
+      projectedUsdUnits: 930 * USD,
+    });
+  });
+
+  it('projects the month without a next threshold or when it is reached', () => {
+    expect(tierForecast(700 * USD, 7, 30, null)).toEqual({
+      kind: 'total',
+      projectedUsdUnits: 3_000 * USD,
+    });
+    expect(tierForecast(1_200 * USD, 12, 30, 1_000 * USD)).toEqual({
+      kind: 'total',
+      projectedUsdUnits: 3_000 * USD,
+    });
+  });
+});
+
+describe('tierReminder (PG3)', () => {
+  it('reminds to keep a tier the previous month carried', () => {
+    expect(tierReminder(levels, 1_100 * USD, 400 * USD, 'gold')).toEqual({
+      kind: 'keep',
+      tier: 'gold',
+      missingUsdUnits: 600 * USD,
+    });
+    expect(tierReminder(levels, 1_100 * USD, -20 * USD, 'gold')).toMatchObject({
+      missingUsdUnits: 1_000 * USD,
+    });
+  });
+
+  it('reminds to reach the next tier within 30% of its threshold', () => {
+    expect(tierReminder(levels, 0, 700 * USD, 'silver')).toEqual({
+      kind: 'reach',
+      tier: 'gold',
+      missingUsdUnits: 300 * USD,
+    });
+    expect(tierReminder(levels, 0, 699 * USD, 'silver')).toBeNull();
+  });
+
+  it('stays silent at the top and for a merchant far from Silver (edge cases 11, 12)', () => {
+    expect(tierReminder(levels, 3_500 * USD, 3_100 * USD, 'diamond')).toBeNull();
+    expect(tierReminder(levels, 0, 0, 'bronze')).toBeNull();
+    expect(tierReminder(levels, 0, 1_000 * USD, 'silver')).toBeNull();
+    expect(tierReminder([], 0, 0, 'bronze')).toBeNull();
+  });
+});
+
+describe('the welcome line (RC1)', () => {
+  it('takes 2–60 characters after trimming', () => {
+    expect(welcomeTextSchema.parse('  أهلاً بكم في متجرنا  ')).toBe('أهلاً بكم في متجرنا');
+    expect(welcomeTextSchema.safeParse('أ').success).toBe(false);
+    expect(welcomeTextSchema.safeParse('x'.repeat(61)).success).toBe(false);
+  });
+
+  it('refuses control characters, links and long digit runs', () => {
+    for (const text of [
+      'مرحبا',
+      'زورونا‏هنا',
+      'https://example.test',
+      'www.shop.test',
+      'تابعونا shop.com',
+      'راسلونا t.me/shop',
+      'اتصل 0991234567',
+      'اتصل ٠٩٩١٢٣٤٥٦٧',
+      'اتصل 099 123 45 67',
+    ]) {
+      expect(welcomeTextSchema.safeParse(text).success, text).toBe(false);
+    }
+    expect(welcomeTextSchema.safeParse('خصم 10% على 500 UC').success).toBe(true);
   });
 });

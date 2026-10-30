@@ -304,6 +304,9 @@ describe('the price list (S21 PL1–PL3)', () => {
       games: [],
       omittedCount: 1,
       tradeName: 'محل النور',
+      // S23 ID6, RC2: the header's tier line; Bronze prints the logo at its usual size.
+      tier: 'bronze',
+      largeLogo: false,
       imagePages: 1,
     });
 
@@ -382,6 +385,7 @@ interface StatementBody {
   current: boolean;
   tradeName: string;
   email: string;
+  tier: { netPurchasesUsdUnits: number } | null;
   entries: {
     kind: string;
     amountUnits: number;
@@ -410,7 +414,10 @@ describe('the statement (S21 ST1–ST3)', () => {
       current: true,
       tradeName: 'محل النور',
       email: shop.email,
+      // S23 ID9: this month's tier block (no level live here: no next tier).
+      tier: { tier: 'bronze', savingsUsdUnits: null },
     });
+    expect(statement.tier?.netPurchasesUsdUnits).toBe(-(statement.entries[1]?.amountUnits ?? 0));
     expect(statement.entries.map((entry) => entry.kind)).toEqual(['adjustment', 'purchase']);
     const paid = statement.entries[1];
     expect(paid?.order).toMatchObject({ number: order.number, fields: [{ value: '5100000077' }] });
@@ -457,6 +464,10 @@ describe('the statement (S21 ST1–ST3)', () => {
     const shopCell = workbook.getWorksheet('الملخص')?.getRow(2).getCell(2);
     expect(shopCell?.value).toBe(`'=HYPERLINK("http://x")`);
     expect(shopCell?.formula).toBeUndefined();
+    // S23 ID9: the summary's tier block.
+    const summaryText = JSON.stringify(workbook.getWorksheet('الملخص')?.getSheetValues() ?? []);
+    expect(summaryText).toContain('فئتك هذا الشهر');
+    expect(summaryText).toContain('تاجر معتمد');
     await test.db
       .update(customerRateLimits)
       .set({ count: 20 })
@@ -532,6 +543,8 @@ describe('the documents after audit A06', () => {
       tradeName: 'محل النور',
       generatedAt: new Date().toISOString(),
       currency: 'usd' as const,
+      tier: 'gold' as const,
+      largeLogo: true,
       games: [
         {
           gameId: randomUUID(),

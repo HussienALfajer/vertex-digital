@@ -20,6 +20,7 @@ import { ExpireApplicationsJob } from './jobs/merchants/expire-applications.job.
 import { MerchantLevelJob } from './jobs/merchants/level.job.js';
 import { MerchantStatementEmailsJob } from './jobs/merchants/statement-emails.job.js';
 import { MerchantTierGrantsJob } from './jobs/merchants/tier-grants.job.js';
+import { MerchantTierRemindersJob } from './jobs/merchants/tier-reminders.job.js';
 import { MerchantWatchAlertsJob } from './jobs/merchants/watch-alerts.job.js';
 import { OrdersFulfilJob } from './jobs/orders/fulfil.job.js';
 import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
@@ -123,6 +124,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     MerchantLevelJob,
     MerchantStatementEmailsJob,
     MerchantTierGrantsJob,
+    MerchantTierRemindersJob,
     MerchantWatchAlertsJob,
     ProductAlertsJob,
     SupplierRegistry,

@@ -233,6 +233,8 @@ export const merchantReceiptSettings = pgTable(
     showWhatsapp: boolean('show_whatsapp').notNull().default(false),
     whatsapp: text('whatsapp'),
     logoFileId: uuid('logo_file_id').references(() => storedFiles.id),
+    /** S23 RC1: kept while the tier lacks the privilege; printed only with it. */
+    welcomeText: text('welcome_text'),
     updatedAt: updatedAt(),
   },
   (table) => [
@@ -241,6 +243,10 @@ export const merchantReceiptSettings = pgTable(
       'merchant_receipt_settings_whatsapp_check',
       sql`(${table.whatsapp} is null or ${table.whatsapp} ~ '^[+][1-9][0-9]{6,14}$')
         and (not ${table.showWhatsapp} or ${table.whatsapp} is not null)`,
+    ),
+    check(
+      'merchant_receipt_settings_welcome_text_check',
+      sql`${table.welcomeText} is null or char_length(${table.welcomeText}) between 2 and 60`,
     ),
   ],
 );

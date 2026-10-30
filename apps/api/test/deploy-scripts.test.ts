@@ -260,6 +260,10 @@ describe('nginx (deploy/nginx)', () => {
     };
     expect(logged('/g/7Hq2mXvB0aLp')).toBe('/g/-');
     expect(logged('/v/ABCD-1234')).toBe('/v/-');
+    // S23 ID7: the certificate's page and data hide the code; the merchant area does not match.
+    expect(logged('/m/abcdefghijklmnopqrstuv')).toBe('/m/-');
+    expect(logged('/api/certificates/abcdefghijklmnopqrstuv')).toBe('/api/certificates/-');
+    expect(logged('/merchant/tier')).toBe('/merchant/tier');
     expect(logged('/api/shares/7Hq2mXvB0aLp/image')).toBe('/api/shares/-');
     expect(logged('/api/admin/customers')).toBe('/api/admin/customers');
   });

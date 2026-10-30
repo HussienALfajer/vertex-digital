@@ -333,14 +333,18 @@ describe('parseBulkLines (BK1)', () => {
 
 describe('receipt settings (BR3)', () => {
   it('needs a number to show and normalizes it', () => {
-    const shown = { showWhatsapp: true, logoFileId: null };
+    const shown = { showWhatsapp: true, logoFileId: null, welcomeText: null };
     expect(updateReceiptSettingsSchema.safeParse({ ...shown, whatsapp: null }).success).toBe(false);
     expect(updateReceiptSettingsSchema.parse({ ...shown, whatsapp: '0933 123 456' }).whatsapp).toBe(
       '+963933123456',
     );
     expect(
-      updateReceiptSettingsSchema.safeParse({ showWhatsapp: false, whatsapp: null, logoFileId: ID })
-        .success,
+      updateReceiptSettingsSchema.safeParse({
+        showWhatsapp: false,
+        whatsapp: null,
+        logoFileId: ID,
+        welcomeText: null,
+      }).success,
     ).toBe(true);
   });
 });

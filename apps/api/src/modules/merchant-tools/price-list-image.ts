@@ -7,6 +7,7 @@ import {
 } from '@vertex-digital/contracts';
 import sharp, { type OverlayOptions } from 'sharp';
 import { escapeMarkup, loadFonts, ltr, named, textBlock } from '../../core/images/pango-text.js';
+import { TIER_COLORS, tierIconSvg, tierLine } from './tier-mark.js';
 
 /*
  * The price list image for WhatsApp (S21 PL2, PL3): 1080 px wide, the brand's dark surface, the
@@ -25,6 +26,8 @@ class RenderTimeout extends Error {}
 const WIDTH = 1080;
 const MARGIN = 60;
 const LOGO_SIZE = 140;
+/** S23 ID6: the tier's icon before its line. */
+const TIER_ICON_SIZE = 30;
 const ROW_GAP = 18;
 const PRICE_WIDTH = 360;
 
@@ -65,7 +68,10 @@ function priceText(row: MerchantPriceListRow, currency: MerchantPriceList['curre
   return currency === 'both' ? `${pounds} · ${dollars}` : pounds;
 }
 
-type ListOfImage = Pick<MerchantPriceList, 'tradeName' | 'generatedAt' | 'currency' | 'games'>;
+type ListOfImage = Pick<
+  MerchantPriceList,
+  'tradeName' | 'generatedAt' | 'currency' | 'games' | 'tier' | 'largeLogo'
+>;
 
 /**
  * Renders one image of the list: `list.games` holds this page's packs only. `logo` is the stored
@@ -110,9 +116,16 @@ async function draw(
   const inner = WIDTH - MARGIN * 2;
   const text = { color: COLORS.text };
   const muted = { color: COLORS.muted };
-  const headerWidth = inner - (logo ? LOGO_SIZE + 24 : 0);
+  // S23 RC2: a tier with `receipt_large_logo` prints the logo at twice the size.
+  const logoSize = list.largeLogo ? LOGO_SIZE * 2 : LOGO_SIZE;
+  const headerWidth = inner - (logo ? logoSize + 24 : 0);
   const header = await Promise.all([
     textBlock(named(escapeMarkup(list.tradeName)), 46, headerWidth, { ...text, weight: 700 }),
+    // S23 ID6: the tier's line in its colour, its icon drawn beside it.
+    textBlock(tierLine(list.tier), 26, headerWidth - TIER_ICON_SIZE - 12, {
+      color: TIER_COLORS[list.tier],
+      weight: 700,
+    }),
     textBlock(`قائمة الأسعار · ${ltr(damascusTime(list.generatedAt))}`, 30, headerWidth, {
       color: COLORS.sand,
       weight: 700,
@@ -155,21 +168,29 @@ async function draw(
   const lines: string[] = [];
   let top = MARGIN;
   const headerTop = top;
-  for (const block of header) {
-    layers.push({ input: block.data, top, left: WIDTH - MARGIN - block.width });
+  for (const [index, block] of header.entries()) {
+    const right = index === 1 ? TIER_ICON_SIZE + 12 : 0;
+    layers.push({ input: block.data, top, left: WIDTH - MARGIN - right - block.width });
+    if (index === 1) {
+      layers.push({
+        input: tierIconSvg(list.tier, TIER_ICON_SIZE),
+        top: top + Math.max(0, Math.round((block.height - TIER_ICON_SIZE) / 2)),
+        left: WIDTH - MARGIN - TIER_ICON_SIZE,
+      });
+    }
     top += block.height + 10;
   }
   if (logo) {
     step();
     layers.push({
       input: await sharp(logo)
-        .resize(LOGO_SIZE, LOGO_SIZE, { fit: 'contain', background: COLORS.surface })
+        .resize(logoSize, logoSize, { fit: 'contain', background: COLORS.surface })
         .png()
         .toBuffer(),
       top: headerTop,
       left: MARGIN,
     });
-    top = Math.max(top, headerTop + LOGO_SIZE + 10);
+    top = Math.max(top, headerTop + logoSize + 10);
   }
   top += 20;
   for (const block of blocks) {

@@ -1131,6 +1131,7 @@
                 "merchant.level_changed",
                 "merchant.tier_granted",
                 "merchant.tier_grant_ended",
+                "merchant.certificate_reissued",
                 "merchant.logo_removed",
                 "customer.limits_changed",
                 "customer.archived",
@@ -3690,6 +3691,155 @@
         "responses": {
           "204": {
             "description": "The merchant terms in force accepted (MT2)"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/tier": {
+      "get": {
+        "operationId": "MerchantTierController_summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The tier card (ID3, PG1, PG4, PG6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantTierSummary"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/tier/table": {
+      "get": {
+        "operationId": "MerchantTierController_table",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The tier table (PG2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantTierTable"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/tier/history": {
+      "get": {
+        "operationId": "MerchantTierController_history",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The months held (PG5)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantTierHistory"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/tier/celebrated": {
+      "post": {
+        "operationId": "MerchantTierController_celebrated",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "The celebration was seen (ID4)"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/certificate": {
+      "get": {
+        "operationId": "MerchantTierController_certificate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The certificate (ID7)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantCertificate"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/certificate/reissue": {
+      "post": {
+        "operationId": "MerchantTierController_reissue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "A new code; old prints stop resolving (ID7)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantCertificate"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/certificates/{code}": {
+      "get": {
+        "operationId": "MerchantTierController_publicCertificate",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trade name, place and current tier only (ID7)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCertificate"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -14712,6 +14862,13 @@
                         "$ref": "#/components/schemas/MerchantTier"
                       }
                     ]
+                  },
+                  "privileges": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/MerchantTierPrivileges"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -14968,6 +15125,72 @@
               "event": {
                 "type": "string",
                 "enum": [
+                  "merchant_tier_reminder"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "reach",
+                      "keep"
+                    ]
+                  },
+                  "tier": {
+                    "$ref": "#/components/schemas/LevelTier"
+                  },
+                  "missingUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "month": {
+                    "$ref": "#/components/schemas/Month"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "tier",
+                  "missingUsdUnits",
+                  "month"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
                   "product_available"
                 ]
               },
@@ -15152,6 +15375,85 @@
           "diamond"
         ]
       },
+      "MerchantTierPrivileges": {
+        "type": "object",
+        "properties": {
+          "perDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "dailyDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "playerChecksPerHour": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 1000
+          },
+          "playerChecksPerDay": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 5000
+          },
+          "bulkLinesMax": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 100
+          },
+          "orderUnitsMax": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "depositPriority": {
+            "type": "boolean"
+          },
+          "supportPriority": {
+            "type": "boolean"
+          },
+          "supportReplyMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 1440
+          },
+          "directContact": {
+            "type": "boolean"
+          },
+          "earlyAccess": {
+            "type": "boolean"
+          },
+          "fastAlerts": {
+            "type": "boolean"
+          },
+          "receiptWelcome": {
+            "type": "boolean"
+          },
+          "receiptLargeLogo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "perDepositUsdUnits",
+          "dailyDepositUsdUnits",
+          "playerChecksPerHour",
+          "playerChecksPerDay",
+          "bulkLinesMax",
+          "orderUnitsMax",
+          "depositPriority",
+          "supportPriority",
+          "supportReplyMinutes",
+          "directContact",
+          "earlyAccess",
+          "fastAlerts",
+          "receiptWelcome",
+          "receiptLargeLogo"
+        ],
+        "additionalProperties": false
+      },
       "MerchantAlertKind": {
         "type": "string",
         "enum": [
@@ -15164,6 +15466,14 @@
       "Month": {
         "type": "string",
         "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+      },
+      "LevelTier": {
+        "type": "string",
+        "enum": [
+          "silver",
+          "gold",
+          "diamond"
+        ]
       },
       "MarkNotificationsRead": {
         "type": "object",
@@ -15224,6 +15534,7 @@
               "merchant_watch_digest",
               "merchant_low_balance",
               "merchant_statement_ready",
+              "merchant_tier_reminder",
               "product_available",
               "product_price_dropped"
             ]
@@ -15257,6 +15568,7 @@
               "merchant_watch_digest",
               "merchant_low_balance",
               "merchant_statement_ready",
+              "merchant_tier_reminder",
               "product_available",
               "product_price_dropped"
             ]
@@ -15334,6 +15646,7 @@
           "merchant_watch_digest",
           "merchant_low_balance",
           "merchant_statement_ready",
+          "merchant_tier_reminder",
           "product_available",
           "product_price_dropped"
         ]
@@ -16299,6 +16612,7 @@
           "merchant.level_changed",
           "merchant.tier_granted",
           "merchant.tier_grant_ended",
+          "merchant.certificate_reissued",
           "merchant.logo_removed",
           "customer.limits_changed",
           "customer.archived",
@@ -20741,14 +21055,6 @@
         ],
         "additionalProperties": false
       },
-      "LevelTier": {
-        "type": "string",
-        "enum": [
-          "silver",
-          "gold",
-          "diamond"
-        ]
-      },
       "MerchantTierGrantEndReason": {
         "type": "string",
         "enum": [
@@ -21530,6 +21836,383 @@
         },
         "required": [
           "versionId"
+        ]
+      },
+      "MerchantTierSummary": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "$ref": "#/components/schemas/MerchantTier"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "keptUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "month": {
+            "type": "string"
+          },
+          "thisMonthUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "next": {
+                "nullable": true,
+                "type": "object",
+                "properties": {
+                  "tier": {
+                    "$ref": "#/components/schemas/LevelTier"
+                  },
+                  "thresholdUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "missingUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "tier",
+                  "thresholdUsdUnits",
+                  "missingUsdUnits"
+                ],
+                "additionalProperties": false
+              },
+              "reachedPermille": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "keep": {
+                "nullable": true,
+                "type": "object",
+                "properties": {
+                  "thresholdUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "missingUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "thresholdUsdUnits",
+                  "missingUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "next",
+              "reachedPermille",
+              "keep"
+            ],
+            "additionalProperties": false
+          },
+          "forecast": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "reach"
+                    ]
+                  },
+                  "day": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  }
+                },
+                "required": [
+                  "kind",
+                  "day"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "total"
+                    ]
+                  },
+                  "projectedUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "kind",
+                  "projectedUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "savingsUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "privileges": {
+            "$ref": "#/components/schemas/MerchantTierPrivileges"
+          },
+          "celebrate": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tier",
+          "since",
+          "keptUntil",
+          "month",
+          "thisMonthUsdUnits",
+          "progress",
+          "forecast",
+          "savingsUsdUnits",
+          "privileges",
+          "celebrate"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantTierTable": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/MerchantTier"
+          },
+          "packs": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "gameNameAr",
+                "nameAr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tier": {
+                  "$ref": "#/components/schemas/MerchantTier"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "thresholdUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "privileges": {
+                  "$ref": "#/components/schemas/MerchantTierPrivileges"
+                },
+                "prices": {
+                  "type": "array",
+                  "items": {
+                    "nullable": true,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              "required": [
+                "tier",
+                "available",
+                "thresholdUsdUnits",
+                "privileges",
+                "prices"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "current",
+          "packs",
+          "tiers"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantTierHistory": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string"
+                },
+                "netPurchasesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "tier": {
+                  "$ref": "#/components/schemas/MerchantTier"
+                },
+                "current": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "month",
+                "netPurchasesUsdUnits",
+                "tier",
+                "current"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantCertificate": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{22}$"
+          },
+          "tradeName": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/MerchantTier"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "reissuedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "code",
+          "tradeName",
+          "city",
+          "governorate",
+          "tier",
+          "since",
+          "reissuedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PublicCertificate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active"
+                ]
+              },
+              "tradeName": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string"
+              },
+              "governorate": {
+                "$ref": "#/components/schemas/Governorate"
+              },
+              "tier": {
+                "$ref": "#/components/schemas/MerchantTier"
+              },
+              "since": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "status",
+              "tradeName",
+              "city",
+              "governorate",
+              "tier",
+              "since"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "revoked"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
         ]
       },
       "MerchantApplicationListQuery": {
@@ -23709,13 +24392,22 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "welcomeText": {
+            "nullable": true,
+            "type": "string"
+          },
+          "welcomeAllowed": {
+            "type": "boolean"
           }
         },
         "required": [
           "tradeName",
           "showWhatsapp",
           "whatsapp",
-          "logoFileId"
+          "logoFileId",
+          "welcomeText",
+          "welcomeAllowed"
         ],
         "additionalProperties": false
       },
@@ -23735,12 +24427,19 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "welcomeText": {
+            "nullable": true,
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
           }
         },
         "required": [
           "showWhatsapp",
           "whatsapp",
-          "logoFileId"
+          "logoFileId",
+          "welcomeText"
         ]
       },
       "UploadedLogo": {
@@ -23855,6 +24554,12 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "tier": {
+            "$ref": "#/components/schemas/MerchantTier"
+          },
+          "largeLogo": {
+            "type": "boolean"
+          },
           "generatedAt": {
             "type": "string",
             "format": "date-time",
@@ -23904,6 +24609,8 @@
         "required": [
           "tradeName",
           "logoFileId",
+          "tier",
+          "largeLogo",
           "generatedAt",
           "mode",
           "currency",
@@ -24044,6 +24751,14 @@
             "items": {
               "$ref": "#/components/schemas/StatementTotal"
             }
+          },
+          "tier": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatementTier"
+              }
+            ]
           }
         },
         "required": [
@@ -24055,7 +24770,8 @@
           "openingUsdUnits",
           "closingUsdUnits",
           "entries",
-          "totals"
+          "totals",
+          "tier"
         ],
         "additionalProperties": false
       },
@@ -24257,6 +24973,51 @@
           "kind",
           "count",
           "amountUnits"
+        ],
+        "additionalProperties": false
+      },
+      "StatementTier": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "$ref": "#/components/schemas/MerchantTier"
+          },
+          "netPurchasesUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "savingsUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "next": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "tier": {
+                "$ref": "#/components/schemas/LevelTier"
+              },
+              "missingUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "tier",
+              "missingUsdUnits"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "tier",
+          "netPurchasesUsdUnits",
+          "savingsUsdUnits",
+          "next"
         ],
         "additionalProperties": false
       },
@@ -26049,6 +26810,13 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "welcomeText": {
+            "nullable": true,
+            "type": "string"
+          },
+          "largeLogo": {
+            "type": "boolean"
+          },
           "price": {
             "nullable": true,
             "type": "object",
@@ -26102,6 +26870,8 @@
           "issuer",
           "whatsapp",
           "logoFileId",
+          "welcomeText",
+          "largeLogo",
           "price",
           "verificationCode"
         ],
@@ -26145,11 +26915,20 @@
               },
               "tradeName": {
                 "type": "string"
+              },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
               }
             },
             "required": [
               "kind",
-              "tradeName"
+              "tradeName",
+              "tier"
             ],
             "additionalProperties": false
           }
@@ -29100,12 +29879,30 @@
               },
               "hasLogo": {
                 "type": "boolean"
+              },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
+              },
+              "welcomeText": {
+                "nullable": true,
+                "type": "string"
+              },
+              "largeLogo": {
+                "type": "boolean"
               }
             },
             "required": [
               "tradeName",
               "whatsapp",
-              "hasLogo"
+              "hasLogo",
+              "tier",
+              "welcomeText",
+              "largeLogo"
             ],
             "additionalProperties": false
           },

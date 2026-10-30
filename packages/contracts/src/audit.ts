@@ -413,6 +413,8 @@ export const AUDIT_DETAILS = {
     tier: levelTierSchema,
     endReason: tierGrantEndReasonSchema,
   }),
+  /** S23 ID7: the merchant reissued the certificate code (old prints stop resolving). */
+  'merchant.certificate_reissued': z.strictObject({}),
   /** S21 BR3: the admin removed a merchant's receipt logo, with the reason. */
   'merchant.logo_removed': z.strictObject({ fileId: z.uuid(), reason: z.string() }),
   /** S12 LM5. */

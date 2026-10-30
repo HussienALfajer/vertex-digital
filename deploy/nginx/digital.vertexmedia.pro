@@ -134,6 +134,14 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Merchant certificate data (S23 ID7), public: on top of the API's 60 a minute per address.
+    location ~* ^/api/certificates/ {
+        limit_req zone=vdcertificate burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Direct buy link targets (S22 DL2), public: on top of the API's 60 a minute per address.
     location ~* ^/api/q/ {
         limit_req zone=vdquick burst=10 nodelay;
@@ -296,6 +304,15 @@ server {
     # the visitor's address and redirects to the pack.
     location ~ ^/q/ {
         limit_req zone=vdquick burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3061;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # The public page of a merchant certificate's QR (S23 ID7): rendered per request by the store,
+    # which reads /api/certificates/ with the visitor's address; `noindex`.
+    location ~ ^/m/ {
+        limit_req zone=vdcertificate burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3061;
         include snippets/vertexdigital-proxy.conf;

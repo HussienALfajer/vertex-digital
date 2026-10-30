@@ -12,6 +12,7 @@ import {
   type RefundReason,
   type StorePlacedPurpose,
   TIER_NAMES_AR,
+  type TierPrivileges,
 } from '@vertex-digital/contracts';
 
 /*
@@ -67,6 +68,20 @@ const PDI = '\u2069';
 const latin = (value: string) => `${LRI}${value}${PDI}`;
 const named = (value: string) => `${FSI}${value}${PDI}`;
 const usd = (units: number) => latin(formatUsd(units));
+
+/**
+ * S23 ID4: what a tier grants, in the email of a tier change: the deposit limits, the bulk lines
+ * and codes per order, and the receipt's welcome line and larger logo.
+ */
+function tierGrantLines(privileges: TierPrivileges): string[] {
+  const lines = [
+    `حد الإيداع ${usd(privileges.perDepositUsdUnits)} للمرة الواحدة و${usd(privileges.dailyDepositUsdUnits)} خلال 24 ساعة.`,
+    `حتى ${latin(String(privileges.bulkLinesMax))} سطراً في الطلب الجماعي و${latin(String(privileges.orderUnitsMax))} كوداً في الطلب الواحد.`,
+  ];
+  if (privileges.receiptWelcome) lines.push('سطر ترحيب باسم محلك على إيصالاتك.');
+  if (privileges.receiptLargeLogo) lines.push('شعار محلك بحجم أكبر على الإيصالات وقائمة الأسعار.');
+  return lines;
+}
 
 const IGNORE = 'إذا لم تطلب هذا، تجاهل هذه الرسالة؛ لن يتغير شيء في حسابك.';
 const NOT_YOU = 'إذا لم تكن أنت، غيّر كلمة المرور فورًا من صفحة الحساب أو من «نسيت كلمة المرور».';
@@ -408,7 +423,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: { label: 'عرض حسابي', path: '/account' },
   }),
-  customer_merchant_level_changed: ({ levelNameAr, priceKind, direction, tier }) => {
+  customer_merchant_level_changed: ({ levelNameAr, priceKind, direction, tier, privileges }) => {
     const kind = `تظهر لك ${PRICE_KIND_LABELS[priceKind]} في صفحات الألعاب من الآن.`;
     const link = { label: 'لوحة التاجر', path: '/merchant' };
     // S23 TR6: the tier; a notification written before S23 carries only the level's name.
@@ -419,6 +434,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
         lines: [
           direction === 'up' ? `ارتقت فئة حسابك إلى ${name}.` : `أصبحت فئة حسابك ${name}.`,
           kind,
+          ...(privileges ? ['ما تمنحك إياه فئتك:', ...tierGrantLines(privileges)] : []),
         ],
         link,
       };
@@ -453,6 +469,26 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: { label: 'عرض كشف الحساب', path: `/merchant/statements/${month}` },
   }),
+  customer_merchant_tier_reminder: ({ kind, tier, missingUsdUnits }) => {
+    const name = named(`الفئة ال${TIER_NAMES_AR[tier]}ة`);
+    return kind === 'reach'
+      ? {
+          subject: `أنت قريب من ${name}`,
+          lines: [
+            `ينقصك ${usd(missingUsdUnits)} من المشتريات لتصل إلى ${name} قبل نهاية الشهر.`,
+            'تحسب المشتريات الصافية من محفظتك بعد الاستردادات.',
+          ],
+          link: { label: 'فئتك', path: '/merchant/tier' },
+        }
+      : {
+          subject: `حافظ على ${name} الشهر القادم`,
+          lines: [
+            `اشترِ بـ ${usd(missingUsdUnits)} قبل نهاية الشهر لتحتفظ بـ${name} في الشهر القادم.`,
+            'تحسب المشتريات الصافية من محفظتك بعد الاستردادات.',
+          ],
+          link: { label: 'فئتك', path: '/merchant/tier' },
+        };
+  },
   customer_merchant_daily_digest: ({ total, lines }) => ({
     subject: 'ملخص تغيّرات الباقات التي تتابعها',
     lines: [

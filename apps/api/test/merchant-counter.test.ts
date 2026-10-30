@@ -486,7 +486,7 @@ describe('selling price, print and verification (S21 SP5, PR2, VF1–VF3, BR1, B
       200,
     );
     expect(print).toMatchObject({
-      issuer: { kind: 'merchant', tradeName: 'محل النور' },
+      issuer: { kind: 'merchant', tradeName: 'محل النور', tier: 'bronze' },
       price: { kind: 'selling', currency: 'syp', unitAmountUnits: 15_000_00 },
       fields: [{ labelAr: 'المعرف', value: '••••6789' }],
       verificationCode: order.verificationCode,
@@ -500,7 +500,7 @@ describe('selling price, print and verification (S21 SP5, PR2, VF1–VF3, BR1, B
       200,
     );
     expect(page).toMatchObject({
-      issuer: { kind: 'merchant', tradeName: 'محل النور' },
+      issuer: { kind: 'merchant', tradeName: 'محل النور', tier: 'bronze' },
       orderNumber: order.number,
       stage: expect.any(String),
     });
@@ -588,13 +588,21 @@ describe('receipt settings and the logo (S21 BR3)', () => {
     const shop = await merchant(0);
     expect(
       await json(await client.get('/api/merchant/receipt-settings', { cookie: shop.cookie }), 200),
-    ).toEqual({ tradeName: 'محل النور', showWhatsapp: false, whatsapp: null, logoFileId: null });
+    ).toEqual({
+      tradeName: 'محل النور',
+      showWhatsapp: false,
+      whatsapp: null,
+      logoFileId: null,
+      welcomeText: null,
+      welcomeAllowed: false,
+    });
     expect(
       await json(
         await send('PUT', '/api/merchant/receipt-settings', shop.cookie, {
           showWhatsapp: true,
           whatsapp: null,
           logoFileId: null,
+          welcomeText: null,
         }),
         400,
       ),
@@ -616,6 +624,7 @@ describe('receipt settings and the logo (S21 BR3)', () => {
         showWhatsapp: true,
         whatsapp: '0933 123 456',
         logoFileId: uploaded.fileId,
+        welcomeText: null,
       }),
       200,
     );
@@ -624,6 +633,8 @@ describe('receipt settings and the logo (S21 BR3)', () => {
       showWhatsapp: true,
       whatsapp: '+963933123456',
       logoFileId: uploaded.fileId,
+      welcomeText: null,
+      welcomeAllowed: false,
     });
     const logo = await client.get(`/api/merchant/logo/${uploaded.fileId}`, { cookie: shop.cookie });
     expect(logo.status).toBe(200);
@@ -638,6 +649,7 @@ describe('receipt settings and the logo (S21 BR3)', () => {
           showWhatsapp: false,
           whatsapp: null,
           logoFileId: uploaded.fileId,
+          welcomeText: null,
         }),
         400,
       ),
@@ -1097,6 +1109,7 @@ describe('the counter tools after audit A06', () => {
           showWhatsapp: true,
           whatsapp: '0933 123 456',
           logoFileId: null,
+          welcomeText: null,
         }),
         200,
       );
@@ -1121,6 +1134,8 @@ describe('the counter tools after audit A06', () => {
       showWhatsapp: true,
       whatsapp: '+963933123456',
       logoFileId: uploaded.fileId,
+      welcomeText: null,
+      welcomeAllowed: false,
     });
   });
 });

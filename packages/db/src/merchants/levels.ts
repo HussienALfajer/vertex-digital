@@ -34,7 +34,14 @@ import {
   priceLists,
 } from '../schema/index.js';
 import { queueTelegramMessage } from '../telegram/queue-telegram-message.js';
-import { levelTier, liveTierLevels, openTierGrant, recordTierChange } from './tiers.js';
+import {
+  currentTierSettings,
+  levelTier,
+  liveTierLevels,
+  openTierGrant,
+  recordTierChange,
+  tierPrivileges,
+} from './tiers.js';
 
 /*
  * Volume levels (S21 F39, LV1–LV7, ADR 0036): a merchant's level follows their net wallet purchases
@@ -255,6 +262,8 @@ export async function recomputeMerchantLevel(
   }
 
   const levelChanged = levelIdAfter !== profile.levelId;
+  const tierBefore = levelTier(before);
+  const tierAfter = tierOf(effective.level);
   await tx
     .update(merchantProfiles)
     .set({
@@ -262,12 +271,14 @@ export async function recomputeMerchantLevel(
       earnedLevelId: earnedLevelIdAfter,
       levelSource: effective.source,
       ...(levelChanged ? { levelChangedAt: context.now } : {}),
+      // ID4: the celebration is due after a rise, and no longer after a fall.
+      ...(tierBefore !== tierAfter
+        ? { celebratePending: merchant && tierRank(tierAfter) > tierRank(tierBefore) }
+        : {}),
     })
     .where(eq(merchantProfiles.customerId, customerId));
   const listBefore = effectivePriceListId({ ...customer, levelListId: before?.priceListId });
   const listChanged = listBefore !== listAfter;
-  const tierBefore = levelTier(before);
-  const tierAfter = tierOf(effective.level);
   await recordAudit(tx, {
     action: 'merchant.level_changed',
     actorKind: 'system',
@@ -314,6 +325,8 @@ export async function recomputeMerchantLevel(
           ),
           direction: tierRank(tierAfter) > tierRank(tierBefore) ? 'up' : 'down',
           tier: tierAfter,
+          // ID4: what the new tier grants.
+          privileges: tierPrivileges((await currentTierSettings(tx))[tierAfter]),
         },
       });
       if (isImportantTierChange(tierBefore, tierAfter)) {

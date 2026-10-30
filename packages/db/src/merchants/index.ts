@@ -31,6 +31,18 @@ export {
   remindEndingTierGrants,
 } from './grants.js';
 export {
+  certificateByCode,
+  clearCelebration,
+  reissueCertificate,
+  sendTierReminder,
+  tierMonthOf,
+  tierMonthRows,
+  tierProfileOf,
+  tierReminderMerchants,
+  tierSavings,
+  tierTablePacks,
+} from './identity.js';
+export {
   type LevelChange,
   levelListId,
   levelRows,
@@ -73,5 +85,6 @@ export {
   tierListRefs,
   tierMerchantCounts,
   tierMerchants,
+  tierPrivileges,
   tierQuantities,
 } from './tiers.js';

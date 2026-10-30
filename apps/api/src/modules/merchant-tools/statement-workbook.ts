@@ -7,6 +7,7 @@ import {
   type Statement,
   type StatementEntry,
   type StatementOrder,
+  TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 import ExcelJS from 'exceljs';
 
@@ -131,6 +132,16 @@ export async function statementWorkbook(statement: Statement): Promise<Buffer> {
     line(`${KIND_LABELS[total.kind]} (${total.count})`, usd(total.amountUnits), true);
   }
   line('الرصيد الختامي', usd(statement.closingUsdUnits), true);
+  // S23 ID9: the tier held that month.
+  if (statement.tier) {
+    const { tier, netPurchasesUsdUnits, savingsUsdUnits, next } = statement.tier;
+    summary.addRow([]);
+    summary.addRow(['فئتك هذا الشهر']).font = { bold: true };
+    line('الفئة', tier === 'bronze' ? 'تاجر معتمد' : `تاجر ${TIER_NAMES_AR[tier]} معتمد`);
+    line('صافي المشتريات', usd(netPurchasesUsdUnits), true);
+    if (savingsUsdUnits !== null) line('وفّرت فئتك', usd(savingsUsdUnits), true);
+    if (next) line(`الباقي للفئة ال${TIER_NAMES_AR[next.tier]}ة`, usd(next.missingUsdUnits), true);
+  }
 
   const entries = workbook.addWorksheet('الحركات', { views: [{ rightToLeft: true }] });
   entries.columns = [

@@ -45,6 +45,7 @@ import {
   tierListRefs,
   tierMerchantCounts,
   tierMerchants,
+  tierPrivileges,
   usableList,
 } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
@@ -257,7 +258,7 @@ export class MerchantTiersService {
         entityId: id,
         ipAddress: actor.meta.ipAddress,
         userAgent: actor.meta.userAgent,
-        details: { tier, before: settingsValues(before), after: input },
+        details: { tier, before: tierPrivileges(before), after: input },
       });
     });
     return this.view(tier);
@@ -407,27 +408,8 @@ function adminActor(actor: MerchantActor): AdminActor {
   };
 }
 
-function settingsValues(row: TierSettingsRow): TierSettingsInput {
-  return {
-    perDepositUsdUnits: row.perDepositUsdUnits,
-    dailyDepositUsdUnits: row.dailyDepositUsdUnits,
-    playerChecksPerHour: row.playerChecksPerHour,
-    playerChecksPerDay: row.playerChecksPerDay,
-    bulkLinesMax: row.bulkLinesMax,
-    orderUnitsMax: row.orderUnitsMax,
-    depositPriority: row.depositPriority,
-    supportPriority: row.supportPriority,
-    supportReplyMinutes: row.supportReplyMinutes,
-    directContact: row.directContact,
-    earlyAccess: row.earlyAccess,
-    fastAlerts: row.fastAlerts,
-    receiptWelcome: row.receiptWelcome,
-    receiptLargeLogo: row.receiptLargeLogo,
-  };
-}
-
 function settingsView(row: TierSettingsRow): MerchantTierView['settings'] {
-  return { ...settingsValues(row), updatedAt: row.createdAt.toISOString() };
+  return { ...tierPrivileges(row), updatedAt: row.createdAt.toISOString() };
 }
 
 export function grantView(row: TierGrantRow): TierGrant {

@@ -1,39 +1,33 @@
-# TASKS — S23 Merchant tiers, PR 1 "Tiers and prices" (`docs/specs/S23-merchant-tiers.md`)
+# TASKS — S23 Merchant tiers, PR 2 "Identity and progress" (`docs/specs/S23-merchant-tiers.md`)
 
-Spec PR 1 (decisions 1–5, 9, 10, 13, 14) is split in two PRs so neither is half-wired: 1a the server side, 1b the panel. PR 2 (identity and progress) and PR 3 (operations and reports) follow in their own sessions.
+PR 1a (#230) and PR 1b (#231) are merged. Spec PR 2 (decisions 6–8: ID1–ID9, PG1–PG7, RC1–RC2) ships as one PR (owner, 2026-10-30), server and store together, on `feat/s23-identity`. PR 3 (operations and reports) follows in its own session.
 
-PR 1a merged (#230). PR 1b on `feat/s23-panel`.
+## PR 2 — identity and progress
 
-Owner decision (2026-10-29), not applied yet: PX3's half-step minimum margins are whole cents, rounded up: Silver $0.05 (was $0.045), Diamond $0.04 (was $0.035); Gold stays $0.04. Apply it in `TIER_RULE_DEFAULTS.half` (`packages/contracts/src/merchant-tiers.ts`) and in the spec's PX3 table, with a line naming the six production slugs read on 2026-10-29: `games`, `game-cards` (global rule), `apps`, `subscriptions` (half step), `gift-cards`, `shopping` (no step).
+### Server (contracts, db, api, worker)
 
-## PR 1a — tiers, prices and privileges on the server (contracts, db, api, worker)
+- [x] contracts: `tierProgress`, `tierKeptUntil`, `tierForecast`, `tierReminder`, `welcomeTextSchema` (RC1) with unit tests at 100%; merchant tier summary, table, history, certificate and public certificate schemas (`.meta({ id })`); `CERTIFICATE_REISSUE_LIMIT` with its Arabic text; audit action `merchant.certificate_reissued`; notification event `merchant_tier_reminder` (center, email, push) and its preference; job `merchants.tier-reminders` (the 25th 10:00 Damascus); `merchant_level_changed` payload with what the tier grants
+- [x] db (`/db-migration`): `merchant_profiles.celebrate_pending`, `certificate_code` (22 base64url chars, unique, backfilled), `certificate_reissued_at`; `merchant_receipt_settings.welcome_text`; TR6 sets `celebrate_pending` on a rise and the grant writes the certificate code; tests
+- [x] api merchant routes: `GET /api/merchant/tier` (since, kept-until, progress, forecast, savings PG6, privileges incl. `orderUnitsMax` and `bulkLinesMax`; never the source), `GET /api/merchant/tier/table` (three packs' prices per tier, PG2), `GET /api/merchant/tier/history`, `POST /api/merchant/tier/celebrated`, `GET /api/merchant/certificate`, `POST /api/merchant/certificate/reissue` (3 a day, audited); `PUT /api/merchant/receipt-settings` with `welcomeText` (kept, printed only with `receipt_welcome`)
+- [x] api public: `GET /api/certificates/:code` (60/min per IP, cached 30 s, revoked, unknown → `NOT_FOUND`, no personal data) and its nginx zone `vdcertificate` in `deploy/` (`/api/certificates/` and `/m/`, codes masked in the access log)
+- [x] api identity data: the tier line on the receipt and branded receipt link and the verification page (ID5, current tier, none when revoked), the welcome line and large-logo flag on receipt data (RC1, RC2); the price list header and the PNG badge with the tier colour (ID6, RC2); the statement's "فئتك هذا الشهر" block and the Excel "الملخص" sheet (ID9)
+- [x] worker: `merchants.tier-reminders` (push without the amount, PT2) (PG3, dedupe `tier-reminder:<customer>:<month>`, preference, frozen skipped), email and push texts for `merchant_tier_reminder`; `merchant_level_changed` texts name what the tier grants; tests run twice
+- [x] tests per endpoint (success, 401, `NOT_MERCHANT`, other merchants, frozen on writes), reissue limit, certificate page cases, savings and progress cases
+- [x] bridge: `pnpm build`, OpenAPI export, admin client regenerated
 
-- [x] contracts: `merchant-tiers.ts` (`MERCHANT_TIERS`, `LEVEL_TIERS`, `TIER_NAMES_AR`, `tierRank`, `higherTier`, `effectiveLevel`, `parentCappedPrice`, tier settings and grant schemas, tiers page and preview schemas with `.meta({ id })`), `MERCHANT_LEVELS_MAX = 3`, `TIER_QUANTITY_CEILING`, `PRICE_SOURCES` + `parent_cap`, `listPrice` with the parent cap, error codes (`MERCHANT_TIER_*`) with their Arabic texts, audit actions (`merchant_tier.*`, `merchant.tier_granted`, `merchant.tier_grant_ended`), jobs (`merchants.tier-grants`), Telegram events (`merchant_tier_changed`, `merchant_tier_grant_ending`, the summary line), `merchant_level_changed` payload with the tier; unit tests at 100%
-- [x] db (`/db-migration`): `merchant_tier` enum, `merchant_levels.tier` (live levels archived first, unique among live), `merchant_tier_settings` seeded (Bronze copied from `merchant_settings`), `merchant_profiles` (`earned_level_id`, `level_source`), `merchant_tier_grants` with its guard and one-open index, append-only `merchant_tier_changes` and `merchant_tier_months`, `product_prices.source` + `parent_cap`, widened checks (`orders.quantity`, `checkouts.line_count` to 100); `TABLE_OWNERS`; tests
-- [x] db write paths: TR6 recomputation in `packages/db/src/merchants/levels.ts` (earned + effective level, change row, celebrate flag, notification, Telegram alert); repricing parents before children with the parent cap (`packages/db/src/pricing`); concurrency tests (TR6 with a purchase, parent cap under concurrent rule edits)
-- [x] apply the owner's rounding decision above, rebuild contracts, rerun `pnpm verify apps/api/test/merchant-tiers.test.ts` (the setup test fails on `margin_rules_min_margin_check` until then)
-- [x] api: tiers routes replacing `/api/admin/merchant-levels` (`GET /api/admin/merchant-tiers`, `PUT …/:tier/level`, `PUT …/:tier/settings`, `POST …/preview`), grants (`POST /api/admin/customers/:id/merchant/tier-grant` and `/end`), merchant settings with the Diamond contact, revocation ending grants (TR9), MG7, the merchants list and profile with the tier and filter; privileges per tier (deposit limits TS3, player-check quota TS4, code quantity and bulk lines TS5); price kind (PX6); `merchants:setup-tiers` command (PX1) and `pnpm db:seed-local` running it; tests per endpoint and rule
-- [x] worker: `merchants.level` passes the payload's `cause` to `recomputeMerchantLevel`; `merchants.level-schedule` recomputes each merchant then writes `recordTierMonth` for the month just ended; new `merchants.tier-grants` job every 10 minutes (`dueTierGrants` → `expireTierGrant` one per transaction, `remindEndingTierGrants`), registered in `worker.module.ts`; Telegram texts for `merchant_tier_changed`, `merchant_tier_grant_ending` and the summary line "فئات التجار: n تغيّرت اليوم" (counted from `merchant_tier_changes`); email and push texts of `merchant_level_changed` name the tier; tests (each job run twice). Was: `merchants.level` with TR6, `merchants.level-schedule` writing `merchant_tier_months`, `merchants.tier-grants` (MG4, MG5), Telegram texts (TR8, MG5, daily summary line); tests run twice
-- [x] bridge: `pnpm build`, OpenAPI export and admin client regenerated; the admin's S21 levels page removed (route, navigation, queries, i18n, E2E mock and spec for `/api/admin/merchant-levels`; the tiers page comes in PR 1b), route tree regenerated, admin typecheck
-- [x] reviewer (`docs/specs/S23-merchant-tiers.md`): fixed the 50-unit request cap (orders, releases, resolve, fulfil up to 100), the month row written before the recomputation, the setup refusing a same-named list off the chain, the Bronze seed's hourly checks clamped, and tests for TS3–TS5, MG7, edge case 9 and access
-- [x] full `pnpm verify` again after the review fixes (pass, 2026-10-29: lint, typecheck, test, build, 340 admin E2E, migration and OpenAPI drift); the db test "gives every order a fixed verification code … (VF1–VF3)" in `packages/db/src/orders/orders.test.ts` passes when its file runs alone (148/148): nothing to fix
-- [x] docs: AGENTS.md commands table (`merchants:setup-tiers`), `docs/architecture.md` ownership (merchants owns the four tier tables), `apps/api/CLAUDE.md` and `packages/db/CLAUDE.md` notes (tiers, grants, parent cap, setup), ROADMAP line
-- [x] note in the PR: migration 0104's SQL was rewritten to the generator's output without the early `merchant_levels_tier_check` (moved to 0105 after the archive; owner approved deleting the first generation); `pnpm db:generate` reports no drift
-- [x] checks, reviewer, PR and merge (#230)
+### Store
 
-Before the S23 deploy (from the reviewer, not confirmed here): read production's newest `merchant_settings` row and whether lists named "الفضية", "الذهبية" or "الماسية" exist; time `PUT /api/admin/merchant-tiers/:tier/level` (it reprices every routed product in one request) against the 15 s lock timeout on the production catalog; a grant racing the archive of its tier can stay open without effect (single admin, not blocking).
-
-## PR 1b — the panel (admin)
-
-- [x] contracts and api: the merchant settings lose the deposit and check fields (input, view, audit; the retired columns keep their last values on each new version); the tiers list carries the deposit minimum for the settings dialog; OpenAPI and the admin client regenerated
-- [x] admin: tiers page `/merchants/tiers` (navigation item): four cards with threshold, list, merchants earned and granted, privileges, the chain gap and an archived list; threshold and list dialog, settings dialog (deposit minimum checked in place), stop a tier; threshold preview side panel with counts and movers
-- [x] admin: merchants list tier column with "ممنوحة" and the tier filter in the URL (`tier`); customer profile tier card (effective, earned, source, since), "منح فئة" and "إنهاء المنح" dialogs (re-authentication), grant history; the limit source names the tier (TS3); the pricing chip names the tier; Settings → merchants keeps the order rate, reapply wait and information expiry with a link to the tiers page
-- [x] i18n keys (tiers, grants, preview, limit source); loading, empty and error states
-- [x] e2e: `merchant-tiers.spec.ts` (tiers page, preview, grant and end, filter; RTL screenshots light and dark), `merchants.spec.ts` adapted; mocks script tiers, grants and the preview
-- [x] browser check on the local stack (acceptance 1 and 5): tiers page on the seeded chain, preview with a mover, Diamond granted for 2 days and ended, both `merchant_tier_changed` Telegram messages queued (skipped: no linked chat locally), phone width without overflow; the seed's snapshot copy fixed (a margin rule keeps its fixed columns, guard 0099)
-- [x] checks, reviewer, PR and merge (`pnpm verify` 2026-10-30: lint, typecheck, test, build, 344 admin E2E, migration and OpenAPI drift; the db reconciliation C9 test timed out once under the parallel run and passes alone, 10/10; reviewer: no blocking issues)
+- [ ] tier colour tokens in `brand/identity.md` and the UI tokens, measured for contrast (ID1); `TierBadge` in `packages/ui`
+- [ ] header and account menu badge (ID2); dashboard tier card replacing the level card (ID3) with progress bar (PG1), keep line, savings
+- [ ] celebration sheet (ID4, reduced motion)
+- [ ] tier page `/merchant/tier` (PG2 table, forecast PG4, history PG5; the Diamond contact comes in PR 3)
+- [ ] certificate print `/merchant/certificate/print` and public page `/m/[code]` (ID7, `noindex`), reissue action; sticker canvas PNG square and story with QR and Web Share (ID8)
+- [ ] receipts and verification badge line (ID5), welcome line and larger logo (RC1, RC2); receipt settings welcome field with counter and preview, disabled below Silver; statement tier block (ID9)
+- [ ] code-quantity input and bulk lines read `orderUnitsMax` and `bulkLinesMax` from `GET /api/merchant/tier` (moved from PR 1b)
+- [ ] i18n keys, loading, empty and error states
+- [ ] e2e: tier flow spec with mocks; RTL screenshots phone width dark and light (header badge per tier, tier card, celebration, tier page, receipt and verification, certificate print and page, receipt settings)
+- [ ] browser check (acceptance 2–4), checks, reviewer, PR and merge
 
 ## Moved to later PRs (spec delivery plan)
 
-- PR 2: the store's code-quantity input (POS) reads the tier's `orderUnitsMax` from `GET /api/merchant/tier` (today 50 in the browser, the server enforces the tier; moved from PR 1b, which adds no customer route); `celebrate_pending`, `certificate_code`, `certificate_reissued_at` (identity); the notification's "what it grants".
-- PR 3: the Diamond contact columns of `merchant_settings` (decision 12).
+- PR 3: deposit and ticket queue priority, reply promise and overdue job, the Diamond contact columns of `merchant_settings` (decision 12) and their panel fields, early access with its end job and notification, faster alerts, best-sellers helper, the report by tier.

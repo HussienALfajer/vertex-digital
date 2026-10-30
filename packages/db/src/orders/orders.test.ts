@@ -57,6 +57,7 @@ import {
   grantTier,
   remindEndingTierGrants,
 } from '../merchants/grants.js';
+import { tierSavings } from '../merchants/identity.js';
 import { netPurchases, recomputeMerchantLevel, recordTierMonth } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
@@ -4345,6 +4346,30 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     expect(kept.status).toBe('paid');
   });
 
+  it("counts what a tier's list saved on the orders delivered this month (S23 PG6)", async () => {
+    await archiveLevels();
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(20));
+    try {
+      await level(usd(1), cost);
+      const bronze = await wholesalePrice(item.id);
+      await buy(request(shop, { id: item.id, price: bronze }));
+      await recompute(shop);
+      const month = damascusMonth(new Date());
+      // Bought at wholesale and not delivered: nothing saved.
+      expect(await tierSavings(db, shop, month)).toBe(0);
+      const tierPrice = await listPriceOf(item.id, cost);
+      expect(tierPrice).toBeLessThan(bronze);
+      const { order } = await buy(request(shop, { id: item.id, price: tierPrice }));
+      expect(await tierSavings(db, shop, month)).toBe(0);
+      await apply(await send(order, item), { status: 'delivered', quantity: order.quantity });
+      expect(await tierSavings(db, shop, month)).toBe(bronze - tierPrice);
+      expect(await tierSavings(db, shop, previousMonth(month))).toBe(0);
+    } finally {
+      await archiveLevels();
+    }
+  });
+
   it('moves a merchant to the level their month reached, below an assigned list (LV3–LV5)', async () => {
     await archiveLevels();
     const item = await product({ cost: usd(1) });
@@ -4370,7 +4395,13 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       expect(await recompute(shop)).toEqual({ changed: false });
       // S23 PX6: a tier list reads as wholesale, with the tier.
       expect(await notifications(shop, 'merchant_level_changed')).toEqual([
-        { levelNameAr: 'فضي', priceKind: 'wholesale', direction: 'up', tier: 'silver' },
+        {
+          levelNameAr: 'فضي',
+          priceKind: 'wholesale',
+          direction: 'up',
+          tier: 'silver',
+          privileges: expect.objectContaining({ receiptWelcome: true, bulkLinesMax: 50 }),
+        },
       ]);
       const { rows: audits } = await pool.query(
         `select actor_kind, details from audit_entries
@@ -4432,6 +4463,12 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
           [shop],
         )
       ).rows[0];
+    const celebration = async (shop: string) =>
+      (
+        await pool.query('select celebrate_pending from merchant_profiles where customer_id = $1', [
+          shop,
+        ])
+      ).rows[0]?.celebrate_pending;
     const changes = async (shop: string) =>
       (
         await pool.query(
@@ -4467,6 +4504,13 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
           level_id: gold,
           earned_level_id: null,
           level_source: 'granted',
+        });
+        // ID4: the rise makes the celebration due; the notice says what Gold grants.
+        expect(await celebration(shop)).toBe(true);
+        expect((await notifications(shop, 'merchant_level_changed')).at(-1)).toMatchObject({
+          tier: 'gold',
+          direction: 'up',
+          privileges: { bulkLinesMax: 100, receiptLargeLogo: true },
         });
         expect((await accountPriceList(db, shop))?.effectiveList.id).toBe(retail);
         await expect(grant(shop, 'gold')).rejects.toMatchObject({
@@ -4510,6 +4554,8 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
           tier: 'silver',
           direction: 'down',
         });
+        // A fall clears a celebration the merchant never saw.
+        expect(await celebration(shop)).toBe(false);
         // Not above the earned Silver now (MG1).
         await expect(grant(shop, 'silver')).rejects.toMatchObject({
           code: 'MERCHANT_TIER_GRANT_NOT_HIGHER',
@@ -4532,6 +4578,27 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       } finally {
         await archiveLevels();
       }
+    });
+
+    it('gives every profile its own certificate code (ID7)', async () => {
+      const [one, two] = [await merchant(usd(1)), await merchant(usd(1))];
+      const { rows } = await pool.query(
+        `select certificate_code, celebrate_pending, certificate_reissued_at from merchant_profiles
+         where customer_id = any($1) order by customer_id`,
+        [[one, two]],
+      );
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.certificate_code).toMatch(/^[A-Za-z0-9_-]{22}$/);
+        expect(row).toMatchObject({ celebrate_pending: false, certificate_reissued_at: null });
+      }
+      expect(rows[0].certificate_code).not.toBe(rows[1].certificate_code);
+      await expect(
+        pool.query('update merchant_profiles set certificate_code = $1 where customer_id = $2', [
+          rows[0].certificate_code,
+          two,
+        ]),
+      ).rejects.toThrow(/merchant_profiles_certificate_code_unique/);
     });
 
     it('reminds once, then expires a grant at its end, idempotently (MG4, MG5)', async () => {
@@ -5057,7 +5124,7 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
 
     const page = await publicVerification(db, order.verificationCode);
     expect(page).toMatchObject({
-      issuer: { kind: 'merchant', tradeName: 'محل النور' },
+      issuer: { kind: 'merchant', tradeName: 'محل النور', tier: 'bronze' },
       orderNumber: order.number,
       stage: 'processing',
       deliveredAt: null,
@@ -5082,6 +5149,25 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       unitAmountUnits: item.price,
     });
     expect(await orderPrint(db, buyer, order.id)).toBeNull();
+
+    // S23 RC1, RC2: Bronze keeps a welcome line but prints it only from a tier that grants it.
+    await pool.query(
+      `insert into merchant_receipt_settings (customer_id, welcome_text) values ($1, 'أهلاً بكم')`,
+      [shop],
+    );
+    expect(await orderPrint(db, shop, order.id)).toMatchObject({
+      welcomeText: null,
+      largeLogo: false,
+    });
+    // ID5: a merchant revoked since shows the shop without a tier line.
+    await pool.query('update merchant_profiles set revoked_at = now() where customer_id = $1', [
+      shop,
+    ]);
+    expect((await publicVerification(db, order.verificationCode))?.issuer).toEqual({
+      kind: 'merchant',
+      tradeName: 'محل النور',
+      tier: null,
+    });
   });
 
   it('lists the 20 newest distinct ids of a game with their checked name (PS2)', async () => {

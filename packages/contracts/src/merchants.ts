@@ -627,3 +627,51 @@ export interface MerchantDepositTier {
   perDepositUsdUnits: number;
   dailyDepositUsdUnits: number;
 }
+
+/* Certificate (ID7) -------------------------------------------------------------------------- */
+
+/** ID7: a certificate code, 22 base64url characters (16 CSPRNG bytes). */
+export const certificateCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+
+/** ID7: the merchant reissues the code at most 3 times a day. */
+export const CERTIFICATE_REISSUES_PER_DAY = 3;
+
+/** ID7: the path of a certificate's public page, which its QR and the sticker carry. */
+export function certificatePath(code: string): string {
+  return `/m/${code}`;
+}
+
+/** `GET /api/merchant/certificate` · `POST /api/merchant/certificate/reissue` (ID7). */
+export const merchantCertificateSchema = z
+  .object({
+    code: certificateCodeSchema,
+    tradeName: z.string(),
+    city: z.string(),
+    governorate: governorateSchema,
+    tier: merchantTierSchema,
+    since: z.iso.datetime(),
+    reissuedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'MerchantCertificate' });
+
+export type MerchantCertificate = z.infer<typeof merchantCertificateSchema>;
+
+/**
+ * `GET /api/certificates/:code` (ID7): the trade name, place and current tier only; never a phone,
+ * address, price or email. A revoked merchant shows nothing but that.
+ */
+export const publicCertificateSchema = z
+  .discriminatedUnion('status', [
+    z.object({
+      status: z.literal('active'),
+      tradeName: z.string(),
+      city: z.string(),
+      governorate: governorateSchema,
+      tier: merchantTierSchema,
+      since: z.iso.datetime(),
+    }),
+    z.object({ status: z.literal('revoked') }),
+  ])
+  .meta({ id: 'PublicCertificate' });
+
+export type PublicCertificate = z.infer<typeof publicCertificateSchema>;
