@@ -27,7 +27,7 @@ import { tierBadgeLabel } from './tier-parts';
 
 /*
  * The merchant's tier across the merchant area (S23 ID2, ID4): read once in the browser by the
- * area's layout, shown as the badge beside the area's title, and given to the tier card and the
+ * area's layout, shown as the badge beside the area's sections, and given to the tier card and the
  * tier page. A failed read shows no badge (the pages show their own state); a newer read replaces
  * the shown one only.
  */
@@ -80,7 +80,7 @@ export function MerchantTierProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** ID2: the badge beside the merchant area's title; a placeholder while it loads. */
+/** ID2: the badge beside the merchant area's sections; a placeholder while it loads. */
 export function MerchantTierBadge() {
   const { tier, failed } = useMerchantTier();
   if (failed) return null;

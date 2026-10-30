@@ -231,6 +231,19 @@ function pos(api: MockApi): MockApi {
 }
 
 test.describe('the point of sale (F32, PS1–PS5)', () => {
+  test('keeps its pack tiles wide beside the sidebar', async ({ page, api }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the sidebar starts at this width');
+    pos(api);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto('/merchant/pos');
+    const tile = page.getByRole('button', { name: /60 UC/ });
+    await expect(tile).toBeVisible();
+    expect((await tile.boundingBox())?.width).toBeGreaterThan(160);
+    await page.setViewportSize({ width: 1280, height: 768 });
+    expect((await tile.boundingBox())?.width).toBeGreaterThan(150);
+    await screenshot(page, testInfo, 'merchant-pos-sidebar');
+  });
+
   test('fills a recent id, picks a pack by its number and sells it', async ({
     page,
     api,
