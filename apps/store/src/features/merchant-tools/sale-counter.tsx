@@ -1,8 +1,8 @@
 'use client';
 
 import {
+  type CreateOrder,
   displaySypTotal,
-  formatAmountInput,
   formatSyp,
   formatUsd,
   MERCHANT_CODE_QUANTITY_MAX,
@@ -10,8 +10,8 @@ import {
   orderTotal,
   type PlayerCheck,
   type RecentPlayers,
-  type SaleCurrency,
   type SavedPlayer,
+  type SellingPriceInput,
   type SellingPriceRow,
   type StoreGame,
   type StoreProduct,
@@ -23,7 +23,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@vertex-digital/ui/components/dialog';
@@ -35,18 +34,20 @@ import {
 } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
+import { SlideToPay } from '@vertex-digital/ui/components/slide-to-pay';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   EyeIcon,
   EyeOffIcon,
   KeyboardIcon,
+  LoaderCircleIcon,
   PrinterIcon,
   TicketIcon,
   UserRoundCheckIcon,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { readCustomerPrices } from '@/features/catalog/customer-prices';
 import { PackButton } from '@/features/catalog/pack-button';
@@ -60,14 +61,14 @@ import { FieldInput } from '@/features/purchase/field-input';
 import { checkFields, type FieldValues } from '@/features/purchase/fields';
 import { freesKey } from '@/features/purchase/order-key';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
-import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
+import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { parseSellingPrice } from './form';
+import { manualSalePrice, type SalePriceDraft, salePriceStart } from './form';
 import { tm } from './i18n';
 import { getRecentPlayers, getSavedPlayers, getSellingPrices, setOrderSale } from './requests';
-import { type Amount, type SalePrice, saleFigures } from './sale-figures';
+import { type SalePrice, saleFigures } from './sale-figures';
 import { toggleCostHidden, useCostHidden } from './sale-mode';
 import { SellingPriceField } from './selling-price-field';
 import { MerchantTierProvider, useMerchantTier } from './tier-state';
@@ -163,7 +164,7 @@ function Counter({
         <Button
           variant="ghost"
           size="xl"
-          className="hidden md:inline-flex"
+          className="hidden md:inline-flex pointer-coarse:hidden"
           onClick={() => setHelp(true)}
         >
           <KeyboardIcon aria-hidden="true" />
@@ -193,7 +194,7 @@ function Counter({
                 ['/', 'search'],
                 ['1–9', 'pack'],
                 ['F2', 'player'],
-                ['Enter', 'confirm'],
+                ['End', 'confirm'],
                 ['Esc', 'close'],
                 ['P', 'print'],
                 ['H', 'hideCost'],
@@ -256,26 +257,55 @@ async function readGame(store: StoreGame): Promise<GameState> {
   };
 }
 
-const amountText = ({ currency, units }: Amount) =>
-  currency === 'syp' ? tm('common.syp', { amount: formatSyp(units) }) : formatUsd(units);
+const sypText = (units: number) => tm('common.syp', { amount: formatSyp(units) });
 
-/** A price with its equivalent after "≈" (brand/identity.md §6: the rate is not locked here). */
+const sign = (units: number) => (units > 0 ? '+' : units < 0 ? '-' : '');
+
+/**
+ * PS1a: "ربحك +$0.47 ≈ 70 ل.س", USD alone without a SYP figure; the two halves each kept whole, so
+ * a narrow card breaks the line at "≈" only.
+ */
+function Profit({ profit }: { profit: SalePrice }) {
+  const usd = ltr(`${sign(profit.usdUnits)}${formatUsd(Math.abs(profit.usdUnits))}`);
+  return (
+    <>
+      <span className="whitespace-nowrap">{tm('sale.profit', { amount: usd })}</span>
+      {profit.sypUnits !== null && (
+        <span className="whitespace-nowrap">
+          {tm('common.approx', {
+            amount: tm('common.syp', {
+              // "+$0.47 ≈ 70 ل.س": only a loss signs its pounds.
+              amount: ltr(
+                `${profit.sypUnits < 0 ? '-' : ''}${formatSyp(Math.abs(profit.sypUnits))}`,
+              ),
+            }),
+          })}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * A price in USD with its SYP after "≈" (brand/identity.md §6: the rate is not locked here); USD
+ * leads, "$5.08 ≈ 730 ل.س" (owner, 2026-10-30).
+ */
 function PriceLine({ price, large }: { price: SalePrice; large?: boolean }) {
   return (
     <span className={`flex flex-wrap items-baseline gap-x-1.5 ${large ? '' : 'text-xs'}`}>
-      <bdi className={`tabular-nums ${large ? 'text-xl font-bold' : ''}`}>
-        {amountText(price.main)}
+      <bdi dir="ltr" className={`tabular-nums ${large ? 'text-xl font-bold' : 'font-medium'}`}>
+        {formatUsd(price.usdUnits)}
       </bdi>
-      {price.approx && (
+      {price.sypUnits !== null && (
         <span className="text-xs text-muted-foreground tabular-nums">
-          {tm('common.approx', { amount: amountText(price.approx) })}
+          {tm('common.approx', { amount: sypText(price.sypUnits) })}
         </span>
       )}
     </span>
   );
 }
 
-/** PS3, PS6: what a pack shows in the sale mode; with the cost hidden, the selling price alone. */
+/** PS1a, PS1b: what a pack shows in the sale mode; with the cost hidden, the selling price alone. */
 function SaleCard({
   row,
   number,
@@ -283,7 +313,8 @@ function SaleCard({
   hideCost,
 }: {
   row: SellingPriceRow;
-  number: number;
+  /** Its shortcut (`1`–`9`), for the first nine available packs only. */
+  number: number | null;
   purchaseSyp: number | null;
   hideCost: boolean;
 }) {
@@ -292,8 +323,12 @@ function SaleCard({
     <>
       <span className="flex w-full items-start justify-between gap-2">
         <bdi className="font-bold break-words">{row.nameAr}</bdi>
-        {number <= 9 && (
-          <kbd className="rounded border border-border px-1.5 tabular-nums text-xs" dir="ltr">
+        {number !== null && (
+          // No shortcut numbers where there is no keyboard (owner, 2026-10-30).
+          <kbd
+            className="rounded border border-border px-1.5 text-xs tabular-nums pointer-coarse:hidden"
+            dir="ltr"
+          >
             {number}
           </kbd>
         )}
@@ -316,15 +351,13 @@ function SaleCard({
               </span>
               {profit && (
                 <Badge
-                  tone={profit.units > 0 ? 'success' : profit.units < 0 ? 'danger' : 'neutral'}
-                  className="mt-auto self-start"
+                  tone={
+                    profit.usdUnits > 0 ? 'success' : profit.usdUnits < 0 ? 'danger' : 'neutral'
+                  }
+                  // Two currencies may not fit a phone's narrow card on one line.
+                  className="mt-auto h-auto min-h-6 flex-wrap gap-x-1 self-start py-0.5 whitespace-normal"
                 >
-                  {tm('sale.profit', {
-                    amount: `${profit.units > 0 ? '+' : profit.units < 0 ? '-' : ''}${amountText({
-                      ...profit,
-                      units: Math.abs(profit.units),
-                    })}`,
-                  })}
+                  <Profit profit={profit} />
                 </Badge>
               )}
               {row.belowCost && (
@@ -343,6 +376,10 @@ function SaleCard({
     </>
   );
 }
+
+/** Available packs first, in the store's order; unavailable ones last (owner, 2026-10-30). */
+const availableFirst = (rows: readonly SellingPriceRow[]) =>
+  [...rows].sort((a, b) => Number(b.available) - Number(a.available));
 
 /** PS1–PS3: the game's packs, the player fields and the confirmation. */
 function GamePanel({
@@ -390,10 +427,17 @@ function GamePanel({
   );
   const packs = useMemo(
     () =>
-      (ready?.prices ?? []).filter(
-        (row) => query.trim() === '' || row.nameAr.includes(query.trim()),
+      availableFirst(
+        (ready?.prices ?? []).filter(
+          (row) => query.trim() === '' || row.nameAr.includes(query.trim()),
+        ),
       ),
     [ready, query],
+  );
+  // `1`–`9` reach the first nine packs that can be sold now, never an unavailable one.
+  const numbered = useMemo(
+    () => (frozen ? [] : packs.filter((row) => row.available).slice(0, 9)),
+    [packs, frozen],
   );
   // One object while the typed values stay the same: the sheet checks the player again only
   // when they change, never on a re-render (audit A06-6, BK4's quota).
@@ -443,7 +487,7 @@ function GamePanel({
         event.stopPropagation();
         searchRef.current?.focus();
       } else if (/^[1-9]$/.test(event.key)) {
-        const row = packs[Number(event.key) - 1];
+        const row = numbered[Number(event.key) - 1];
         if (row) {
           event.preventDefault();
           open(row);
@@ -452,7 +496,7 @@ function GamePanel({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [packs, open, chosen, paused]);
+  }, [numbered, open, chosen, paused]);
 
   if (state.status === 'loading') {
     return (
@@ -555,7 +599,7 @@ function GamePanel({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <span className="hidden shrink-0 text-xs text-muted-foreground md:inline">
+          <span className="hidden shrink-0 text-xs text-muted-foreground md:inline pointer-coarse:hidden">
             {tm('sale.searchHint')}
           </span>
         </div>
@@ -581,8 +625,11 @@ function GamePanel({
         {packs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{tm('sale.noPacks')}</p>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
-            {packs.map((row, index) => (
+          <ul
+            className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3"
+            data-testid="sale-packs"
+          >
+            {packs.map((row) => (
               <li key={row.productId}>
                 <PackButton
                   available={!frozen && row.available}
@@ -591,7 +638,7 @@ function GamePanel({
                 >
                   <SaleCard
                     row={row}
-                    number={index + 1}
+                    number={numbered.includes(row) ? numbered.indexOf(row) + 1 : null}
                     purchaseSyp={data.purchaseSyp.get(row.productId) ?? null}
                     hideCost={hideCost}
                   />
@@ -610,6 +657,7 @@ function GamePanel({
             gameName={game.nameAr}
             purchaseSyp={data.purchaseSyp.get(chosen.productId) ?? null}
             hideCost={hideCost}
+            blocked={frozen}
             fields={fields}
             onPlaced={(placed) => {
               clearFormDraft(`sale-price:${chosen.productId}`);
@@ -633,13 +681,26 @@ type Check = { status: 'idle' } | { status: 'checking' } | { status: 'done'; che
 /** A placed sale, and whether the selling price typed in the sheet was written (A06-7). */
 type Notice = { id: string; number: string; saleSaved: boolean };
 
-/** PS3: the pack, quantity, id with its check, the price paid, the editable selling price. */
+/** The confirmation's sending state, as the buy box's (S09 BB5, BB6). */
+type Sending =
+  | { status: 'idle' }
+  | { status: 'sending' }
+  | { status: 'failed'; message: string; retry: boolean };
+
+/**
+ * PS3: the pack, quantity, id with its check, the price paid and the editable selling price, then
+ * the slide (owner, 2026-10-30: `SlideToPay` as the buy box, `End` or the arrows from the
+ * keyboard). The slide stays disabled while the id is checked, until an unfound or unchecked id is
+ * confirmed, and while the account is frozen or purchases are stopped. Every attempt goes through
+ * `sendAttempt` with the buy box's key rule; a refusal remounts the slide (`key`).
+ */
 function ConfirmSale({
   row,
   products,
   gameName,
   purchaseSyp,
   hideCost,
+  blocked,
   fields,
   onPlaced,
   onPriceChanged,
@@ -649,8 +710,10 @@ function ConfirmSale({
   gameName: string;
   /** The pack's purchase price in SYP at `row.purchaseUsdUnits`; null when not known. */
   purchaseSyp: number | null;
-  /** PS6: the customer may see the screen, so no price paid here either. */
+  /** PS1b: the customer may see the screen, so no price paid here either. */
   hideCost: boolean;
+  /** Frozen, or purchases stopped since the sheet opened. */
+  blocked: boolean;
   fields: FieldValues;
   onPlaced: (placed: Notice) => void;
   onPriceChanged: () => void;
@@ -663,27 +726,17 @@ function ConfirmSale({
   const [quantity, setQuantity] = useState('1');
   const [check, setCheck] = useState<Check>({ status: code ? 'idle' : 'checking' });
   const [confirmed, setConfirmed] = useState(false);
-  const startCurrency: SaleCurrency =
-    row.ownPrice?.currency ?? (row.sellingSypUnits !== null ? 'syp' : 'usd');
+  // The pack's selling price as the API computed it: what the field shows untouched, in USD first.
+  const ready = { usdUnits: row.sellingUsdUnits, sypUnits: row.sellingSypUnits };
   // A selling price typed here stays with the pack until the sale goes through (a closed
-  // confirmation, a reload).
-  const [typedSale] = useState(() =>
-    readFormDraft<{ currency: SaleCurrency; amount: string }>(`sale-price:${row.productId}`),
+  // confirmation, a reload); an untouched one is never kept, nor saved as the sale's own.
+  const [draft, setDraft] = useState<SalePriceDraft>(
+    () => readFormDraft<SalePriceDraft>(`sale-price:${row.productId}`) ?? salePriceStart(ready),
   );
-  const [currency, setCurrency] = useState<SaleCurrency>(typedSale?.currency ?? startCurrency);
-  // The pack's selling price as the field shows it, in the currency it was set in.
-  const initialAmount =
-    startCurrency === 'syp'
-      ? row.sellingSypUnits !== null
-        ? formatAmountInput('SYP', row.sellingSypUnits)
-        : ''
-      : row.sellingUsdUnits !== null
-        ? formatAmountInput('USD', row.sellingUsdUnits)
-        : '';
-  const [amount, setAmount] = useState(typedSale?.amount ?? initialAmount);
-  const [invalid, setInvalid] = useState<'quantity' | 'price' | 'player' | null>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  const [pending, setPending] = useState(false);
+  const [invalid, setInvalid] = useState<'quantity' | 'price' | null>(null);
+  const [sending, setSending] = useState<Sending>({ status: 'idle' });
+  const [slide, setSlide] = useState(0);
+  const lastBody = useRef<CreateOrder | null>(null);
   // The price paid per unit, updated in place by a `PRICE_CHANGED` refusal (A06-2).
   const [purchase, setPurchase] = useState(row.purchaseUsdUnits ?? 0);
   // S20 MT2: the terms sheet, and that they were accepted after a refused confirmation.
@@ -692,10 +745,9 @@ function ConfirmSale({
   const { ref, focusInvalid } = useFocusInvalid();
 
   useEffect(() => {
-    if (currency === startCurrency && amount === initialAmount) {
-      clearFormDraft(`sale-price:${row.productId}`);
-    } else saveFormDraft(`sale-price:${row.productId}`, { currency, amount });
-  }, [row.productId, currency, amount, startCurrency, initialAmount]);
+    if (draft.typed) saveFormDraft(`sale-price:${row.productId}`, draft);
+    else clearFormDraft(`sale-price:${row.productId}`);
+  }, [row.productId, draft]);
 
   useEffect(() => {
     if (code) return;
@@ -718,34 +770,12 @@ function ConfirmSale({
     check.check.result !== 'not_supported';
   const units = Number(quantity);
   const shownUnits = Number.isInteger(units) && units > 0 && units <= max ? units : 1;
+  const slideReady = !blocked && check.status !== 'checking' && (!needsConfirm || confirmed);
+  const again = () => setSlide((count) => count + 1);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFailure(null);
-    setTermsAccepted(false);
-    if (!/^\d{1,2}$/.test(quantity) || units < 1 || units > max) {
-      setInvalid('quantity');
-      return focusInvalid();
-    }
-    const sale = amount.trim() === '' ? null : parseSellingPrice(currency, amount);
-    if (sale === undefined) {
-      setInvalid('price');
-      return focusInvalid();
-    }
-    if (needsConfirm && !confirmed) {
-      setInvalid('player');
-      return focusInvalid();
-    }
-    if (check.status === 'checking') return;
-    setInvalid(null);
-    setPending(true);
-    const body = {
-      productId: row.productId,
-      quantity: units,
-      fields,
-      expectedUnitPriceUsdUnits: purchase,
-      confirmPlayer: needsConfirm && confirmed,
-    };
+  async function send(body: CreateOrder, sale: SellingPriceInput | null) {
+    lastBody.current = body;
+    setSending({ status: 'sending' });
     // The buy box's key rule, kept in session storage per pack: closing the sheet after a lost
     // answer and confirming again replays the first order instead of paying twice (A06-1).
     const result = await sendAttempt(
@@ -755,21 +785,69 @@ function ConfirmSale({
       freesKey,
     );
     if (!result.ok) {
-      setPending(false);
+      again();
       if (result.reason === 'PRICE_CHANGED') {
         const price = (result.details as { unitPriceUsdUnits?: unknown } | undefined)
           ?.unitPriceUsdUnits;
         if (typeof price === 'number') setPurchase(price);
         onPriceChanged();
+        return setSending({
+          status: 'failed',
+          message:
+            typeof price === 'number'
+              ? t('purchase.priceChanged', { price: ltr(formatUsd(price)) })
+              : errorText(result.reason),
+          retry: false,
+        });
       }
-      if (result.reason === 'MERCHANT_TERMS_REQUIRED') setTermsOpen(true);
-      return setFailure(result.reason);
+      if (result.reason === 'MERCHANT_TERMS_REQUIRED') {
+        setTermsOpen(true);
+        return setSending({ status: 'idle' });
+      }
+      const retry = ['NETWORK', 'UNKNOWN', 'INTERNAL_ERROR'].includes(result.reason);
+      return setSending({ status: 'failed', message: errorText(result.reason), retry });
     }
     // PS3: a price typed here is this sale's own (`manual`); the pack's stays as it was.
-    const typed = sale && (sale.currency !== startCurrency || amount !== initialAmount);
-    const saleSaved = sale && typed ? (await setOrderSale(result.data.id, sale)).ok : true;
-    setPending(false);
+    const saleSaved = sale ? (await setOrderSale(result.data.id, sale)).ok : true;
     onPlaced({ id: result.data.id, number: result.data.number, saleSaved });
+  }
+
+  /** The sale's own price as typed, or a refusal of the field. */
+  function typedSale(): SellingPriceInput | null | undefined {
+    const sale = manualSalePrice(draft, ready);
+    if (sale === undefined) {
+      setInvalid('price');
+      focusInvalid();
+    }
+    return sale;
+  }
+
+  /** After an answer that may follow a paid order: the same body, so the same key (BB6). */
+  function retry() {
+    const sale = typedSale();
+    if (sale !== undefined && lastBody.current) void send(lastBody.current, sale);
+  }
+
+  function confirm() {
+    setTermsAccepted(false);
+    if (!/^\d{1,3}$/.test(quantity) || units < 1 || units > max) {
+      setInvalid('quantity');
+      again();
+      return focusInvalid();
+    }
+    const sale = typedSale();
+    if (sale === undefined) return again();
+    setInvalid(null);
+    void send(
+      {
+        productId: row.productId,
+        quantity: units,
+        fields,
+        expectedUnitPriceUsdUnits: purchase,
+        confirmPlayer: needsConfirm && confirmed,
+      },
+      sale,
+    );
   }
 
   return (
@@ -780,19 +858,30 @@ function ConfirmSale({
           <bdi>{row.nameAr}</bdi> · {gameName}
         </DialogDescription>
       </DialogHeader>
-      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      {/* No submit: the slide confirms (Enter in a field sends nothing). */}
+      <form
+        ref={ref}
+        className="flex flex-col gap-4"
+        onSubmit={(event) => event.preventDefault()}
+        noValidate
+      >
         {!code && (
           <div className="flex flex-col gap-2 rounded-lg bg-muted p-3 text-sm">
             <bdi dir="ltr" className="font-medium">
               {Object.values(fields).join(' · ')}
             </bdi>
-            {check.status === 'checking' && <span>{tm('sale.checking')}</span>}
+            {check.status === 'checking' && (
+              <span className="flex items-center gap-2" role="status">
+                <LoaderCircleIcon className="size-4 animate-spin" aria-hidden="true" />
+                {tm('sale.checking')}
+              </span>
+            )}
             {check.status === 'done' && check.check.result === 'valid' && (
               <span className="flex items-center gap-2 text-status-success-foreground">
                 <UserRoundCheckIcon className="size-4" aria-hidden="true" />
                 {check.check.playerName
                   ? tm('sale.checkedName', { name: check.check.playerName })
-                  : tm('bulk.checks.validNoName')}
+                  : tm('sale.checkedNoName')}
               </span>
             )}
             {needsConfirm && check.status === 'done' && (
@@ -803,15 +892,11 @@ function ConfirmSale({
               </span>
             )}
             {needsConfirm && (
-              <label
-                className="flex min-h-11 items-center gap-2"
-                data-invalid={invalid === 'player' ? '' : undefined}
-              >
+              <label className="flex min-h-11 items-center gap-2">
                 <input
                   type="checkbox"
                   className="size-5"
                   checked={confirmed}
-                  aria-invalid={invalid === 'player'}
                   onChange={(event) => setConfirmed(event.target.checked)}
                 />
                 {tm('sale.confirmPlayer')}
@@ -841,7 +926,7 @@ function ConfirmSale({
           <div className="flex flex-col">
             <p className="flex items-baseline justify-between text-sm">
               <span className="text-muted-foreground">{tm('sale.total')}</span>
-              <bdi dir="ltr" className="font-bold">
+              <bdi dir="ltr" className="font-bold tabular-nums">
                 {formatUsd(orderTotal(purchase, shownUnits))}
               </bdi>
             </p>
@@ -860,18 +945,16 @@ function ConfirmSale({
           </div>
         )}
         <SellingPriceField
-          currency={currency}
-          amount={amount}
+          draft={draft}
+          ready={ready}
           invalid={invalid === 'price'}
           label={tm('sale.sellingPrice')}
-          onCurrency={setCurrency}
-          onAmount={setAmount}
+          onChange={setDraft}
         />
         <p className="text-xs text-muted-foreground">{tm('sale.sellingHint')}</p>
-        {termsAccepted ? (
+        {sending.status === 'failed' && <FormAlert>{sending.message}</FormAlert>}
+        {termsAccepted && sending.status === 'idle' && (
           <FormAlert tone="success">{tm('sale.termsAccepted')}</FormAlert>
-        ) : (
-          failure && <FormAlert>{errorText(failure)}</FormAlert>
         )}
         {termsOpen && (
           <TermsSheet
@@ -880,11 +963,33 @@ function ConfirmSale({
             onAccepted={() => setTermsAccepted(true)}
           />
         )}
-        <DialogFooter>
-          <Button type="submit" size="xl" disabled={pending || check.status === 'checking'}>
-            {tm('sale.confirm')}
+        {needsConfirm && !confirmed && !blocked && (
+          <p className="text-xs text-muted-foreground">{tm('sale.slideNeedsPlayer')}</p>
+        )}
+        {sending.status === 'sending' ? (
+          <p
+            role="status"
+            className="flex h-14 items-center justify-center gap-2 rounded-lg border border-border text-md"
+          >
+            <LoaderCircleIcon className="size-5 animate-spin" aria-hidden="true" />
+            {tm('sale.sending')}
+          </p>
+        ) : sending.status === 'failed' && sending.retry && lastBody.current ? (
+          <Button size="xl" disabled={blocked} onClick={retry}>
+            {t('purchase.retry')}
           </Button>
-        </DialogFooter>
+        ) : (
+          <SlideToPay
+            // Remounted after a refusal, and once it can be slid: its handle takes the focus then,
+            // unless the merchant is typing.
+            key={`${slide}:${slideReady}`}
+            label={tm('sale.slide')}
+            valueText={(percent) => t('purchase.slideValue', { percent })}
+            disabled={!slideReady}
+            autoFocus={typeof document !== 'undefined' && !isTyping(document.activeElement)}
+            onConfirm={confirm}
+          />
+        )}
       </form>
     </DialogContent>
   );

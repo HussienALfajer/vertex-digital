@@ -4,39 +4,39 @@ import type { SaleCurrency } from '@vertex-digital/contracts';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
+import { type ReadyPrice, type SalePriceDraft, switchSaleCurrency } from './form';
 import { tm } from './i18n';
 
 /**
- * A selling price as typed (S21 SP2, SP5, PS3): the currency, then the amount, checked by the
- * caller with `parseSellingPrice`. Shared by the order page and the sale mode.
+ * A selling price as typed (S21 SP2, SP5, PS3): the currency, USD first, then the amount, checked
+ * by the caller with `parseSellingPrice` or `manualSalePrice`. A currency change never carries a
+ * typed amount over (`switchSaleCurrency`). Shared by the order page and the sale mode.
  */
 export function SellingPriceField({
-  currency,
-  amount,
+  draft,
+  ready,
   invalid,
   label,
-  onCurrency,
-  onAmount,
+  onChange,
 }: {
-  currency: SaleCurrency;
-  amount: string;
+  draft: SalePriceDraft;
+  ready: ReadyPrice;
   invalid: boolean;
   label: string;
-  onCurrency: (currency: SaleCurrency) => void;
-  onAmount: (amount: string) => void;
+  onChange: (draft: SalePriceDraft) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
       <ToggleGroup<SaleCurrency>
         aria-label={tm('prices.currency')}
-        value={[currency]}
-        onValueChange={(value) => value[0] && onCurrency(value[0])}
+        value={[draft.currency]}
+        onValueChange={(value) => value[0] && onChange(switchSaleCurrency(draft, value[0], ready))}
       >
-        <ToggleGroupItem value="syp" className="h-11 px-4 text-md">
-          {tm('prices.syp')}
-        </ToggleGroupItem>
         <ToggleGroupItem value="usd" className="h-11 px-4 text-md">
           {tm('prices.usd')}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="syp" className="h-11 px-4 text-md">
+          {tm('prices.syp')}
         </ToggleGroupItem>
       </ToggleGroup>
       <Field invalid={invalid}>
@@ -44,14 +44,14 @@ export function SellingPriceField({
         <Input
           name="sellingAmount"
           dir="ltr"
-          inputMode={currency === 'usd' ? 'decimal' : 'numeric'}
+          inputMode={draft.currency === 'usd' ? 'decimal' : 'numeric'}
           autoComplete="off"
           className="h-11 text-md"
-          value={amount}
-          onChange={(event) => onAmount(event.target.value)}
+          value={draft.amount}
+          onChange={(event) => onChange({ ...draft, amount: event.target.value, typed: true })}
         />
         <FieldError match={invalid}>
-          {currency === 'usd' ? tm('prices.amountInvalidUsd') : tm('prices.amountInvalidSyp')}
+          {draft.currency === 'usd' ? tm('prices.amountInvalidUsd') : tm('prices.amountInvalidSyp')}
         </FieldError>
       </Field>
     </div>

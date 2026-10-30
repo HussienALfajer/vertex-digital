@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@vertex-digital/ui/components/dropdown-menu';
-import { TierBadge, type TierBadgeTier } from '@vertex-digital/ui/components/tier-badge';
 import {
   BellRingIcon,
   DownloadIcon,
@@ -17,7 +16,6 @@ import {
   LogOutIcon,
   MoonIcon,
   ShoppingBagIcon,
-  StoreIcon,
   SunIcon,
   UserRoundIcon,
 } from 'lucide-react';
@@ -31,31 +29,15 @@ import { useTheme } from '@/lib/theme';
 
 /**
  * The signed-in customer's menu in the header: the account page, the orders (S08), the saved
- * player IDs (S10 rule SP5), "أدوات التاجر" for a merchant (S21 MA1), "ثبّت التطبيق" when possible (S15 IN1), sign-out, which also clears
- * the cart (S10 rule CT1) and makes the browser forget its push subscription (S15 PS5). S23 ID2:
- * a merchant's tier badge beside "أدوات التاجر", read when the menu first opens (never on every
- * page's load; the header imports no contracts).
+ * player IDs (S10 rule SP5), "ثبّت التطبيق" when possible (S15 IN1), sign-out, which also clears
+ * the cart (S10 rule CT1) and makes the browser forget its push subscription (S15 PS5). A
+ * merchant reaches the merchant area from the sidebar and the account page's merchant card
+ * (owner, 2026-10-30: no "أدوات التاجر" here, and no tier read).
  */
-export function AccountMenu({
-  name,
-  email,
-  merchant,
-}: {
-  name: string;
-  email: string;
-  merchant: boolean;
-}) {
+export function AccountMenu({ name, email }: { name: string; email: string }) {
   const { theme, toggle } = useTheme();
   const install = useInstall();
   const [signOutFailed, setSignOutFailed] = useState(false);
-  const [tier, setTier] = useState<TierBadgeTier | null>(null);
-  const readTier = () => {
-    if (!merchant || tier !== null) return;
-    void fetch('/api/merchant/tier', { credentials: 'same-origin', cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { tier?: TierBadgeTier } | null) => data?.tier && setTier(data.tier))
-      .catch(() => undefined);
-  };
   const signOut = async () => {
     setSignOutFailed(false);
     const response = await fetch('/api/auth/sign-out', {
@@ -76,7 +58,7 @@ export function AccountMenu({
 
   return (
     <>
-      <DropdownMenu onOpenChange={(open) => open && readTier()}>
+      <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button variant="ghost" size="xl" className="px-2" aria-label={t('header.menu')} />
@@ -96,23 +78,6 @@ export function AccountMenu({
             <UserRoundIcon />
             {t('header.account')}
           </DropdownMenuItem>
-          {merchant && (
-            <DropdownMenuItem
-              className="min-h-11"
-              render={<Link href="/merchant" prefetch={false} />}
-            >
-              <StoreIcon />
-              {t('header.merchantTools')}
-              {tier && (
-                <TierBadge
-                  tier={tier}
-                  size="sm"
-                  className="ms-auto"
-                  label={t('header.tierBadge', { name: t(`merchant.tierNames.${tier}`) })}
-                />
-              )}
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem className="min-h-11" render={<Link href="/orders" prefetch={false} />}>
             <ShoppingBagIcon />
             {t('header.orders')}

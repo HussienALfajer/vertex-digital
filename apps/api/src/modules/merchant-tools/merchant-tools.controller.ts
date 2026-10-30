@@ -20,6 +20,8 @@ import {
   merchantDashboardQuerySchema,
   merchantDashboardSchema,
   merchantGamesSchema,
+  type PinnedGames,
+  pinnedGamesSchema,
   type SellingPriceInput,
   type SellingPriceQuery,
   type SellingSettings,
@@ -38,8 +40,8 @@ import type { CustomerIdentity } from '../auth/index.js';
 import { MerchantToolsService } from './merchant-tools.service.js';
 
 /**
- * The merchant area (S21 F30, F31, F37): merchants only, never cached; a merchant reaches only
- * their own figures, prices, follows and settings.
+ * The merchant area (S21 F30, F31, F37; "ألعابك", owner 2026-10-30): merchants only, never
+ * cached; a merchant reaches only their own figures, prices, follows, pinned games and settings.
  */
 @ApiTags('merchant-tools')
 @Controller('merchant')
@@ -154,6 +156,30 @@ export class MerchantToolsController {
     @Body({ schema: updateWatchesSchema }) body: UpdateWatches,
   ) {
     return this.tools.saveWatches(customer.id, body);
+  }
+
+  @Get('pinned-games')
+  @CustomerRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: pinnedGamesSchema })
+  @ApiOkResponse({
+    description: 'The pinned games of "ألعابك", in order',
+    standardSchema: pinnedGamesSchema,
+  })
+  pinnedGames(@CurrentCustomer() customer: CustomerIdentity) {
+    return this.tools.pinnedGames(customer.id);
+  }
+
+  @Put('pinned-games')
+  @CustomerRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: pinnedGamesSchema })
+  @ApiOkResponse({ description: 'The saved pinned games', standardSchema: pinnedGamesSchema })
+  savePinnedGames(
+    @CurrentCustomer() customer: CustomerIdentity,
+    @Body({ schema: pinnedGamesSchema }) body: PinnedGames,
+  ) {
+    return this.tools.savePinnedGames(customer.id, body);
   }
 
   @Get('alerts')

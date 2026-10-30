@@ -3,7 +3,7 @@ import { phoneSchema } from './auth.js';
 import type { ProductKind } from './catalog.js';
 import { zoneDate, zoneDayStart, zoneMonthStart, zoneYearMonth } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
-import { TIER_GRANT_MAX_DAYS, TIER_QUANTITY_CEILING, welcomeTextSchema } from './merchant-tiers.js';
+import { TIER_GRANT_MAX_DAYS, welcomeTextSchema } from './merchant-tiers.js';
 import {
   amountUnitsSchema,
   CURRENCY_SCALE,
@@ -16,8 +16,6 @@ import {
 } from './money.js';
 import {
   CART_LINES_MAX,
-  type PlayerCheck,
-  playerCheckSchema,
   SAVED_PLAYERS_MAX,
   SAVED_PLAYERS_PER_GAME,
   type SaleCurrency,
@@ -210,6 +208,9 @@ export const merchantGameSchema = z
     id: z.uuid(),
     slug: z.string(),
     nameAr: z.string(),
+    /** The picker's category chips (owner, 2026-10-30). */
+    categoryId: z.uuid(),
+    categoryNameAr: z.string(),
     /** PS1: the merchant's units of the game bought in the last 30 days, net of refunds. */
     recentUnits: z.int().nonnegative(),
   })
@@ -222,6 +223,59 @@ export const merchantGamesSchema = z
   .meta({ id: 'MerchantGames' });
 
 export type MerchantGames = z.infer<typeof merchantGamesSchema>;
+
+/* "ألعابك": pinned games (owner, 2026-10-30) ------------------------------------------------- */
+
+/** A merchant pins at most 20 games, in their own order. */
+export const PINNED_GAMES_MAX = 20;
+
+/** "ألعابك" shows 10 games: the pinned ones first, then suggestions while fewer are pinned. */
+export const YOUR_GAMES_SHOWN = 10;
+
+/**
+ * `GET /api/merchant/pinned-games` and the body of its `PUT`: the pinned games in the merchant's
+ * order, distinct. Apart from the follows (`watches`), which drive the price alerts only.
+ */
+export const pinnedGamesSchema = z
+  .object({
+    gameIds: z
+      .array(z.uuid())
+      .max(PINNED_GAMES_MAX)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate game'),
+  })
+  .meta({ id: 'PinnedGames' });
+
+export type PinnedGames = z.infer<typeof pinnedGamesSchema>;
+
+/** Where a game of "ألعابك" comes from: pinned, else suggested (followed, then bought lately). */
+export type YourGameSource = 'pinned' | 'suggested';
+
+/**
+ * "ألعابك": the pinned games in their order, then, while fewer than `YOUR_GAMES_SHOWN`, the
+ * suggestions: followed games, then the games bought in the last 30 days by units (ties in the
+ * store's order). Only games in `games` (the store's shown games, in its order) appear.
+ */
+export function yourGames<T extends { id: string; recentUnits: number }>(
+  games: readonly T[],
+  pinned: readonly string[],
+  followed: ReadonlySet<string>,
+): { game: T; source: YourGameSource }[] {
+  const byId = new Map(games.map((game) => [game.id, game]));
+  const chosen = pinned.flatMap((id) => {
+    const game = byId.get(id);
+    return game ? [{ game, source: 'pinned' as const }] : [];
+  });
+  const taken = new Set(pinned);
+  const suggested = games
+    .filter((game) => !taken.has(game.id) && (followed.has(game.id) || game.recentUnits > 0))
+    .sort(
+      (a, b) =>
+        Number(followed.has(b.id)) - Number(followed.has(a.id)) || b.recentUnits - a.recentUnits,
+    )
+    .slice(0, Math.max(0, YOUR_GAMES_SHOWN - chosen.length))
+    .map((game) => ({ game, source: 'suggested' as const }));
+  return [...chosen, ...suggested];
+}
 
 /* Months (DB1, LV2, ST1) --------------------------------------------------------------------- */
 
@@ -509,17 +563,17 @@ export function alertCounts(kinds: readonly AlertKind[]): Record<AlertKind, numb
  */
 export const MERCHANT_CODE_QUANTITY_MAX = 50;
 
-/** BK1, BK3: a bulk list (and a merchant's checkout) holds at most 50 lines; S23 TS5: per tier. */
-export const BULK_LINES_MAX = 50;
+/**
+ * S21 BK3: a merchant's checkout holds at most 50 lines; S23 TS5: per tier (`bulkLinesMax`, named
+ * for the bulk orders the owner removed on 2026-10-30; it still caps a merchant's checkout).
+ */
+export const MERCHANT_CHECKOUT_LINES_MAX = 50;
 
 /** S23 TS5: a merchant tier's quantities, from its settings in force. */
 export interface TierQuantities {
   orderUnitsMax: number;
   bulkLinesMax: number;
 }
-
-/** BK1: a pasted list or CSV file is at most 100 KB. */
-export const BULK_TEXT_MAX_BYTES = 100 * 1024;
 
 /** PS2: the last 20 distinct ids per game, from the merchant's orders of the last 90 days. */
 export const RECENT_PLAYERS_PER_GAME = 20;
@@ -554,151 +608,6 @@ export const recentPlayersSchema = z
 
 export type RecentPlayers = z.infer<typeof recentPlayersSchema>;
 
-/* Bulk orders (F33, BK1–BK5) ----------------------------------------------------------------- */
-
-/** Why a bulk line cannot be paid as parsed (BK1, BK2). */
-export const BULK_LINE_ERRORS = [
-  /** Not the game's fields, then the pack, then an optional quantity. */
-  'columns',
-  'pack_unknown',
-  /** Two packs of the game share this amount: name the pack instead. */
-  'pack_ambiguous',
-  'quantity_invalid',
-  /** Above the pack's limit for this account (QT1). */
-  'quantity_above_max',
-  /** The pack is not available on the merchant's list now. */
-  'pack_unavailable',
-  /** A field fails the game's rules (S06 CT7); the field's key is in `field`. */
-  'field_invalid',
-] as const;
-
-export const bulkLineErrorSchema = z.enum(BULK_LINE_ERRORS).meta({ id: 'BulkLineError' });
-
-export type BulkLineError = z.infer<typeof bulkLineErrorSchema>;
-
-/** What `parseBulkLines` needs of a game: its field keys in order and its packs. */
-export interface BulkGame {
-  fieldKeys: readonly string[];
-  packs: readonly { id: string; nameAr: string; gameAmount: number | null }[];
-}
-
-export interface ParsedBulkLine {
-  /** The line's number in the text, from 1. */
-  line: number;
-  fields: Record<string, string>;
-  productId: string | null;
-  quantity: number | null;
-  errors: BulkLineError[];
-}
-
-const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
-
-function latinDigits(text: string): string {
-  return text.replace(ARABIC_DIGITS, (digit) => {
-    const code = digit.charCodeAt(0);
-    return String(code - (code >= 0x06f0 ? 0x06f0 : 0x0660));
-  });
-}
-
-/** One CSV-like line into cells: the separator is a tab, else `;`, else `,`; `"` quotes a cell. */
-function splitCells(line: string): string[] {
-  const separator = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
-  const cells: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line.charAt(index);
-    if (quoted) {
-      if (character !== '"') cell += character;
-      else if (line.charAt(index + 1) === '"') {
-        cell += '"';
-        index += 1;
-      } else quoted = false;
-    } else if (character === '"' && cell.trim() === '') {
-      cell = '';
-      quoted = true;
-    } else if (character === separator) {
-      cells.push(cell.trim());
-      cell = '';
-    } else cell += character;
-  }
-  cells.push(cell.trim());
-  return cells;
-}
-
-function matchPack(
-  cell: string,
-  packs: BulkGame['packs'],
-): { productId: string } | { error: 'pack_unknown' | 'pack_ambiguous' } {
-  const typed = latinDigits(cell).normalize('NFKC').trim();
-  if (/^\d+$/.test(typed)) {
-    const amount = Number(typed);
-    const matches = packs.filter((pack) => pack.gameAmount === amount);
-    if (matches.length > 1) return { error: 'pack_ambiguous' };
-    const [match] = matches;
-    if (match) return { productId: match.id };
-  }
-  const named = packs.find((pack) => pack.nameAr.normalize('NFKC').trim() === typed);
-  return named ? { productId: named.id } : { error: 'pack_unknown' };
-}
-
-/**
- * BK1: the lines of a pasted list or CSV, each the game's fields in order, then the pack (its
- * `game_amount` or its exact Arabic name), then an optional quantity (default 1). Empty lines,
- * and lines starting with `#` (the template's header), are skipped. Field values are checked
- * against the game's rules by the API, not here.
- */
-export function parseBulkLines(text: string, game: BulkGame): ParsedBulkLine[] {
-  const lines: ParsedBulkLine[] = [];
-  const rows = text.replace(/^﻿/, '').split(/\r\n|\r|\n/);
-  for (const [index, row] of rows.entries()) {
-    if (row.trim() === '' || row.trimStart().startsWith('#')) continue;
-    const cells = splitCells(row);
-    const count = game.fieldKeys.length;
-    const parsed: ParsedBulkLine = {
-      line: index + 1,
-      fields: {},
-      productId: null,
-      quantity: null,
-      errors: [],
-    };
-    lines.push(parsed);
-    if (cells.length !== count + 1 && cells.length !== count + 2) {
-      parsed.errors.push('columns');
-      continue;
-    }
-    for (const [position, key] of game.fieldKeys.entries()) {
-      // The column count was checked: every field has its cell.
-      parsed.fields[key] = String(cells[position]);
-    }
-    const pack = matchPack(String(cells[count]), game.packs);
-    if ('productId' in pack) parsed.productId = pack.productId;
-    else parsed.errors.push(pack.error);
-    const quantityCell = latinDigits(cells[count + 1] ?? '1');
-    const quantity = /^\d{1,3}$/.test(quantityCell) ? Number(quantityCell) : 0;
-    // The tier's own limit is checked with the pack (QT1, TS5).
-    if (quantity >= 1 && quantity <= TIER_QUANTITY_CEILING) parsed.quantity = quantity;
-    else parsed.errors.push('quantity_invalid');
-  }
-  return lines;
-}
-
-/** `POST /api/merchant/bulk/check` (BK2): the game and the pasted text or the CSV's content. */
-export const bulkCheckRequestSchema = z
-  .object({
-    gameId: z.uuid(),
-    text: z
-      .string()
-      .min(1)
-      .refine(
-        (text) => new TextEncoder().encode(text).byteLength <= BULK_TEXT_MAX_BYTES,
-        'Expected at most 100 KB',
-      ),
-  })
-  .meta({ id: 'BulkCheckRequest' });
-
-export type BulkCheckRequest = z.infer<typeof bulkCheckRequestSchema>;
-
 /**
  * QT1, QT2, S23 TS5: the most units one order (or cart line) of a pack may carry: the merchant
  * tier's code quantity for a merchant's code pack, the pack's own limit otherwise (direct top-ups,
@@ -723,43 +632,9 @@ export function savedPlayerLimits(accountType: AccountType): { perGame: number; 
 
 /** BK3, edge case 21, S23 TS5: the tier's lines for a merchant's checkout, 10 for a customer. */
 export function checkoutLinesMax(accountType: AccountType, tier: TierQuantities | null): number {
-  return accountType === 'merchant' ? (tier?.bulkLinesMax ?? BULK_LINES_MAX) : CART_LINES_MAX;
-}
-
-/**
- * BK2: a checked line. `check` is the player check of its fields (null when the line has errors
- * or the game checks no ids); `needsConfirmation` asks the merchant's tick before paying (BK3).
- */
-export const bulkCheckLineSchema = z
-  .object({
-    line: z.int().positive(),
-    fields: z.record(z.string(), z.string()),
-    product: z.object({ id: z.uuid(), nameAr: z.string() }).nullable(),
-    quantity: z.int().positive().nullable(),
-    unitPriceUsdUnits: amountUnitsSchema.nullable(),
-    totalUsdUnits: amountUnitsSchema.nullable(),
-    check: playerCheckSchema.nullable(),
-    needsConfirmation: z.boolean(),
-    errors: z.array(z.object({ code: bulkLineErrorSchema, field: z.string().nullable() })),
-  })
-  .meta({ id: 'BulkCheckLine' });
-
-export type BulkCheckLine = z.infer<typeof bulkCheckLineSchema>;
-
-export const bulkCheckResultSchema = z
-  .object({
-    lines: z.array(bulkCheckLineSchema),
-    /** The lines without errors, in USD units. */
-    totalUsdUnits: amountUnitsSchema,
-    balanceUsdUnits: z.int(),
-  })
-  .meta({ id: 'BulkCheckResult' });
-
-export type BulkCheckResult = z.infer<typeof bulkCheckResultSchema>;
-
-/** BK3, S09 PV8: a line needs the merchant's confirmation unless its id is known valid. */
-export function bulkNeedsConfirmation(check: PlayerCheck | null): boolean {
-  return check !== null && check.result !== 'valid' && check.result !== 'not_supported';
+  return accountType === 'merchant'
+    ? (tier?.bulkLinesMax ?? MERCHANT_CHECKOUT_LINES_MAX)
+    : CART_LINES_MAX;
 }
 
 /* Receipt settings and branding (F35, BR1–BR3) ----------------------------------------------- */

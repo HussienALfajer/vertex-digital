@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   alertCounts,
   alertSettingsSchema,
-  bulkCheckRequestSchema,
-  bulkNeedsConfirmation,
   checkoutLinesMax,
   damascusMonth,
   levelFor,
@@ -14,7 +12,8 @@ import {
   monthRange,
   monthSchema,
   orderQuantityMax,
-  parseBulkLines,
+  PINNED_GAMES_MAX,
+  pinnedGamesSchema,
   previousMonth,
   saleProfit,
   saleUnitUsd,
@@ -27,6 +26,8 @@ import {
   updateReceiptSettingsSchema,
   updateWatchesSchema,
   watchChanges,
+  YOUR_GAMES_SHOWN,
+  yourGames,
 } from './merchant-tools.js';
 
 const ID = '01900000-0000-7000-8000-000000000001';
@@ -265,61 +266,40 @@ describe('counter limits (QT1, QT2, decision 10, BK3)', () => {
   });
 });
 
-describe('parseBulkLines (BK1)', () => {
-  const game = {
-    fieldKeys: ['player_id'],
-    packs: [
-      { id: ID, nameAr: '60 شدة', gameAmount: 60 },
-      { id: OTHER, nameAr: '325 شدة', gameAmount: 325 },
-    ],
-  };
+describe('pinned games, "ألعابك" (owner, 2026-10-30)', () => {
+  const game = (id: string, recentUnits = 0) => ({ id, recentUnits });
+  const ids = Array.from({ length: 14 }, (_, index) => `g${index}`);
 
-  it('reads commas, tabs and semicolons, a quantity, Arabic digits and the pack name', () => {
-    const text = '﻿# player_id, pack, quantity\n5123,60\r\n5124\t325\t۳\n\n٥١٢٥;325 شدة;٢';
-    expect(parseBulkLines(text, game)).toEqual([
-      { line: 2, fields: { player_id: '5123' }, productId: ID, quantity: 1, errors: [] },
-      { line: 3, fields: { player_id: '5124' }, productId: OTHER, quantity: 3, errors: [] },
-      { line: 5, fields: { player_id: '٥١٢٥' }, productId: OTHER, quantity: 2, errors: [] },
-    ]);
+  it('takes up to 20 distinct games', () => {
+    expect(pinnedGamesSchema.safeParse({ gameIds: [ID, OTHER] }).success).toBe(true);
+    expect(pinnedGamesSchema.safeParse({ gameIds: [ID, ID] }).success).toBe(false);
+    const many = Array.from(
+      { length: PINNED_GAMES_MAX + 1 },
+      (_, index) => `01900000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+    );
+    expect(pinnedGamesSchema.safeParse({ gameIds: many.slice(0, PINNED_GAMES_MAX) }).success).toBe(
+      true,
+    );
+    expect(pinnedGamesSchema.safeParse({ gameIds: many }).success).toBe(false);
   });
 
-  it('reads quoted cells, with doubled quotes and separators inside', () => {
-    const twoFields = { fieldKeys: ['id', 'server'], packs: game.packs };
-    const [line] = parseBulkLines('"51,23"," a ""b"" ",60', twoFields);
-    expect(line).toMatchObject({ fields: { id: '51,23', server: 'a "b"' }, productId: ID });
-  });
-
-  it('reports columns, unknown and ambiguous packs and bad quantities per line', () => {
-    const twins = {
-      fieldKeys: ['player_id'],
-      packs: [...game.packs, { id: OTHER, nameAr: 'أخرى', gameAmount: 60 }],
-    };
+  it('puts the pinned games first in their order, then followed, then bought lately', () => {
+    const games = [game('a'), game('b', 3), game('c', 9), game('d'), game('e', 1)];
     expect(
-      parseBulkLines('1\n1,2,3,4\n1,999\n1,60,0\n1,60,x\n1,60,101', game).map((l) => l.errors),
-    ).toEqual([
-      ['columns'],
-      ['columns'],
-      ['pack_unknown'],
-      ['quantity_invalid'],
-      ['quantity_invalid'],
-      ['quantity_invalid'],
-    ]);
-    expect(parseBulkLines('1,60', twins)[0]?.errors).toEqual(['pack_ambiguous']);
+      yourGames(games, ['d', 'gone', 'a'], new Set(['e'])).map(
+        ({ game: shown, source }) => `${shown.id}:${source}`,
+      ),
+    ).toEqual(['d:pinned', 'a:pinned', 'e:suggested', 'c:suggested', 'b:suggested']);
   });
 
-  it('takes 1–100 KB of text', () => {
-    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: 'a' }).success).toBe(true);
-    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: '' }).success).toBe(false);
-    const big = 'ش'.repeat(51 * 1024);
-    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: big }).success).toBe(false);
-  });
-
-  it('asks a confirmation unless the id is known valid or never checked (BK3)', () => {
-    expect(bulkNeedsConfirmation(null)).toBe(false);
-    expect(bulkNeedsConfirmation({ result: 'valid', playerName: null, region: null })).toBe(false);
-    expect(bulkNeedsConfirmation({ result: 'not_supported' })).toBe(false);
-    expect(bulkNeedsConfirmation({ result: 'invalid' })).toBe(true);
-    expect(bulkNeedsConfirmation({ result: 'unavailable', reason: 'quota' })).toBe(true);
+  it('fills up to 10 only, and suggests nothing once 10 are pinned', () => {
+    const games = ids.map((id) => game(id, 1));
+    expect(yourGames(games, ['g0'], new Set())).toHaveLength(YOUR_GAMES_SHOWN);
+    const pinned = ids.slice(0, 12);
+    const shown = yourGames(games, pinned, new Set());
+    expect(shown).toHaveLength(12);
+    expect(shown.every((entry) => entry.source === 'pinned')).toBe(true);
+    expect(yourGames([game('x')], [], new Set())).toEqual([]);
   });
 });
 

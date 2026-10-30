@@ -1,13 +1,11 @@
 'use client';
 
 import {
-  formatAmountInput,
   formatSyp,
   formatUsd,
   type Order,
   type OrderSale,
   PRINT_PAPERS,
-  type SaleCurrency,
 } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card } from '@vertex-digital/ui/components/card';
@@ -20,7 +18,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { saveBlob } from './download';
-import { parseSellingPrice } from './form';
+import { parseSellingPrice, salePriceStart } from './form';
 import { tm } from './i18n';
 import { exportCodes, releaseCodes, setOrderSale } from './requests';
 import { SellingPriceField } from './selling-price-field';
@@ -188,12 +186,12 @@ function writeClipboard(text: Promise<string>): Promise<void> {
 /** SP5: the order's selling price, set or changed later at the order's rate; no money moves. */
 function SaleEditor({ order, onChange }: { order: Order; onChange: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
-  const [currency, setCurrency] = useState<SaleCurrency>(order.sale?.currency ?? 'syp');
-  const [amount, setAmount] = useState(
-    order.sale
-      ? formatAmountInput(order.sale.currency === 'usd' ? 'USD' : 'SYP', order.sale.unitAmountUnits)
-      : '',
-  );
+  // The order's sale as it stands: its USD, and its SYP when it was set in SYP.
+  const ready = {
+    usdUnits: order.sale?.unitUsdUnits ?? null,
+    sypUnits: order.sale?.currency === 'syp' ? order.sale.unitAmountUnits : null,
+  };
+  const [draft, setDraft] = useState(() => salePriceStart(ready, order.sale?.currency ?? 'usd'));
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
@@ -202,7 +200,7 @@ function SaleEditor({ order, onChange }: { order: Order; onChange: () => Promise
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
-    const input = parseSellingPrice(currency, amount);
+    const input = parseSellingPrice(draft.currency, draft.amount);
     setInvalid(input === undefined);
     if (input === undefined) return focusInvalid();
     setPending(true);
@@ -234,12 +232,11 @@ function SaleEditor({ order, onChange }: { order: Order; onChange: () => Promise
   return (
     <form ref={ref} className="flex flex-col gap-3" onSubmit={submit} noValidate>
       <SellingPriceField
-        currency={currency}
-        amount={amount}
+        draft={draft}
+        ready={ready}
         invalid={invalid}
         label={tm('order.sellingPrice')}
-        onCurrency={setCurrency}
-        onAmount={setAmount}
+        onChange={setDraft}
       />
       {failure && <FormAlert>{errorText(failure)}</FormAlert>}
       <div className="flex gap-2">

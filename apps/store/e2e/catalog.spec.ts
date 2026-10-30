@@ -30,7 +30,7 @@ test.describe('home (rules SF1, SS2)', () => {
     // Owner, 2026-10-19: a slow supplier is the panel's business, never the customer's.
     await expect(page.getByText('أبطأ من المعتاد')).toHaveCount(0);
     await expect(page.getByText('تعمل بشكل طبيعي')).toHaveCount(0);
-    const categories = page.getByRole('navigation', { name: c.categories });
+    const categories = page.getByRole('navigation', { name: c.browse });
     // A category without games is not shown.
     await expect(categories.getByRole('link')).toHaveCount(2);
     await expect(categories.getByRole('link', { name: /^ألعاب/ })).toBeVisible();
@@ -352,7 +352,7 @@ for (const theme of ['dark', 'light'] as const) {
     if (theme === 'light') await page.addInitScript(lightTheme);
     api.on('GET /api/catalog/search-index', 200, searchIndex());
     await page.goto('/');
-    await expect(page.getByRole('navigation', { name: c.categories })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: c.browse })).toBeVisible();
     await screenshot(page, testInfo, `home-catalog-${theme}`);
     await page.goto(`${EMPTY_STORE_URL}/`);
     await expect(page.getByText(c.empty)).toBeVisible();

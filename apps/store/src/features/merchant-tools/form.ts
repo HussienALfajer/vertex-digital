@@ -52,6 +52,60 @@ export function sellingPriceInput(price: SellingPriceInput): string {
   return formatAmountInput(price.currency === 'usd' ? 'USD' : 'SYP', price.amountUnits);
 }
 
+/** A selling price the API already computed, in both currencies (null where it has none). */
+export interface ReadyPrice {
+  usdUnits: number | null;
+  sypUnits: number | null;
+}
+
+/** A selling price field: its currency, what it shows, and whether the merchant typed in it. */
+export interface SalePriceDraft {
+  currency: SaleCurrency;
+  amount: string;
+  typed: boolean;
+}
+
+function readyAmount(ready: ReadyPrice, currency: SaleCurrency): string {
+  const units = currency === 'usd' ? ready.usdUnits : ready.sypUnits;
+  return units === null ? '' : formatAmountInput(currency === 'usd' ? 'USD' : 'SYP', units);
+}
+
+/** The field untouched: the ready amount in `currency` (USD leads, owner 2026-10-30). */
+export function salePriceStart(ready: ReadyPrice, currency: SaleCurrency = 'usd'): SalePriceDraft {
+  return { currency, amount: readyAmount(ready, currency), typed: false };
+}
+
+/**
+ * A currency change. Untouched, the field shows the API's ready amount in the other currency;
+ * typed, it is cleared: an amount never changes currency, or 730 SYP would become $730.
+ */
+export function switchSaleCurrency(
+  draft: SalePriceDraft,
+  currency: SaleCurrency,
+  ready: ReadyPrice,
+): SalePriceDraft {
+  if (currency === draft.currency) return draft;
+  return draft.typed
+    ? { currency, amount: '', typed: true }
+    : { currency, amount: readyAmount(ready, currency), typed: false };
+}
+
+/**
+ * PS3: the sale's own price (`manual`) from the confirmation's field: null when the field was not
+ * typed in, is empty, or holds the ready amount (the pack's price or markup is the sale's then,
+ * SP4); undefined when what was typed is not a price.
+ */
+export function manualSalePrice(
+  draft: SalePriceDraft,
+  ready: ReadyPrice,
+): SellingPriceInput | null | undefined {
+  if (!draft.typed || draft.amount.trim() === '') return null;
+  const input = parseSellingPrice(draft.currency, draft.amount);
+  if (input === undefined) return undefined;
+  const readyUnits = draft.currency === 'usd' ? ready.usdUnits : ready.sypUnits;
+  return input.amountUnits === readyUnits ? null : input;
+}
+
 /** AL5: the low-balance threshold in dollars; empty turns it off. */
 export function parseAlertSettings(
   threshold: string,

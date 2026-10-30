@@ -139,6 +139,8 @@
   --foreground: var(--color-neutral-900);
   --surface: var(--color-white);
   --surface-foreground: var(--color-neutral-900);
+  /* A quiet green surface for what must read apart from a game card (the store's categories). */
+  --surface-brand: var(--color-green-50);
   --muted: var(--color-neutral-100);
   --muted-foreground: var(--color-neutral-600);
   --border: var(--color-neutral-200);
@@ -204,6 +206,7 @@
   --foreground: var(--color-neutral-100);
   --surface: var(--color-green-900);
   --surface-foreground: var(--color-neutral-100);
+  --surface-brand: var(--color-green-800);
   --muted: var(--color-green-800);
   /* neutral-300: muted text also sits on the muted surface (table heads, toggles). */
   --muted-foreground: var(--color-neutral-300);
@@ -265,6 +268,7 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-foreground: var(--surface-foreground);
+  --color-surface-brand: var(--surface-brand);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);

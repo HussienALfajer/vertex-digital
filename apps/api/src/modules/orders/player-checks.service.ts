@@ -112,29 +112,6 @@ export class PlayerChecksService {
   }
 
   /**
-   * S21 BK2, BK4: one line of a merchant's bulk list, checked as the store's check does; a quota
-   * used up (the merchant's, or the address's) answers `unavailable` (`quota`), "لم يُفحص", so the
-   * line can still be paid with the merchant's confirmation.
-   */
-  async checkLine(
-    customerId: string,
-    request: PlayerCheckRequest,
-    meta: RequestMeta,
-  ): Promise<PlayerCheck> {
-    try {
-      return await this.check(customerId, request, meta);
-    } catch (error) {
-      if (
-        error instanceof CodedException &&
-        (error.code === 'PLAYER_CHECK_QUOTA_EXCEEDED' || error.code === 'RATE_LIMITED')
-      ) {
-        return { result: 'unavailable', reason: 'quota' };
-      }
-      throw error;
-    }
-  }
-
-  /**
    * `POST /api/admin/player-checks` (S16 rule AP8): the same check and cache with the admin as
    * requester, the supplier's daily quota counted, 30 supplier calls per 10 minutes; a pack the
    * admin paused may be checked (an owner-funded order may buy it, AP5).

@@ -2,7 +2,7 @@ import { AscentBar } from '@vertex-digital/ui/components/page-header';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { PageBackLink } from '@/components/page-back-link';
-import { t } from '@/lib/i18n';
+import { t, tc } from '@/lib/i18n';
 import { getStorefront } from './data';
 import { GameCard } from './game-card';
 import { SLUG } from './slug';
@@ -29,7 +29,7 @@ export async function CategoryPage({ params }: { params: Promise<{ slug: string 
           {category.nameAr}
         </h1>
         <p className="text-sm text-muted-foreground tabular-nums">
-          {t('catalog.gameCount', { count: category.games.length })}
+          {tc('catalog.itemCount', category.games.length)}
         </p>
       </div>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

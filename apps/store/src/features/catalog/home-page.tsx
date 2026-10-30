@@ -35,15 +35,21 @@ export function HomeHero() {
 /** S24 NH1: how many games a category's row shows on the home page. */
 const ROW_GAMES = 10;
 
-/**
- * The catalog (rule SF1, S24 NH1): the category cards, then one row per category with its first
- * games in panel order and "عرض الكل". Read at request time (never at build, when the API may be
- * away) from the `catalog` cache (rule SF4).
- */
-export async function StorefrontSections() {
+/** The storefront's categories that show a game (rule SF1, S24 NH1). */
+async function shownCategories() {
   await connection();
   const storefront = await getStorefront();
-  const categories = storefront.categories.filter((category) => category.games.length > 0);
+  return storefront.categories.filter((category) => category.games.length > 0);
+}
+
+/**
+ * The categories first (owner, 2026-10-30): "تصفّح حسب الفئة" and one compact card per category
+ * (a horizontal scroll on a phone, six columns from `lg`, three beside a merchant's sidebar until
+ * `xl`). Read at request time (never at build, when the API may be away) from the `catalog` cache
+ * (rule SF4); the rows below read the same cached storefront.
+ */
+export async function StorefrontCategories() {
+  const categories = await shownCategories();
   if (categories.length === 0) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 py-12">
@@ -52,16 +58,50 @@ export async function StorefrontSections() {
     );
   }
   return (
+    <nav
+      aria-labelledby="categories-title"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 pt-6"
+    >
+      <h2 id="categories-title" className="flex items-center gap-2 text-lg font-bold">
+        <AscentBar className="h-5 w-1" />
+        {t('catalog.browse')}
+      </h2>
+      <ul
+        className={`${SCROLLER} sm:grid-cols-3 lg:grid-cols-6 [[data-merchant-hint]_&]:lg:grid-cols-3 [[data-merchant-hint]_&]:xl:grid-cols-6`}
+      >
+        {categories.map((category) => (
+          <li key={category.slug} className="w-40 shrink-0 snap-start sm:w-auto">
+            <CategoryCard category={category} />
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** The categories' place while the storefront is read: no shift when the cards arrive. */
+export function CategoriesSkeleton() {
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 pt-6" aria-hidden="true">
+      <Skeleton className="h-6 w-40" />
+      <div className="flex gap-3 overflow-hidden sm:grid sm:grid-cols-3 lg:grid-cols-6">
+        {['a', 'b', 'c', 'd', 'e', 'f'].map((key) => (
+          <Skeleton key={key} className="h-40 w-40 shrink-0 sm:w-auto" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The games (S24 NH1): one row per category with its first games in panel order and "عرض الكل",
+ * under the categories, the banners and "اشحن مجددًا".
+ */
+export async function StorefrontRows() {
+  const categories = await shownCategories();
+  if (categories.length === 0) return null;
+  return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
-      <nav aria-label={t('catalog.categories')}>
-        <ul className={`${SCROLLER} sm:grid-cols-3 lg:grid-cols-4`}>
-          {categories.map((category) => (
-            <li key={category.slug} className="w-44 shrink-0 snap-start sm:w-auto">
-              <CategoryCard category={category} />
-            </li>
-          ))}
-        </ul>
-      </nav>
       {categories.map((category, section) => (
         <section
           key={category.slug}

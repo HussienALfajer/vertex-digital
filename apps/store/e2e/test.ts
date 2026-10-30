@@ -84,7 +84,13 @@ const PNG = Buffer.from(
 /** The API as the browser sees it: answers keyed by `METHOD /path`, everything else recorded. */
 export class MockApi {
   readonly unexpected: string[] = [];
-  readonly requests: { key: string; body: unknown; headers: Record<string, string> }[] = [];
+  /** Each request with its query (`search`), for a test of what was asked. */
+  readonly requests: {
+    key: string;
+    search: string;
+    body: unknown;
+    headers: Record<string, string>;
+  }[] = [];
   private readonly answers = new Map<string, Answer>([
     // Signed out unless a test says otherwise: Better Auth answers `null`.
     ['GET /api/auth/get-session', { status: 200, body: null }],
@@ -140,6 +146,8 @@ export class MockApi {
     ],
     // S23 ID2: the merchant area's layout reads the tier on every merchant page; Bronze here.
     ['GET /api/merchant/tier', { status: 200, body: tierSummary() }],
+    // "ألعابك" (owner, 2026-10-30): no pinned game; a merchant's stars read them on any page.
+    ['GET /api/merchant/pinned-games', { status: 200, body: { gameIds: [] } }],
     // S22 PK4: no passkey; the account page reads them once signed in.
     ['GET /api/account/passkeys', { status: 200, body: [] }],
     // S22 PK3: the sign-in page asks options for the browser's passkey suggestions.
@@ -221,7 +229,12 @@ export class MockApi {
     const request = route.request();
     const url = new URL(request.url());
     const key = `${request.method()} ${url.pathname}`;
-    this.requests.push({ key, body: bodyOf(request), headers: request.headers() });
+    this.requests.push({
+      key,
+      search: url.search,
+      body: bodyOf(request),
+      headers: request.headers(),
+    });
     // Catalog images are public files on every catalog page (S09 rule SF5): a PNG by default.
     // A key with its query (S22: "تنبيهاتي"'s active and ended lists) wins over the bare path.
     const answer =

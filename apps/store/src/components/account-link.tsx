@@ -74,13 +74,7 @@ export function AccountLink() {
   }, []);
 
   if (session) {
-    return (
-      <SignedInHeader
-        name={session.user.name}
-        email={session.user.email}
-        merchant={session.user.accountType === 'merchant'}
-      />
-    );
+    return <SignedInHeader name={session.user.name} email={session.user.email} />;
   }
 
   const signedOut = (

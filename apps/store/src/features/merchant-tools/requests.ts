@@ -1,7 +1,5 @@
 import {
   type AlertSettings,
-  type BulkCheckRequest,
-  type BulkCheckResult,
   type CustomerPrices,
   ERROR_CODES,
   type ErrorCode,
@@ -15,6 +13,7 @@ import {
   type MerchantTierTable,
   type OrderPrint,
   type OrderSale,
+  type PinnedGames,
   PRICE_LIST_CURRENCIES,
   PRICE_LIST_MODES,
   type ReceiptSettings,
@@ -115,6 +114,18 @@ export function saveWatches(input: UpdateWatches, fetcher: Fetcher = fetch) {
   return apiRequest<Watches>('/api/merchant/watches', { method: 'PUT', body: input, fetcher });
 }
 
+export function getPinnedGames(fetcher: Fetcher = fetch) {
+  return apiRequest<PinnedGames>('/api/merchant/pinned-games', { fetcher });
+}
+
+export function savePinnedGames(input: PinnedGames, fetcher: Fetcher = fetch) {
+  return apiRequest<PinnedGames>('/api/merchant/pinned-games', {
+    method: 'PUT',
+    body: input,
+    fetcher,
+  });
+}
+
 export function getAlerts(cursor: string | null, fetcher: Fetcher = fetch) {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   return apiRequest<MerchantAlertPage>(`/api/merchant/alerts${query}`, { fetcher });
@@ -143,14 +154,6 @@ export function getRecentPlayers(gameId: string, fetcher: Fetcher = fetch) {
 
 export function getSavedPlayers(gameId: string, fetcher: Fetcher = fetch) {
   return apiRequest<SavedPlayerList>(`/api/saved-players?gameId=${encodeURIComponent(gameId)}`, {
-    fetcher,
-  });
-}
-
-export function checkBulk(input: BulkCheckRequest, fetcher: Fetcher = fetch) {
-  return apiRequest<BulkCheckResult>('/api/merchant/bulk/check', {
-    method: 'POST',
-    body: input,
     fetcher,
   });
 }

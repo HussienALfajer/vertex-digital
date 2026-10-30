@@ -10,11 +10,13 @@ import { escapeMarkup, loadFonts, ltr, named, textBlock } from '../../core/image
 import { TIER_COLORS, tierIconSvg, tierLine } from './tier-mark.js';
 
 /*
- * The price list image for WhatsApp (S21 PL2, PL3): 1080 px wide, the brand's dark surface, the
- * shop's name and logo, "قائمة الأسعار" with the Damascus date and time and "الأسعار قابلة
- * للتغيير", then each game's packs with their prices, at most 60 packs per image. Drawn by sharp
- * with Pango like the share image; every value is escaped; the whole render (text blocks, logo and
- * composite) stops after 10 seconds (audit A06-38).
+ * The price list image for WhatsApp (S21 PL2, PL3; owner, 2026-10-30, as the printed list): 1080 px
+ * wide, the brand's dark surface, the shop's name and logo with its tier's line, "قائمة الأسعار"
+ * with the Damascus date and time, then each game under its cover and name with its packs in
+ * alternating rows (USD before SYP when both show), and a footer with the date, "الأسعار قابلة
+ * للتغيير" and the shop's WhatsApp when its receipts show it; at most 60 packs per image. Drawn by
+ * sharp with Pango like the share image, Arabic shaped by Pango; every value is escaped; the whole
+ * render (text blocks, images and composite) stops after 10 seconds (audit A06-38).
  */
 
 /** PL3: the time one image may take to render, every step included. */
@@ -28,13 +30,17 @@ const MARGIN = 60;
 const LOGO_SIZE = 140;
 /** S23 ID6: the tier's icon before its line. */
 const TIER_ICON_SIZE = 30;
-const ROW_GAP = 18;
-const PRICE_WIDTH = 360;
+/** A game's cover beside its name. */
+const COVER_SIZE = 64;
+const ROW_PADDING = 12;
+const PRICE_WIDTH = 400;
 
 /** `brand/identity.md`: green-950 background, green-900 surface, sand accent. */
 const COLORS = {
   background: '#031B17',
   surface: '#0B2D28',
+  /** Every other row, a step lighter than the surface. */
+  stripe: '#123A34',
   line: '#174A42',
   sand: '#B9A87A',
   text: '#FFFFFF',
@@ -59,36 +65,41 @@ function damascusTime(iso: string): string {
   return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
-/** PL1: the price in the chosen currency; USD when there is no rate for SYP. */
-function priceText(row: MerchantPriceListRow, currency: MerchantPriceList['currency']): string {
+/** PL1: the price in the chosen currency, USD first when both show; USD alone without a rate. */
+export function priceText(
+  row: MerchantPriceListRow,
+  currency: MerchantPriceList['currency'],
+): string {
   if (!row.available || row.usdUnits === null) return 'غير متوفر';
   const dollars = ltr(formatUsd(row.usdUnits));
   if (row.sypUnits === null || currency === 'usd') return dollars;
   const pounds = `${ltr(formatSyp(row.sypUnits))} ل.س`;
-  return currency === 'both' ? `${pounds} · ${dollars}` : pounds;
+  return currency === 'both' ? `${dollars} · ${pounds}` : pounds;
 }
 
 type ListOfImage = Pick<
   MerchantPriceList,
-  'tradeName' | 'generatedAt' | 'currency' | 'games' | 'tier' | 'largeLogo'
+  'tradeName' | 'generatedAt' | 'currency' | 'games' | 'tier' | 'largeLogo' | 'whatsapp'
 >;
 
 /**
  * Renders one image of the list: `list.games` holds this page's packs only. `logo` is the stored
- * logo (any format sharp reads), or null. Refused once `budgetMs` has passed, whichever step is
- * running; no step starts after it.
+ * logo and `covers` the games' covers by game id (any format sharp reads); a game without one
+ * shows its name alone. Refused once `budgetMs` has passed, whichever step is running; no step
+ * starts after it.
  */
 export async function renderPriceListImage(
   list: ListOfImage,
   pages: { page: number; pages: number },
   logo: Buffer | null,
+  covers: ReadonlyMap<string, Buffer> = new Map(),
   budgetMs = PRICE_LIST_RENDER_BUDGET_MS,
 ): Promise<Buffer> {
   const deadline = Date.now() + budgetMs;
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
-      draw(list, pages, logo, deadline),
+      draw(list, pages, logo, covers, deadline),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(timedOut(budgetMs)), budgetMs);
       }),
@@ -105,6 +116,7 @@ async function draw(
   list: ListOfImage,
   pages: { page: number; pages: number },
   logo: Buffer | null,
+  covers: ReadonlyMap<string, Buffer>,
   deadline: number,
 ): Promise<Buffer> {
   /** Before each step: a render past its deadline starts nothing more. */
@@ -130,42 +142,64 @@ async function draw(
       color: COLORS.sand,
       weight: 700,
     }),
-    textBlock('الأسعار قابلة للتغيير', 24, headerWidth, muted),
   ]);
-  const blocks: {
-    kind: 'game' | 'row';
-    name: Awaited<ReturnType<typeof textBlock>>;
-    price?: Awaited<ReturnType<typeof textBlock>>;
+  type Block = Awaited<ReturnType<typeof textBlock>>;
+  const sections: {
+    title: Block;
+    cover: Buffer | null;
+    rows: { name: Block; price: Block }[];
   }[] = [];
   for (const game of list.games) {
     step();
-    blocks.push({
-      kind: 'game',
-      name: await textBlock(named(escapeMarkup(game.nameAr)), 34, inner, {
+    const stored = covers.get(game.gameId);
+    const cover = stored
+      ? await sharp(stored)
+          .resize(COVER_SIZE, COVER_SIZE, { fit: 'cover' })
+          .composite([
+            {
+              input: Buffer.from(
+                `<svg width="${COVER_SIZE}" height="${COVER_SIZE}"><rect width="${COVER_SIZE}" height="${COVER_SIZE}" rx="10" ry="10"/></svg>`,
+              ),
+              blend: 'dest-in',
+            },
+          ])
+          .png()
+          .toBuffer()
+      : null;
+    const titleWidth = inner - (cover ? COVER_SIZE + 16 : 0);
+    sections.push({
+      title: await textBlock(named(escapeMarkup(game.nameAr)), 34, titleWidth, {
         color: COLORS.sand,
         weight: 700,
       }),
+      cover,
+      rows: await Promise.all(
+        game.rows.map(async (row) => ({
+          name: await textBlock(
+            named(escapeMarkup(row.nameAr)),
+            28,
+            inner - PRICE_WIDTH - ROW_PADDING * 3,
+            text,
+          ),
+          price: await textBlock(priceText(row, list.currency), 28, PRICE_WIDTH, {
+            ...(row.available ? text : muted),
+            weight: 700,
+          }),
+        })),
+      ),
     });
-    const rows = await Promise.all(
-      game.rows.map(async (row) => ({
-        kind: 'row' as const,
-        name: await textBlock(named(escapeMarkup(row.nameAr)), 28, inner - PRICE_WIDTH - 24, text),
-        price: await textBlock(priceText(row, list.currency), 28, PRICE_WIDTH, {
-          ...(row.available ? text : muted),
-          weight: 700,
-        }),
-      })),
-    );
-    blocks.push(...rows);
   }
   step();
-  const footer =
-    pages.pages > 1
-      ? await textBlock(`${ltr(`${pages.page} / ${pages.pages}`)}`, 22, inner, muted)
-      : null;
+  const footerLine = [
+    'الأسعار قابلة للتغيير',
+    ...(list.whatsapp ? [`واتساب ${ltr(escapeMarkup(list.whatsapp))}`] : []),
+    ...(pages.pages > 1 ? [ltr(`${pages.page} / ${pages.pages}`)] : []),
+    // A right-to-left mark on each side of the dot: two numbers in a row never merge into one run.
+  ].join('\u200F · \u200F');
+  const footer = await textBlock(footerLine, 22, inner, muted);
 
   const layers: OverlayOptions[] = [];
-  const lines: string[] = [];
+  const shapes: string[] = [];
   let top = MARGIN;
   const headerTop = top;
   for (const [index, block] of header.entries()) {
@@ -192,30 +226,45 @@ async function draw(
     });
     top = Math.max(top, headerTop + logoSize + 10);
   }
-  top += 20;
-  for (const block of blocks) {
-    if (block.kind === 'game') top += 16;
-    const height = Math.max(block.name.height, block.price?.height ?? 0);
-    layers.push({ input: block.name.data, top, left: WIDTH - MARGIN - block.name.width });
-    if (block.price) layers.push({ input: block.price.data, top, left: MARGIN });
-    top += height + ROW_GAP;
-    if (block.kind === 'row') {
-      lines.push(
-        `<rect x="${MARGIN}" y="${top - ROW_GAP / 2}" width="${inner}" height="1" fill="${COLORS.line}"/>`,
-      );
+  top += 10;
+  shapes.push(`<rect x="${MARGIN}" y="${top}" width="${inner}" height="2" fill="${COLORS.sand}"/>`);
+  top += 24;
+  for (const section of sections) {
+    const titleHeight = Math.max(section.title.height, section.cover ? COVER_SIZE : 0);
+    if (section.cover) {
+      layers.push({ input: section.cover, top, left: WIDTH - MARGIN - COVER_SIZE });
     }
+    layers.push({
+      input: section.title.data,
+      top: top + Math.round((titleHeight - section.title.height) / 2),
+      left: WIDTH - MARGIN - (section.cover ? COVER_SIZE + 16 : 0) - section.title.width,
+    });
+    top += titleHeight + 12;
+    for (const [index, row] of section.rows.entries()) {
+      const height = Math.max(row.name.height, row.price.height) + ROW_PADDING * 2;
+      shapes.push(
+        `<rect x="${MARGIN}" y="${top}" width="${inner}" height="${height}" rx="6" ry="6" fill="${index % 2 === 0 ? COLORS.stripe : COLORS.surface}"/>`,
+      );
+      layers.push({
+        input: row.name.data,
+        top: top + ROW_PADDING,
+        left: WIDTH - MARGIN - ROW_PADDING - row.name.width,
+      });
+      layers.push({ input: row.price.data, top: top + ROW_PADDING, left: MARGIN + ROW_PADDING });
+      top += height;
+    }
+    top += 28;
   }
-  if (footer) {
-    top += 10;
-    layers.push({ input: footer.data, top, left: MARGIN });
-    top += footer.height;
-  }
+  shapes.push(`<rect x="${MARGIN}" y="${top}" width="${inner}" height="1" fill="${COLORS.line}"/>`);
+  top += 16;
+  layers.push({ input: footer.data, top, left: WIDTH - MARGIN - footer.width });
+  top += footer.height;
   const height = top + MARGIN;
   const background = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}">
       <rect width="100%" height="100%" fill="${COLORS.background}"/>
       <rect x="${MARGIN / 2}" y="${MARGIN / 2}" width="${WIDTH - MARGIN}" height="${height - MARGIN}" fill="${COLORS.surface}"/>
-      ${lines.join('')}
+      ${shapes.join('')}
     </svg>`,
   );
   step();

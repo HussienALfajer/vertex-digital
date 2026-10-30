@@ -564,7 +564,8 @@ describe('merchant tiers in the worker (S23 TR6, MG4, MG5, PG5)', () => {
       store,
     );
     expect(changed.text).toContain('ما تمنحك إياه فئتك');
-    expect(changed.text).toMatch(/100\D{0,3} سطراً في الطلب الجماعي/);
+    expect(changed.text).toMatch(/100\D{0,3} كوداً في الطلب الواحد/);
+    expect(changed.text).not.toContain('الطلب الجماعي');
     expect(changed.text).toContain('شعار محلك بحجم أكبر');
   });
 

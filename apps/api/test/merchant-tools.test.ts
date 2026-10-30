@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { markupPrice, WATCHES_MAX } from '@vertex-digital/contracts';
+import { markupPrice, PINNED_GAMES_MAX, WATCHES_MAX } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   customers,
@@ -461,6 +461,114 @@ describe('follows and alert settings (S21 AL1, AL5, AL6)', () => {
         400,
       ),
     ).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+});
+
+describe('pinned games, "ألعابك" (owner, 2026-10-30)', () => {
+  it('saves the ordered list, refuses unknown, duplicate and more than 20, and hides paused', async () => {
+    const shop = await merchant(0);
+    const second = await json<{ id: string }>(
+      await adminSend('POST', '/api/admin/catalog/games', {
+        categoryId: ids.categoryId,
+        slug: `mt-ff-${run}`,
+        nameAr: `فري فاير ${run}`,
+        nameEn: 'Free Fire',
+      }),
+      201,
+    );
+    await test.db.execute(sql`update catalog_games set status = 'active' where id = ${second.id}`);
+    const pinned = () => client.get('/api/merchant/pinned-games', { cookie: shop.cookie });
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [] });
+    const order = [second.id, ids.gameId];
+    expect(
+      await json(
+        await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: order }),
+        200,
+      ),
+    ).toEqual({ gameIds: order });
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: order });
+    // Reordered: the whole list is replaced, positions and all.
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, {
+        gameIds: [ids.gameId, second.id],
+      }),
+      200,
+    );
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+
+    expect(
+      await json(
+        await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [randomUUID()] }),
+        404,
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    for (const gameIds of [
+      [ids.gameId, ids.gameId],
+      Array.from({ length: PINNED_GAMES_MAX + 1 }, () => randomUUID()),
+    ]) {
+      expect(
+        await json(await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds }), 400),
+      ).toMatchObject({ code: 'VALIDATION_FAILED' });
+    }
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+
+    // A paused game leaves the read and comes back with it; the picker names its category.
+    await test.db.execute(sql`update catalog_games set status = 'paused' where id = ${second.id}`);
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
+    await test.db.execute(sql`update catalog_games set status = 'active' where id = ${second.id}`);
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+    // A save while it is paused keeps it: the merchant never saw it to remove it (S21 amendment 4).
+    await test.db.execute(sql`update catalog_games set status = 'paused' where id = ${second.id}`);
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
+      200,
+    );
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
+    await test.db.execute(sql`update catalog_games set status = 'active' where id = ${second.id}`);
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId, second.id] });
+    // Saved while shown and left out, it is unpinned for real.
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
+      200,
+    );
+    expect(await json(await pinned(), 200)).toEqual({ gameIds: [ids.gameId] });
+    const games = await json<{ items: { id: string; categoryNameAr: string }[] }>(
+      await client.get('/api/merchant/games', { cookie: shop.cookie }),
+      200,
+    );
+    expect(games.items.find((game) => game.id === second.id)?.categoryNameAr).toBe(`أدوات ${run}`);
+  });
+
+  it('refuses customers and keeps a frozen merchant to reading', async () => {
+    const person = await seedCustomer(test.db);
+    seeded.push(person.id);
+    const cookie = await client.signInCustomer(person.email);
+    expect((await client.get('/api/merchant/pinned-games')).status).toBe(401);
+    expect((await client.get('/api/merchant/pinned-games', { cookie: admin.cookie })).status).toBe(
+      401,
+    );
+    expect(
+      await json(await client.get('/api/merchant/pinned-games', { cookie }), 403),
+    ).toMatchObject({ code: 'NOT_MERCHANT' });
+    expect(
+      await json(await send('PUT', '/api/merchant/pinned-games', cookie, { gameIds: [] }), 403),
+    ).toMatchObject({ code: 'NOT_MERCHANT' });
+
+    const shop = await merchant(0);
+    await json(
+      await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [ids.gameId] }),
+      200,
+    );
+    await test.db.update(customers).set({ frozenAt: new Date() }).where(eq(customers.id, shop.id));
+    expect(
+      await json(await client.get('/api/merchant/pinned-games', { cookie: shop.cookie }), 200),
+    ).toEqual({ gameIds: [ids.gameId] });
+    expect(
+      await json(
+        await send('PUT', '/api/merchant/pinned-games', shop.cookie, { gameIds: [] }),
+        403,
+      ),
+    ).toMatchObject({ code: 'ACCOUNT_FROZEN' });
   });
 });
 

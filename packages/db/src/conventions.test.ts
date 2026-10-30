@@ -112,6 +112,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
     "The merchant's own bookkeeping (S21 SP4, SP5): no ledger posting, edited in place, never deleted",
   merchant_watches:
     "The merchant's own follows (S21 AL1): deleted for real, nothing references them",
+  merchant_pinned_games:
+    "The merchant's own pinned games (owner, 2026-10-30): replaced on a save, nothing references them",
   merchant_watch_states: 'What the alerts job last told (S21 AL2): overwritten by the job only',
   merchant_alert_events:
     'A notification log (S21 AL2): never changed, deleted after 90 days, not a business record',

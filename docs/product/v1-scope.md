@@ -223,10 +223,10 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 - The merchant sets the price they charge their own customers per product, in SYP or USD; profit per order and per period is computed from it; used by F34, F35 and F36.
 
 #### F32 — Sale mode
-- A switch a merchant turns on from the home page; the game page, the one purchase screen, then works as a fast counter: each pack's selling and purchase price in SYP and USD with the profit, a button to hide the cost from a customer watching the screen, keyboard shortcuts, recent player IDs, a purchase in two taps (still confirmed). The home page leads with the merchant's games. Customers see no change.
+- A switch a merchant turns on from the home page; the game page, the one purchase screen, then works as a fast counter: each pack's selling and purchase price in USD with SYP after "≈" and the profit, a button to hide the cost from a customer watching the screen, keyboard shortcuts, recent player IDs, a purchase in two taps confirmed with the slide. The home page shows "ألعابك" after the categories: the games the merchant pins with a star, in their own order, then suggestions. Customers see no change.
 
-#### F33 — Bulk orders
-- Paste a list (or upload a CSV) of player IDs and packs, check it, pay it once, and follow each line's status.
+#### F33 — Bulk orders (removed)
+- Removed by the owner on 2026-10-30: the bulk page and its check are gone. Past checkouts paid from it stay valid and readable (`source: bulk`); a merchant's checkout keeps the tier's line limit (S23 TS5).
 
 #### F34 — Codes in quantity and thermal printing
 - Buy several codes of one pack at once; print them on a 58 or 80 mm thermal printer with the redemption steps; every print and export is logged like a reveal (F11).
@@ -236,13 +236,13 @@ Added by the owner on 2026-10-20, moved forward from a later phase and started b
 - A merchant's printed or shared receipt carries their shop name, and their own selling price instead of the price they paid.
 
 #### F36 — Printable daily price list
-- A PDF or image of the merchant's prices (or their own selling prices, F31) in SYP, to hang in the shop or send on WhatsApp.
+- A PDF or image of the merchant's prices (or their own selling prices, F31) in SYP, USD or both, to hang in the shop or send on WhatsApp; it starts from the merchant's pinned games, else their best sellers, never the whole catalog.
 
 #### F37 — Merchant alerts
 - Price changes, products back in stock or out of stock, and a low balance.
 
 #### F38 — Monthly statement
-- A monthly account statement (PDF and Excel): deposits, orders, refunds, opening and closing balance.
+- A monthly account statement (PDF and Excel): deposits, orders, refunds, opening and closing balance. On screen, the month in a sentence and four figures, the month's sales and estimated profit, the tier's progress and the movements by day with a search.
 
 #### F39 — Merchant volume levels
 - Levels by monthly purchases (for example bronze, silver, gold), each with its own price list, upgraded automatically; thresholds and lists set in the panel.
@@ -266,7 +266,7 @@ Added by the owner on 2026-10-29; extends F39 (S23).
 - Four tiers: Bronze (every merchant without a level, on the wholesale list), Silver, Gold and Diamond (monthly net purchase thresholds set in the panel), each with its own price list inheriting from the tier below; a smaller margin per tier, varied by category; fixed prices on best sellers for Diamond. A tier never costs more than the tier below and never sells below cost.
 - Identity: a tier badge in the merchant area, a tier card, an upgrade celebration; the badge on receipts, the verification page, the price list and the statement (named from Silver up); a printable "تاجر معتمد" certificate with a QR to a live page; a shop sticker image.
 - Progress: a progress bar, a tier table with example prices, a forecast, a month-end reminder, a monthly history, the savings against Bronze, and the existing grace (a tier is held through the next month) made explicit.
-- Privileges per tier, set in the panel: deposit limits, player-check quota, bulk lines and codes per order, deposit and ticket queue priority with a reply promise, a direct contact for Diamond, early access to packs the admin chooses, faster alerts, receipt customisation.
+- Privileges per tier, set in the panel: deposit limits, player-check quota, merchant checkout lines (named bulk lines; bulk orders were removed 2026-10-30) and codes per order, deposit and ticket queue priority with a reply promise, a direct contact for Diamond, early access to packs the admin chooses, faster alerts, receipt customisation.
 - The admin grants a higher tier for up to 90 days; tier column, filter and report; Telegram alerts for Gold and Diamond changes; a preview of a threshold change.
 
 ## 5. Automations (fixed rules in V1)
@@ -320,7 +320,7 @@ Added by the owner on 2026-10-29; extends F39 (S23).
 | 1. Money core | F01–F07, F26, F27 | Test customers can sign up and fund wallets; the admin can review deposits safely; registration stays closed |
 | 2. Selling | F08–F16 | Test customers buy and receive top-ups automatically; registration still closed |
 | 3. Operations | F17–F25 | The admin runs the store from the panel; nightly reconciliation; PWA |
-| M. Merchants and store growth | F28–F43 (owner, 2026-10-20: started before the pilot; F43 added 2026-10-29) | Merchants apply and buy at their lists; shops get counter, bulk and print tools; quicker retail buying |
+| M. Merchants and store growth | F28–F43 (owner, 2026-10-20: started before the pilot; F43 added 2026-10-29) | Merchants apply and buy at their lists; shops get counter and print tools (bulk orders removed 2026-10-30); quicker retail buying |
 | Pilot | Registration opened (F26), quiet launch with low limits | Real orders, real suppliers, limits raised as confidence grows |
 
 ## 8. V1 success metrics (two months after launch)

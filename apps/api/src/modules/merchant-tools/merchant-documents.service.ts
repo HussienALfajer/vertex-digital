@@ -4,8 +4,10 @@ import {
   type MerchantPriceList,
   type MerchantPriceListGame,
   type MerchantPriceListQuery,
+  monthRange,
   monthSchema,
   PRICE_LIST_IMAGES_PER_HOUR,
+  PRICE_LIST_TOP_GAMES,
   priceListLine,
   priceListPage,
   priceListPages,
@@ -15,16 +17,18 @@ import {
   type StatementTier,
   statementBalances,
   statementMonths,
+  statementSales,
   statementTotals,
   tierProgress,
 } from '@vertex-digital/contracts';
 import {
   type Database,
+  dashboardFacts,
   liveTierLevels,
   merchantPrivileges,
-  merchantWatchRows,
   monthsPurchases,
   receiptSettingsOf,
+  recentGameUnits,
   shownGames,
   statementAccount,
   statementFacts,
@@ -41,6 +45,9 @@ import { renderPriceListImage } from './price-list-image.js';
 import { statementFileName, statementWorkbook } from './statement-workbook.js';
 
 const HOUR = 60 * 60 * 1000;
+
+/** The stored cover variant the price list image draws a game's cover from (S09 rule SF5). */
+const COVER_WIDTH = 160;
 
 /** A06-40: statement pages a merchant may read in an hour (each sums a month of the ledger). */
 const STATEMENT_READS_PER_HOUR = 60;
@@ -98,6 +105,7 @@ export class MerchantDocumentsService {
     return {
       tradeName: branding.tradeName,
       logoFileId: branding.logoFileId,
+      whatsapp: branding.showWhatsapp ? branding.whatsapp : null,
       tier: privileges.tier,
       largeLogo: privileges.settings.receiptLargeLogo,
       generatedAt: new Date().toISOString(),
@@ -110,20 +118,30 @@ export class MerchantDocumentsService {
     };
   }
 
-  /** PL1: the games asked for among the store's, else the followed ones, else all of them. */
+  /**
+   * PL1 (owner, 2026-10-30): the games asked for among the store's; else "ألعابك", the pinned
+   * games; else the 10 the merchant sold most in the last 30 days; else none. Never the whole
+   * catalog. In the store's order.
+   */
   private async listGames(
     customerId: string,
     shown: string[],
     asked: string[] | undefined,
   ): Promise<string[]> {
     if (asked) return shown.filter((id) => asked.includes(id));
-    const followed = await merchantWatchRows(this.db, customerId);
-    const ids = new Set([
-      ...followed.games.map((game) => game.gameId),
-      ...followed.products.map((product) => product.gameId),
-    ]);
-    const games = shown.filter((id) => ids.has(id));
-    return games.length > 0 ? games : shown;
+    const pinned = new Set(await this.tools.pinnedGameIds(customerId));
+    const yours = shown.filter((id) => pinned.has(id));
+    if (yours.length > 0) return yours;
+    const units = await recentGameUnits(this.db, customerId);
+    const top = new Set(
+      shown
+        .map((id, order) => ({ id, order, units: units.get(id) ?? 0 }))
+        .filter((game) => game.units > 0)
+        .sort((a, b) => b.units - a.units || a.order - b.order)
+        .slice(0, PRICE_LIST_TOP_GAMES)
+        .map((game) => game.id),
+    );
+    return shown.filter((id) => top.has(id));
   }
 
   /** `GET /api/merchant/price-list.png` (PL3): one page of 60 packs, 20 an hour. */
@@ -140,10 +158,22 @@ export class MerchantDocumentsService {
     const list = await this.priceList(customerId, query);
     if (query.page > list.imagePages) throw refusals.notFound('page');
     const logo = list.logoFileId ? await this.files.serve(list.logoFileId, 'merchant_logo') : null;
+    const games = priceListPage(list.games, query.page);
+    // Each game's cover beside its title, as on the printed list (owner, 2026-10-30).
+    const coverIds = new Map(
+      (await shownGames(this.db, true)).map((game) => [game.id, game.coverFileId]),
+    );
+    const covers = new Map<string, Buffer>();
+    for (const game of games) {
+      const fileId = coverIds.get(game.gameId);
+      const file = fileId ? await this.files.catalogVariant(fileId, COVER_WIDTH) : null;
+      if (file) covers.set(game.gameId, await file.read());
+    }
     return renderPriceListImage(
-      { ...list, games: priceListPage(list.games, query.page) },
+      { ...list, games },
       { page: query.page, pages: list.imagePages },
       logo ? await logo.read() : null,
+      covers,
     );
   }
 
@@ -204,7 +234,18 @@ export class MerchantDocumentsService {
       entries: facts.entries,
       totals: statementTotals(facts.entries),
       tier: await this.statementTier(customerId, month, now),
+      sales: await this.statementSales(customerId, month, now),
     };
+  }
+
+  /**
+   * "مبيعاتك وربحك" (owner, 2026-10-30): the month's delivered orders as the dashboard counts them
+   * (DB2–DB4), up to now for this month.
+   */
+  private async statementSales(customerId: string, month: string, now: Date) {
+    const { start, end } = monthRange(month);
+    const facts = await dashboardFacts(this.db, customerId, start, end < now ? end : now, 0);
+    return statementSales(facts);
   }
 
   /**

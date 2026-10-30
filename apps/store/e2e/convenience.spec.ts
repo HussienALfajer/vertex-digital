@@ -898,7 +898,7 @@ test.describe('quick buy (S22 F40)', () => {
 
   test('no row signed out or without cards (QB6)', async ({ page, api }) => {
     await page.goto('/');
-    await expect(page.getByRole('navigation', { name: ar.catalog.categories })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: ar.catalog.browse })).toBeVisible();
     await expect(page.getByRole('region', { name: qb.row.title })).toHaveCount(0);
     signedIn(api).on('GET /api/quick-buy', 200, { items: [] });
     await page.reload();

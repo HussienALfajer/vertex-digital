@@ -136,7 +136,6 @@ export function tierGrantLines(privileges: TierPrivileges): string[] {
       per: ltr(formatUsd(privileges.perDepositUsdUnits)),
       daily: ltr(formatUsd(privileges.dailyDepositUsdUnits)),
     }),
-    tm('tier.grants.bulk', { count: privileges.bulkLinesMax }),
     tm('tier.grants.codes', { count: privileges.orderUnitsMax }),
     tm('tier.grants.checks', { count: privileges.playerChecksPerHour }),
   ];
