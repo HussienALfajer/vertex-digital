@@ -142,6 +142,16 @@ export const useRenameCategory = () =>
     ),
   );
 
+export const useSetCategoryImage = () =>
+  useCatalogMutation(({ id, imageFileId }: { id: string; imageFileId: string | null }) =>
+    call(
+      api.PATCH('/api/admin/catalog/categories/{id}', {
+        params: { path: { id } },
+        body: { imageFileId },
+      }),
+    ),
+  );
+
 export const useReorderCategories = () =>
   useCatalogMutation((ids: string[]) =>
     call(api.PUT('/api/admin/catalog/categories/order', { body: { ids } })),

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function VerifyEmailPage() {
   return (
-    <AuthFrame title={t('verifyEmail.title')}>
+    <AuthFrame backHref="/sign-in" title={t('verifyEmail.title')}>
       <VerifyEmailPanel />
     </AuthFrame>
   );

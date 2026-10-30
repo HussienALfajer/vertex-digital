@@ -65,7 +65,10 @@ export class CatalogStoreService {
     const shown = await this.shownGames();
     const [products, images] = await Promise.all([
       this.liveProducts(shown.map(({ game }) => game.id)),
-      this.images(shown.map(({ game }) => game)),
+      this.images(
+        shown.map(({ game }) => game),
+        shown.flatMap(({ category }) => (category.imageFileId ? [category.imageFileId] : [])),
+      ),
     ]);
     const states = await this.states(products);
     const statusOf = serviceStatusOf(products, states);
@@ -73,7 +76,12 @@ export class CatalogStoreService {
     for (const { game, category } of shown) {
       let section = categories.at(-1);
       if (section?.slug !== category.slug) {
-        section = { slug: category.slug, nameAr: category.nameAr, games: [] };
+        section = {
+          slug: category.slug,
+          nameAr: category.nameAr,
+          image: category.imageFileId ? imageOf(category.imageFileId, images) : null,
+          games: [],
+        };
         categories.push(section);
       }
       section.games.push({ ...card(game, images), status: statusOf(game.id) });
@@ -364,11 +372,11 @@ export class CatalogStoreService {
     );
   }
 
-  private images(rows: readonly GameRow[]) {
+  private images(rows: readonly GameRow[], others: readonly string[] = []) {
     const ids = rows.flatMap((row) =>
       [row.coverFileId, row.idGuideFileId].filter((id): id is string => id !== null),
     );
-    return this.files.dimensions(ids, 'catalog_image');
+    return this.files.dimensions([...new Set([...ids, ...others])], 'catalog_image');
   }
 
   /**

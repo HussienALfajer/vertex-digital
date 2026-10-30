@@ -173,7 +173,12 @@ export class CatalogService {
       .from(catalogCategories)
       .where(archivedFilter(catalogCategories.archivedAt, query.archived))
       .orderBy(asc(catalogCategories.sortOrder), asc(catalogCategories.createdAt));
-    return rows.map(({ row, gameCount }) => toCategory(row, gameCount));
+    const images = await this.files.dimensions(
+      rows.flatMap(({ row }) => (row.imageFileId ? [row.imageFileId] : [])),
+      'catalog_image',
+      executor,
+    );
+    return rows.map(({ row, gameCount }) => toCategory(row, gameCount, images));
   }
 
   createCategory(actor: Actor, input: CreateCategory & { slug: string }): Promise<Category> {
@@ -203,12 +208,16 @@ export class CatalogService {
     return mapTaken(() =>
       this.db.transaction(async (tx) => {
         const before = await this.lockCategory(tx, id);
-        const changed = changes({ nameAr: before.nameAr }, { nameAr: input.nameAr });
+        if (input.imageFileId) {
+          await this.checkImages({ coverFileId: input.imageFileId }, tx);
+        }
+        const next = {
+          nameAr: input.nameAr ?? before.nameAr,
+          imageFileId: input.imageFileId === undefined ? before.imageFileId : input.imageFileId,
+        };
+        const changed = changes({ nameAr: before.nameAr, imageFileId: before.imageFileId }, next);
         if (changed) {
-          await tx
-            .update(catalogCategories)
-            .set({ nameAr: input.nameAr })
-            .where(eq(catalogCategories.id, id));
+          await tx.update(catalogCategories).set(next).where(eq(catalogCategories.id, id));
           await auditCatalog(tx, actor, 'catalog_category.updated', categoryEntity(id), changed);
         }
         return this.category(tx, id);
@@ -1013,7 +1022,12 @@ export class CatalogService {
       .from(catalogCategories)
       .where(eq(catalogCategories.id, id));
     if (!found) throw refusals.notFound('category');
-    return toCategory(found.row, found.gameCount);
+    const images = await this.files.dimensions(
+      found.row.imageFileId ? [found.row.imageFileId] : [],
+      'catalog_image',
+      executor,
+    );
+    return toCategory(found.row, found.gameCount, images);
   }
 
   /** `FOR NO KEY UPDATE`, as `lockGame`: a game's insert takes `FOR KEY SHARE` on its category. */

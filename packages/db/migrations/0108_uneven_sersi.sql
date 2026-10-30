@@ -1,0 +1,3 @@
+ALTER TABLE "catalog_categories" ADD COLUMN "image_file_id" uuid;--> statement-breakpoint
+ALTER TABLE "catalog_categories" ADD CONSTRAINT "catalog_categories_image_file_id_stored_files_id_fk" FOREIGN KEY ("image_file_id") REFERENCES "public"."stored_files"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "catalog_categories_image_file_id_idx" ON "catalog_categories" USING btree ("image_file_id");

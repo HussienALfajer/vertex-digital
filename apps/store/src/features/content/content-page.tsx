@@ -4,6 +4,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
+import { PageBackLink } from '@/components/page-back-link';
 import { t } from '@/lib/i18n';
 import { ContentLink } from './content-link';
 import { getPublishedPage } from './data';
@@ -20,6 +21,7 @@ export async function ContentPageView({ page }: { page: ContentPage }) {
   if (!data) notFound();
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 py-10 md:py-16">
+      <PageBackLink href="/">{t('back.home')}</PageBackLink>
       <h1 className="text-3xl font-bold">{data.title}</h1>
       <p className="text-sm text-muted-foreground">{updatedText(data.updatedAt)}</p>
       <RichText

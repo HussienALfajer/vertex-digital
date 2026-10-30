@@ -1,6 +1,7 @@
 import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { PageBackLink } from '@/components/page-back-link';
 import { DepositPage, DepositSkeleton } from '@/features/deposits/deposit-page';
 import { t } from '@/lib/i18n';
 
@@ -16,7 +17,10 @@ export const metadata: Metadata = {
 export default function DepositStatusRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 md:py-16">
-      <PageHeader title={t('deposits.detail.title')} />
+      <PageHeader
+        back={<PageBackLink href="/wallet/deposits">{t('back.deposits')}</PageBackLink>}
+        title={t('deposits.detail.title')}
+      />
       <Suspense fallback={<DepositSkeleton />}>
         <DepositPage />
       </Suspense>

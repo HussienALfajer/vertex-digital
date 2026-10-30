@@ -1,6 +1,7 @@
 import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import type { Metadata } from 'next';
 import { type ReactNode, Suspense } from 'react';
+import { PageBackLink } from '@/components/page-back-link';
 import { tm } from '@/features/merchant-tools/i18n';
 import { MerchantNav, MerchantNavLinks } from '@/features/merchant-tools/merchant-nav';
 import { MerchantTierBadge, MerchantTierProvider } from '@/features/merchant-tools/tier-state';
@@ -22,6 +23,7 @@ export default function MerchantLayout({ children }: { children: ReactNode }) {
     <MerchantTierProvider>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10 md:py-16">
         <PageHeader
+          back={<PageBackLink href="/account">{t('back.account')}</PageBackLink>}
           title={tm('title')}
           description={tm('subtitle')}
           actions={<MerchantTierBadge />}

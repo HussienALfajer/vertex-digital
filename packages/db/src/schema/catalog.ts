@@ -42,10 +42,13 @@ export const catalogCategories = pgTable(
     slug: text('slug').notNull().unique(),
     nameAr: text('name_ar').notNull(),
     sortOrder: integer('sort_order').notNull(),
+    /** S24 NH2: optional; the store falls back to a collage of the first covers. */
+    imageFileId: uuid('image_file_id').references(() => storedFiles.id),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [
+    index('catalog_categories_image_file_id_idx').on(table.imageFileId),
     uniqueIndex('catalog_categories_name_ar_live_idx')
       .on(table.nameAr)
       .where(isNull(table.archivedAt)),

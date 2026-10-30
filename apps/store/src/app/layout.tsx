@@ -2,6 +2,7 @@ import { DirectionProvider } from '@vertex-digital/ui/components/direction-provi
 import { themeHex } from '@vertex-digital/ui/theme-hex';
 import type { Metadata, Viewport } from 'next';
 import { type ReactNode, Suspense } from 'react';
+import { BottomNav } from '@/components/bottom-nav';
 import { FrozenBanner } from '@/components/frozen-banner';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
@@ -49,7 +50,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input. */}
         <script dangerouslySetInnerHTML={{ __html: SESSION_HINT_SCRIPT }} />
       </head>
-      <body className="flex min-h-dvh flex-col">
+      <body className="flex min-h-dvh flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0 print:pb-0">
         <DirectionProvider direction="rtl">
           <SiteHeader />
           {/* Read in the browser on every page (audit A09-22): `usePathname` needs a boundary. */}
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </Suspense>
           <main className="flex flex-1 flex-col">{children}</main>
           <SiteFooter />
+          <BottomNav />
         </DirectionProvider>
       </body>
     </html>

@@ -34,9 +34,11 @@ import {
   useCreateCategory,
   useRenameCategory,
   useReorderCategories,
+  useSetCategoryImage,
 } from './catalog.queries';
 import { catalogFailure, MoveButton } from './catalog-parts';
 import { moved } from './catalog-search';
+import { ImageUpload } from './image-upload';
 
 /**
  * "إدارة الفئات" (S06 screens): the categories with rename, order, archive and restore, and a new
@@ -163,6 +165,7 @@ export function CategoriesDialog() {
                   </Button>
                 )}
               </fieldset>
+              {!archived && <CategoryImage category={category} />}
             </li>
           ))}
         </ul>
@@ -186,6 +189,30 @@ export function CategoriesDialog() {
   );
 }
 
+/** S24 NH2: the home page card's image, saved as soon as it is uploaded or removed. */
+function CategoryImage({ category }: { category: Category }) {
+  const { t } = useTranslation();
+  const setImage = useSetCategoryImage();
+  const [failure, setFailure] = useState<string | null>(null);
+  return (
+    <div className="w-full">
+      <ImageUpload
+        label={t('catalog.categories.image')}
+        hint={t('catalog.categories.imageHint')}
+        image={category.image}
+        onPendingChange={() => {}}
+        error={failure ?? undefined}
+        onChange={(image) => {
+          setFailure(null);
+          setImage
+            .mutateAsync({ id: category.id, imageFileId: image?.id ?? null })
+            .catch((error: unknown) => setFailure(errorMessage(t, error)));
+        }}
+      />
+    </div>
+  );
+}
+
 /** The name, renamed in place. */
 function CategoryName({ category, editable }: { category: Category; editable: boolean }) {
   const { t } = useTranslation();
@@ -204,7 +231,7 @@ function CategoryName({ category, editable }: { category: Category; editable: bo
       return focusInvalid();
     }
     try {
-      await rename.mutateAsync({ id: category.id, nameAr: parsed.data.nameAr });
+      await rename.mutateAsync({ id: category.id, nameAr: parsed.data.nameAr ?? category.nameAr });
       setEditing(false);
       setError(null);
     } catch (failure) {

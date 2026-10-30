@@ -1,5 +1,6 @@
 import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import type { Metadata } from 'next';
+import { PageBackLink } from '@/components/page-back-link';
 import { MerchantPage } from '@/features/merchant/merchant-page';
 import { t } from '@/lib/i18n';
 
@@ -12,7 +13,11 @@ export const metadata: Metadata = {
 export default function MerchantRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 md:py-16">
-      <PageHeader title={t('merchant.title')} description={t('merchant.subtitle')} />
+      <PageHeader
+        back={<PageBackLink href="/account">{t('back.account')}</PageBackLink>}
+        title={t('merchant.title')}
+        description={t('merchant.subtitle')}
+      />
       <MerchantPage />
     </div>
   );

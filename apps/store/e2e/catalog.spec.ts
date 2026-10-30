@@ -22,7 +22,7 @@ const syp = (units: number) => fill(c.price.syp, { amount: formatSyp(units) });
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
 
 test.describe('home (rules SF1, SS2)', () => {
-  test('shows the category chips and the game cards, and no service line', async ({
+  test('shows the category cards and the game cards, and no service line', async ({
     page,
     api: _api,
   }) => {
@@ -32,7 +32,8 @@ test.describe('home (rules SF1, SS2)', () => {
     await expect(page.getByText('تعمل بشكل طبيعي')).toHaveCount(0);
     const categories = page.getByRole('navigation', { name: c.categories });
     // A category without games is not shown.
-    await expect(categories.getByRole('link')).toHaveText(['ألعاب', 'بطاقات الهدايا']);
+    await expect(categories.getByRole('link')).toHaveCount(2);
+    await expect(categories.getByRole('link', { name: /^ألعاب/ })).toBeVisible();
     const pubg = page.getByRole('link', { name: /ببجي موبايل/ });
     await expect(pubg).toContainText('PUBG Mobile');
     // Only a game the customer cannot buy carries a chip (rule SS1).
@@ -42,8 +43,10 @@ test.describe('home (rules SF1, SS2)', () => {
     await expect(page.getByRole('link', { name: /موبايل ليجندز/ })).toContainText(
       c.status.unavailable,
     );
-    await categories.getByRole('link', { name: 'بطاقات الهدايا' }).click();
-    await expect(page).toHaveURL(/#gift-cards$/);
+    await expect(categories.getByRole('link', { name: /بطاقات الهدايا/ })).toHaveAttribute(
+      'href',
+      '/categories/gift-cards',
+    );
     await pubg.click();
     await expect(page).toHaveURL('/games/pubg-mobile');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(

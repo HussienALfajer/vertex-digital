@@ -2,10 +2,12 @@ import { AscentLines } from '@vertex-digital/ui/brand/ascent-lines';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { AscentBar } from '@vertex-digital/ui/components/page-header';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { StoreIcon } from 'lucide-react';
+import { ChevronLeftIcon, StoreIcon } from 'lucide-react';
+import Link from 'next/link';
 import { connection } from 'next/server';
 import { SearchField } from '@/features/search/search-trigger';
 import { t } from '@/lib/i18n';
+import { CategoryCard } from './category-card';
 import { getStorefront } from './data';
 import { GameCard } from './game-card';
 
@@ -26,10 +28,17 @@ export function HomeHero() {
   );
 }
 
+/** S24 NH1: how many games a category's row shows on the home page. */
+const ROW_GAMES = 10;
+
+/** A phone's horizontal row reaching both edges of the screen, a grid from `sm`. */
+const SCROLLER =
+  '-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:snap-none sm:overflow-visible sm:px-0 sm:pb-0';
+
 /**
- * The catalog (rule SF1): the category jump chips and one section per category with its games,
- * 2 columns at 360 px, 3 from `sm`, 5 from `lg` (no service line since 2026-10-19, rule SS2). Read at request time
- * (never at build, when the API may be away) from the `catalog` cache (rule SF4).
+ * The catalog (rule SF1, S24 NH1): the category cards, then one row per category with its first
+ * games in panel order and "عرض الكل". Read at request time (never at build, when the API may be
+ * away) from the `catalog` cache (rule SF4).
  */
 export async function StorefrontSections() {
   await connection();
@@ -44,22 +53,15 @@ export async function StorefrontSections() {
   }
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
-      <div className="flex flex-col gap-4">
-        <nav aria-label={t('catalog.categories')}>
-          <ul className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <li key={category.slug}>
-                <a
-                  href={`#${category.slug}`}
-                  className="inline-flex h-11 items-center rounded-md border border-border bg-surface px-4 text-sm font-medium hover:bg-muted"
-                >
-                  {category.nameAr}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </div>
+      <nav aria-label={t('catalog.categories')}>
+        <ul className={`${SCROLLER} sm:grid-cols-3 lg:grid-cols-4`}>
+          {categories.map((category) => (
+            <li key={category.slug} className="w-44 shrink-0 snap-start sm:w-auto">
+              <CategoryCard category={category} />
+            </li>
+          ))}
+        </ul>
+      </nav>
       {categories.map((category, section) => (
         <section
           key={category.slug}
@@ -67,15 +69,33 @@ export async function StorefrontSections() {
           aria-labelledby={`${category.slug}-title`}
           className="flex scroll-mt-4 flex-col gap-4"
         >
-          <h2 id={`${category.slug}-title`} className="flex items-center gap-2 text-lg font-bold">
-            <AscentBar className="h-5 w-1" />
-            {category.nameAr}
-          </h2>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {category.games.map((game, index) => (
-              <li key={game.id}>
+          <div className="flex items-center justify-between gap-3">
+            <h2 id={`${category.slug}-title`} className="flex items-center gap-2 text-lg font-bold">
+              <AscentBar className="h-5 w-1" />
+              {category.nameAr}
+            </h2>
+            <Link
+              href={`/categories/${category.slug}`}
+              aria-label={t('catalog.viewAllOf', { name: category.nameAr })}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm font-medium text-accent-text underline-offset-4 hover:underline"
+            >
+              {t('catalog.viewAll')}
+              <ChevronLeftIcon
+                className="size-4 ltr:rotate-180"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
+          <ul className={`${SCROLLER} sm:grid-cols-3 lg:grid-cols-5`}>
+            {category.games.slice(0, ROW_GAMES).map((game, index) => (
+              <li key={game.id} className="w-36 shrink-0 snap-start sm:w-auto">
                 {/* The first row is what a visitor sees first: its covers do not wait. */}
-                <GameCard game={game} priority={section === 0 && index < 5} />
+                <GameCard
+                  game={game}
+                  priority={section === 0 && index < 5}
+                  sizes="(min-width: 64rem) 220px, (min-width: 40rem) 30vw, 144px"
+                />
               </li>
             ))}
           </ul>

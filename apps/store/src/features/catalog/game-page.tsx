@@ -2,17 +2,16 @@ import type { StoreGame } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Gamepad2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { PageBackLink } from '@/components/page-back-link';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
-import { getGame } from './data';
+import { getGame, getStorefront } from './data';
 import { accentStyle } from './game-card';
 import { GameShop } from './game-shop';
 import { IdGuidePanel } from './id-guide-panel';
 import { PackContent } from './pack-card';
 import { GameStatusChip } from './service-status';
-
-/** A slug the API could answer (S06 `slugSchema`); anything else is not found without a call. */
-export const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+import { SLUG } from './slug';
 
 export async function gameOf(slug: string): Promise<StoreGame | null> {
   return slug.length <= 48 && SLUG.test(slug) ? getGame(slug) : null;
@@ -35,10 +34,19 @@ export async function GamePage({
   const data = await gameOf(slug);
   if (!data) return missing;
   const { game } = data;
+  // S24 NH6: its category's page, from the same cache; home for one outside the storefront, or
+  // when that read fails: a back link never costs the customer the buy page.
+  const categories = await getStorefront()
+    .then((storefront) => storefront.categories)
+    .catch(() => []);
+  const category = categories.find((item) => item.games.some((shown) => shown.slug === slug));
   return (
     <div style={accentStyle(game.accentColor)} className="flex flex-col">
       <div aria-hidden="true" className="h-2 bg-(--game-accent)" />
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:py-10">
+        <PageBackLink href={category ? `/categories/${category.slug}` : '/'}>
+          {category?.nameAr ?? t('back.home')}
+        </PageBackLink>
         <header className="flex items-start gap-4">
           {game.cover ? (
             <CatalogPicture

@@ -43,7 +43,8 @@
             "accentColor": null,
             "status": "unavailable"
           }
-        ]
+        ],
+        "image": null
       },
       {
         "slug": "gift-cards",
@@ -63,12 +64,19 @@
             "accentColor": "#5AB0F2",
             "status": "normal"
           }
-        ]
+        ],
+        "image": {
+          "id": "0199d000-0000-7000-8000-000000000068",
+          "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000068",
+          "width": 640,
+          "height": 640
+        }
       },
       {
         "slug": "apps",
         "nameAr": "تطبيقات الدردشة",
-        "games": []
+        "games": [],
+        "image": null
       }
     ]
   },

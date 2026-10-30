@@ -1,5 +1,6 @@
 import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import type { Metadata } from 'next';
+import { PageBackLink } from '@/components/page-back-link';
 import { ChangeEmailPanel } from '@/features/account/change-email-panel';
 import { t } from '@/lib/i18n';
 
@@ -12,7 +13,11 @@ export const metadata: Metadata = {
 export default function ChangeEmailRoute() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10 md:py-16">
-      <PageHeader title={t('changeEmail.title')} description={t('changeEmail.subtitle')} />
+      <PageHeader
+        back={<PageBackLink href="/account">{t('back.account')}</PageBackLink>}
+        title={t('changeEmail.title')}
+        description={t('changeEmail.subtitle')}
+      />
       <ChangeEmailPanel />
     </div>
   );
