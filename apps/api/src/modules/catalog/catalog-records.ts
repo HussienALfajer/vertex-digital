@@ -63,8 +63,19 @@ const record = (row: {
   updatedAt: row.updatedAt.toISOString(),
 });
 
-export function toCategory(row: CategoryRow, gameCount: number): Category {
-  return { ...record(row), slug: row.slug, nameAr: row.nameAr, gameCount };
+export function toCategory(
+  row: CategoryRow,
+  gameCount: number,
+  images: Map<string, { width: number; height: number }> = new Map(),
+): Category {
+  const size = row.imageFileId ? images.get(row.imageFileId) : undefined;
+  return {
+    ...record(row),
+    slug: row.slug,
+    nameAr: row.nameAr,
+    image: row.imageFileId && size ? toImage(row.imageFileId, size) : null,
+    gameCount,
+  };
 }
 
 export function toImage(id: string, size: { width: number; height: number }): CatalogImage {

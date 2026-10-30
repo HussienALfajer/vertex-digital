@@ -560,7 +560,7 @@ export const AUDIT_DETAILS = {
   'telegram.unlinked': z.strictObject({ linkId: z.uuid() }),
   /** S06 rule CT1–CT5: each catalog change in the transaction of its change. */
   'catalog_category.created': z.strictObject(categoryValues),
-  'catalog_category.updated': changed(categoryValues),
+  'catalog_category.updated': changed({ ...categoryValues, imageFileId: z.uuid().nullable() }),
   'catalog_category.archived': named({}),
   'catalog_category.restored': named({}),
   'catalog_category.reordered': reordered({}),

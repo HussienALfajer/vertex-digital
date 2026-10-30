@@ -45,12 +45,14 @@ export function SiteHeader() {
             {t('app.name')}
           </span>
         </Link>
-        {/* No gap at phone width. Signed in, the theme switch moves into the account menu there:
-            the search, the cart, the balance, the bell and the menu share 360 px (S10); also while the
-            signed-in placeholder shows. */}
+        {/* No gap at phone width, where the search and the cart live in the bottom bar (S24 NH5; the
+            search button stays mounted, it holds the dialog). Signed in, the theme switch moves into
+            the account menu there; also while the signed-in placeholder shows. */}
         <div className="flex items-center sm:gap-1">
-          <SearchButton />
-          <CartButton />
+          <span className="flex items-center max-sm:hidden sm:gap-1">
+            <SearchButton />
+            <CartButton />
+          </span>
           <span className="flex max-sm:group-has-data-signed-in/header:hidden max-sm:[[data-signed-in-hint]_&]:hidden">
             <ThemeToggle />
           </span>

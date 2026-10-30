@@ -2,6 +2,7 @@ import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import { BellRingIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { PageBackLink } from '@/components/page-back-link';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
 import { NotificationsDeviceSwitch } from '@/features/push/device-switch';
 import { t } from '@/lib/i18n';
@@ -19,6 +20,7 @@ export default function NotificationsRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 md:py-16">
       <PageHeader
+        back={<PageBackLink href="/">{t('back.home')}</PageBackLink>}
         title={t('notifications.title')}
         description={t('notifications.subtitle')}
         actions={

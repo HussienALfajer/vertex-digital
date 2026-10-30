@@ -4,6 +4,7 @@ import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import { ListChecksIcon, WalletIcon, ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { t } from '@/lib/i18n';
+import { PageBackLink } from './page-back-link';
 
 const POINTS = [
   { icon: ZapIcon, text: 'auth.points.fast' },
@@ -20,10 +21,13 @@ const POINTS = [
 export function AuthFrame({
   title,
   description,
+  backHref = '/',
   children,
 }: {
   title: string;
   description?: string;
+  /** Rule NH6: home, or `/sign-in` for the steps that follow it. */
+  backHref?: '/' | '/sign-in';
   children: ReactNode;
 }) {
   return (
@@ -45,7 +49,15 @@ export function AuthFrame({
           </ul>
         </aside>
         <div className="flex flex-col gap-8 px-5 py-8 md:px-10 md:py-10">
-          <PageHeader title={title} description={description} />
+          <PageHeader
+            back={
+              <PageBackLink href={backHref}>
+                {t(backHref === '/' ? 'back.home' : 'back.signIn')}
+              </PageBackLink>
+            }
+            title={title}
+            description={description}
+          />
           {children}
         </div>
       </div>

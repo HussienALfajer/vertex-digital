@@ -18,6 +18,8 @@ interface PageHeaderProps extends Omit<ComponentProps<'header'>, 'title'> {
   description?: ReactNode;
   /** Page-level actions, placed at the inline end. */
   actions?: ReactNode;
+  /** A `BackLink`, above the title. */
+  back?: ReactNode;
   /** The heading, made focusable: where the focus goes when an action leaves the page with it. */
   headingRef?: Ref<HTMLHeadingElement>;
 }
@@ -26,6 +28,7 @@ function PageHeader({
   title,
   description,
   actions,
+  back,
   headingRef,
   className,
   ...props
@@ -36,6 +39,7 @@ function PageHeader({
       className={cn('flex flex-wrap items-start justify-between gap-4', className)}
       {...props}
     >
+      {back && <div className="flex w-full">{back}</div>}
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex items-center gap-3">
           <AscentBar />

@@ -46,6 +46,23 @@
     "toLight": "التبديل إلى المظهر الفاتح",
     "toDark": "التبديل إلى المظهر الداكن"
   },
+  "back": {
+    "home": "الرئيسية",
+    "wallet": "المحفظة",
+    "deposits": "الإيداعات",
+    "orders": "طلباتي",
+    "support": "الدعم",
+    "account": "حسابي",
+    "signIn": "تسجيل الدخول"
+  },
+  "nav": {
+    "label": "التنقل الرئيسي",
+    "home": "الرئيسية",
+    "search": "البحث",
+    "cart": "السلة",
+    "orders": "طلباتي",
+    "wallet": "المحفظة"
+  },
   "home": {
     "title": "شحن الألعاب والتطبيقات خلال ثوانٍ",
     "subtitle": "أودِع في محفظتك بالدولار، ثم اشحن ألعابك وتطبيقات الدردشة وبطاقات الهدايا، ويُسلَّم معظم الطلبات تلقائيًا."
@@ -828,6 +845,11 @@
   "catalog": {
     "empty": "نجهّز المتجر، عُد قريبًا",
     "categories": "الفئات",
+    "viewAll": "عرض الكل",
+    "viewAllOf": "عرض كل {name}",
+    "gameCount": "العدد: {count}",
+    "categoryMetaTitle": "{name} | VERTEX DIGITAL",
+    "categoryDescription": "اشحن {name} من Vertex Digital خلال ثوانٍ.",
     "status": {
       "unavailable": "غير متوفرة حاليًا"
     },

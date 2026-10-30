@@ -9078,6 +9078,7 @@ export interface components {
             categories: {
                 slug: string;
                 nameAr: string;
+                image: components["schemas"]["CatalogImage"] | null;
                 games: {
                     /** Format: uuid */
                     id: string;
@@ -9217,6 +9218,7 @@ export interface components {
             updatedAt: string;
             slug: string;
             nameAr: string;
+            image: components["schemas"]["CatalogImage"] | null;
             gameCount: number;
         };
         CreateCategory: {
@@ -9227,7 +9229,9 @@ export interface components {
             ids: string[];
         };
         UpdateCategory: {
-            nameAr: string;
+            nameAr?: string;
+            /** Format: uuid */
+            imageFileId?: string | null;
         };
         Game: {
             /** Format: uuid */

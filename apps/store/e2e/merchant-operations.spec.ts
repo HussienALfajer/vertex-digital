@@ -162,6 +162,8 @@ for (const scheme of ['dark', 'light'] as const) {
     await page.goto('/games/early-game');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('لعبة جديدة');
     await expect(page).toHaveTitle(/لعبة جديدة/);
+    // S24 NH6: outside the storefront, its back link goes home.
+    await expect(page.locator('main [data-slot="back-link"]')).toHaveAttribute('href', '/');
     await expect(
       packButton(page, ar.catalog.earlyAccess).or(packButton(page, '8100 UC')).first(),
     ).toContainText('$98.00');

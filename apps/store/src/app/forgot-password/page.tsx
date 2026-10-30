@@ -10,7 +10,11 @@ export const metadata: Metadata = {
 
 export default function ForgotPasswordPage() {
   return (
-    <AuthFrame title={t('forgotPassword.title')} description={t('forgotPassword.subtitle')}>
+    <AuthFrame
+      backHref="/sign-in"
+      title={t('forgotPassword.title')}
+      description={t('forgotPassword.subtitle')}
+    >
       <ForgotPasswordPanel />
     </AuthFrame>
   );

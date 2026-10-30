@@ -13,9 +13,9 @@
 - [x] `pnpm verify`, reviewer and its findings (in-flight writes, POS and draft clean-up, the shop photo's upload location)
 
 ## PR 2 `feat/store-navigation-and-home`
-- [ ] Spec, roadmap
-- [ ] `BackLink` on inner pages
-- [ ] Phone bottom navigation
-- [ ] Category image (migration, admin upload, contract, OpenAPI)
-- [ ] New home page, `/categories/[slug]`, sitemap
-- [ ] `pnpm verify`, reviewer, PR, merge, deploy, production check, deploy log, report
+- [x] Spec, roadmap
+- [x] `BackLink` on inner pages
+- [x] Phone bottom navigation
+- [x] Category image (migration, admin upload, contract, OpenAPI)
+- [x] New home page, `/categories/[slug]`, sitemap
+- [x] `pnpm verify`, reviewer

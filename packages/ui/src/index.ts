@@ -7,6 +7,7 @@ export * from './components/alert-dialog';
 export * from './components/announcement-bar';
 export * from './components/autocomplete';
 export * from './components/avatar';
+export * from './components/back-link';
 export * from './components/badge';
 export * from './components/button';
 export * from './components/callout';

@@ -241,6 +241,13 @@ test('the cart stays within its performance budget', async ({ page, api }) => {
   expect(kb.stylesheet).toBeLessThanOrEqual(CART_BUDGET_KB.stylesheet);
 });
 
+test('a category page stays within the home budget', async ({ page, api: _api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  const kb = await firstLoad(page, '/categories/games');
+  expect(kb.script).toBeLessThanOrEqual(BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(BUDGET_KB.stylesheet);
+});
+
 test('a share page stays within its performance budget', async ({ page, api: _api }) => {
   test.skip(test.info().project.name !== 'desktop', 'measured once');
   const kb = await firstLoad(page, '/g/G1ftT0kenAAAAAAAAAAAAA');

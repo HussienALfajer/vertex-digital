@@ -5,6 +5,7 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 ## Layout
 - `src/app/`: routes, thin (data loading and layout only). `layout.tsx` sets `lang="ar" dir="rtl"`, the `dark` class, the inline head scripts, header and footer. `globals.css` = Tailwind + `@vertex-digital/ui/styles.css`.
 - `src/app/%5Finternal/revalidate/route.ts` is `POST /_internal/revalidate` (a folder starting with `_` is private in the App Router, so it is written `%5F`); the worker's `store.revalidate` job calls it.
+- `src/components/bottom-nav.tsx` is the phone's bar (S24 NH4), `page-back-link.tsx` the store's `BackLink`: a fixed parent per route, never `history.back()` (the table in S24 NH6). At phone width the header's search and cart live in the bar; the search button stays mounted, it holds the dialog.
 - Merchant routes: `app/merchant/(area)/` (layout with `MerchantNav`) and `app/merchant/(print)/` (print pages without that frame).
 - Route handlers that must keep `no-cache` (`sw.js/route.ts`, `offline/route.ts`, `q/[code]/route.ts`) read per request.
 - `src/features/<area>/`: one area's components, server data functions and request functions. `src/components/`: app-wide pieces (header, footer, banners, account menu, `FormAlert`, `InvalidAlert` in its own file so pages showing only a `FormAlert` don't ship it).
@@ -15,7 +16,7 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 ## Patterns to copy
 - Request functions + forms: `src/features/auth/` (`requests.ts` pure with a unit test, client forms, field messages in `validation.ts`).
 - Browser-read customer page (skeleton, error, sign-in redirect): `src/features/account/`. Cursor list with "load more": `src/features/wallet/`.
-- Cached public reads: `src/features/catalog/data.ts`. Money form (Idempotency-Key, ALTCHA, image upload): `src/features/deposits/deposit-form.tsx`.
+- Cached public reads: `src/features/catalog/data.ts` (a category's page reads the cached storefront). Money form (Idempotency-Key, ALTCHA, image upload): `src/features/deposits/deposit-form.tsx`.
 - Refused-field focus: `src/features/auth/sign-up-form.tsx`, `src/features/deposits/deposit-form.tsx`. Dynamic `[id]` page: `src/features/deposits/` (`useParams` inside `<Suspense>`, `notFound()` for another customer's record).
 
 ## Rendering and caching
@@ -36,7 +37,7 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 - `CatalogPicture` and the header are client code on every page: they import no contracts values (`features/catalog/images.ts` keeps its own copy of the widths, checked by its test), and no Base UI tooltip or popup (Floating UI is about 30 KB).
 - UI only via `@vertex-digital/ui` subpaths (`@vertex-digital/ui/components/button`), never the root barrel. Missing component: add it to `packages/ui`.
 - Links on every page (header, footer, banners) to account or support pages set `prefetch={false}`, or their forms, zod and ALTCHA count in every page's first load.
-- Modules the header imports (e.g. `features/cart/cart-keys.ts`, `features/push/rules.ts`) must not import contracts.
+- Modules the header and the bottom bar import (e.g. `features/cart/cart-keys.ts`, `features/push/rules.ts`) must not import contracts.
 
 ## Money, idempotency and session
 - Every money and ticket form follows `lib/idempotency.ts`: keep the key while the body is the same; keep it whatever the body after an answer that may follow a write (no answer, server fault, `IDEMPOTENCY_KEY_REUSED`) or while an attempt is in flight, until a success; new key only for a changed body after a clear refusal.

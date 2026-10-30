@@ -203,6 +203,8 @@ export const categorySchema = z
     ...record,
     slug: z.string(),
     nameAr: z.string(),
+    /** S24 NH2: what the home page's card shows; null for the collage. */
+    image: catalogImageSchema.nullable(),
     /** Unarchived games in the category (rule CT2). */
     gameCount: z.int().nonnegative(),
   })
@@ -222,8 +224,9 @@ export const createCategorySchema = z
 
 export type CreateCategory = z.input<typeof createCategorySchema>;
 
-export const updateCategorySchema = createCategorySchema
-  .pick({ nameAr: true })
+/** A new name, or a new image (`null` clears it; S24 NH2). */
+export const updateCategorySchema = z
+  .object({ nameAr: line(40).optional(), imageFileId: z.uuid().nullable().optional() })
   .meta({ id: 'UpdateCategory' });
 
 export type UpdateCategory = z.input<typeof updateCategorySchema>;
@@ -831,7 +834,12 @@ export const storefrontSchema = z
   .object({
     service: storeServiceStateSchema,
     categories: z.array(
-      z.object({ slug: z.string(), nameAr: z.string(), games: z.array(storeGameCard) }),
+      z.object({
+        slug: z.string(),
+        nameAr: z.string(),
+        image: catalogImageSchema.nullable(),
+        games: z.array(storeGameCard),
+      }),
     ),
   })
   .meta({ id: 'Storefront' });

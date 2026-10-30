@@ -123,6 +123,7 @@ export class CatalogMock {
     id: nextId(),
     slug: slug as string,
     nameAr: nameAr as string,
+    image: null,
     sortOrder: index + 1,
     archivedAt: null,
     createdAt: NOW,
@@ -493,6 +494,7 @@ export class CatalogMock {
         id: nextId(),
         slug: String(body?.slug),
         nameAr: String(body?.nameAr),
+        image: null,
         sortOrder: this.categories.length + 1,
         archivedAt: null,
         createdAt: NOW,
@@ -511,6 +513,17 @@ export class CatalogMock {
     if (categoryId) {
       const row = this.categories.find((item) => item.id === categoryId);
       if (!row) return notFound();
+      if (method === 'PATCH' && body && 'imageFileId' in body) {
+        row.image = body.imageFileId
+          ? {
+              id: String(body.imageFileId),
+              url: `/api/catalog/images/${body.imageFileId}`,
+              width: 1200,
+              height: 675,
+            }
+          : null;
+        return { status: 200, json: { ...row, gameCount: 0 } };
+      }
       if (path.endsWith('/games/order') && method === 'PUT') {
         const rows = this.reorder(
           this.games.filter((item) => item.categoryId === row.id),

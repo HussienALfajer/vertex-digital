@@ -3,6 +3,7 @@ import { RichText } from '@vertex-digital/ui/components/rich-text';
 import { ChevronDownIcon } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
+import { PageBackLink } from '@/components/page-back-link';
 import { t } from '@/lib/i18n';
 import { ContentLink } from './content-link';
 import { getPublishedFaq } from './data';
@@ -26,6 +27,7 @@ export async function FaqView() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10 md:py-16">
       <header className="flex flex-col gap-2">
+        <PageBackLink href="/">{t('back.home')}</PageBackLink>
         <h1 className="text-3xl font-bold">{t('content.faq.title')}</h1>
         <p className="text-sm text-muted-foreground">{updatedText(faq.updatedAt)}</p>
       </header>

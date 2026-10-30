@@ -417,6 +417,46 @@ describe('categories (rules CT1, CT2, CT5)', () => {
     });
   });
 
+  it('sets, audits and clears a category image; only a catalog image (S24 NH2)', async () => {
+    const category = await newCategory();
+    const uploaded = await json<{ id: string; url: string }>(
+      await client.post('/api/admin/catalog/images', {
+        cookie: admin.cookie,
+        form: form(await image(), 'c.png'),
+      }),
+      201,
+    );
+    const set = await json<{ image: { id: string; url: string } | null; nameAr: string }>(
+      await patch(`/categories/${category.id}`, { imageFileId: uploaded.id }),
+      200,
+    );
+    expect(set.image).toMatchObject({ id: uploaded.id, url: uploaded.url });
+    expect(set.nameAr).toBe(category.nameAr);
+    expect(
+      (await auditOf(test.db, category.id)).some(
+        (entry) => entry.action === 'catalog_category.updated',
+      ),
+    ).toBe(true);
+    // The name alone leaves the image as it is.
+    const renamed = await json<{ image: { id: string } | null }>(
+      await patch(`/categories/${category.id}`, { nameAr: `${category.nameAr} ب` }),
+      200,
+    );
+    expect(renamed.image?.id).toBe(uploaded.id);
+    const receipt = await test.app.get(FilesService).store('deposit_receipt', await image());
+    await json(await patch(`/categories/${category.id}`, { imageFileId: receipt }), 404);
+    const listed = await json<{ id: string; image: { id: string } | null }[]>(
+      await get('/categories'),
+      200,
+    );
+    expect(listed.find((item) => item.id === category.id)?.image?.id).toBe(uploaded.id);
+    const cleared = await json<{ image: unknown }>(
+      await patch(`/categories/${category.id}`, { imageFileId: null }),
+      200,
+    );
+    expect(cleared.image).toBeNull();
+  });
+
   it('refuses to archive a category with games, then archives, hides and restores it', async () => {
     const category = await newCategory();
     const game = await newGame(category.id);

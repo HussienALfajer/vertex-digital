@@ -323,6 +323,38 @@ test.describe('catalog', () => {
     await expect(page.getByRole('tab', { name: 'اشتراكات' })).toBeVisible();
   });
 
+  test('sets, removes and refuses a category image (S24 NH2)', async ({ page, admin }) => {
+    await open(page, admin, '/catalog');
+    await page.getByRole('button', { name: ar.catalog.categories.manage }).click();
+    const dialog = page.getByRole('dialog');
+    const first = dialog.getByRole('listitem').first();
+    await first
+      .locator('input[type=file]')
+      .setInputFiles({ name: 'image.png', mimeType: 'image/png', buffer: PNG });
+    await expect(first.getByRole('img', { name: ar.catalog.categories.image })).toBeVisible();
+    const sent = admin.lastBody(
+      `PATCH /api/admin/catalog/categories/${admin.catalog.categories[0]?.id}`,
+    ) as { imageFileId?: string } | undefined;
+    expect(sent?.imageFileId).toBeTruthy();
+    await first.getByRole('button', { name: ar.catalog.image.remove }).click();
+    await expect(first.getByRole('img', { name: ar.catalog.categories.image })).toHaveCount(0);
+
+    // A refused save leaves the category without the image.
+    await page.route('**/api/admin/catalog/categories/*', (route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({
+            status: 404,
+            json: { statusCode: 404, code: 'NOT_FOUND', message: 'NOT_FOUND' },
+          })
+        : route.fallback(),
+    );
+    await first
+      .locator('input[type=file]')
+      .setInputFiles({ name: 'image.png', mimeType: 'image/png', buffer: PNG });
+    await expect(first.getByText(ar.errors.api.NOT_FOUND)).toBeVisible();
+    await expect(first.getByRole('img', { name: ar.catalog.categories.image })).toHaveCount(0);
+  });
+
   test('lists and orders a category of more than one page of games (audit A4)', async ({
     page,
     admin,
