@@ -74,7 +74,9 @@ export function priceText(
   const dollars = ltr(formatUsd(row.usdUnits));
   if (row.sypUnits === null || currency === 'usd') return dollars;
   const pounds = `${ltr(formatSyp(row.sypUnits))} ل.س`;
-  return currency === 'both' ? `${dollars} · ${pounds}` : pounds;
+  // A right-to-left mark first: Pango reads a line that opens with an embedding as left to right,
+  // which puts the pounds before the dollars and "ل.س" on the number's other side.
+  return `‏${currency === 'both' ? `${dollars} ‏·‏ ${pounds}` : pounds}`;
 }
 
 type ListOfImage = Pick<
