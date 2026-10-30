@@ -20,6 +20,7 @@ import { setQuickBuyHidden } from '@/features/players/requests';
 import { tq } from '@/features/quick-buy/i18n';
 import { ltr } from '@/lib/format';
 import { QUICK_BUY_HINT_KEY } from '@/lib/session';
+import { FreshOnShow } from '@/lib/shown-again';
 import { mainValue } from './main-value';
 import { RowPlaceholder } from './quick-buy-slot';
 import { getQuickBuy } from './requests';
@@ -58,6 +59,14 @@ function rememberCards(any: boolean) {
  * the rest of the home page never depends on it.
  */
 export function QuickBuyRow() {
+  return (
+    <FreshOnShow>
+      <QuickBuyCards />
+    </FreshOnShow>
+  );
+}
+
+function QuickBuyCards() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [open, setOpen] = useState<QuickBuyItem | null>(null);
 

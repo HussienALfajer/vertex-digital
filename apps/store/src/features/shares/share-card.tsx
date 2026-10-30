@@ -3,6 +3,7 @@ import { VertexMark } from '@vertex-digital/ui/brand/logo';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import type { ReactNode } from 'react';
 import { accentStyle } from '@/features/catalog/game-card';
+import { imageSources } from '@/features/catalog/images';
 import { tm } from '@/features/merchant-tools/i18n';
 import { TierLine } from '@/features/merchant-tools/tier-parts';
 import { LazyVerificationQr } from '@/features/orders/verification-qr-lazy';
@@ -105,9 +106,10 @@ export function ShareCard({
         )}
         <div className="flex items-center gap-3">
           {share.game.cover && (
-            // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
+            // biome-ignore lint/performance/noImgElement: the API resizes; this page's first load has a tight budget.
             <img
-              src={`${share.game.cover.url}?w=160`}
+              {...imageSources(share.game.cover)}
+              sizes="56px"
               alt=""
               width={share.game.cover.width}
               height={share.game.cover.height}

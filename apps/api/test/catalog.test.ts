@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { JobsService } from '../src/core/jobs/index.js';
+import { DEFAULT_RATE_LIMIT } from '../src/core/rate-limit/rate-limit.js';
 import { FilesService } from '../src/modules/files/index.js';
 import { api, auditOf, body, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -279,6 +280,23 @@ describe('images (rule CT10)', () => {
     expect(metadata.exif).toBeUndefined();
     // Not audited by itself.
     expect(await auditOf(test.db, uploaded.id)).toEqual([]);
+  });
+
+  it('never counts an image against the per-address limit (2026-10-30)', async () => {
+    const uploaded = await json<{ url: string }>(
+      await client.post('/api/admin/catalog/images', {
+        cookie: admin.cookie,
+        form: form(await image(), 'c.png'),
+      }),
+      201,
+    );
+    // Above the 300 a minute of every other route: one page asks for dozens of covers, and a
+    // carrier address holds many customers.
+    for (let index = 0; index < DEFAULT_RATE_LIMIT.limit + 5; index += 1) {
+      const response = await fetch(`${test.url}${uploaded.url}`);
+      await response.arrayBuffer();
+      expect(response.status).toBe(200);
+    }
   });
 
   it('refuses anything but an image within the limits', async () => {

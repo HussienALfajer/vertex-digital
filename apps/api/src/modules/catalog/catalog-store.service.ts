@@ -29,8 +29,9 @@ import {
   playerCheckProviders,
   productDeliveryStats,
   productRoutingStates,
+  uuidIn,
 } from '@vertex-digital/db';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -62,15 +63,12 @@ export class CatalogStoreService {
   /** `GET /api/catalog/storefront` (rules SF1, SS2). */
   async storefront(): Promise<Storefront> {
     const shown = await this.shownGames();
-    const products = await this.liveProducts(shown.map(({ game }) => game.id));
+    const [products, images] = await Promise.all([
+      this.liveProducts(shown.map(({ game }) => game.id)),
+      this.images(shown.map(({ game }) => game)),
+    ]);
     const states = await this.states(products);
-    const images = await this.images(shown.map(({ game }) => game));
-    const statusOf = (gameId: string) =>
-      gameServiceStatus(
-        products
-          .filter((product) => product.gameId === gameId)
-          .map((product) => serviceFacts(states.get(product.id))),
-      );
+    const statusOf = serviceStatusOf(products, states);
     const categories: Storefront['categories'] = [];
     for (const { game, category } of shown) {
       let section = categories.at(-1);
@@ -261,6 +259,7 @@ export class CatalogStoreService {
       this.images(shown.map(({ game }) => game)),
     ]);
     const slugOf = new Map(shown.map(({ game }) => [game.id, game.slug]));
+    const statusOf = serviceStatusOf(products, states);
     return {
       games: shown.map(({ game, category }) => ({
         id: game.id,
@@ -268,11 +267,7 @@ export class CatalogStoreService {
         nameAr: game.nameAr,
         nameEn: game.nameEn,
         cover: game.coverFileId ? imageOf(game.coverFileId, images) : null,
-        status: gameServiceStatus(
-          products
-            .filter((product) => product.gameId === game.id)
-            .map((product) => serviceFacts(states.get(product.id))),
-        ),
+        status: statusOf(game.id),
         searchTerms: game.searchTerms,
         categoryNameAr: category.nameAr,
       })),
@@ -351,7 +346,7 @@ export class CatalogStoreService {
       .from(catalogProducts)
       .where(
         and(
-          inArray(catalogProducts.gameId, [...gameIds]),
+          uuidIn(catalogProducts.gameId, gameIds),
           isNull(catalogProducts.archivedAt),
           earlyAccess
             ? undefined
@@ -412,6 +407,20 @@ function serviceFacts(state: ProductRoutingState | undefined) {
     available: state?.availability === 'available',
     healthyAutomaticBasis: state?.basis?.tier === 'healthy',
   };
+}
+
+/** Each game's service status, its products grouped once rather than searched per game. */
+function serviceStatusOf(
+  products: readonly ProductRow[],
+  states: Map<string, ProductRoutingState>,
+): (gameId: string) => ReturnType<typeof gameServiceStatus> {
+  const facts = new Map<string, ReturnType<typeof serviceFacts>[]>();
+  for (const product of products) {
+    const list = facts.get(product.gameId) ?? [];
+    list.push(serviceFacts(states.get(product.id)));
+    facts.set(product.gameId, list);
+  }
+  return (gameId) => gameServiceStatus(facts.get(gameId) ?? []);
 }
 
 type Images = Map<string, { width: number; height: number }>;

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/index.js';
 import { FilesModule } from '../files/index.js';
+import { SettingsModule } from '../settings/index.js';
 import { ContentAdminController } from './content.admin.controller.js';
 import { ContentController } from './content.controller.js';
 import { ContentActivityService } from './content-activity.service.js';
@@ -15,7 +16,7 @@ import { ContentPagesService } from './content-pages.service.js';
  * which reads the orders, catalog and customers tables for it.
  */
 @Module({
-  imports: [AdminModule, FilesModule],
+  imports: [AdminModule, FilesModule, SettingsModule],
   controllers: [ContentController, ContentAdminController],
   providers: [ContentPagesService, ContentFaqService, ContentHomeService, ContentActivityService],
 })

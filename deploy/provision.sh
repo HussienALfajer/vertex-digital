@@ -224,7 +224,13 @@ for snippet in vertexdigital-store-headers.conf vertexdigital-admin-headers.conf
   nginx_install "$src/deploy/nginx/$snippet" "/etc/nginx/snippets/$snippet"
 done
 nginx_install "$src/deploy/nginx/vertexdigital-limits.conf" /etc/nginx/conf.d/vertexdigital-limits.conf
-# Brotli where the server's nginx has the module (ADR 0008: slow connections), gzip otherwise.
+# Brotli (ADR 0008: slow connections): Ubuntu's modules for its own nginx, installed once. A server
+# where they cannot be installed keeps gzip and says so.
+if ! nginx -V 2>&1 | grep -q brotli && ! ls /etc/nginx/modules-enabled/ 2>/dev/null | grep -q brotli-static; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade \
+    libnginx-mod-http-brotli-filter libnginx-mod-http-brotli-static >/dev/null ||
+    echo "the nginx Brotli modules could not be installed" >&2
+fi
 if nginx -V 2>&1 | grep -q brotli || ls /etc/nginx/modules-enabled/ 2>/dev/null | grep -q brotli; then
   nginx_install "$src/deploy/nginx/vertexdigital-compression-brotli.conf" /etc/nginx/snippets/vertexdigital-compression.conf
   echo "compression: brotli and gzip"

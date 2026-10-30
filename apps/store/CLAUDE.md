@@ -25,12 +25,15 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 - A failed cached read throws (never cached) and the route's error view offers a retry. Exception: `siteContent()` returns null so the parts on every page never break it. Only public routes, no cookie.
 - Server reads use `API_READ_TIMEOUT_MS` and cached public reads send `CACHED_READ_HEADERS` (both `lib/server-env.ts`). Per-request public reads (share, verify, quick-link pages) forward the visitor's `X-Forwarded-For` so the API's per-address limit counts the visitor.
 - Read query parameters with `useSearchParam` (after hydration), not `useSearchParams`, so pages stay static without a boundary. Exception: inside a boundary the route already needs (the game page's `?pack=`, `/orders?checkout=`, print pages).
-- Next keeps the previous page mounted but hidden after a client navigation: code and tests must not assume a single visible instance.
+- Next keeps the previous page mounted but hidden after a client navigation (React Activity): effects' cleanups run on hide, effects again on the re-show, and every state survives. Code and tests must not assume a single visible instance.
+- A form that navigates on success wraps in `FreshOnShow` (`lib/shown-again.tsx`), which mounts it afresh and so re-reads its server data on a re-show; a part that must only react uses `useShownAgain()`. Never reset a busy state before the navigation completes: the idempotency key is freed by then, so a second press would pay twice.
+- What must survive a re-show or a reload goes in a form draft (`lib/form-draft.ts`: session storage, never the URL, a password or a file; cleared on success and by `forgetThisBrowser`). A long form also warns before unload (`useLeaveWarning`). Reading a page from inside a form goes through `ContentDialogLink`: `target="_blank"` replaces the form in an installed app or an in-app browser.
 - `error.tsx` reloads on a chunk of an earlier release (`lib/chunk-error.ts`); `global-error.tsx` is the Arabic page for root-layout errors.
 
 ## First-load budget
 - Budgets (`e2e/store.spec.ts`, gzipped): `/`, content pages and `/faq` 220 KB JS; `/games/[slug]` 238; `/cart` 394; share page `/g/<token>` 220; CSS 20 KB each. Raising one needs a reason in the PR.
 - Keep money formatting and the contracts' zod schemas out of first load: render prices in server components and pass them as `children` (`PackContent` into `PackButton`); load heavy client parts with `next/dynamic` when first needed (buy box, calculator, search dialog, sheets).
+- `CatalogPicture` and the header are client code on every page: they import no contracts values (`features/catalog/images.ts` keeps its own copy of the widths, checked by its test), and no Base UI tooltip or popup (Floating UI is about 30 KB).
 - UI only via `@vertex-digital/ui` subpaths (`@vertex-digital/ui/components/button`), never the root barrel. Missing component: add it to `packages/ui`.
 - Links on every page (header, footer, banners) to account or support pages set `prefetch={false}`, or their forms, zod and ALTCHA count in every page's first load.
 - Modules the header imports (e.g. `features/cart/cart-keys.ts`, `features/push/rules.ts`) must not import contracts.

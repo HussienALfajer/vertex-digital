@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
@@ -343,16 +344,7 @@ export function GameCover({ order }: { order: Pick<OrderSummary, 'game'> }) {
       </IconTile>
     );
   }
-  return (
-    // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
-    <img
-      src={`${cover.url}?w=160`}
-      alt=""
-      width={cover.width}
-      height={cover.height}
-      className="size-12 shrink-0 rounded-md object-cover"
-    />
-  );
+  return <CatalogPicture image={cover} sizes="48px" className="size-12 shrink-0" />;
 }
 
 export function OrdersSkeleton() {

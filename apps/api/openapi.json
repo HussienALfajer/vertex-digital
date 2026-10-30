@@ -40986,13 +40986,17 @@
           },
           "faqPublished": {
             "type": "boolean"
+          },
+          "registrationOpen": {
+            "type": "boolean"
           }
         },
         "required": [
           "announcement",
           "banners",
           "pages",
-          "faqPublished"
+          "faqPublished",
+          "registrationOpen"
         ],
         "additionalProperties": false
       },

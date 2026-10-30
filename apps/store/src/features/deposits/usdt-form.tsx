@@ -14,7 +14,7 @@ import { Input } from '@vertex-digital/ui/components/input';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { NetworkIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -54,6 +54,13 @@ export function UsdtForm({
   // One `Idempotency-Key` per request body (rule U2, as S03 SC2), kept after a lost answer
   // whatever the amount (F6-14).
   const sendOnce = useIdempotentRequest();
+
+  // Another network keeps the typed amount; a refusal of the last one's does not apply to it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `method` is the trigger.
+  useEffect(() => {
+    setError(null);
+    setBusyAlternatives([]);
+  }, [method]);
 
   const units = parseDepositAmount('USD', text);
   const limits = options.limits;

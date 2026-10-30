@@ -99,8 +99,19 @@ server {
     }
 
     # Catalog images (S06): the panel's previews come from its own host (CSP `img-src 'self'`).
-    # The API serves catalog images only on this route; nginx sends the file after its check.
-    location ~* "^/api/catalog/images/[0-9a-f-]{36}$" {
+    # From disk when the file is there, as on the store's host (its comment says why); else the API.
+    location ~ "^/api/catalog/images/(?<vd_image_id>[0-9a-f-]{34}(?<vd_image_shard>[0-9a-f]{2}))$" {
+        limit_conn vdimageconn 400;
+        limit_req zone=vdimage burst=400 nodelay;
+        root /srv/digital.vertexmedia.pro/shared/files;
+        try_files /catalog_image/$vd_image_shard/$vd_image_id$vd_catalog_image_width.webp @vd_catalog_image;
+        include snippets/vertexdigital-admin-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Content-Disposition "inline" always;
+    }
+    location @vd_catalog_image {
+        limit_conn vdimageconn 400;
+        limit_req zone=vdimage burst=400 nodelay;
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
     }

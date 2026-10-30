@@ -383,6 +383,40 @@ test.describe('deposits', () => {
     await expect(page.getByRole('link', { name: ar.deposits.newDeposit })).toBeVisible();
   });
 
+  test('create, cancel, new deposit: a working button and the rate read again', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/deposits/sham-cash/options', 200, OPTIONS);
+    await page.goto('/wallet/deposit');
+    await page.getByLabel(ar.deposits.form.amountSyp).fill('2000');
+    pending(api).on('POST /api/deposits/sham-cash', 201, deposit());
+    await page.getByRole('button', { name: ar.deposits.form.submit }).click();
+    await expect(page).toHaveURL(`/wallet/deposits/${DEPOSIT_ID}`);
+
+    api.on(`POST ${DEPOSIT_PATH}/cancel`, 200, deposit({ status: 'cancelled', quote: null }));
+    await page.getByRole('button', { name: ar.deposits.pending.cancel }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: ar.deposits.cancel.confirm })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: ar.deposits.detail.cancelledTitle }),
+    ).toBeVisible();
+
+    // The rate moved meanwhile; the form was left mounted but hidden by Next.
+    api.on('GET /api/deposits/sham-cash/options', 200, {
+      ...OPTIONS,
+      rate: { ...OPTIONS.rate, sypPerUsd: '120' },
+    });
+    await page.getByRole('link', { name: ar.deposits.newDeposit }).click();
+    await expect(page.getByText(fill(ar.deposits.form.rate, { rate: '120' }))).toBeVisible();
+    const submit = page.getByRole('button', { name: ar.deposits.form.submit });
+    await expect(submit).toBeEnabled();
+    await expect(page.getByText(ar.deposits.form.submitting)).toHaveCount(0);
+    await expect(page.getByLabel(ar.deposits.form.amountSyp)).toHaveValue('');
+  });
+
   test('credited and rejected deposits say what happened', async ({ page, api }) => {
     signedIn(api).on(`GET ${DEPOSIT_PATH}`, 200, CREDITED);
     await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);

@@ -28,6 +28,7 @@ import {
   type AnyColumn,
   and,
   asc,
+  type Column,
   count,
   desc,
   eq,
@@ -377,16 +378,21 @@ export function forgetDeliveryMeasure(): void {
   deliveryMeasure = null;
 }
 
+/**
+ * `column` is one of `ids`, as one array parameter: the whole catalog is about 4,600 ids, and a
+ * parameter per id took most of the storefront read's time, in Drizzle and in PostgreSQL's parser.
+ */
+export function uuidIn(column: Column, ids: readonly string[]): SQL {
+  return sql`${column} = any(${sql.param([...ids])}::uuid[])`;
+}
+
 /** The newest price row of each product on a list (S20: one row set per list). */
 export function newestListPrices(db: Executor, productIds: readonly string[], priceListId: string) {
   return db
     .selectDistinctOn([productPrices.productId])
     .from(productPrices)
     .where(
-      and(
-        inArray(productPrices.productId, [...productIds]),
-        eq(productPrices.priceListId, priceListId),
-      ),
+      and(uuidIn(productPrices.productId, productIds), eq(productPrices.priceListId, priceListId)),
     )
     .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id));
 }
@@ -433,13 +439,13 @@ export async function productRoutingStates(
         .from(catalogProducts)
         .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
         .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
-        .where(inArray(catalogProducts.id, ids)),
+        .where(uuidIn(catalogProducts.id, ids)),
     () =>
       db
         .select({ route: productRoutes, offer: supplierOffers })
         .from(productRoutes)
         .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
-        .where(inArray(productRoutes.productId, ids))
+        .where(uuidIn(productRoutes.productId, ids))
         .orderBy(asc(productRoutes.createdAt)),
     () => supplierStates(db, context),
     () =>
@@ -459,7 +465,7 @@ export async function productRoutingStates(
         .where(
           and(
             eq(priceListFixedPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
-            inArray(priceListFixedPrices.productId, ids),
+            uuidIn(priceListFixedPrices.productId, ids),
             isNull(priceListFixedPrices.archivedAt),
           ),
         ),
@@ -469,7 +475,7 @@ export async function productRoutingStates(
       db
         .select()
         .from(priceReviews)
-        .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
+        .where(and(uuidIn(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
     () => currentSupplierPolicy(db),
     () => measuredDelivery(db, context.now),
   ]);
@@ -485,7 +491,7 @@ export async function productRoutingStates(
           })
           .from(catalogInputFields)
           .where(
-            and(inArray(catalogInputFields.gameId, gameIds), isNull(catalogInputFields.archivedAt)),
+            and(uuidIn(catalogInputFields.gameId, gameIds), isNull(catalogInputFields.archivedAt)),
           );
   const supplierOf = new Map(supplierList.map((supplier) => [supplier.id, supplier]));
   const priceOf = new Map(prices.map((row) => [row.productId, row]));

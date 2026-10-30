@@ -11387,6 +11387,7 @@ export interface components {
                 updatedAt: string;
             }[];
             faqPublished: boolean;
+            registrationOpen: boolean;
         };
         /** @enum {string} */
         AnnouncementTone: "info" | "warning";

@@ -464,6 +464,31 @@ test.describe('a new ticket (S12 TK1)', () => {
     ).toBeVisible();
   });
 
+  test('the subject and message survive a reload, and a sent ticket leaves no draft', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api);
+    await page.goto('/support/new?category=other');
+    const subject = page.getByLabel(s.new.subject);
+    await subject.fill('سؤال عن الشحن');
+    await page.getByLabel(s.new.message).fill('متى يصل الطلب؟');
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.reload();
+    await expect(subject).toHaveValue('سؤال عن الشحن');
+
+    const opened = ticket({ subject: 'سؤال عن الشحن', status: 'open', lastAuthor: 'customer' });
+    api.on('POST /api/support/tickets', 201, opened);
+    thread(api, opened);
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page).toHaveURL(`/support/${TICKET_ID}`);
+    await page.goBack();
+    await expect(subject).toHaveValue('');
+    expect(await page.evaluate(() => JSON.stringify(sessionStorage))).not.toContain(
+      'vd:form-draft:support-ticket',
+    );
+  });
+
   test('refusals keep the values and link to the open ticket or the list', async ({
     page,
     api,

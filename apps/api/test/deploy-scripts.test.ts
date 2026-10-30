@@ -279,6 +279,64 @@ describe('nginx (deploy/nginx)', () => {
     expect(read('fail2ban/filter.d/vertexdigital-limit.conf')).toContain('" 429 ');
   });
 
+  it('never counts a page of catalog images in the general zone or the jail (2026-10-30)', () => {
+    for (const site of sites) {
+      const text = read(`nginx/${site}`);
+      const location = text.slice(text.indexOf('/api/catalog/images/'));
+      const block = location.slice(0, location.indexOf('@vd_catalog_image {'));
+      expect(block).toContain('limit_req zone=vdimage');
+      expect(block).toContain('limit_conn vdimageconn');
+      // The file on disk, then the API; a location with add_header includes the headers again.
+      expect(block).toMatch(/try_files \/catalog_image\/\S+ @vd_catalog_image;/);
+      expect(block).toMatch(/include snippets\/vertexdigital-\w+-headers\.conf;/);
+      expect(block).toContain('immutable');
+      expect(text).toMatch(/location @vd_catalog_image \{\s+limit_conn vdimageconn/);
+    }
+    const limits = read('nginx/vertexdigital-limits.conf');
+    expect(limits).toContain('zone=vdimage:10m');
+    const width = /\$arg_w \$vd_catalog_image_width \{([^}]+)\}/.exec(limits)?.[1] ?? '';
+    for (const value of [160, 320, 640, 1280]) expect(width).toContain(String(value));
+    expect(width).toContain('default .invalid;');
+  });
+
+  it('gives a customer’s own images a zone and a way to their files (2026-10-30)', () => {
+    const text = read('nginx/digital.vertexmedia.pro');
+    const location =
+      /location ~\* "(\^\/api\/\(\?:merchant\/logo[^"]+)" \{\s+limit_req zone=vdimage/.exec(
+        text,
+      )?.[1];
+    expect(location).toBeDefined();
+    const matches = new RegExp(location as string, 'i');
+    const id = '01a18401-6a83-7208-bd09-788b23923fea';
+    expect(matches.test(`/api/merchant/logo/${id}`)).toBe(true);
+    expect(matches.test(`/api/merchant/application/photo/${id}`)).toBe(true);
+    expect(matches.test('/api/deposits/sham-cash/qr/syp')).toBe(true);
+    expect(matches.test(`/api/support/tickets/${id}/attachments/${id}`)).toBe(true);
+    // The uploads keep their own locations.
+    expect(matches.test('/api/merchant/logo')).toBe(false);
+    expect(matches.test('/api/merchant/application/photo')).toBe(false);
+    expect(text).toMatch(
+      /location ~\* \^\/api\/merchant\/application\/photo\/\?\$ \{\s+client_max_body_size 6m;/,
+    );
+    for (const kind of [
+      'sham_cash_qr',
+      'ticket_attachment',
+      'catalog_image',
+      'merchant_logo',
+      'merchant_shop_photo',
+    ]) {
+      expect(text).toContain(`location ^~ /internal-files/${kind}/`);
+    }
+  });
+
+  it('installs the Brotli modules without replacing nginx, and keeps gzip otherwise', () => {
+    const script = read('provision.sh');
+    expect(script).toMatch(/apt-get install -y --no-upgrade[\s\S]*libnginx-mod-http-brotli-filter/);
+    expect(script).toContain('vertexdigital-compression-gzip.conf');
+    expect(read('nginx/vertexdigital-compression-brotli.conf')).toContain('brotli_static on;');
+    expect(read('deploy.sh')).toContain('node deploy/precompress-static.mjs');
+  });
+
   it('compresses the App Router’s payloads (audit A10-9)', () => {
     for (const file of [
       'vertexdigital-compression-gzip.conf',

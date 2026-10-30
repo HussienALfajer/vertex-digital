@@ -33,6 +33,8 @@ Everything installed on the production server comes from this folder (ADR 0009, 
 - Regex locations match in file order. A regex with a `{n}` quantifier is quoted (`location ~* "^/x/[0-9a-f-]{36}$"`), or nginx reads the brace as a block and rejects the whole site.
 - The admin CSP hash must match `apps/admin/index.html` (`apps/admin/src/csp.test.ts`).
 - Both sites log in the `vdprivacy` format (no query string, share tokens masked) and set `limit_req_log_level notice`; `deploy-scripts.test.ts` checks both.
+- Catalog images are sent from disk by the sites' own location (`try_files`, then the API for what is not there): `proxy_cache` cannot keep an `X-Accel-Redirect` answer. Every stored file kind the store's API serves needs its `/internal-files/<kind>/` location on the store's site.
+- `provision.sh` installs Ubuntu's Brotli modules and the matching compression snippet; `deploy.sh` runs `precompress-static.mjs` for `brotli_static` and `gzip_static`. The nginx check in CI has no Brotli module, so only the gzip snippet goes through its `nginx -t`.
 - `provision.sh` installs every nginx file through `nginx_install`/`nginx_link` and tests them once with `nginx_commit`: a refused configuration puts every file back as it was and reloads nothing. Keep new nginx files on that path.
 
 ## Scripts

@@ -30,12 +30,13 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { ImageIcon, LoaderCircleIcon, XIcon } from 'lucide-react';
-import Link from 'next/link';
-import { type FormEvent, useId, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
+import { ContentDialogLink } from '@/features/content/content-dialog-link';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearFormDraft, readFormDraft, saveFormDraft, useLeaveWarning } from '@/lib/form-draft';
 import { t } from '@/lib/i18n';
 import { useIdempotentRequest } from '@/lib/idempotency';
 import {
@@ -57,6 +58,14 @@ import {
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 /**
+ * The draft of this tab, restored after a reload or a re-show: the steps' answers and the stored
+ * photo's id (only this customer can read it, MA3). The terms stay ticked only for the same version.
+ */
+type SavedApplication = { draft: MerchantDraft; step: Step | 'summary'; termsVersionId: string };
+
+const draftName = (mode: 'submit' | 'resubmit') => `merchant-application:${mode}`;
+
+/**
  * The application form (S20 MA2, screens): four short steps (المحل، التواصل، النشاط، الإثبات
  * والشروط), each checked before the next, then a summary before sending. A new application goes
  * with an `Idempotency-Key` per attempt; a resubmission (MA4) edits the waiting one.
@@ -74,13 +83,32 @@ export function ApplicationForm({
   mode: 'submit' | 'resubmit';
   onSent: (application: MerchantApplication) => void;
 }) {
-  const [draft, setDraft] = useState(initial);
-  const [step, setStep] = useState<Step | 'summary'>('shop');
+  const [saved] = useState(() => readFormDraft<SavedApplication>(draftName(mode)));
+  const [draft, setDraft] = useState<MerchantDraft>(() =>
+    saved
+      ? {
+          ...initial,
+          ...saved.draft,
+          termsAccepted: saved.draft.termsAccepted && saved.termsVersionId === termsVersionId,
+        }
+      : initial,
+  );
+  const [step, setStep] = useState<Step | 'summary'>(saved?.step ?? 'shop');
   const [shown, setShown] = useState<Set<Step>>(new Set());
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Failure | null>(null);
   const sendOnce = useIdempotentRequest();
   const { ref, focusInvalid } = useFocusInvalid();
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const sent = useRef(false);
+  useEffect(() => {
+    if (sent.current) return;
+    if (dirty) {
+      saveFormDraft(draftName(mode), { draft, step, termsVersionId } satisfies SavedApplication);
+    } else clearFormDraft(draftName(mode));
+  }, [dirty, draft, step, mode, termsVersionId]);
+  useLeaveWarning(dirty && !sending);
 
   const change = (changes: Partial<MerchantDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -106,7 +134,11 @@ export function ApplicationForm({
         ? await sendOnce(JSON.stringify(input), (key) => submitMerchantApplication(input, key))
         : await resubmitMerchantApplication(input);
     setSending(false);
-    if (result.ok) return onSent(result.data);
+    if (result.ok) {
+      sent.current = true;
+      clearFormDraft(draftName(mode));
+      return onSent(result.data);
+    }
     setRefusal(result.reason);
   }
 
@@ -492,14 +524,11 @@ function ProofStep({ draft, problems, change }: StepProps) {
           />
           <span className="text-base">
             {before}{' '}
-            <Link
-              href="/merchant-terms"
-              target="_blank"
-              prefetch={false}
-              className="font-medium underline underline-offset-4"
-            >
-              {t('merchant.fields.termsLink')}
-            </Link>{' '}
+            <ContentDialogLink
+              page="merchant_terms"
+              label={t('merchant.fields.termsLink')}
+              className="min-h-11 font-medium underline underline-offset-4"
+            />{' '}
             {after}
           </span>
         </label>

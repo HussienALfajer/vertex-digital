@@ -61,6 +61,34 @@ test.describe('home (rules SF1, SS2)', () => {
   });
 });
 
+test('a refused cover is tried once more, then the brand mark takes its place at its size', async ({
+  page,
+  api: _api,
+}) => {
+  const answers = new Map<string, number>();
+  await page.route('**/api/catalog/images/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    answers.set(path, (answers.get(path) ?? 0) + 1);
+    return route.fulfill({ status: 429, body: '' });
+  });
+  await page.goto('/');
+  const first = page.locator('main a[href^="/games/"]').first();
+  await expect(first.locator('svg').first()).toBeVisible({ timeout: 10_000 });
+  await expect(first.locator('img')).toHaveCount(0);
+  expect(await first.locator('svg').first().boundingBox()).not.toBeNull();
+  expect(Math.max(...answers.values())).toBeGreaterThanOrEqual(2);
+});
+
+test('the header offers the sign-up in the cached HTML, with no read of its own', async ({
+  page,
+  api,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'hidden at phone width');
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: ar.header.signUp })).toBeVisible();
+  expect(api.requests.filter((r) => r.key === 'GET /api/auth/registration')).toHaveLength(0);
+});
+
 test.describe('game page (rules SF1–SF3, SF6, CL1–CL3)', () => {
   test('shows each pack with its prices, savings and delivery time; an unavailable one greyed', async ({
     page,

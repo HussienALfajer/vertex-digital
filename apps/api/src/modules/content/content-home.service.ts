@@ -23,6 +23,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import { FilesService } from '../files/index.js';
+import { SettingsService } from '../settings/index.js';
 import { ContentFaqService } from './content-faq.service.js';
 import { ContentPagesService } from './content-pages.service.js';
 import {
@@ -56,23 +57,27 @@ export class ContentHomeService {
     private readonly files: FilesService,
     private readonly pages: ContentPagesService,
     private readonly faq: ContentFaqService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** `GET /api/content/site` (CP3): only what the store shows. */
   async site(now = new Date()): Promise<SiteContent> {
-    const [enabledAnnouncements, enabledBanners, pages, faqPublished] = await Promise.all([
-      this.db
-        .select()
-        .from(announcements)
-        .where(and(eq(announcements.enabled, true), isNull(announcements.archivedAt))),
-      this.db
-        .select()
-        .from(banners)
-        .where(and(eq(banners.enabled, true), isNull(banners.archivedAt)))
-        .orderBy(asc(banners.position)),
-      this.pages.publishedTitles(),
-      this.faq.isPublished(),
-    ]);
+    const [enabledAnnouncements, enabledBanners, pages, faqPublished, switches] = await Promise.all(
+      [
+        this.db
+          .select()
+          .from(announcements)
+          .where(and(eq(announcements.enabled, true), isNull(announcements.archivedAt))),
+        this.db
+          .select()
+          .from(banners)
+          .where(and(eq(banners.enabled, true), isNull(banners.archivedAt)))
+          .orderBy(asc(banners.position)),
+        this.pages.publishedTitles(),
+        this.faq.isPublished(),
+        this.settings.values(),
+      ],
+    );
     const announcement = enabledAnnouncements.find((row) => announcementState(row, now) === 'live');
     return {
       announcement: announcement
@@ -95,6 +100,7 @@ export class ContentHomeService {
         })),
       pages,
       faqPublished,
+      registrationOpen: switches.registration_open,
     };
   }
 

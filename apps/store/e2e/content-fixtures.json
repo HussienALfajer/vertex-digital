@@ -43,7 +43,8 @@
         "updatedAt": "2026-10-08T10:00:00.000Z"
       }
     ],
-    "faqPublished": true
+    "faqPublished": true,
+    "registrationOpen": true
   },
   "pages": {
     "terms": {

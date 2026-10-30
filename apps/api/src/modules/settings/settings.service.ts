@@ -175,6 +175,8 @@ export class SettingsService {
       // S09 rule SF4: the store shows the products' new availability.
       await queueStoreRevalidate(tx, this.jobs);
     }
+    // The store's header shows the sign-up button in its cached HTML (`GET /api/content/site`).
+    if (input.switch === 'registration_open') await queueStoreRevalidate(tx, this.jobs, 'content');
     return true;
   }
 

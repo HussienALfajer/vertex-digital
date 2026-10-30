@@ -31,6 +31,7 @@ import { tq } from '@/features/quick-buy/i18n';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { trackFlight } from '@/lib/in-flight';
 import { mainValue } from './main-value';
 
 type Sending =
@@ -93,7 +94,7 @@ export function QuickBuySheet({
     if (result.ok) {
       router.push(
         result.data.stage === 'awaiting_balance'
-          ? await gapDepositPath(result.data)
+          ? await trackFlight(gapDepositPath(result.data))
           : `/orders/${result.data.id}`,
       );
       return;

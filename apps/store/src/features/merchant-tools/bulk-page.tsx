@@ -27,7 +27,7 @@ import { DownloadIcon, FileUpIcon, SearchCheckIcon, TrashIcon, WalletIcon } from
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ChangeEvent, useCallback, useRef, useState } from 'react';
+import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { freesCheckoutKey } from '@/features/cart/checkout-key';
 import { lineRefusals, payCart } from '@/features/cart/requests';
@@ -37,8 +37,10 @@ import { usePurchasesStopped } from '@/features/purchase/customer';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
 import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { FreshOnShow } from '@/lib/shown-again';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { checkBulk, getMerchantGames, readCounterGame } from './requests';
@@ -57,6 +59,11 @@ const ATTEMPT = 'bulk';
 
 /** BK5: the last 10 bulk payments kept on this device (ids and counts, nothing personal). */
 const RECENT_KEY = 'vd-bulk-checkouts';
+
+/** The game and the pasted lines, until they are paid: a long list survives a link or a reload. */
+const DRAFT = 'bulk';
+
+type BulkDraft = { gameId: string | null; text: string };
 
 type RecentCheckout = { id: string; count: number; at: string };
 
@@ -103,6 +110,14 @@ const STATE_TONES = { ok: 'success', confirm: 'warning', invalid: 'danger' } as 
  * follows the orders live. Invalid lines block paying until fixed or removed.
  */
 export function BulkPage() {
+  return (
+    <FreshOnShow>
+      <BulkRead />
+    </FreshOnShow>
+  );
+}
+
+function BulkRead() {
   const read = useCallback(() => getMerchantGames(), []);
   const { state, reload } = useMerchantRead(read);
   if (state.status !== 'ready') {
@@ -113,8 +128,11 @@ export function BulkPage() {
 
 function BulkForm({ games }: { games: MerchantGame[] }) {
   const router = useRouter();
-  const [gameId, setGameId] = useState<string | null>(games[0]?.id ?? null);
-  const [text, setText] = useState('');
+  const [saved] = useState(() => readFormDraft<BulkDraft>(DRAFT));
+  const [gameId, setGameId] = useState<string | null>(
+    games.find((item) => item.id === saved?.gameId)?.id ?? games[0]?.id ?? null,
+  );
+  const [text, setText] = useState(typeof saved?.text === 'string' ? saved.text : '');
   const [result, setResult] = useState<BulkCheckResult | null>(null);
   const [confirmed, setConfirmed] = useState<Set<number>>(new Set());
   const [refusals, setRefusals] = useState<Map<number, CheckoutLineRefusal>>(new Map());
@@ -130,6 +148,13 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const game = games.find((item) => item.id === gameId) ?? null;
+  // Paid, on the way to its orders: nothing may be pressed again (the key is freed).
+  const paid = useRef(false);
+  useEffect(() => {
+    if (paid.current) return;
+    if (text === '') clearFormDraft(DRAFT);
+    else saveFormDraft(DRAFT, { gameId, text } satisfies BulkDraft);
+  }, [gameId, text]);
   const bulkLinesMax = useMerchantTier().tier?.privileges.bulkLinesMax ?? BULK_LINES_MAX;
 
   async function check() {
@@ -195,7 +220,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
     shortfall === 0;
 
   async function pay() {
-    if (!payable) return;
+    if (!payable || paid.current) return;
     setFailure(null);
     setTermsAccepted(false);
     setRefusals(new Map());
@@ -216,12 +241,16 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
       (key) => payCart(body, key),
       freesCheckoutKey,
     );
-    setPending(false);
     if (!answer.ok) {
+      setPending(false);
       if (answer.reason === 'CHECKOUT_REFUSED') setRefusals(lineRefusals(answer.details));
       if (answer.reason === 'MERCHANT_TERMS_REQUIRED') setTermsOpen(true);
       return setFailure(answer.reason);
     }
+    // Stays busy until the page is left: the key is freed, so another press would pay again. Coming
+    // back mounts a new, empty form (`FreshOnShow`).
+    paid.current = true;
+    clearFormDraft(DRAFT);
     keepRecent({
       id: answer.data.id,
       count: answer.data.orders.length,

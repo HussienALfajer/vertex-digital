@@ -58,6 +58,7 @@ import { checkPlayer, createOrder } from '@/features/purchase/requests';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { parseSellingPrice } from './form';
@@ -253,7 +254,10 @@ function GamePanel({
   onPlaced: () => void;
 }) {
   const [state, setState] = useState<GameState>({ status: 'loading' });
-  const [values, setValues] = useState<FieldValues>({});
+  // The player typed for this game until the sale goes through, across a game change and a reload.
+  const [values, setValues] = useState<FieldValues>(
+    () => readFormDraft<FieldValues>(`pos:${game.id}`) ?? {},
+  );
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<SellingPriceRow | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -265,6 +269,10 @@ function GamePanel({
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (Object.keys(values).length > 0) saveFormDraft(`pos:${game.id}`, values);
+    else clearFormDraft(`pos:${game.id}`);
+  }, [game.id, values]);
 
   const ready = state.status === 'ready' ? state.data : null;
   const kinds = useMemo(
@@ -504,6 +512,9 @@ function GamePanel({
             store={data.store}
             fields={fields}
             onPlaced={(placed) => {
+              clearFormDraft(`pos-sale:${chosen.productId}`);
+              // The next sale is for another player: this id never comes back by itself.
+              setValues({});
               setChosen(null);
               setNotice(placed);
               onPlaced();
@@ -546,7 +557,12 @@ function ConfirmSale({
   const [confirmed, setConfirmed] = useState(false);
   const startCurrency: SaleCurrency =
     row.ownPrice?.currency ?? (row.sellingSypUnits !== null ? 'syp' : 'usd');
-  const [currency, setCurrency] = useState<SaleCurrency>(startCurrency);
+  // A selling price typed here stays with the pack until the sale goes through (a closed
+  // confirmation, a reload).
+  const [typedSale] = useState(() =>
+    readFormDraft<{ currency: SaleCurrency; amount: string }>(`pos-sale:${row.productId}`),
+  );
+  const [currency, setCurrency] = useState<SaleCurrency>(typedSale?.currency ?? startCurrency);
   // The pack's selling price as the field shows it, in the currency it was set in.
   const initialAmount =
     startCurrency === 'syp'
@@ -556,7 +572,7 @@ function ConfirmSale({
       : row.sellingUsdUnits !== null
         ? formatAmountInput('USD', row.sellingUsdUnits)
         : '';
-  const [amount, setAmount] = useState(initialAmount);
+  const [amount, setAmount] = useState(typedSale?.amount ?? initialAmount);
   const [invalid, setInvalid] = useState<'quantity' | 'price' | 'player' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
@@ -566,6 +582,12 @@ function ConfirmSale({
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { ref, focusInvalid } = useFocusInvalid();
+
+  useEffect(() => {
+    if (currency === startCurrency && amount === initialAmount) {
+      clearFormDraft(`pos-sale:${row.productId}`);
+    } else saveFormDraft(`pos-sale:${row.productId}`, { currency, amount });
+  }, [row.productId, currency, amount, startCurrency, initialAmount]);
 
   useEffect(() => {
     if (code) return;
@@ -775,6 +797,17 @@ function useOrderStrip(): Strip {
 }
 
 function OrderStrip({ strip }: { strip: Strip }) {
+  // An installed app opens a new-tab link in its only window: there the print page comes in place,
+  // through the router, keeping this page mounted behind its back link.
+  const [printTarget, setPrintTarget] = useState<'_blank' | undefined>('_blank');
+  useEffect(() => {
+    if (
+      (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches
+    ) {
+      setPrintTarget(undefined);
+    }
+  }, []);
   return (
     <Card className="gap-3">
       <h2 className="font-bold">{tm('pos.strip')}</h2>
@@ -811,7 +844,7 @@ function OrderStrip({ strip }: { strip: Strip }) {
                       <Link
                         href={`/orders/${order.id}/print?paper=58&content=receipt`}
                         prefetch={false}
-                        target="_blank"
+                        target={printTarget}
                       />
                     }
                   >
@@ -828,7 +861,7 @@ function OrderStrip({ strip }: { strip: Strip }) {
                       <Link
                         href={`/orders/${order.id}/print?paper=58&content=codes`}
                         prefetch={false}
-                        target="_blank"
+                        target={printTarget}
                       />
                     }
                   >

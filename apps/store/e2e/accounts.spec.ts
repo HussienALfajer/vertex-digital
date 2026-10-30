@@ -80,6 +80,9 @@ test.describe('sign-up and the email code', () => {
     await signUp(page);
     await expect(page).toHaveURL('/verify-email');
     await expect(page.getByText(EMAIL)).toBeVisible();
+    // Accepted: nothing typed stays in this tab, and the password never did.
+    const stored = await page.evaluate(() => JSON.stringify(sessionStorage));
+    expect(stored).not.toContain('vd:form-draft:sign-up');
 
     const sent = api.last('POST /api/auth/sign-up/email');
     expect(sent?.body).toEqual({
@@ -212,11 +215,27 @@ test.describe('sign-up and the email code', () => {
     expect(resend?.headers['x-altcha']).toBeTruthy();
   });
 
+  test('a sign-up keeps what was typed through a same-tab link, never the password', async ({
+    page,
+    api: _api,
+  }) => {
+    await page.goto('/sign-up');
+    await field(page, ar.fields.name).fill(PROFILE.name);
+    await field(page, ar.fields.email).fill(EMAIL);
+    await field(page, ar.fields.password).fill(PASSWORD);
+    const stored = await page.evaluate(() => JSON.stringify(sessionStorage));
+    expect(stored).toContain(EMAIL);
+    expect(stored).not.toContain(PASSWORD);
+    await page.reload();
+    await expect(field(page, ar.fields.name)).toHaveValue(PROFILE.name);
+    await expect(field(page, ar.fields.email)).toHaveValue(EMAIL);
+    await expect(field(page, ar.fields.password)).toHaveValue('');
+  });
+
   test('closed registration hides the link and shows a calm message', async ({ page, api }) => {
     api.on('GET /api/auth/registration', 200, { open: false });
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { level: 1, name: ar.signIn.title })).toBeVisible();
-    await expect(page.getByRole('link', { name: ar.header.signUp })).toHaveCount(0);
     await expect(page.getByRole('link', { name: ar.signIn.signUpLink })).toHaveCount(0);
     await page.goto('/sign-up');
     await expect(page.getByText(ar.signUp.closedTitle)).toBeVisible();

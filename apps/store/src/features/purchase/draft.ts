@@ -21,11 +21,15 @@ export function saveDraft(draft: BuyDraft): void {
   }
 }
 
-/** The draft for this game and pack, or null. */
-export function readDraft(gameSlug: string, packId: string): BuyDraft | null {
+/**
+ * The draft for this game and pack, or null; taken once, so that a re-show or a later visit never
+ * puts it back over what was typed since.
+ */
+export function takeDraft(gameSlug: string, packId: string): BuyDraft | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(KEY) ?? 'null') as Partial<BuyDraft> | null;
     if (value?.gameSlug !== gameSlug || value.packId !== packId) return null;
+    sessionStorage.removeItem(KEY);
     const fields: Record<string, string> = {};
     for (const [key, field] of Object.entries(value.fields ?? {}))
       if (typeof field === 'string') fields[key] = field;

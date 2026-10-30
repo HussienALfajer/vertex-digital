@@ -8,12 +8,13 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ChevronDownIcon, MousePointerClickIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
-import type { Buyable, BuyBoxIntent } from '@/features/purchase/buy-box';
+import type { Buyable, BuyBoxIntent, GameTyped } from '@/features/purchase/buy-box';
 import { useCustomer } from '@/features/purchase/session';
 import { takeQuickLinkCookie } from '@/features/quick-links/handoff';
 import { t } from '@/lib/i18n';
+import { useShownAgain } from '@/lib/shown-again';
 import { CalculatorCard, calculatorPacks } from './calculator-card';
 import { PackButton } from './pack-button';
 import { usePrivatePrices } from './private-prices';
@@ -86,6 +87,13 @@ export function GameShop({
   const [restingOpen, setRestingOpen] = useState(false);
   const [intent, setIntent] = useState<BuyBoxIntent | undefined>();
   const [repeatFailed, setRepeatFailed] = useState(false);
+  const typedOnPage = useRef<GameTyped | null>(null);
+  // Back on the page after a purchase or a cart edit: a new buy box and today's prices (the box
+  // kept "sending"; its key is freed, so it is never reset any other way).
+  const shownAgain = useShownAgain();
+  useEffect(() => {
+    if (shownAgain > 0) router.refresh();
+  }, [shownAgain, router]);
   const packId = searchParams.get('pack');
   const selected = products.find((product) => product.id === packId);
   const open = buyable(selected) && !waiting ? selected : null;
@@ -147,13 +155,14 @@ export function GameShop({
 
   const box = open && (
     <BuyBox
-      key={`${open.id}:${quantity}:${intent?.kind ?? ''}:${intent?.kind === 'player' ? intent.savedId : ''}`}
+      key={`${shownAgain}:${open.id}:${quantity}:${intent?.kind ?? ''}:${intent?.kind === 'player' ? intent.savedId : ''}`}
       game={data.game}
       fields={data.fields}
       product={open}
       customer={customer}
       initialQuantity={quantity}
       intent={intent}
+      typedOnPage={typedOnPage}
     />
   );
 

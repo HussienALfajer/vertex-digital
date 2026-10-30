@@ -60,7 +60,7 @@ export async function StorefrontSections() {
           </ul>
         </nav>
       </div>
-      {categories.map((category) => (
+      {categories.map((category, section) => (
         <section
           key={category.slug}
           id={category.slug}
@@ -72,9 +72,10 @@ export async function StorefrontSections() {
             {category.nameAr}
           </h2>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {category.games.map((game) => (
+            {category.games.map((game, index) => (
               <li key={game.id}>
-                <GameCard game={game} />
+                {/* The first row is what a visitor sees first: its covers do not wait. */}
+                <GameCard game={game} priority={section === 0 && index < 5} />
               </li>
             ))}
           </ul>

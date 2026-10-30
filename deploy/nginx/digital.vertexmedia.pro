@@ -161,6 +161,40 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Catalog images (S06 CT10, S09 SF5; 2026-10-30): public, immutable and never replaced, so nginx
+    # sends them from disk without asking the API or the database. An X-Accel-Redirect answer cannot
+    # be kept by `proxy_cache` (nginx follows the header before it would store anything), and every
+    # image would still cost the API a query. Keys are deterministic (`catalog_image/<last 2 of
+    # id>/<id>[.w<width>].webp`). What is not on disk yet (a width not made yet, a width above the
+    # stored image's, an unknown id) goes to the API. A swept image stays until `system.sweep-files`
+    # removes it minutes later, and an orphan's bytes are a catalog image an admin uploaded: both
+    # are as public as the browsers' year-long copies.
+    location ~ "^/api/catalog/images/(?<vd_image_id>[0-9a-f-]{34}(?<vd_image_shard>[0-9a-f]{2}))$" {
+        limit_conn vdimageconn 400;
+        limit_req zone=vdimage burst=400 nodelay;
+        root /srv/digital.vertexmedia.pro/shared/files;
+        try_files /catalog_image/$vd_image_shard/$vd_image_id$vd_catalog_image_width.webp @vd_catalog_image;
+        include snippets/vertexdigital-store-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Content-Disposition "inline" always;
+    }
+    location @vd_catalog_image {
+        limit_conn vdimageconn 400;
+        limit_req zone=vdimage burst=400 nodelay;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # A customer's own images, read with the session, a few to a page: not worth a place in `general`
+    # next to the pages (the API checks the owner and sets the cache headers). The uploads have
+    # their own locations.
+    location ~* "^/api/(?:merchant/logo/[0-9a-f-]{36}|merchant/application/photo/[0-9a-f-]{36}|deposits/sham-cash/qr/[a-z]+|support/tickets/[0-9a-f-]{36}/attachments/[0-9a-f-]{36})/?$" {
+        limit_req zone=vdimage burst=100 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
     location ~* "^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$" {
         limit_req zone=vdreveal burst=10 nodelay;
@@ -211,6 +245,16 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # A merchant application's shop photo (S20 MA3): one image of 5 MB with its multipart wrapping.
+    location ~* ^/api/merchant/application/photo/?$ {
+        client_max_body_size 6m;
+        client_body_timeout 60s;
+        limit_req zone=vdupload burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Support tickets and messages (S12 TK11): up to 3 images of 5 MB, 16 MB a request.
     location ~* "^/api/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$" {
         client_max_body_size 16m;
@@ -234,6 +278,19 @@ server {
     location ^~ /internal-files/ticket_attachment/ {
         internal;
         alias /srv/digital.vertexmedia.pro/shared/files/ticket_attachment/;
+        include snippets/vertexdigital-store-headers.conf;
+    }
+
+    # A merchant's receipt logo (S21 BR3) and an application's shop photo (S20 MA3), sent by nginx
+    # after the API checked they are the customer's own; the API sets `no-store`.
+    location ^~ /internal-files/merchant_logo/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/merchant_logo/;
+        include snippets/vertexdigital-store-headers.conf;
+    }
+    location ^~ /internal-files/merchant_shop_photo/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/merchant_shop_photo/;
         include snippets/vertexdigital-store-headers.conf;
     }
 

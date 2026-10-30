@@ -11,36 +11,67 @@ import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { clearErrorOnInput } from '@/lib/field-errors';
+import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
 import { t } from '@/lib/i18n';
 import { safeRedirect } from '@/lib/safe-redirect';
+import { FreshOnShow } from '@/lib/shown-again';
 import { useSearchParam } from '@/lib/use-search-param';
 import { holdPassword, savePendingEmail } from './pending-email';
-import { DEFAULT_COUNTRY, toE164 } from './phone';
+import { type CountryCode, DEFAULT_COUNTRY, toE164 } from './phone';
 import { PhoneField } from './phone-field';
 import { signUp } from './requests';
 import { emailError, nameError, newPasswordError } from './validation';
 
 type Fields = 'name' | 'email' | 'password' | 'phone';
 
+/** Name, email and phone while the terms are read in this tab; never the password. */
+const DRAFT = 'sign-up';
+
+type SignUpDraft = { name?: string; email?: string; phone?: string; country?: CountryCode };
+
 /**
  * Sign-up (rule C1): name, email, password and phone, with a solved ALTCHA. The answer is the same
  * for a known email (rule C2), so the next step is always the code screen.
  */
 export function SignUpForm({ onClosed }: { onClosed: () => void }) {
+  return (
+    <FreshOnShow>
+      <SignUpFields onClosed={onClosed} />
+    </FreshOnShow>
+  );
+}
+
+function SignUpFields({ onClosed }: { onClosed: () => void }) {
   const router = useRouter();
   const next = useSearchParam('next');
-  const [country, setCountry] = useState(DEFAULT_COUNTRY);
-  const [phone, setPhone] = useState('');
+  const [saved] = useState(() => readFormDraft<SignUpDraft>(DRAFT));
+  const [country, setCountry] = useState(saved?.country ?? DEFAULT_COUNTRY);
+  const [phone, setPhone] = useState(saved?.phone ?? '');
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Fields, string>>>({});
   const [failure, setFailure] = useState<Failure | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
+
+  // Effects run again on a re-show: an accepted sign-up must not write its draft back.
+  const accepted = useRef(false);
+  const saveDraft = () => {
+    if (!ref.current || accepted.current) return;
+    const data = new FormData(ref.current as HTMLFormElement);
+    saveFormDraft(DRAFT, {
+      name: String(data.get('name') ?? ''),
+      email: String(data.get('email') ?? ''),
+      phone,
+      country,
+    } satisfies SignUpDraft);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the phone's own changes.
+  useEffect(saveDraft, [phone, country]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -64,6 +95,8 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
     setPending(true);
     const result = await signUp({ name, email, password, phone: e164 });
     if (result.ok) {
+      accepted.current = true;
+      clearFormDraft(DRAFT);
       savePendingEmail({ email, next: safeRedirect(next) });
       holdPassword(password);
       router.push('/verify-email');
@@ -84,12 +117,14 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
       noValidate
       onSubmit={onSubmit}
       onInput={clearErrorOnInput(setErrors)}
+      onChange={saveDraft}
       className="flex flex-col gap-5"
     >
       <Field invalid={!!errors.name}>
         <FieldLabel>{t('fields.name')}</FieldLabel>
         <Input
           name="name"
+          defaultValue={saved?.name}
           autoComplete="name"
           className="h-11 text-md"
           aria-invalid={!!errors.name}
@@ -100,6 +135,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
         <FieldLabel>{t('fields.email')}</FieldLabel>
         <Input
           name="email"
+          defaultValue={saved?.email}
           type="email"
           dir="ltr"
           autoComplete="email"

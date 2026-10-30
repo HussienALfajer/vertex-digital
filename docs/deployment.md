@@ -64,7 +64,7 @@ Status: in production since 2026-10-07. Each deploy is a line of the deploy log 
 | admin | other `/api/*` | 404 |
 | admin | everything else | `index.html` (SPA), never cached |
 
-nginx overwrites `X-Forwarded-For` with the client address: the API's rate limits and Better Auth's sign-in limits key on it. Compression is Brotli when the server's nginx has the module (`provision.sh` checks), gzip otherwise; the apps do not compress.
+nginx overwrites `X-Forwarded-For` with the client address: the API's rate limits and Better Auth's sign-in limits key on it. Compression is Brotli when the server's nginx has the module (`provision.sh` installs Ubuntu's `libnginx-mod-http-brotli-*` once), gzip otherwise; the apps do not compress. `deploy.sh` writes `.br` and `.gz` copies of the hashed scripts and styles (`deploy/precompress-static.mjs`) for `brotli_static` and `gzip_static`. Run `provision.sh` after a deploy that changes `deploy/nginx`: `deploy.sh` installs no nginx file.
 
 ## Deploy
 
