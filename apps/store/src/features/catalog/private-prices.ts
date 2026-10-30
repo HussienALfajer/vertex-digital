@@ -33,12 +33,18 @@ export function rememberPrivatePrices(on: boolean) {
   else document.documentElement.removeAttribute(HINT_ATTRIBUTE);
 }
 
-/** The game's packs with the account's prices, availability and savings in place of retail's. */
+/**
+ * The game's packs with the account's prices, availability and savings in place of retail's; S23
+ * OP5: then the packs in early access the cached page leaves out, for a merchant of an
+ * early-access tier.
+ */
 export function withPrivatePrices(
   products: readonly StoreProduct[],
   prices: CustomerPrices,
 ): StoreProduct[] {
-  return products.map((product) => {
+  const shown = new Set(products.map((product) => product.id));
+  const early = prices.earlyProducts.filter((product) => !shown.has(product.id));
+  const priced = products.map((product) => {
     const own = prices.products.find((row) => row.id === product.id);
     return own
       ? { ...product, ...own }
@@ -52,6 +58,7 @@ export function withPrivatePrices(
           bestValue: false,
         };
   });
+  return [...priced, ...early];
 }
 
 export function usePrivatePrices(

@@ -43,6 +43,7 @@ import {
 } from './form';
 import { ImagePicker } from './image-picker';
 import { LinkPicker } from './link-picker';
+import { MerchantSupport } from './merchant-support';
 import { openTicket } from './requests';
 
 const CATEGORY_ICONS: Record<TicketCategory, LucideIcon> = {
@@ -173,6 +174,7 @@ export function NewTicketPage() {
       noValidate
       onSubmit={(event) => void submit(event)}
     >
+      <MerchantSupport />
       <Field invalid={problems.has('category')}>
         <FieldLabel render={<span />}>{t('support.new.category')}</FieldLabel>
         <ToggleGroup<TicketCategory>

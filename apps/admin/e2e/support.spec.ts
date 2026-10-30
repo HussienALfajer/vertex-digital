@@ -105,6 +105,17 @@ test.describe('the queue (TK12, TK13)', () => {
     await expect(page.getByText(s.problems.not_arrived).first()).toBeVisible();
   });
 
+  test("names a merchant's tier in the queue and the thread (S23 OP2)", async ({ page, admin }) => {
+    const waiting = admin.customers.tickets.find((item) => item.id === TICKET_IDS.waiting);
+    const owner = waiting && admin.customers.find(waiting.customerId);
+    if (!owner) throw new Error('No waiting ticket');
+    owner.tier = 'gold';
+    await open(page, admin, '/support');
+    await expect(rows(page).first()).toContainText(ar.merchants.tierNames.gold);
+    await page.goto(`/support/${TICKET_IDS.waiting}`);
+    await expect(page.getByText(ar.merchants.tierNames.gold).first()).toBeVisible();
+  });
+
   test('is empty per tab', async ({ page, admin }) => {
     admin.customers.tickets = admin.customers.tickets.filter((ticket) => ticket.status !== 'open');
     await open(page, admin, '/support');
@@ -550,6 +561,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test.use({ colorScheme });
 
     test('the queue and a thread', async ({ page, admin }, testInfo) => {
+      // S23 OP2: the waiting ticket is a Gold merchant's, with the tier in the row.
+      const waiting = admin.customers.tickets.find((item) => item.id === TICKET_IDS.waiting);
+      const owner = waiting && admin.customers.find(waiting.customerId);
+      if (owner) owner.tier = 'gold';
       await open(page, admin, '/support?status=all');
       await expect(rows(page)).toHaveCount(3);
       await screenshot(page, testInfo, `support-queue-${colorScheme}`);

@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { EarlyAccessGame } from '@/features/catalog/early-access-game';
 import { GamePage, GameSkeleton, gameOf } from '@/features/catalog/game-page';
 import { t } from '@/lib/i18n';
 import { storeUrl } from '@/lib/server-env';
+import NotFound from '../../not-found';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -38,7 +40,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default function GameRoute({ params }: Props) {
   return (
     <Suspense fallback={<GameSkeleton />}>
-      <GamePage params={params} />
+      <GamePage
+        params={params}
+        missing={
+          <EarlyAccessGame>
+            <NotFound />
+          </EarlyAccessGame>
+        }
+      />
     </Suspense>
   );
 }

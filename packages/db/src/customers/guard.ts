@@ -35,6 +35,8 @@ export interface PurchasingCustomer {
   merchantTermsRequired: boolean;
   /** S23 TS5: a merchant's tier quantities, read under the lock; null for a customer. */
   tierQuantities: TierQuantities | null;
+  /** S23 OP5: a merchant whose tier sees and buys early-access games and packs. */
+  earlyAccess: boolean;
 }
 
 /** The customer's overrides; a missing row is all null (S12 data). */
@@ -81,10 +83,12 @@ export async function lockActiveCustomer(
   let merchantTermsRequired = false;
   let merchantLevelListId: string | null = null;
   let quantities: TierQuantities | null = null;
+  let earlyAccess = false;
   if (customer.accountType === 'merchant') {
     merchantLevelListId = await levelListId(tx, customerId);
     const privileges = await merchantPrivileges(tx, customerId);
     quantities = privileges && tierQuantities(privileges.settings);
+    earlyAccess = privileges?.settings.earlyAccess ?? false;
     const [profile] = await tx
       .select({ termsVersionId: merchantProfiles.termsVersionId })
       .from(merchantProfiles)
@@ -100,6 +104,7 @@ export async function lockActiveCustomer(
     capUnits: overrides.dailyPurchaseUsdUnits,
     merchantTermsRequired,
     tierQuantities: quantities,
+    earlyAccess,
   };
 }
 

@@ -10,8 +10,11 @@ import {
   type MerchantTierList,
   type MerchantTierView,
   ROOT_PRICE_LIST_IDS,
+  TIER_BEST_SELLERS_DAYS,
+  TIER_BEST_SELLERS_LIMIT,
   TIER_NAMES_AR,
   TIER_PREVIEW_MOVERS_MAX,
+  type TierBestSellers,
   type TierGrant,
   type TierGrantEndInput,
   type TierGrantInput,
@@ -30,12 +33,16 @@ import {
   grantTier,
   liveTierLevels,
   lockCustomer,
+  merchantBestSellers,
   merchantLevels,
   merchantTierSettings,
   monthsPurchases,
+  newestListPrices,
   newId,
   openGrantsOfTier,
+  productRoutingStates,
   queueAllMerchantLevels,
+  readAll,
   recordAudit,
   repriceProducts,
   routedProducts,
@@ -83,6 +90,66 @@ export class MerchantTiersService {
     private readonly jobs: JobsService,
     private readonly depositSettings: DepositSettingsService,
   ) {}
+
+  /**
+   * `GET /api/admin/merchant-tiers/best-sellers` (PX5): the 20 packs merchants bought most in 30
+   * days, with the basis cost and each tier's price, margin and whether it is a fixed price; the
+   * Diamond list opens S20's fixed price dialog.
+   */
+  async bestSellers(now = new Date()): Promise<TierBestSellers> {
+    const [packs, levels] = await readAll(this.db, [
+      () => merchantBestSellers(this.db, now, TIER_BEST_SELLERS_DAYS, TIER_BEST_SELLERS_LIMIT),
+      () => liveTierLevels(this.db),
+    ]);
+    const ids = packs.map((pack) => pack.productId);
+    const listOf = (tier: MerchantTier) =>
+      tier === 'bronze'
+        ? ROOT_PRICE_LIST_IDS.wholesale
+        : (levels.find((level) => level.tier === tier)?.priceListId ?? null);
+    const tiers = MERCHANT_TIERS.map((tier) => ({ tier, listId: listOf(tier) }));
+    const states =
+      ids.length === 0
+        ? new Map()
+        : await productRoutingStates(this.db, ids, {
+            ...routingContext(this.env),
+            earlyAccess: true,
+          });
+    const rows = new Map<string, Map<string, { price: number; source: string }>>();
+    for (const { listId } of tiers) {
+      if (listId === null || ids.length === 0 || rows.has(listId)) continue;
+      const prices = await newestListPrices(this.db, ids, listId);
+      rows.set(
+        listId,
+        new Map(
+          prices.map((row) => [row.productId, { price: row.priceUsdUnits, source: row.source }]),
+        ),
+      );
+    }
+    return {
+      diamondListId: listOf('diamond'),
+      items: packs.map((pack) => {
+        const cost = states.get(pack.productId)?.basis?.costUsdUnits ?? null;
+        return {
+          productId: pack.productId,
+          gameId: pack.gameId,
+          gameNameAr: pack.gameNameAr,
+          nameAr: pack.nameAr,
+          deliveredUnits: pack.units,
+          costUsdUnits: cost,
+          tiers: tiers.map(({ tier, listId }) => {
+            const row = listId === null ? undefined : rows.get(listId)?.get(pack.productId);
+            const price = row?.price ?? null;
+            return {
+              tier,
+              priceUsdUnits: price,
+              marginUsdUnits: price !== null && cost !== null ? price - cost : null,
+              fixed: row?.source === 'fixed',
+            };
+          }),
+        };
+      }),
+    };
+  }
 
   /** `GET /api/admin/merchant-tiers`: Bronze first. */
   async list(): Promise<MerchantTierList> {

@@ -32,7 +32,8 @@ const OPEN_WINDOW_MS = 60 * 60 * 1000;
 /**
  * DL2: where a code leads. An active product of a shown game opens its pack; an archived or paused
  * product its game page; a paused or archived game (or its category), or an unknown code, the home
- * page. `productId` is set only for a pack that counts an open.
+ * page. `productId` is set only for a pack that counts an open. S23 OP5: a game or product in a
+ * running early-access window reads as paused (the link is public, it knows no viewer).
  */
 export async function resolveQuickCode(
   db: Executor,
@@ -42,10 +43,12 @@ export async function resolveQuickCode(
     .select({
       productId: catalogProducts.id,
       productLive: sql<boolean>`(${catalogProducts.status} = 'active'
-        and ${catalogProducts.archivedAt} is null)`,
+        and ${catalogProducts.archivedAt} is null
+        and (${catalogProducts.earlyAccessUntil} is null or ${catalogProducts.earlyAccessUntil} <= now()))`,
       gameSlug: catalogGames.slug,
       gameShown: sql<boolean>`(${catalogGames.status} = 'active' and ${catalogGames.archivedAt} is null
-        and ${catalogCategories.archivedAt} is null)`,
+        and ${catalogCategories.archivedAt} is null
+        and (${catalogGames.earlyAccessUntil} is null or ${catalogGames.earlyAccessUntil} <= now()))`,
     })
     .from(catalogProducts)
     .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))

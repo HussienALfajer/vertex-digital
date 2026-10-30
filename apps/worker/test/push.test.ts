@@ -145,6 +145,13 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     outOfStock: 0,
     lines: [],
   },
+  merchant_early_access: {
+    gameSlug: 'pubg-mobile',
+    gameNameAr: 'ببجي موبايل',
+    productId: newId(),
+    productNameAr: '660 شدة',
+    until: '2030-01-02T10:00:00.000Z',
+  },
   product_available: {
     alertId: newId(),
     productId: newId(),

@@ -164,6 +164,14 @@ const RENDERERS: Renderers = {
     url: '/merchant/alerts',
     tag: 'merchant-alerts',
   }),
+  // S23 OP5: the game or pack opened early, never a price.
+  merchant_early_access: (params) => ({
+    body: params.productNameAr
+      ? `وصول مبكر: ${params.productNameAr} في ${params.gameNameAr} متاحة لك قبل الجميع`
+      : `وصول مبكر: ${params.gameNameAr} متاحة لك قبل الجميع`,
+    url: `/games/${params.gameSlug}`,
+    tag: `early-access-${params.gameSlug}`,
+  }),
   // S22 PA4: the pack's name, never its price (PT2).
   product_available: (params) => ({
     body: `عادت باقة ${params.productNameAr} في ${params.gameNameAr} إلى التوفر`,

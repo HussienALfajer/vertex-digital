@@ -3,6 +3,7 @@ import { type QuickBuy, type QuickBuyState, sypDisplayPrice } from '@vertex-digi
 import {
   accountPriceList,
   type Database,
+  merchantEarlyAccess,
   productRoutingStates,
   quickBuyRows,
 } from '@vertex-digital/db';
@@ -25,16 +26,18 @@ export class QuickBuyService {
   ) {}
 
   async cards(customerId: string): Promise<QuickBuy> {
-    const [rows, pricing, rate] = await Promise.all([
+    const [rows, pricing, rate, earlyAccess] = await Promise.all([
       quickBuyRows(this.db, customerId),
       accountPriceList(this.db, customerId),
       this.rates.current(),
+      merchantEarlyAccess(this.db, customerId),
     ]);
     if (rows.length === 0 || !pricing) return { items: [] };
+    // S23 OP5: an early-access pack is buyable only for a tier that sees it.
     const states = await productRoutingStates(
       this.db,
       [...new Set(rows.map((row) => row.product.id))],
-      routingContext(this.env),
+      { ...routingContext(this.env), earlyAccess },
       pricing.effectiveList.id,
     );
     return {

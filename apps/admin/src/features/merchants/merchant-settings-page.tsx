@@ -29,12 +29,18 @@ import { merchantSettingsQuery, useSaveMerchantSettings } from './merchants.quer
 
 type SettingsField = keyof MerchantSettingsInput;
 
-const FIELDS: SettingsField[] = ['ordersPerTenMinutes', 'reapplyWaitDays', 'infoExpiryDays'];
+const NUMBER_FIELDS: SettingsField[] = ['ordersPerTenMinutes', 'reapplyWaitDays', 'infoExpiryDays'];
+
+/** S23 OP4: the Diamond contact, each optional (empty hides its button). */
+const CONTACT_FIELDS: SettingsField[] = ['directContactWhatsapp', 'directContactTelegram'];
+
+const FIELDS: SettingsField[] = [...NUMBER_FIELDS, ...CONTACT_FIELDS];
 
 /**
  * "إعدادات التجّار" (S20 PO5, MA1, MA4): the order rate, the reapply wait and the information
  * expiry, with their bounds; saving asks for re-authentication and keeps the earlier version in the
- * audit log. S23 TS2: the deposit limits and player checks are each tier's, on the tiers page.
+ * audit log. S23 TS2: the deposit limits and player checks are each tier's, on the tiers page;
+ * S23 OP4: the Diamond contact (WhatsApp number, Telegram username) shown to Diamond merchants.
  */
 export function MerchantSettingsPage() {
   const { t } = useTranslation();
@@ -88,6 +94,8 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
     ordersPerTenMinutes: String(saved.ordersPerTenMinutes),
     reapplyWaitDays: String(saved.reapplyWaitDays),
     infoExpiryDays: String(saved.infoExpiryDays),
+    directContactWhatsapp: saved.directContactWhatsapp ?? '',
+    directContactTelegram: saved.directContactTelegram ?? '',
   }));
   const [invalid, setInvalid] = useState<Set<SettingsField>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);
@@ -98,9 +106,12 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
     event.preventDefault();
     setFailure(null);
     setDone(false);
-    const parsed = merchantSettingsInputSchema.safeParse(
-      Object.fromEntries(FIELDS.map((name) => [name, Number(values[name].trim() || Number.NaN)])),
-    );
+    const parsed = merchantSettingsInputSchema.safeParse({
+      ...Object.fromEntries(
+        NUMBER_FIELDS.map((name) => [name, Number(values[name].trim() || Number.NaN)]),
+      ),
+      ...Object.fromEntries(CONTACT_FIELDS.map((name) => [name, values[name].trim() || null])),
+    });
     if (!parsed.success) {
       setInvalid(new Set(parsed.error.issues.map((issue) => issue.path[0] as SettingsField)));
       return focusInvalid();
@@ -132,7 +143,13 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
             <Input
               name={name}
               dir="ltr"
-              inputMode="numeric"
+              inputMode={
+                NUMBER_FIELDS.includes(name)
+                  ? 'numeric'
+                  : name === 'directContactWhatsapp'
+                    ? 'tel'
+                    : 'text'
+              }
               value={values[name]}
               onChange={(event) => {
                 const value = event.target.value;

@@ -19,6 +19,7 @@ import {
   type TierLevelInput,
   type TierPreviewInput,
   type TierSettingsInput,
+  tierBestSellersSchema,
   tierGrantEndInputSchema,
   tierGrantInputSchema,
   tierGrantSchema,
@@ -52,6 +53,19 @@ export class MerchantTiersAdminController {
   })
   list() {
     return this.tiers.list();
+  }
+
+  /** PX5: the Diamond best-sellers helper. */
+  @Get('merchant-tiers/best-sellers')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: tierBestSellersSchema })
+  @ApiOkResponse({
+    description: 'The packs merchants bought most in 30 days with each tier price and margin',
+    standardSchema: tierBestSellersSchema,
+  })
+  bestSellers() {
+    return this.tiers.bestSellers();
   }
 
   @Put('merchant-tiers/:tier/level')

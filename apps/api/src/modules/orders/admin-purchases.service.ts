@@ -21,6 +21,7 @@ import {
   type Database,
   findCustomerWallet,
   gameListPrices,
+  merchantEarlyAccess,
   orders,
   ownerSpentToday,
   purchasedLastDay,
@@ -174,10 +175,14 @@ export class AdminPurchasesService {
     ]);
     const cap = overrides.dailyPurchaseUsdUnits;
     const listId = pricing?.effectiveList.id ?? ROOT_PRICE_LIST_IDS.retail;
+    // S23 OP5: an order on a merchant's behalf follows the merchant's early access.
     const customerPrices =
       gameId === undefined || listId === ROOT_PRICE_LIST_IDS.retail
         ? null
-        : await gameListPrices(this.db, gameId, listId, routingContext(this.env));
+        : await gameListPrices(this.db, gameId, listId, {
+            ...routingContext(this.env),
+            earlyAccess: await merchantEarlyAccess(this.db, customerId),
+          });
     return {
       customer: {
         id: row.id,

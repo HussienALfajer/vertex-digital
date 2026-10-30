@@ -56,7 +56,7 @@ import { checkFields, type FieldValues } from '@/features/purchase/fields';
 import { freesKey } from '@/features/purchase/order-key';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
-import { apiRequest, type Failure } from '@/lib/api';
+import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -69,6 +69,7 @@ import {
   getSavedPlayers,
   getSellingPrices,
   getWatches,
+  readCounterGame,
   setOrderSale,
 } from './requests';
 import { SellingPriceField } from './selling-price-field';
@@ -217,7 +218,7 @@ type GameState = { status: 'loading' } | { status: 'failed' } | { status: 'ready
 
 async function readGame(game: MerchantGame): Promise<GameState> {
   const [store, prices, recent, saved] = await Promise.all([
-    apiRequest<StoreGame>(`/api/catalog/games/${encodeURIComponent(game.slug)}`),
+    readCounterGame(game.slug),
     getSellingPrices(game.id),
     getRecentPlayers(game.id),
     getSavedPlayers(game.id),

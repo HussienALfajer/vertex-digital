@@ -1,7 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { DEPOSIT_SETTINGS_DEFAULTS } from '@vertex-digital/contracts';
-import { customers, supportMessages, supportTickets, telegramMessages } from '@vertex-digital/db';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  customers,
+  merchantProfiles,
+  merchantTierSettings,
+  newId,
+  supportMessages,
+  supportTickets,
+  telegramMessages,
+} from '@vertex-digital/db';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FilesService } from '../src/modules/files/index.js';
@@ -420,6 +428,76 @@ describe('the admin side (TK2, TK5, TK9, TK12, TK13)', () => {
         )
       ).code,
     ).toBe('CUSTOMER_STATE_INVALID');
+  });
+
+  it("puts a priority tier's open tickets first, with the tier, over the cursor (S23 OP2)", async () => {
+    const plain = await customer();
+    const shop = await customer();
+    await test.db
+      .update(customers)
+      .set({ accountType: 'merchant' })
+      .where(eq(customers.id, shop.id));
+    const termsVersionId = newId();
+    await test.db.execute(sql`insert into content_page_versions
+      (id, page, version, title, body, draft_revision, admin_id)
+      values (${termsVersionId}, 'merchant_terms', 1000 + floor(random() * 1e9)::int,
+        'شروط التاجر', 'النص', 1, ${newId()})`);
+    await test.db.insert(merchantProfiles).values({
+      customerId: shop.id,
+      tradeName: 'محل النور',
+      governorate: 'aleppo',
+      city: 'اعزاز',
+      grantedAt: new Date(),
+      termsVersionId,
+    });
+    // Bronze takes the ticket priority for this test (TS1: a new settings row is in force).
+    const [bronze] = await test.db
+      .select()
+      .from(merchantTierSettings)
+      .where(eq(merchantTierSettings.tier, 'bronze'))
+      .orderBy(desc(merchantTierSettings.createdAt), desc(merchantTierSettings.id))
+      .limit(1);
+    if (!bronze) throw new Error('No Bronze settings');
+    const { id: _id, createdAt: _at, ...values } = bronze;
+    await test.db
+      .insert(merchantTierSettings)
+      .values({ ...values, id: newId(), supportPriority: true });
+    try {
+      const older = await json<TicketView>(await openTicket(plain), 201);
+      const priority = await json<TicketView>(await openTicket(shop), 201);
+      const page = async (cursor: string | null) =>
+        json<{
+          items: { id: string; customer: { tier: string | null } }[];
+          nextCursor: string | null;
+        }>(
+          await client.get(
+            `/api/admin/support/tickets?status=open&limit=1${cursor ? `&cursor=${cursor}` : ''}`,
+            { cookie: admin.cookie },
+          ),
+          200,
+        );
+      const all: { id: string; customer: { tier: string | null } }[] = [];
+      let cursor: string | null = null;
+      do {
+        const result = await page(cursor);
+        all.push(...result.items);
+        cursor = result.nextCursor;
+      } while (cursor);
+      const ids = all.map((item) => item.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      // The test database keeps earlier runs' tickets: the merchants' still lead, whatever their age.
+      expect(ids.indexOf(priority.id)).toBeLessThan(ids.indexOf(older.id));
+      expect(ids).toContain(older.id);
+      expect(all[ids.indexOf(priority.id)]?.customer.tier).toBe('bronze');
+      expect(all.find((item) => item.id === older.id)?.customer.tier).toBeNull();
+      const detail = await json<{ customer: { tier: string | null } }>(
+        await client.get(`/api/admin/support/tickets/${priority.id}`, { cookie: admin.cookie }),
+        200,
+      );
+      expect(detail.customer.tier).toBe('bronze');
+    } finally {
+      await test.db.insert(merchantTierSettings).values({ ...values, id: newId() });
+    }
   });
 
   it('reopens a closed ticket to answered when the admin replies (TK5)', async () => {

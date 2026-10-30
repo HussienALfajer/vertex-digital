@@ -21,9 +21,10 @@ import { errorMessage } from '../../lib/errors';
 import { GamePlayerCheckCard } from '../orders/game-player-check';
 import { GamePricing } from '../pricing/game-pricing';
 import { GameSupplierLinks } from '../suppliers/game-supplier-links';
-import { gameQuery, useArchiveGame } from './catalog.queries';
+import { gameQuery, useArchiveGame, useGameEarlyAccess } from './catalog.queries';
 import { StatusBadge } from './catalog-parts';
 import { GAME_TABS, type GameTab } from './catalog-search';
+import { EarlyAccessBadge, EarlyAccessButton } from './early-access';
 import { FieldsTab } from './fields-tab';
 import { GameForm } from './game-form';
 import { ProductsTab } from './products-tab';
@@ -86,6 +87,7 @@ export function GamePage({
           <span className="flex flex-wrap items-center gap-3">
             {data.nameAr}
             <StatusBadge status={data.status} />
+            <EarlyAccessBadge until={data.earlyAccessUntil} />
             {data.archivedAt && <Badge tone="warning">{t('catalog.archived')}</Badge>}
           </span>
         }
@@ -93,6 +95,7 @@ export function GamePage({
         actions={
           <>
             <BackLink />
+            {!data.archivedAt && <GameEarlyAccess game={data} />}
             <ArchiveGame game={data} />
           </>
         }
@@ -152,6 +155,18 @@ function BackLink() {
 }
 
 /** Archive, or restore (`PARENT_ARCHIVED` while its category is archived, rule CT1). */
+/** S23 OP5: the game's early access. */
+function GameEarlyAccess({ game }: { game: GameDetail }) {
+  const set = useGameEarlyAccess(game.id);
+  return (
+    <EarlyAccessButton
+      name={game.nameAr}
+      until={game.earlyAccessUntil}
+      onSet={(on) => set.mutateAsync(on)}
+    />
+  );
+}
+
 function ArchiveGame({ game }: { game: GameDetail }) {
   const { t } = useTranslation();
   const archive = useArchiveGame(game.id);

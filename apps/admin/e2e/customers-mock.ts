@@ -1,3 +1,4 @@
+import type { MerchantTier } from '@vertex-digital/contracts';
 import {
   type AcceptedVersion,
   type AdminCustomer,
@@ -117,6 +118,8 @@ interface MockCustomer {
   signIns: { id: string; ipAddress: string; userAgent: string; createdAt: string }[];
   /** S22 PK6. */
   passkeys: Passkey[];
+  /** S23 OP2: a merchant's effective tier, for the ticket queue. */
+  tier?: MerchantTier | null;
 }
 
 interface MockTicket {
@@ -617,7 +620,13 @@ export class CustomersMock {
       closedAt: ticket.closedAt,
       closedBy: ticket.closedBy,
       createdAt: ticket.createdAt,
-      customer: { id: owner.id, name: owner.name, email: owner.email, status: this.status(owner) },
+      customer: {
+        id: owner.id,
+        name: owner.name,
+        email: owner.email,
+        status: this.status(owner),
+        tier: owner.tier ?? null,
+      },
     };
   }
 
@@ -638,6 +647,7 @@ export class CustomersMock {
         phone: owner.phone,
         isTest: owner.isTest,
         marks: this.marks(owner),
+        tier: owner.tier ?? null,
       },
       orderSummary: order
         ? {

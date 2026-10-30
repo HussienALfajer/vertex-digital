@@ -17,6 +17,8 @@ import {
   activateAllResultSchema,
   createInputFieldSchema,
   createProductSchema,
+  type EarlyAccessInput,
+  earlyAccessInputSchema,
   inputFieldSchema,
   productSchema,
   type Reorder,
@@ -28,7 +30,7 @@ import {
 } from '@vertex-digital/contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
-import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
+import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
@@ -176,6 +178,22 @@ export class CatalogItemsAdminController {
     @Req() request: Request,
   ) {
     return this.items.updateProduct(actor(admin, request), id, body);
+  }
+
+  /** S23 OP5: "وصول مبكر 24 ساعة", or "إنهاء الآن". */
+  @Put('products/:id/early-access')
+  @AdminRoute()
+  @Sensitive()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: productSchema })
+  @ApiOkResponse({ description: 'The product', standardSchema: productSchema })
+  setProductEarlyAccess(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body({ schema: earlyAccessInputSchema }) body: EarlyAccessInput,
+    @Req() request: Request,
+  ) {
+    return this.items.setProductEarlyAccess(actor(admin, request), id, body.on);
   }
 
   @Post('products/:id/archive')

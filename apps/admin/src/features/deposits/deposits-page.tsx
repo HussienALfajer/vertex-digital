@@ -38,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
+import { TierChip } from '../merchants/tier-chip';
 import { depositAmount, STATUS_TONES } from './deposit-labels';
 import {
   DEPOSIT_TABS,
@@ -290,6 +291,8 @@ export function DepositTable({
                   <span className="flex items-center gap-2">
                     {deposit.customer.name}
                     {deposit.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+                    {/* S23 OP1: a merchant's tier; priority tiers come first. */}
+                    {deposit.customer.tier && <TierChip tier={deposit.customer.tier} />}
                   </span>
                   <span dir="ltr" className="text-end text-sm text-muted-foreground">
                     {deposit.customer.email}

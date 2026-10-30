@@ -4740,6 +4740,64 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
         await archiveLevels();
       }
     });
+    it('sells an early-access pack only to a tier with early access, and to everyone after (OP5)', async () => {
+      await archiveLevels();
+      const item = await product({ cost: usd(1) });
+      const shop = await merchant(usd(20));
+      const buyer = await customer({ funds: usd(20) });
+      const until = new Date(Date.now() + DAY);
+      await pool.query('update catalog_products set early_access_until = $2 where id = $1', [
+        item.id,
+        until,
+      ]);
+      try {
+        const price = await wholesalePrice(item.id);
+        const retailPrice = await listPriceOf(item.id, retail);
+        // Bronze and a customer do not see it: hidden, as an archived pack.
+        expect(await refusal(buy(request(shop, { id: item.id, price })))).toMatchObject({
+          code: 'PRODUCT_UNAVAILABLE',
+          details: { availability: 'hidden' },
+        });
+        expect(
+          await refusal(buy(request(buyer, { id: item.id, price: retailPrice }))),
+        ).toMatchObject({
+          code: 'PRODUCT_UNAVAILABLE',
+          details: { availability: 'hidden' },
+        });
+        // Gold (granted, early access in TS2) buys it, on Gold's list.
+        await level(usd(1_000_000), wholesale, 'silver');
+        await level(usd(2_000_000), wholesale, 'gold');
+        await grant(shop, 'gold');
+        expect((await db.transaction((tx) => lockActiveCustomer(tx, shop))).earlyAccess).toBe(true);
+        expect((await buy(request(shop, { id: item.id, price }))).order.status).toBe('paid');
+        // A game in early access hides its packs the same way.
+        await pool.query('update catalog_products set early_access_until = null where id = $1', [
+          item.id,
+        ]);
+        await pool.query('update catalog_games set early_access_until = $2 where id = $1', [
+          item.game,
+          until,
+        ]);
+        expect(
+          await refusal(buy(request(buyer, { id: item.id, price: retailPrice }))),
+        ).toMatchObject({
+          code: 'PRODUCT_UNAVAILABLE',
+        });
+        // The window ended: everyone buys it. A minute back: the purchase reads the app's clock.
+        await pool.query(
+          "update catalog_games set early_access_until = now() - interval '1 minute' where id = $1",
+          [item.game],
+        );
+        expect((await buy(request(buyer, { id: item.id, price: retailPrice }))).order.status).toBe(
+          'paid',
+        );
+      } finally {
+        await pool.query('update catalog_games set early_access_until = null where id = $1', [
+          item.game,
+        ]);
+        await archiveLevels();
+      }
+    });
   });
 
   it('serializes a level change and a purchase on the customer (LV4, AT3)', async () => {

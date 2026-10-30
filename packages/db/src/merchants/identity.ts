@@ -12,6 +12,7 @@ import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
 import { lockCustomer } from '../customers/state.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
+import { outsideEarlyAccess } from '../pricing/routing.js';
 import {
   catalogGames,
   catalogProducts,
@@ -105,12 +106,53 @@ export async function tierSavings(
   return Number(row?.saved ?? 0);
 }
 
+/**
+ * S23 PX5: the packs merchants bought most (delivered units of customer-paid orders net of
+ * refunded units, test accounts left out) in the last `days`, most first.
+ */
+export async function merchantBestSellers(
+  db: Executor,
+  now: Date,
+  days: number,
+  limit: number,
+): Promise<
+  { productId: string; gameId: string; gameNameAr: string; nameAr: string; units: number }[]
+> {
+  const units = sql<number>`sum(${orders.deliveredQuantity} - least(${orders.refundedQuantity}, ${orders.deliveredQuantity}))::int`;
+  return db
+    .select({
+      productId: catalogProducts.id,
+      gameId: catalogGames.id,
+      gameNameAr: catalogGames.nameAr,
+      nameAr: catalogProducts.nameAr,
+      units,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(customers.id, orders.customerId))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .where(
+      and(
+        eq(customers.accountType, 'merchant'),
+        eq(customers.isTest, false),
+        eq(orders.payer, 'customer'),
+        sql`${orders.deliveredQuantity} > 0`,
+        gte(orders.createdAt, new Date(now.getTime() - days * 86_400_000)),
+        isNull(catalogProducts.archivedAt),
+      ),
+    )
+    .groupBy(catalogProducts.id, catalogGames.id, catalogGames.nameAr, catalogProducts.nameAr)
+    .having(sql`${units} > 0`)
+    .orderBy(sql`${units} desc`, catalogProducts.id)
+    .limit(limit);
+}
+
 /** PG2: three packs at most. */
 const TABLE_PACKS = 3;
 
 /**
  * PG2: the merchant's three most-bought packs (delivered units in 90 days); with none, the three
- * packs merchants bought most in 30 days. Live packs of live games only.
+ * packs merchants bought most in 30 days. Live packs of live games only, none in early access.
  */
 export async function tierTablePacks(
   db: Executor,
@@ -136,6 +178,9 @@ export async function tierTablePacks(
           gte(orders.createdAt, new Date(now.getTime() - days * 86_400_000)),
           isNull(catalogProducts.archivedAt),
           isNull(catalogGames.archivedAt),
+          // S23 OP5: a pack in early access stays out of every tier's table until it opens.
+          outsideEarlyAccess(catalogProducts.earlyAccessUntil, now),
+          outsideEarlyAccess(catalogGames.earlyAccessUntil, now),
         ),
       )
       .groupBy(catalogProducts.id, catalogGames.nameAr, catalogProducts.nameAr)

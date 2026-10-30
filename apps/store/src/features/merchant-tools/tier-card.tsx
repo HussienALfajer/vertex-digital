@@ -11,6 +11,7 @@ import { TierBadge, tierSurfaceVariants } from '@vertex-digital/ui/components/ti
 import { CheckIcon, PiggyBankIcon } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate, ltr } from '@/lib/format';
+import { DirectContact } from './direct-contact';
 import { tm } from './i18n';
 import { tierBadgeLabel } from './tier-parts';
 
@@ -88,6 +89,7 @@ export function TierCard({
         </p>
       )}
       <TierGrants privileges={tier.privileges} />
+      <DirectContact contact={tier.contact} />
       {withLink && (
         <Button
           variant="outline"

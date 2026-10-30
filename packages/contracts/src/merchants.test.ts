@@ -225,6 +225,27 @@ describe('merchant settings', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('normalize the Diamond contact (OP4) and refuse a bad username', () => {
+    expect(
+      merchantSettingsInputSchema.parse({
+        ...MERCHANT_SETTINGS_DEFAULTS,
+        directContactWhatsapp: '0933 123 456',
+        directContactTelegram: 'vertex_shop',
+      }),
+    ).toMatchObject({
+      directContactWhatsapp: '+963933123456',
+      directContactTelegram: 'vertex_shop',
+    });
+    for (const directContactTelegram of ['abc', '@vertex_shop', 'vertex shop']) {
+      expect(
+        merchantSettingsInputSchema.safeParse({
+          ...MERCHANT_SETTINGS_DEFAULTS,
+          directContactTelegram,
+        }).success,
+      ).toBe(false);
+    }
+  });
 });
 
 describe('the certificate (ID7)', () => {

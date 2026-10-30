@@ -46,6 +46,7 @@ import { useIdempotentRequest } from '../../lib/idempotency';
 import { actorLabel } from '../audit/audit-labels';
 import { CustomerMarks } from '../customers/customer-marks';
 import { STATUS_TONES as DEPOSIT_TONES } from '../deposits/deposit-labels';
+import { TierChip } from '../merchants/tier-chip';
 import { STATUS_TONES as ORDER_TONES } from '../orders/order-labels';
 import { ImagePicker } from './image-picker';
 import {
@@ -366,6 +367,7 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
           >
             {customer.name}
           </Link>
+          {customer.tier && <TierChip tier={customer.tier} />}
           <span dir="ltr" className="text-end text-sm break-all text-muted-foreground">
             {customer.email}
           </span>

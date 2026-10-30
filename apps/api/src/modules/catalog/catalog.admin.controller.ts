@@ -25,6 +25,8 @@ import {
   categorySchema,
   createCategorySchema,
   createGameSchema,
+  type EarlyAccessInput,
+  earlyAccessInputSchema,
   type GameListQuery,
   gameDetailSchema,
   gameListQuerySchema,
@@ -39,7 +41,7 @@ import {
 } from '@vertex-digital/contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
-import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
+import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
@@ -222,6 +224,22 @@ export class CatalogAdminController {
     @Req() request: Request,
   ) {
     return this.catalog.updateGame(actor(admin, request), id, body);
+  }
+
+  /** S23 OP5: "وصول مبكر 24 ساعة", or "إنهاء الآن". */
+  @Put('games/:id/early-access')
+  @AdminRoute()
+  @Sensitive()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: gameDetailSchema })
+  @ApiOkResponse({ description: 'The game', standardSchema: gameDetailSchema })
+  setGameEarlyAccess(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body({ schema: earlyAccessInputSchema }) body: EarlyAccessInput,
+    @Req() request: Request,
+  ) {
+    return this.catalog.setGameEarlyAccess(actor(admin, request), id, body.on);
   }
 
   @Post('games/:id/archive')

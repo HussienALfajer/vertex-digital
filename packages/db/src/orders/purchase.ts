@@ -135,7 +135,8 @@ const uniqueViolation = (error: unknown, constraint: string): boolean => {
 
 /**
  * The product's routing state now, with its price on the list (S20 PO1, PO2); routes of a supplier
- * this build cannot use stay out (SP1).
+ * this build cannot use stay out (SP1). S23 OP5: a product in early access reads `hidden` unless
+ * the buyer's tier has early access.
  */
 export async function routingNow(
   tx: Transaction,
@@ -143,10 +144,11 @@ export async function routingNow(
   now: Date,
   fakeEnabled: boolean,
   priceListId: string,
+  earlyAccess = false,
 ): Promise<ProductRoutingState | undefined> {
-  return (await productRoutingStates(tx, [productId], { now, fakeEnabled }, priceListId)).get(
-    productId,
-  );
+  return (
+    await productRoutingStates(tx, [productId], { now, fakeEnabled, earlyAccess }, priceListId)
+  ).get(productId);
 }
 
 /**
@@ -266,6 +268,8 @@ export async function prepareLine(
     accountType: AccountType;
     /** S23 TS5: the merchant's tier quantities (null for a customer). */
     tierQuantities: TierQuantities | null;
+    /** S23 OP5: the buyer's tier sees early-access packs (false for a customer and the owner). */
+    earlyAccess: boolean;
   },
   line: LineInput,
   product: ProductRow,
@@ -276,6 +280,7 @@ export async function prepareLine(
     context.now,
     common.fakeEnabled,
     common.priceListId,
+    common.earlyAccess,
   );
   if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
   const current = usable.current;
@@ -452,6 +457,7 @@ export async function purchaseOrder(
       priceListId: customer.priceListId,
       accountType: customer.accountType,
       tierQuantities: customer.tierQuantities,
+      earlyAccess: customer.earlyAccess,
     },
     input,
     product,

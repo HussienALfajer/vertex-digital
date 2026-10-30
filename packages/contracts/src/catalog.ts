@@ -419,6 +419,8 @@ export const productSchema = z
     regionAr: z.string().nullable(),
     redemptionAr: z.string().nullable(),
     status: catalogStatusSchema,
+    /** S23 OP5: while in the future, only merchants of an early-access tier see and buy it. */
+    earlyAccessUntil: z.iso.datetime().nullable(),
     availability: productAvailabilitySchema,
     /** The current stored price (S07 rule P2) and its SYP display price; null: none yet. */
     priceUsdUnits: z.int().nullable(),
@@ -485,6 +487,31 @@ export const updateProductSchema = z
 
 export type UpdateProduct = z.input<typeof updateProductSchema>;
 
+/* Early access (S23 OP5, decision 15) ------------------------------------------------------ */
+
+/** OP5: an early-access window lasts 24 hours from when the admin sets it. */
+export const EARLY_ACCESS_HOURS = 24;
+
+/**
+ * `PUT /api/admin/catalog/games/:id/early-access` and `products/:id/early-access`: `on` opens a
+ * window of `EARLY_ACCESS_HOURS` from now (a running one restarts), `off` ends it now.
+ */
+export const earlyAccessInputSchema = z
+  .object({ on: z.boolean() })
+  .meta({ id: 'EarlyAccessInput' });
+
+export type EarlyAccessInput = z.infer<typeof earlyAccessInputSchema>;
+
+/** OP5: the window's end for a window opened at `now`. */
+export function earlyAccessEnd(now: Date): Date {
+  return new Date(now.getTime() + EARLY_ACCESS_HOURS * 60 * 60 * 1000);
+}
+
+/** OP5: a window is running while its end is in the future. */
+export function inEarlyAccess(until: Date | string | null, now: Date): boolean {
+  return until !== null && new Date(until).getTime() > now.getTime();
+}
+
 /** What a product's availability reads (rule CT9; S07 rule P6). */
 export interface AvailabilityFacts {
   categoryArchived: boolean;
@@ -496,6 +523,11 @@ export interface AvailabilityFacts {
   price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
   /** The costs of the product's usable routes (rule RT4). */
   usableRouteCostsUsdUnits: readonly number[];
+  /**
+   * S23 OP5: the product or its game is in a running early-access window and the viewer is not a
+   * merchant of an early-access tier: hidden as an archived product.
+   */
+  earlyAccessHidden?: boolean;
 }
 
 /**
@@ -505,6 +537,7 @@ export interface AvailabilityFacts {
  */
 export function productAvailability(facts: AvailabilityFacts): ProductAvailability {
   if (facts.categoryArchived || facts.gameArchived || facts.productArchived) return 'hidden';
+  if (facts.earlyAccessHidden) return 'hidden';
   if (facts.gameStatus === 'paused' || facts.productStatus === 'paused') return 'paused';
   const { price } = facts;
   if (price === null || facts.usableRouteCostsUsdUnits.length === 0) return 'out_of_stock';
@@ -562,6 +595,8 @@ export const gameSchema = z
     nameAr: z.string(),
     nameEn: z.string(),
     status: catalogStatusSchema,
+    /** S23 OP5: while in the future, only merchants of an early-access tier see the game. */
+    earlyAccessUntil: z.iso.datetime().nullable(),
     cover: catalogImageSchema.nullable(),
     idGuide: catalogImageSchema.nullable(),
     accentColor: z.string().nullable(),
@@ -755,6 +790,11 @@ export const storeProductSchema = z
     playerCheck: z.boolean(),
     regionAr: z.string().nullable(),
     redemptionAr: z.string().nullable(),
+    /**
+     * S23 OP5: the pack (or its game) is in a running early-access window: the "وصول مبكر" chip.
+     * Always false on the public reads, which leave such packs out.
+     */
+    earlyAccess: z.boolean(),
   })
   .meta({ id: 'StoreProduct' });
 

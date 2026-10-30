@@ -33,6 +33,12 @@ export function PackContent({
   const amount = packAmountText(product.nameAr, product.gameAmount);
   return (
     <>
+      {/* S23 OP5: a pack open early to the merchant's tier; never on the cached public card. */}
+      {product.earlyAccess && (
+        <Badge tone="gold" className="self-start">
+          {t('catalog.earlyAccess')}
+        </Badge>
+      )}
       <span className="flex items-start justify-between gap-2">
         <bdi className="font-bold break-words">{product.nameAr}</bdi>
         {available && (product.savings?.percent || product.bestValue) && (

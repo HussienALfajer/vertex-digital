@@ -131,6 +131,7 @@ export async function checkoutOrders(
             priceListId: customer.priceListId,
             accountType: customer.accountType,
             tierQuantities: customer.tierQuantities,
+            earlyAccess: customer.earlyAccess,
           },
           line,
           product,

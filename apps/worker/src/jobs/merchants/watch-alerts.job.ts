@@ -5,7 +5,9 @@ import {
   compareMerchantWatches,
   type Database,
   dailyDigestMerchants,
+  FAST_ALERTS_WINDOW_MS,
   merchantsToCompare,
+  merchantsWith,
   sendDailyDigest,
   withoutQueryParameters,
 } from '@vertex-digital/db';
@@ -13,14 +15,16 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 
-/** AL2: at minute 5 of every hour. */
-export const WATCH_ALERTS_CRON = '5 * * * *';
+/** AL2, S23 OP8: at minutes 5, 20, 35 and 50 of every hour. */
+export const WATCH_ALERTS_CRON = '5,20,35,50 * * * *';
 
 /** AL4: 09:00 `Asia/Damascus`. */
 export const DAILY_DIGEST_CRON = '0 9 * * *';
 
 /**
- * `merchants.watch-alerts` (S21 AL2, AL3, AL6), hourly: each merchant with follows compared in a
+ * `merchants.watch-alerts` (S21 AL2, AL3, AL6; S23 OP8), every 15 minutes: merchants of a tier with
+ * faster alerts every run (their digest once a quarter hour), the others at :05 only (hourly, as
+ * before). Each merchant with follows compared in a
  * transaction of their own (`compareMerchantWatches`, a merchant held by another run is skipped),
  * at most one digest notification each; a sent low-balance alert is cleared once the balance is
  * back. `merchants.daily-digest` (AL4), daily: the email of the last 24 hours for merchants who
@@ -57,19 +61,42 @@ export class MerchantWatchAlertsJob implements OnApplicationBootstrap {
     this.logger.log(`Scheduled ${QUEUES.merchantsDailyDigest} (${DAILY_DIGEST_CRON} Damascus)`);
   }
 
-  /** AL2: every merchant to compare; returns the events written. */
+  /**
+   * AL2, OP8: the merchants to compare in this run; returns the events written. The hourly run is
+   * the one in the first quarter of the hour (:05); the others compare faster-alert tiers only.
+   */
   async compareAll(now: Date): Promise<number> {
     const context = {
       jobs: bossJobSender(this.pgBoss.boss),
       now,
       fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
     };
+    const { due, fast } = await this.dueMerchants(now);
     let events = 0;
-    await this.eachMerchant('Watch comparison', await merchantsToCompare(this.db), async (id) => {
-      const result = await this.db.transaction((tx) => compareMerchantWatches(tx, context, id));
+    await this.eachMerchant('Watch comparison', due, async (id) => {
+      const result = await this.db.transaction((tx) =>
+        compareMerchantWatches(
+          tx,
+          { ...context, digestWindowMs: fast.has(id) ? FAST_ALERTS_WINDOW_MS : undefined },
+          id,
+        ),
+      );
       events += result?.events ?? 0;
     });
     return events;
+  }
+
+  /**
+   * OP8: who this run compares (every merchant with follows at :05, else only the faster-alert
+   * tiers'), and which of them are faster-alert merchants.
+   */
+  async dueMerchants(now: Date): Promise<{ due: string[]; fast: Set<string> }> {
+    const hourly = now.getUTCMinutes() < 15;
+    const [all, fast] = [
+      await merchantsToCompare(this.db),
+      new Set(await merchantsWith(this.db, 'fastAlerts')),
+    ];
+    return { due: hourly ? all : all.filter((id) => fast.has(id)), fast };
   }
 
   /** AL4: every merchant who turned the email on; returns the emails queued. */

@@ -112,6 +112,11 @@ export async function merchantPrivileges(
   return { tier, settings };
 }
 
+/** S23 OP5: the account is a merchant whose effective tier sees early-access games and packs. */
+export async function merchantEarlyAccess(db: Executor, customerId: string): Promise<boolean> {
+  return (await merchantPrivileges(db, customerId))?.settings.earlyAccess ?? false;
+}
+
 /** TS2: a settings row's privileges, as the admin's tiers page and the merchant read them. */
 export function tierPrivileges(row: TierSettingsRow): TierPrivileges {
   return {
@@ -207,6 +212,70 @@ export async function tierMerchantCounts(
   ) as Record<MerchantTier, { earned: number; granted: number }>;
   for (const row of rows) counts[row.tier][row.granted ? 'granted' : 'earned'] += row.count;
   return counts;
+}
+
+/** The effective tier of a profile's live level, Bronze without one (archived, revoked). */
+const effectiveTierSql = sql<MerchantTier>`coalesce(${merchantLevels.tier}, 'bronze')`;
+
+/**
+ * S23 OP1, OP2: the effective tier of each merchant among `customerIds` (TR3: Bronze for a
+ * revoked profile or an archived level); accounts that are not merchants are left out.
+ */
+export async function merchantTiers(
+  db: Executor,
+  customerIds: readonly string[],
+): Promise<Map<string, MerchantTier>> {
+  if (customerIds.length === 0) return new Map();
+  const rows = await db
+    .select({ customerId: customers.id, tier: effectiveTierSql })
+    .from(customers)
+    .leftJoin(
+      merchantProfiles,
+      and(eq(merchantProfiles.customerId, customers.id), isNull(merchantProfiles.revokedAt)),
+    )
+    .leftJoin(
+      merchantLevels,
+      and(eq(merchantLevels.id, merchantProfiles.levelId), isNull(merchantLevels.archivedAt)),
+    )
+    .where(
+      and(inArray(customers.id, [...new Set(customerIds)]), eq(customers.accountType, 'merchant')),
+    );
+  return new Map(rows.map((row) => [row.customerId, row.tier]));
+}
+
+/** The tier privileges a queue or a job selects merchants by (TS2). */
+export type TierFlag = 'depositPriority' | 'supportPriority' | 'earlyAccess' | 'fastAlerts';
+
+/** TS2: the tiers whose settings in force have the privilege on. */
+export async function tiersWith(db: Executor, flag: TierFlag): Promise<MerchantTier[]> {
+  const settings = await currentTierSettings(db);
+  return MERCHANT_TIERS.filter((tier) => settings[tier][flag]);
+}
+
+/**
+ * S23 OP1, OP2, OP5, OP8: the merchants (granted, not revoked) whose effective tier has the
+ * privilege on now, by customer id.
+ */
+export async function merchantsWith(db: Executor, flag: TierFlag): Promise<string[]> {
+  const tiers = await tiersWith(db, flag);
+  if (tiers.length === 0) return [];
+  const rows = await db
+    .select({ customerId: merchantProfiles.customerId })
+    .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .leftJoin(
+      merchantLevels,
+      and(eq(merchantLevels.id, merchantProfiles.levelId), isNull(merchantLevels.archivedAt)),
+    )
+    .where(
+      and(
+        eq(customers.accountType, 'merchant'),
+        isNull(merchantProfiles.revokedAt),
+        inArray(effectiveTierSql, tiers),
+      ),
+    )
+    .orderBy(asc(merchantProfiles.customerId));
+  return rows.map((row) => row.customerId);
 }
 
 /** AD2: the lists a tier page names, by id (archived ones too). */

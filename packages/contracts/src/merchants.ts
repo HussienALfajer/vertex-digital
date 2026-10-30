@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
-import { adminMerchantTierSchema } from './merchant-tiers.js';
+import { adminMerchantTierSchema, telegramUsernameSchema } from './merchant-tiers.js';
 import { amountUnitsSchema } from './money.js';
 import { merchantTierSchema, priceKindSchema } from './price-kinds.js';
 
@@ -600,17 +600,24 @@ export const MERCHANT_SETTINGS_DEFAULTS = {
   ordersPerTenMinutes: 60,
   reapplyWaitDays: 7,
   infoExpiryDays: 7,
+  directContactWhatsapp: null,
+  directContactTelegram: null,
 } as const;
 
 /** A customer's order rate (PO5): orders and checkouts per 10 minutes. */
 export const CUSTOMER_ORDERS_PER_TEN_MINUTES = 10;
 
-/** `PUT /api/admin/merchant-settings`. */
+/**
+ * `PUT /api/admin/merchant-settings`. S23 OP4 (decision 12): the Diamond contact, a WhatsApp number
+ * (E.164) and a Telegram username, each optional (null hides its button).
+ */
 export const merchantSettingsInputSchema = z
   .object({
     ordersPerTenMinutes: z.int().min(10).max(500),
     reapplyWaitDays: z.int().min(0).max(365),
     infoExpiryDays: z.int().min(1).max(60),
+    directContactWhatsapp: phoneSchema.nullable(),
+    directContactTelegram: telegramUsernameSchema.nullable(),
   })
   .meta({ id: 'MerchantSettingsInput' });
 
@@ -620,6 +627,8 @@ export type MerchantSettingsInput = z.infer<typeof merchantSettingsInputSchema>;
 export const merchantSettingsSchema = z
   .object({
     ...merchantSettingsInputSchema.shape,
+    // The stored E.164 number, not the input's transform (a response schema has no transform).
+    directContactWhatsapp: z.string().nullable(),
     updatedAt: z.iso.datetime(),
   })
   .meta({ id: 'MerchantSettings' });

@@ -740,9 +740,10 @@ test.describe('the order page, printing and verification (F34, F35)', () => {
     const tools_ = page.getByTestId('order-tools');
     await tools_.getByRole('button', { name: tools.order.copyCodes }).click();
     await expect(tools_.getByRole('status')).toHaveText(tools.order.copied);
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-      codeOrder.codes.map((code) => `GPLAY-${code.position}A2B`).join('\n'),
-    );
+    // Windows' clipboard reads its line ends back as CRLF.
+    expect(
+      (await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n'),
+    ).toBe(codeOrder.codes.map((code) => `GPLAY-${code.position}A2B`).join('\n'));
     expect(api.last(`POST /api/orders/${CODE_ORDER_ID}/codes/release`)?.body).toEqual({
       purpose: 'copy',
     });

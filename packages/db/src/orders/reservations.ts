@@ -260,7 +260,14 @@ async function payOne(
     await cancelReservation(tx, context, order, 'price_list_changed', { kind: 'system' });
     return 'cancelled_price_list_changed';
   }
-  const usable = await routingNow(tx, order.productId, now, context.fakeEnabled, order.priceListId);
+  const usable = await routingNow(
+    tx,
+    order.productId,
+    now,
+    context.fakeEnabled,
+    order.priceListId,
+    customer.earlyAccess,
+  );
   const current = usable?.current;
   if (!usable || !current || availabilityNow(usable, customer.isTest) !== 'available') {
     return 'skipped_unavailable';

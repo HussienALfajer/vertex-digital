@@ -118,3 +118,20 @@ export function withKind(search: ReportSearch, kind: ReportKind): ReportSearch {
   if (kind === 'sales') return rest;
   return kind === 'breakdown' && by ? { ...rest, kind, by } : { ...rest, kind };
 }
+
+/** S23 AD4: the report by tier's month, `YYYY-MM`; absent for the current Damascus month. */
+export interface TierReportSearch {
+  month?: string;
+}
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+export function parseTierReportSearch(search: Record<string, unknown>): TierReportSearch {
+  return typeof search.month === 'string' && MONTH.test(search.month)
+    ? { month: search.month }
+    : {};
+}
+
+/** The month the report shows: the URL's, else this Damascus month. */
+export const tierReportMonth = (search: TierReportSearch, now: Date) =>
+  search.month ?? damascusToday(now).slice(0, 7);

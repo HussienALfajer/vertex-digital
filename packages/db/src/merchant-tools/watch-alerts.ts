@@ -27,6 +27,9 @@ import { alertEvents, merchantListPrices, watchedProductIds } from './reads.js';
 
 const HOUR = 60 * 60 * 1000;
 
+/** S23 OP8: a merchant of a tier with faster alerts is told at most once a quarter hour. */
+export const FAST_ALERTS_WINDOW_MS = 15 * 60 * 1000;
+
 /*
  * The hourly follow alerts (S21 AL2, AL3, AL6) and the daily email (AL4). One merchant per
  * transaction, under a per-merchant advisory lock taken without waiting: a second run in the same
@@ -57,11 +60,12 @@ export async function merchantsToCompare(db: Executor): Promise<string[]> {
  * dropped (edge case 18), each followed product compared with what was last told (hidden products
  * ignored, a first sight only recorded), the events written, one digest notification when there
  * are any and none was written this hour, and a sent low-balance alert cleared once the balance is
- * back. Null when another run holds the merchant.
+ * back. Null when another run holds the merchant. S23 OP8: `digestWindowMs` is the digest's
+ * dedupe window, an hour by default and a quarter hour for a tier with faster alerts.
  */
 export async function compareMerchantWatches(
   tx: Transaction,
-  context: RoutingContext & { jobs: JobSender },
+  context: RoutingContext & { jobs: JobSender; digestWindowMs?: number },
   customerId: string,
 ): Promise<{ events: number } | null> {
   const [locked] = (
@@ -147,7 +151,10 @@ export async function compareMerchantWatches(
         set: state,
       });
   }
-  if (kinds.length > 0 && !(await digestSentThisHour(tx, customerId, context.now))) {
+  if (
+    kinds.length > 0 &&
+    !(await digestSentInWindow(tx, customerId, context.now, context.digestWindowMs ?? HOUR))
+  ) {
     const counts = alertCounts(kinds);
     await notifyCustomer(tx, context.jobs, {
       customerId,
@@ -166,12 +173,18 @@ export async function compareMerchantWatches(
 }
 
 /**
- * AL3's dedupe `watch-digest:<customer>:<hour>` (audit A06-37): a digest already written this hour,
- * read under the merchant's advisory lock, so a manual run after the cron sends no second one. The
- * events are still written and shown on the alerts page.
+ * AL3's dedupe `watch-digest:<customer>:<hour>` (audit A06-37): a digest already written this hour
+ * (S23 OP8: this quarter hour for faster alerts), read under the merchant's advisory lock, so a
+ * manual run after the cron sends no second one. The events are still written and shown on the
+ * alerts page.
  */
-async function digestSentThisHour(tx: Transaction, customerId: string, now: Date) {
-  const hour = new Date(Math.floor(now.getTime() / HOUR) * HOUR);
+async function digestSentInWindow(
+  tx: Transaction,
+  customerId: string,
+  now: Date,
+  windowMs: number,
+) {
+  const hour = new Date(Math.floor(now.getTime() / windowMs) * windowMs);
   const [sent] = await tx
     .select({ id: customerNotifications.id })
     .from(customerNotifications)

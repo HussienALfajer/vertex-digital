@@ -5,6 +5,7 @@ import { WalletIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatDateTime, formatSince, ltr } from '../../lib/format';
 import { CustomerMarks } from '../customers/customer-marks';
+import { TierChip } from '../merchants/tier-chip';
 import { depositAmount, STATUS_TONES } from './deposit-labels';
 import { Fact } from './fact';
 
@@ -24,6 +25,7 @@ export function CustomerPanel({ deposit }: { deposit: AdminDeposit }) {
           <CardTitle className="flex items-center gap-2">
             {customer.name}
             {customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+            {customer.tier && <TierChip tier={customer.tier} />}
           </CardTitle>
           <span dir="ltr" className="text-end text-sm text-muted-foreground">
             {customer.email}

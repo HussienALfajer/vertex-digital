@@ -23,3 +23,16 @@ export function newTicketHref(ticket: {
   if (ticket.category === 'deposit' && ticket.deposit) params.set('deposit', ticket.deposit.id);
   return `/support/new?${params}`;
 }
+
+/**
+ * S23 OP3: "نرد عادةً خلال …" for a merchant whose tier promises a reply: whole hours in hours
+ * (ساعة، ساعتين، 3 ساعات، 11 ساعة), anything else in minutes.
+ */
+export function replyPromiseText(minutes: number): string {
+  if (minutes % 60 !== 0) return t('support.promise.minutes', { minutes: String(minutes) });
+  const hours = minutes / 60;
+  if (hours === 1) return t('support.promise.hour');
+  if (hours === 2) return t('support.promise.twoHours');
+  if (hours <= 10) return t('support.promise.hours', { hours: String(hours) });
+  return t('support.promise.manyHours', { hours: String(hours) });
+}

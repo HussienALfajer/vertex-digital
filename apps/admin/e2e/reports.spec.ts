@@ -142,6 +142,22 @@ test('an empty period says so; the export downloads the report', async ({ page, 
   expect(Buffer.concat(chunks).toString()).toBe('PK');
 });
 
+test('the report by tier: a month, its rows and the export (S23 AD4)', async ({ page, admin }) => {
+  admin.merchants.setupTiers();
+  await open(page, admin, '/reports');
+  await page.getByRole('link', { name: rp.merchantTiers.title }).click();
+  await expect(page).toHaveURL('/reports/merchant-tiers');
+  const table = page.getByRole('table', { name: rp.merchantTiers.title });
+  await expect(table.getByRole('row')).toHaveCount(6);
+  await expect(table).toContainText(ar.merchants.tierNames.diamond);
+  await page.getByLabel(rp.merchantTiers.month).fill('2026-09');
+  await expect(page).toHaveURL('/reports/merchant-tiers?month=2026-09');
+  await expect(page.getByText(rp.merchantTiers.ended)).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: rp.export }).click();
+  expect((await download).suggestedFilename()).toBe('vertex-merchant-tiers-2026-09.xlsx');
+});
+
 test('a page left open past midnight names the new day in its presets (A09-30)', async ({
   page,
   admin,
@@ -168,6 +184,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/reports?kind=breakdown&by=supplier');
       await expect(page.getByRole('link', { name: 'مورد تجريبي' })).toBeVisible();
       await screenshot(page, testInfo, `reports-supplier-${colorScheme}`, { fullPage: true });
+      // S23 AD4.
+      admin.merchants.setupTiers();
+      await page.goto('/reports/merchant-tiers?month=2026-10');
+      await expect(page.getByRole('table', { name: rp.merchantTiers.title })).toBeVisible();
+      await screenshot(page, testInfo, `reports-merchant-tiers-${colorScheme}`, { fullPage: true });
     });
   });
 }

@@ -181,6 +181,16 @@ export function notificationText(notification: CustomerNotification): string {
         amount: ltr(formatUsd(notification.params.missingUsdUnits)),
         tier: t(`merchant.tierNames.${notification.params.tier}`),
       });
+    // S23 OP5: the game, or one of its packs, opened early to the merchant's tier.
+    case 'merchant_early_access':
+      return notification.params.productNameAr
+        ? t('notifications.events.merchant_early_access_pack', {
+            product: notification.params.productNameAr,
+            game: notification.params.gameNameAr,
+          })
+        : t('notifications.events.merchant_early_access_game', {
+            game: notification.params.gameNameAr,
+          });
     // S22 PA4: the customer's own prices only.
     case 'product_available':
       return t('notifications.events.product_available', {
@@ -229,6 +239,10 @@ export function notificationHref(notification: CustomerNotification): string {
       return `/merchant/statements/${notification.params.month}`;
     case 'merchant_tier_reminder':
       return '/merchant/tier';
+    case 'merchant_early_access':
+      return notification.params.productId
+        ? `/games/${notification.params.gameSlug}?pack=${notification.params.productId}`
+        : `/games/${notification.params.gameSlug}`;
     case 'product_available':
     case 'product_price_dropped':
       return `/games/${notification.params.gameSlug}?pack=${notification.params.productId}`;

@@ -597,6 +597,11 @@ export const AUDIT_DETAILS = {
   'catalog_product.archived': named({ gameId: z.uuid() }),
   'catalog_product.restored': named({ gameId: z.uuid() }),
   'catalog_product.reordered': reordered({ gameId: z.uuid() }),
+  /** S23 OP5: a 24-hour early-access window opened, or ended early by the admin. */
+  'catalog_game.early_access_set': named({ until: z.iso.datetime() }),
+  'catalog_game.early_access_ended': named({}),
+  'catalog_product.early_access_set': named({ gameId: z.uuid(), until: z.iso.datetime() }),
+  'catalog_product.early_access_ended': named({ gameId: z.uuid() }),
   /** S06 rule PR9: `before` is null for a new rule. */
   'margin_rule.set': z.strictObject({
     ...marginTarget,
@@ -878,6 +883,11 @@ export const AUDIT_DETAILS = {
     breakdown: reportBreakdownSchema.nullable(),
     from: z.iso.date(),
     to: z.iso.date(),
+    rows: z.int().nonnegative(),
+  }),
+  /** S23 AD4: the report by tier exported, its month and rows. */
+  'report.merchant_tiers_exported': z.strictObject({
+    month: z.string(),
     rows: z.int().nonnegative(),
   }),
   /** S14 PG3: the body by its length only. */

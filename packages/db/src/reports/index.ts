@@ -1,3 +1,4 @@
+export { merchantTierReport } from './merchant-tiers.js';
 export {
   breakdownReport,
   customersReport,

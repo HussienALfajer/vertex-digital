@@ -6,6 +6,7 @@ import {
   formatSyp,
   formatUsd,
   formatUsdtAmount,
+  type MerchantTier,
   type OrderProblem,
   type ReconciliationCheck,
   type StopScope,
@@ -616,6 +617,8 @@ export interface DepositCardView {
   /** The quote's rate for SYP. */
   rate: string | null;
   customerName: string;
+  /** S23 OP1: the merchant's effective tier ("تاجر ذهبي"); null for a customer. */
+  merchantTier: MerchantTier | null;
   /** Credited deposits of the customer before this one; 0 is a new account. */
   creditedCount: number;
   flags: DepositFlagCode[];
@@ -675,7 +678,7 @@ export function renderDepositCard(
     card.usdt
       ? `المستلم ${formatUsdtAmount(card.usdt.receivedUnits)} USDT، المطلوب ${formatUsdtAmount(card.usdt.expectedUnits)}`
       : `المبلغ: ${amount}`,
-    `العميل: ${card.customerName.slice(0, 60)} · ${card.creditedCount === 0 ? 'حساب جديد' : `${card.creditedCount} إيداعات سابقة`}`,
+    `العميل: ${card.customerName.slice(0, 60)}${card.merchantTier ? ` · تاجر ${TIER_NAMES_AR[card.merchantTier]}` : ''} · ${card.creditedCount === 0 ? 'حساب جديد' : `${card.creditedCount} إيداعات سابقة`}`,
     ...(card.flags.length > 0 ? [`⚠️ ${card.flags.map((flag) => FLAGS[flag]).join('، ')}`] : []),
     ...(card.usdt && card.usdt.transferMethod !== card.method
       ? [`وصل على ${METHODS[card.usdt.transferMethod]}، والإيداع على ${METHODS[card.method]}`]
@@ -832,6 +835,21 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
           `صافي المشتريات: هذا الشهر ${formatUsd(change.thisMonthUsdUnits)} · الشهر الماضي ${formatUsd(change.previousMonthUsdUnits)}`,
           `${links.admin}/customers/${change.customerId}`,
         ].join('\n'),
+      };
+    }
+    case 'ticket_overdue': {
+      // S23 OP6: once per waiting period; never the message.
+      const ticket = params as TelegramMessageParams<'ticket_overdue'>;
+      const head = `⏰ تذكرة ${ticket.number} تنتظر ردّك منذ ${ticket.waitingMinutes} دقيقة · تاجر ${TIER_NAMES_AR[ticket.tier]} (الوعد ${ticket.replyMinutes} دقيقة)`;
+      return {
+        text: [
+          head,
+          ticket.subject,
+          ticket.tradeName,
+          `افتح في اللوحة: ${links.admin}/support/${ticket.ticketId}`,
+        ].join('\n'),
+        // As TK7: the customer's subject as code, so no link in it is clickable.
+        codeSpans: [{ offset: head.length + 1, length: ticket.subject.length }],
       };
     }
     case 'merchant_tier_grant_ending': {

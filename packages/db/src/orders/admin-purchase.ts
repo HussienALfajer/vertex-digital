@@ -229,6 +229,8 @@ export async function adminPurchaseOrder(
       // S21 QT1: a merchant's own limits on their behalf; the store's otherwise.
       accountType: customer && shape.payer === 'customer' ? customer.accountType : 'customer',
       tierQuantities: customer && shape.payer === 'customer' ? customer.tierQuantities : null,
+      // S23 OP5: an order on a merchant's behalf follows the merchant; owner-funded follows retail.
+      earlyAccess: customer !== null && shape.payer === 'customer' && customer.earlyAccess,
     },
     { ...input, savePlayer: undefined, gift: undefined },
     product,

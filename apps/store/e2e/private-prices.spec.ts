@@ -37,7 +37,9 @@ const merchantPrices = (): CustomerPrices => ({
     // S22 BV3: the badge over the account's own prices.
     perHundredUsdUnits: product.gameAmount && product.available ? 1_000_000 : null,
     bestValue: product.nameAr === '660 UC',
+    earlyAccess: false,
   })),
+  earlyProducts: [],
   rateId: PUBG.rateId,
 });
 

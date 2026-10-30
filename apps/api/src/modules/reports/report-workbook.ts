@@ -5,6 +5,8 @@ import {
   type CustomersReport,
   type DepositsReport,
   type LedgerReport,
+  type MerchantTier,
+  type MerchantTierReport,
   REVIEW_TIME_ZONE,
   type RefundsReport,
   type Report,
@@ -497,6 +499,95 @@ export async function writeReportWorkbook(
     };
     for (const cells of block.rows) add(cells);
     if (block.totals) add(block.totals, true);
+  }
+  sheet.commit();
+  await workbook.commit();
+}
+
+const TIER_LABELS = {
+  bronze: 'برونزي',
+  silver: 'فضي',
+  gold: 'ذهبي',
+  diamond: 'ماسي',
+} as const satisfies Record<MerchantTier, string>;
+
+/** `vertex-merchant-tiers-<month>.xlsx` (S23 AD4, as rule X3). */
+export function merchantTierFileName(month: string): string {
+  return `vertex-merchant-tiers-${month}.xlsx`;
+}
+
+/** S23 AD4: the report by tier as one right-to-left sheet with its totals (rules X1–X3). */
+export async function writeMerchantTierWorkbook(
+  stream: Writable,
+  report: MerchantTierReport,
+): Promise<void> {
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true });
+  const sheet = workbook.addWorksheet('حسب فئة التاجر', { views: [{ rightToLeft: true }] });
+  const columns: Column[] = [
+    { header: 'الفئة', width: 12 },
+    { header: 'التجار', width: 10, format: 'count' },
+    { header: 'صافي المشتريات', width: 16, format: 'usd' },
+    { header: 'الطلبات المسلّمة', width: 14, format: 'count' },
+    { header: 'المبيعات', width: 14, format: 'usd' },
+    { header: 'التكلفة', width: 14, format: 'usd' },
+    { header: 'الربح', width: 14, format: 'usd' },
+    { header: 'صعود', width: 8, format: 'count' },
+    { header: 'هبوط', width: 8, format: 'count' },
+  ];
+  sheet.columns = columns.map((column) => ({ width: column.width }));
+  const title = sheet.addRow([
+    `حسب فئة التاجر: ${report.month}`,
+    `صُدّر في ${damascusTime(report.generatedAt)} بتوقيت دمشق`,
+  ]);
+  title.font = { bold: true, size: 13 };
+  title.commit();
+  sheet.addRow([]).commit();
+  const header = sheet.addRow(columns.map((column) => column.header));
+  header.font = { bold: true };
+  header.commit();
+  const total = (pick: (row: MerchantTierReport['rows'][number]) => number) =>
+    report.rows.reduce((sum, row) => sum + pick(row), 0);
+  const lines: { cells: Cell[]; bold: boolean }[] = [
+    ...report.rows.map((row) => ({
+      cells: [
+        TIER_LABELS[row.tier],
+        row.merchants,
+        usd(row.netPurchasesUsdUnits),
+        row.delivered,
+        usd(row.salesUsdUnits),
+        usd(row.costUsdUnits),
+        usd(row.profitUsdUnits),
+        row.rises,
+        row.falls,
+      ],
+      bold: false,
+    })),
+    {
+      cells: [
+        'المجموع',
+        total((row) => row.merchants),
+        usd(total((row) => row.netPurchasesUsdUnits)),
+        total((row) => row.delivered),
+        usd(total((row) => row.salesUsdUnits)),
+        usd(total((row) => row.costUsdUnits)),
+        usd(total((row) => row.profitUsdUnits)),
+        total((row) => row.rises),
+        total((row) => row.falls),
+      ],
+      bold: true,
+    },
+  ];
+  for (const line of lines) {
+    const row = sheet.addRow(line.cells);
+    line.cells.forEach((value, index) => {
+      const format = columns[index]?.format;
+      // Rule X2: text stays a string cell, never a formula.
+      if (typeof value !== 'string' && format && value !== null) {
+        row.getCell(index + 1).numFmt = FORMATS[format];
+      }
+    });
+    if (line.bold) row.font = { bold: true };
+    row.commit();
   }
   sheet.commit();
   await workbook.commit();

@@ -26,6 +26,7 @@ import {
   SlidersHorizontalIcon,
   StoreIcon,
   TagIcon,
+  TimerIcon,
   TrendingDownIcon,
   TrophyIcon,
   Undo2Icon,
@@ -80,6 +81,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   merchant_low_balance: WalletMinimalIcon,
   merchant_statement_ready: FileSpreadsheetIcon,
   merchant_tier_reminder: TrophyIcon,
+  merchant_early_access: TimerIcon,
   product_available: PackagePlusIcon,
   product_price_dropped: TrendingDownIcon,
 };

@@ -3,6 +3,7 @@ import {
   CERTIFICATE_REISSUES_PER_DAY,
   certificateCodeSchema,
   damascusMonth,
+  directContactLinks,
   MERCHANT_TIERS,
   type MerchantCertificate,
   type MerchantTier,
@@ -21,6 +22,7 @@ import {
   applicant,
   certificateByCode,
   clearCelebration,
+  currentMerchantSettings,
   currentTierSettings,
   type Database,
   liveTierLevels,
@@ -74,15 +76,16 @@ export class MerchantTierService {
     return { profile, tier };
   }
 
-  /** `GET /api/merchant/tier` (ID3, PG1, PG4, PG6, TR7). */
+  /** `GET /api/merchant/tier` (ID3, PG1, PG4, PG6, TR7; OP4: the contact only with the privilege). */
   async summary(customerId: string, now = new Date()): Promise<MerchantTierSummary> {
     const { profile, tier } = await this.merchant(customerId);
     const month = damascusMonth(now);
-    const [levels, months, settings, pricing] = await readAll(this.db, [
+    const [levels, months, settings, pricing, merchantSettings] = await readAll(this.db, [
       () => liveTierLevels(this.db),
       () => monthsPurchases(this.db, customerId, now),
       () => currentTierSettings(this.db),
       () => accountPriceList(this.db, customerId),
+      () => currentMerchantSettings(this.db),
     ]);
     const progress = tierProgress(levels, months.thisMonthUsdUnits, tier);
     const day = Number(zoneDate(now).slice(8, 10));
@@ -112,6 +115,12 @@ export class MerchantTierService {
       savingsUsdUnits: tierPriced ? await tierSavings(this.db, customerId, month) : null,
       privileges: tierPrivileges(settings[tier]),
       celebrate: profile.celebratePending,
+      contact: settings[tier].directContact
+        ? directContactLinks(
+            merchantSettings.directContactWhatsapp,
+            merchantSettings.directContactTelegram,
+          )
+        : null,
     };
   }
 

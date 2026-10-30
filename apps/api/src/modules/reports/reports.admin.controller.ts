@@ -5,6 +5,9 @@ import {
   customersReportSchema,
   depositsReportSchema,
   ledgerReportSchema,
+  type MerchantTierReportQuery,
+  merchantTierReportQuerySchema,
+  merchantTierReportSchema,
   REPORT_EXPORTS_PER_MINUTE,
   type ReportQuery,
   refundsReportSchema,
@@ -17,7 +20,7 @@ import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { AdminIdentity } from '../admin/index.js';
-import { reportFileName } from './report-workbook.js';
+import { merchantTierFileName, reportFileName } from './report-workbook.js';
 import { ReportsService } from './reports.service.js';
 
 /** Reports R1–R6 (S13) and their Excel export (audited, 10 a minute). */
@@ -87,6 +90,48 @@ export class ReportsAdminController {
   @ApiOkResponse({ description: 'R6: the money movement', standardSchema: ledgerReportSchema })
   ledger(@Query({ schema: reportQuerySchema }) query: ReportQuery) {
     return this.reports.report('ledger', query);
+  }
+
+  /** S23 AD4: the report by tier for a month. */
+  @Get('merchant-tiers')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(merchantTierReportQuerySchema)
+  @SerializeOptions({ schema: merchantTierReportSchema })
+  @ApiOkResponse({
+    description: 'The month by merchant tier',
+    standardSchema: merchantTierReportSchema,
+  })
+  merchantTiers(@Query({ schema: merchantTierReportQuerySchema }) query: MerchantTierReportQuery) {
+    return this.reports.merchantTiers(query);
+  }
+
+  /** Declared before `:kind/export`, which would take the path. */
+  @Get('merchant-tiers/export')
+  @AdminRoute()
+  @RateLimit({ limit: REPORT_EXPORTS_PER_MINUTE, perSeconds: 60 })
+  @ApiQueryOf(merchantTierReportQuerySchema)
+  @ApiProduces('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @ApiOkResponse({ description: 'The report by tier as an .xlsx file' })
+  async exportMerchantTiers(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Query({ schema: merchantTierReportQuerySchema }) query: MerchantTierReportQuery,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    await this.reports.exportMerchantTiers(admin.id, query, requestMeta(request), () => {
+      response.status(200);
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      response.setHeader(
+        'content-disposition',
+        `attachment; filename="${merchantTierFileName(query.month)}"`,
+      );
+      return response;
+    });
   }
 
   @Get(':kind/export')

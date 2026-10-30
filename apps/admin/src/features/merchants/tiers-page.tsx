@@ -31,6 +31,7 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import { merchantTiersQuery, useSetTierLevel } from './merchants.queries';
+import { TierBestSellersCard } from './tier-best-sellers';
 import { TierChip } from './tier-chip';
 import { TierLevelDialog, TierSettingsDialog } from './tier-dialogs';
 import { TierPreviewSheet } from './tier-preview-sheet';
@@ -105,6 +106,8 @@ export function MerchantTiersPage() {
           ))}
         </div>
       )}
+      {/* PX5: the packs to give Diamond fixed prices. */}
+      {tiers.isSuccess && <TierBestSellersCard />}
       <Dialog open={editingLevel !== null} onOpenChange={(open) => !open && setEditingLevel(null)}>
         {editingLevel && editingLevel.tier !== 'bronze' && (
           <TierLevelDialog

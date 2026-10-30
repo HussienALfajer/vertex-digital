@@ -43,6 +43,7 @@ import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index
 import { Route as AppPricingMatrixRouteImport } from './routes/_app/pricing.matrix'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
 import { Route as AppReconciliationIndexRouteImport } from './routes/_app/reconciliation.index'
+import { Route as AppReportsMerchantTiersRouteImport } from './routes/_app/reports_.merchant-tiers'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
 import { Route as AppSettingsMerchantsRouteImport } from './routes/_app/settings.merchants'
 import { Route as AppSettingsSupportRouteImport } from './routes/_app/settings.support'
@@ -236,6 +237,11 @@ const AppReconciliationIndexRoute = AppReconciliationIndexRouteImport.update({
   path: '/reconciliation/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsMerchantTiersRoute = AppReportsMerchantTiersRouteImport.update({
+  id: '/reports_/merchant-tiers',
+  path: '/reports/merchant-tiers',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsDepositsRoute = AppSettingsDepositsRouteImport.update({
   id: '/settings/deposits',
   path: '/settings/deposits',
@@ -381,6 +387,7 @@ export interface FileRoutesByFullPath {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
+  '/reports/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/merchants': typeof AppSettingsMerchantsRoute
   '/settings/support': typeof AppSettingsSupportRoute
@@ -438,6 +445,7 @@ export interface FileRoutesByTo {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
+  '/reports/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/merchants': typeof AppSettingsMerchantsRoute
   '/settings/support': typeof AppSettingsSupportRoute
@@ -498,6 +506,7 @@ export interface FileRoutesById {
   '/_app/orders/policy': typeof AppOrdersPolicyRoute
   '/_app/pricing/matrix': typeof AppPricingMatrixRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
+  '/_app/reports_/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/settings/merchants': typeof AppSettingsMerchantsRoute
   '/_app/settings/support': typeof AppSettingsSupportRoute
@@ -558,6 +567,7 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/matrix'
     | '/pricing/reviews'
+    | '/reports/merchant-tiers'
     | '/settings/deposits'
     | '/settings/merchants'
     | '/settings/support'
@@ -615,6 +625,7 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/matrix'
     | '/pricing/reviews'
+    | '/reports/merchant-tiers'
     | '/settings/deposits'
     | '/settings/merchants'
     | '/settings/support'
@@ -674,6 +685,7 @@ export interface FileRouteTypes {
     | '/_app/orders/policy'
     | '/_app/pricing/matrix'
     | '/_app/pricing/reviews'
+    | '/_app/reports_/merchant-tiers'
     | '/_app/settings/deposits'
     | '/_app/settings/merchants'
     | '/_app/settings/support'
@@ -954,6 +966,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReconciliationIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reports_/merchant-tiers': {
+      id: '/_app/reports_/merchant-tiers'
+      path: '/reports/merchant-tiers'
+      fullPath: '/reports/merchant-tiers'
+      preLoaderRoute: typeof AppReportsMerchantTiersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/deposits': {
       id: '/_app/settings/deposits'
       path: '/settings/deposits'
@@ -1161,6 +1180,7 @@ interface AppRouteChildren {
   AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
   AppPricingMatrixRoute: typeof AppPricingMatrixRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
+  AppReportsMerchantTiersRoute: typeof AppReportsMerchantTiersRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppSettingsMerchantsRoute: typeof AppSettingsMerchantsRoute
   AppSettingsSupportRoute: typeof AppSettingsSupportRoute
@@ -1210,6 +1230,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrdersPolicyRoute: AppOrdersPolicyRoute,
   AppPricingMatrixRoute: AppPricingMatrixRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
+  AppReportsMerchantTiersRoute: AppReportsMerchantTiersRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppSettingsMerchantsRoute: AppSettingsMerchantsRoute,
   AppSettingsSupportRoute: AppSettingsSupportRoute,

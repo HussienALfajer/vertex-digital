@@ -186,6 +186,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       setup(admin);
       await page.goto('/merchants/tiers');
       await expect(card(page, m.tierNames.gold).getByText(formatUsd(1_000 * USD))).toBeVisible();
+      // S23 PX5: the best sellers with each tier's price, Diamond's fixed on the first.
+      const sellers = page.getByTestId('tier-best-sellers');
+      await expect(sellers).toContainText('660 UC');
+      await expect(sellers).toContainText(tiers.bestSellers.fixed);
       await screenshot(page, testInfo, `merchant-tiers-${colorScheme}`, { fullPage: true });
       await card(page, m.tierNames.gold).getByRole('button', { name: tiers.editSettings }).click();
       await expect(page.getByRole('dialog')).toBeVisible();

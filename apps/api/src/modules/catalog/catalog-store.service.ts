@@ -5,6 +5,7 @@ import {
   type CatalogImageWidth,
   type CustomerPrices,
   gameServiceStatus,
+  inEarlyAccess,
   type SearchIndex,
   type Storefront,
   type StoreGame,
@@ -21,6 +22,8 @@ import {
   catalogInputFields,
   catalogProducts,
   type Database,
+  merchantEarlyAccess,
+  outsideEarlyAccess,
   type PlayerCheckProvider,
   type ProductRoutingState,
   playerCheckProviders,
@@ -89,52 +92,36 @@ export class CatalogStoreService {
   async game(slug: string): Promise<StoreGame> {
     const [found] = await this.shownGames(slug);
     if (!found) throw refusals.notFound('game');
-    const { game } = found;
+    return this.gameData(found.game, false);
+  }
+
+  /**
+   * `GET /api/catalog/games/:slug/early-access` (S23 OP5, edge case 13): a game in a running
+   * early-access window, with every pack, for a merchant whose tier has early access; not found
+   * for everyone else and for a game outside a window (the public read serves it then).
+   */
+  async earlyAccessGame(customerId: string, slug: string, now = new Date()): Promise<StoreGame> {
+    if (!(await merchantEarlyAccess(this.db, customerId))) throw refusals.notFound('game');
+    const [found] = await this.shownGames(slug, true);
+    if (!found || !inEarlyAccess(found.game.earlyAccessUntil, now)) {
+      throw refusals.notFound('game');
+    }
+    return this.gameData(found.game, true);
+  }
+
+  private async gameData(game: GameRow, earlyAccess: boolean): Promise<StoreGame> {
     const [fields, products, rate, images] = await Promise.all([
       this.db
         .select()
         .from(catalogInputFields)
         .where(and(eq(catalogInputFields.gameId, game.id), isNull(catalogInputFields.archivedAt)))
         .orderBy(asc(catalogInputFields.sortOrder)),
-      this.liveProducts([game.id]),
+      this.liveProducts([game.id], earlyAccess),
       this.rates.current(),
       this.images([game]),
     ]);
-    const [states, delivery, providers] = await Promise.all([
-      this.states(products),
-      productDeliveryStats(
-        this.db,
-        products.map((product) => product.id),
-      ),
-      playerCheckProviders(this.db, [game.id]),
-    ]);
-    const provider = providers.get(game.id);
-    const storeProducts = products.map(
-      (row): Omit<StoreProduct, 'perHundredUsdUnits' | 'bestValue'> => {
-        const state = states.get(row.id);
-        const available = state?.availability === 'available';
-        const price = available ? (state?.current?.priceUsdUnits ?? null) : null;
-        const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
-        return {
-          id: row.id,
-          kind: row.kind,
-          nameAr: row.nameAr,
-          gameAmount: row.gameAmount,
-          maxQuantity: row.maxQuantity,
-          available: available && price !== null,
-          priceUsdUnits: price,
-          priceSypUnits:
-            price !== null && rate
-              ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
-              : null,
-          savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
-          deliveryStats: delivery.get(row.id) ?? null,
-          playerCheck: row.kind === 'direct' && this.checksPlayers(state, provider),
-          regionAr: row.regionAr,
-          redemptionAr: row.redemptionAr,
-        };
-      },
-    );
+    const states = await this.states(products, earlyAccess);
+    const storeProducts = await this.storeProducts(game, products, states, rate);
     return {
       game: {
         ...card(game, images),
@@ -158,15 +145,63 @@ export class CatalogStoreService {
   }
 
   /**
+   * The store shape of a game's packs from their routing states (rules SF2, SF3, PV1), before the
+   * best value; S23 OP5: `earlyAccess` marks a pack in a running window (its own or its game's).
+   */
+  private async storeProducts(
+    game: GameRow,
+    products: readonly ProductRow[],
+    states: Map<string, ProductRoutingState>,
+    rate: Awaited<ReturnType<RatesService['current']>>,
+  ): Promise<Omit<StoreProduct, 'perHundredUsdUnits' | 'bestValue'>[]> {
+    const [delivery, providers] = await Promise.all([
+      productDeliveryStats(
+        this.db,
+        products.map((product) => product.id),
+      ),
+      playerCheckProviders(this.db, [game.id]),
+    ]);
+    const provider = providers.get(game.id);
+    return products.map((row) => {
+      const state = states.get(row.id);
+      const available = state?.availability === 'available';
+      const price = available ? (state?.current?.priceUsdUnits ?? null) : null;
+      const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
+      return {
+        id: row.id,
+        kind: row.kind,
+        nameAr: row.nameAr,
+        gameAmount: row.gameAmount,
+        maxQuantity: row.maxQuantity,
+        available: available && price !== null,
+        priceUsdUnits: price,
+        priceSypUnits:
+          price !== null && rate
+            ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+            : null,
+        savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
+        deliveryStats: delivery.get(row.id) ?? null,
+        playerCheck: row.kind === 'direct' && this.checksPlayers(state, provider),
+        regionAr: row.regionAr,
+        redemptionAr: row.redemptionAr,
+        earlyAccess: (state?.earlyAccessUntil ?? null) !== null,
+      };
+    });
+  }
+
+  /**
    * `GET /api/catalog/games/:slug/prices` (S20 AT4, PO1): the signed-in account's prices for the
    * game's packs on its effective list, each available only with a row on that list. Never cached
-   * and never a list's name; the public reads above stay retail for everyone.
+   * and never a list's name; the public reads above stay retail for everyone. S23 OP5: a merchant
+   * of an early-access tier also reads the packs in early access in full (`earlyProducts`), which
+   * the cached page leaves out.
    */
   async customerPrices(customerId: string, slug: string): Promise<CustomerPrices> {
-    const [found] = await this.shownGames(slug);
+    const earlyAccess = await merchantEarlyAccess(this.db, customerId);
+    const [found] = await this.shownGames(slug, earlyAccess);
     if (!found) throw refusals.notFound('game');
     const [products, rate, pricing] = await Promise.all([
-      this.liveProducts([found.game.id]),
+      this.liveProducts([found.game.id], earlyAccess),
       this.rates.current(),
       accountPriceList(this.db, customerId),
     ]);
@@ -174,9 +209,10 @@ export class CatalogStoreService {
     const states = await productRoutingStates(
       this.db,
       products.map((product) => product.id),
-      routingContext(this.env),
+      { ...routingContext(this.env), earlyAccess },
       pricing.effectiveList.id,
     );
+    const early = products.filter((row) => (states.get(row.id)?.earlyAccessUntil ?? null) !== null);
     const prices = products.map((row) => {
       const state = states.get(row.id);
       const price =
@@ -194,12 +230,23 @@ export class CatalogStoreService {
             ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
             : null,
         savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
+        earlyAccess: (state?.earlyAccessUntil ?? null) !== null,
       };
     });
     // S22 BV3: the badge over the account's own prices.
+    const ranked = withBestValue(prices, found.game.bestValueEnabled);
+    const full = await this.storeProducts(found.game, early, states, rate);
     return {
       priceKind: pricing.priceKind,
-      products: withBestValue(prices, found.game.bestValueEnabled),
+      products: ranked,
+      earlyProducts: full.map((product) => {
+        const own = ranked.find((row) => row.id === product.id);
+        return {
+          ...product,
+          perHundredUsdUnits: own?.perHundredUsdUnits ?? null,
+          bestValue: own?.bestValue ?? false,
+        };
+      }),
       rateId: rate?.id ?? null,
     };
   }
@@ -264,8 +311,11 @@ export class CatalogStoreService {
   }
 
   /** Rule SF1: active, unarchived games of unarchived categories, category then game order. */
-  /** The shown games in store order; one game's row only for a slug (audit A03-37). */
-  private async shownGames(slug?: string) {
+  /**
+   * The shown games in store order; one game's row only for a slug (audit A03-37). S23 OP5: a game
+   * in a running early-access window only with `earlyAccess`.
+   */
+  private async shownGames(slug?: string, earlyAccess = false) {
     return this.db
       .select({ game: catalogGames, category: catalogCategories })
       .from(catalogGames)
@@ -276,6 +326,7 @@ export class CatalogStoreService {
           isNull(catalogGames.archivedAt),
           isNull(catalogCategories.archivedAt),
           slug === undefined ? undefined : eq(catalogGames.slug, slug),
+          earlyAccess ? undefined : outsideEarlyAccess(catalogGames.earlyAccessUntil, new Date()),
         ),
       )
       .orderBy(
@@ -286,21 +337,35 @@ export class CatalogStoreService {
       );
   }
 
-  /** The games' unarchived products, paused ones included (shown greyed, rule SF1). */
-  private async liveProducts(gameIds: readonly string[]): Promise<ProductRow[]> {
+  /**
+   * The games' unarchived products, paused ones included (shown greyed, rule SF1); S23 OP5: those
+   * in early access only with `earlyAccess`.
+   */
+  private async liveProducts(
+    gameIds: readonly string[],
+    earlyAccess = false,
+  ): Promise<ProductRow[]> {
     if (gameIds.length === 0) return [];
     return this.db
       .select()
       .from(catalogProducts)
-      .where(and(inArray(catalogProducts.gameId, [...gameIds]), isNull(catalogProducts.archivedAt)))
+      .where(
+        and(
+          inArray(catalogProducts.gameId, [...gameIds]),
+          isNull(catalogProducts.archivedAt),
+          earlyAccess
+            ? undefined
+            : outsideEarlyAccess(catalogProducts.earlyAccessUntil, new Date()),
+        ),
+      )
       .orderBy(asc(catalogProducts.sortOrder), asc(catalogProducts.createdAt));
   }
 
-  private states(products: readonly ProductRow[]) {
+  private states(products: readonly ProductRow[], earlyAccess = false) {
     return productRoutingStates(
       this.db,
       products.map((product) => product.id),
-      routingContext(this.env),
+      { ...routingContext(this.env), earlyAccess },
     );
   }
 

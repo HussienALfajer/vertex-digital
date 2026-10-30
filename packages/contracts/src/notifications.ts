@@ -144,6 +144,8 @@ export const NOTIFICATION_EVENTS = [
   'merchant_statement_ready',
   /** S23 PG3: the month-end tier reminder. */
   'merchant_tier_reminder',
+  /** S23 OP5: a game or pack opened early to the merchant's tier (center and push). */
+  'merchant_early_access',
   /** S22 PA4: a pack the customer asked about is available, or cheaper (center and push). */
   'product_available',
   'product_price_dropped',
@@ -285,6 +287,14 @@ export const NOTIFICATION_PARAMS = {
     missingUsdUnits: z.int().positive(),
     month: monthSchema,
   }),
+  // S23 OP5: the game, the pack when only a pack is early, and when the window ends.
+  merchant_early_access: z.object({
+    gameSlug: z.string(),
+    gameNameAr: z.string(),
+    productId: z.uuid().nullable(),
+    productNameAr: z.string().nullable(),
+    until: z.iso.datetime(),
+  }),
   // S22 PA4: the pack and its game; a drop adds the customer's own old and new unit prices.
   product_available: productAlertParams,
   product_price_dropped: productAlertParams.extend({
@@ -389,6 +399,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_low_balance: 'customer_merchant_low_balance',
   merchant_statement_ready: 'customer_merchant_statement_ready',
   merchant_tier_reminder: 'customer_merchant_tier_reminder',
+  merchant_early_access: null,
   product_available: null,
   product_price_dropped: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
@@ -407,17 +418,19 @@ export const EMAIL_NOTIFICATION_EVENTS = NOTIFICATION_EVENTS.filter(
 /**
  * The events that also send a push (S15 rule PD1): every event that has an email (owner,
  * 2026-10-11), and those that have none but push: the hourly follow digest (S21 AL3, decision
- * 11) and the product alerts (S22 PA4).
+ * 11), the product alerts (S22 PA4) and early access (S23 OP5).
  */
 export type PushNotificationEvent =
   | EmailNotificationEvent
   | 'merchant_watch_digest'
+  | 'merchant_early_access'
   | 'product_available'
   | 'product_price_dropped';
 
 export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   ...EMAIL_NOTIFICATION_EVENTS,
   'merchant_watch_digest',
+  'merchant_early_access',
   'product_available',
   'product_price_dropped',
 ];
@@ -462,6 +475,7 @@ export const customerNotificationSchema = z
     notification('merchant_low_balance'),
     notification('merchant_statement_ready'),
     notification('merchant_tier_reminder'),
+    notification('merchant_early_access'),
     notification('product_available'),
     notification('product_price_dropped'),
   ])

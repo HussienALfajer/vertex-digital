@@ -874,6 +874,7 @@ describe('the messages of PR 4', () => {
         declaredUsdUnits: 25 * USD,
         rate: null,
         customerName: 'سامر',
+        merchantTier: 'gold',
         creditedCount: 2,
         flags: ['amount_mismatch'],
         submittedAt: new Date('2030-01-01T07:00:00Z'),
@@ -892,6 +893,8 @@ describe('the messages of PR 4', () => {
     expect(card.text).toContain('https://bscscan.com/tx/0x');
     expect(card.text).not.toContain('وصل على');
     expect(card.text).toContain('2 إيداعات سابقة');
+    // S23 OP1: the merchant's tier beside the name.
+    expect(card.text).toContain('تاجر ذهبي');
     expect(card.text).toContain('مبلغ مختلف');
     expect(card.buttons?.flat().map((button) => button.text)).toEqual(['رفض']);
   });
@@ -908,6 +911,7 @@ describe('the messages of PR 4', () => {
           declaredUsdUnits: 25 * USD,
           rate: null,
           customerName: 'سامر',
+          merchantTier: null,
           creditedCount: 2,
           flags: ['wrong_network'],
           submittedAt: new Date('2030-01-01T07:00:00Z'),

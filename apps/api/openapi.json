@@ -1186,6 +1186,10 @@
                 "catalog_product.archived",
                 "catalog_product.restored",
                 "catalog_product.reordered",
+                "catalog_game.early_access_set",
+                "catalog_game.early_access_ended",
+                "catalog_product.early_access_set",
+                "catalog_product.early_access_ended",
                 "margin_rule.set",
                 "margin_rule.archived",
                 "price_list.created",
@@ -1256,6 +1260,7 @@
                 "reconciliation_result.explained",
                 "reconciliation_settings.changed",
                 "report.exported",
+                "report.merchant_tiers_exported",
                 "content_page.draft_saved",
                 "content_page.published",
                 "content_page.version_restored",
@@ -4442,6 +4447,27 @@
         ]
       }
     },
+    "/api/admin/merchant-tiers/best-sellers": {
+      "get": {
+        "operationId": "MerchantTiersAdminController_bestSellers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The packs merchants bought most in 30 days with each tier price and margin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantTierBestSellers"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
     "/api/admin/merchant-tiers/{tier}/level": {
       "put": {
         "operationId": "MerchantTiersAdminController_setLevel",
@@ -7300,6 +7326,36 @@
         ]
       }
     },
+    "/api/catalog/games/{slug}/early-access": {
+      "get": {
+        "operationId": "CatalogPricesController_earlyAccessGame",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The early-access game",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreGame"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/admin/catalog/images": {
       "post": {
         "operationId": "CatalogAdminController_uploadImage",
@@ -7768,6 +7824,46 @@
         ]
       }
     },
+    "/api/admin/catalog/games/{id}/early-access": {
+      "put": {
+        "operationId": "CatalogAdminController_setGameEarlyAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarlyAccessInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The game",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/admin/catalog/games/{id}/archive": {
       "post": {
         "operationId": "CatalogAdminController_archiveGame",
@@ -8143,6 +8239,46 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateProduct"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/admin/catalog/products/{id}/early-access": {
+      "put": {
+        "operationId": "CatalogItemsAdminController_setProductEarlyAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarlyAccessInput"
               }
             }
           }
@@ -12202,6 +12338,61 @@
         ]
       }
     },
+    "/api/admin/reports/merchant-tiers": {
+      "get": {
+        "operationId": "ReportsAdminController_merchantTiers",
+        "parameters": [
+          {
+            "name": "month",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month by merchant tier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantTierReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/merchant-tiers/export": {
+      "get": {
+        "operationId": "ReportsAdminController_exportMerchantTiers",
+        "parameters": [
+          {
+            "name": "month",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report by tier as an .xlsx file"
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/admin/reports/{kind}/export": {
       "get": {
         "operationId": "ReportsAdminController_export",
@@ -15225,6 +15416,75 @@
               "event": {
                 "type": "string",
                 "enum": [
+                  "merchant_early_access"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "gameSlug": {
+                    "type": "string"
+                  },
+                  "gameNameAr": {
+                    "type": "string"
+                  },
+                  "productId": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productNameAr": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "until": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "gameSlug",
+                  "gameNameAr",
+                  "productId",
+                  "productNameAr",
+                  "until"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
                   "product_available"
                 ]
               },
@@ -15569,6 +15829,7 @@
               "merchant_low_balance",
               "merchant_statement_ready",
               "merchant_tier_reminder",
+              "merchant_early_access",
               "product_available",
               "product_price_dropped"
             ]
@@ -15603,6 +15864,7 @@
               "merchant_low_balance",
               "merchant_statement_ready",
               "merchant_tier_reminder",
+              "merchant_early_access",
               "product_available",
               "product_price_dropped"
             ]
@@ -15681,6 +15943,7 @@
           "merchant_low_balance",
           "merchant_statement_ready",
           "merchant_tier_reminder",
+          "merchant_early_access",
           "product_available",
           "product_price_dropped"
         ]
@@ -16701,6 +16964,10 @@
           "catalog_product.archived",
           "catalog_product.restored",
           "catalog_product.reordered",
+          "catalog_game.early_access_set",
+          "catalog_game.early_access_ended",
+          "catalog_product.early_access_set",
+          "catalog_product.early_access_ended",
           "margin_rule.set",
           "margin_rule.archived",
           "price_list.created",
@@ -16771,6 +17038,7 @@
           "reconciliation_result.explained",
           "reconciliation_settings.changed",
           "report.exported",
+          "report.merchant_tiers_exported",
           "content_page.draft_saved",
           "content_page.published",
           "content_page.version_restored",
@@ -19250,13 +19518,22 @@
               },
               "isTest": {
                 "type": "boolean"
+              },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
               }
             },
             "required": [
               "id",
               "name",
               "email",
-              "isTest"
+              "isTest",
+              "tier"
             ],
             "additionalProperties": false
           },
@@ -19586,6 +19863,14 @@
               "isTest": {
                 "type": "boolean"
               },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
+              },
               "marks": {
                 "$ref": "#/components/schemas/CustomerMarks"
               },
@@ -19662,6 +19947,7 @@
               "name",
               "email",
               "isTest",
+              "tier",
               "marks",
               "phone",
               "createdAt",
@@ -22023,6 +22309,27 @@
           },
           "celebrate": {
             "type": "boolean"
+          },
+          "contact": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "whatsappUrl": {
+                "nullable": true,
+                "type": "string",
+                "format": "uri"
+              },
+              "telegramUrl": {
+                "nullable": true,
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "whatsappUrl",
+              "telegramUrl"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -22035,7 +22342,8 @@
           "forecast",
           "savingsUsdUnits",
           "privileges",
-          "celebrate"
+          "celebrate",
+          "contact"
         ],
         "additionalProperties": false
       },
@@ -22913,6 +23221,15 @@
             "minimum": 1,
             "maximum": 60
           },
+          "directContactWhatsapp": {
+            "nullable": true,
+            "type": "string"
+          },
+          "directContactTelegram": {
+            "nullable": true,
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]{5,32}$"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -22923,6 +23240,8 @@
           "ordersPerTenMinutes",
           "reapplyWaitDays",
           "infoExpiryDays",
+          "directContactWhatsapp",
+          "directContactTelegram",
           "updatedAt"
         ],
         "additionalProperties": false
@@ -22944,12 +23263,24 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 60
+          },
+          "directContactWhatsapp": {
+            "nullable": true,
+            "type": "string",
+            "maxLength": 32
+          },
+          "directContactTelegram": {
+            "nullable": true,
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]{5,32}$"
           }
         },
         "required": [
           "ordersPerTenMinutes",
           "reapplyWaitDays",
-          "infoExpiryDays"
+          "infoExpiryDays",
+          "directContactWhatsapp",
+          "directContactTelegram"
         ]
       },
       "MerchantTierList": {
@@ -23181,6 +23512,101 @@
           "receiptWelcome",
           "receiptLargeLogo",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantTierBestSellers": {
+        "type": "object",
+        "properties": {
+          "diamondListId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "deliveredUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "costUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "tiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tier": {
+                        "$ref": "#/components/schemas/MerchantTier"
+                      },
+                      "priceUsdUnits": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "marginUsdUnits": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "fixed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "tier",
+                      "priceUsdUnits",
+                      "marginUsdUnits",
+                      "fixed"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "gameId",
+                "gameNameAr",
+                "nameAr",
+                "deliveredUnits",
+                "costUsdUnits",
+                "tiers"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "diamondListId",
+          "items"
         ],
         "additionalProperties": false
       },
@@ -30452,6 +30878,9 @@
           "redemptionAr": {
             "nullable": true,
             "type": "string"
+          },
+          "earlyAccess": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -30469,7 +30898,8 @@
           "bestValue",
           "playerCheck",
           "regionAr",
-          "redemptionAr"
+          "redemptionAr",
+          "earlyAccess"
         ],
         "additionalProperties": false
       },
@@ -30666,6 +31096,9 @@
                 },
                 "bestValue": {
                   "type": "boolean"
+                },
+                "earlyAccess": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -30675,9 +31108,16 @@
                 "priceSypUnits",
                 "savings",
                 "perHundredUsdUnits",
-                "bestValue"
+                "bestValue",
+                "earlyAccess"
               ],
               "additionalProperties": false
+            }
+          },
+          "earlyProducts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreProduct"
             }
           },
           "rateId": {
@@ -30690,6 +31130,7 @@
         "required": [
           "priceKind",
           "products",
+          "earlyProducts",
           "rateId"
         ],
         "additionalProperties": false
@@ -30858,6 +31299,12 @@
           "status": {
             "$ref": "#/components/schemas/CatalogStatus"
           },
+          "earlyAccessUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "cover": {
             "nullable": true,
             "allOf": [
@@ -30902,6 +31349,7 @@
           "nameAr",
           "nameEn",
           "status",
+          "earlyAccessUntil",
           "cover",
           "idGuide",
           "accentColor",
@@ -31098,6 +31546,12 @@
           "status": {
             "$ref": "#/components/schemas/CatalogStatus"
           },
+          "earlyAccessUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "cover": {
             "nullable": true,
             "allOf": [
@@ -31163,6 +31617,7 @@
           "nameAr",
           "nameEn",
           "status",
+          "earlyAccessUntil",
           "cover",
           "idGuide",
           "accentColor",
@@ -31344,6 +31799,12 @@
           "status": {
             "$ref": "#/components/schemas/CatalogStatus"
           },
+          "earlyAccessUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "availability": {
             "$ref": "#/components/schemas/ProductAvailability"
           },
@@ -31432,6 +31893,7 @@
           "regionAr",
           "redemptionAr",
           "status",
+          "earlyAccessUntil",
           "availability",
           "priceUsdUnits",
           "priceSypUnits",
@@ -31536,6 +31998,17 @@
             "type": "boolean"
           }
         }
+      },
+      "EarlyAccessInput": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
+        ]
       },
       "CreateInputField": {
         "oneOf": [
@@ -37582,13 +38055,22 @@
               },
               "status": {
                 "$ref": "#/components/schemas/CustomerStatus"
+              },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
               }
             },
             "required": [
               "id",
               "name",
               "email",
-              "status"
+              "status",
+              "tier"
             ],
             "additionalProperties": false
           }
@@ -37769,6 +38251,14 @@
               "status": {
                 "$ref": "#/components/schemas/CustomerStatus"
               },
+              "tier": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantTier"
+                  }
+                ]
+              },
               "phone": {
                 "type": "string"
               },
@@ -37784,6 +38274,7 @@
               "name",
               "email",
               "status",
+              "tier",
               "phone",
               "isTest",
               "marks"
@@ -40059,6 +40550,104 @@
           "owner_drawing_refund"
         ]
       },
+      "MerchantTierReportQuery": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+          }
+        },
+        "required": [
+          "month"
+        ]
+      },
+      "MerchantTierReport": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tier": {
+                  "$ref": "#/components/schemas/MerchantTier"
+                },
+                "merchants": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "netPurchasesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "delivered": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "profitUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "rises": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "falls": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "tier",
+                "merchants",
+                "netPurchasesUsdUnits",
+                "delivered",
+                "salesUsdUnits",
+                "costUsdUnits",
+                "profitUsdUnits",
+                "rises",
+                "falls"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "month",
+          "current",
+          "generatedAt",
+          "rows"
+        ],
+        "additionalProperties": false
+      },
       "SiteContent": {
         "type": "object",
         "properties": {
@@ -41392,7 +41981,8 @@
           "fixed_price_fallback",
           "merchant_application",
           "merchant_tier_changed",
-          "merchant_tier_grant_ending"
+          "merchant_tier_grant_ending",
+          "ticket_overdue"
         ]
       },
       "TelegramMessageStatus": {

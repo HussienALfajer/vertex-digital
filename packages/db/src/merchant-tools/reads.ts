@@ -23,7 +23,8 @@ import {
 } from 'drizzle-orm';
 import { type Executor, readAll } from '../client.js';
 import { accountPriceList } from '../customers/price-lists.js';
-import { productRoutingStates, type RoutingContext } from '../pricing/index.js';
+import { merchantEarlyAccess, merchantsWith } from '../merchants/tiers.js';
+import { outsideEarlyAccess, productRoutingStates, type RoutingContext } from '../pricing/index.js';
 import {
   catalogCategories,
   catalogGames,
@@ -48,7 +49,10 @@ export interface MerchantListPrice {
   priceUsdUnits: number | null;
 }
 
-/** MA2: the merchant's own prices of products on their effective list. */
+/**
+ * MA2: the merchant's own prices of products on their effective list; S23 OP5: early-access packs
+ * only for a tier with early access (hidden otherwise).
+ */
 export async function merchantListPrices(
   db: Executor,
   customerId: string,
@@ -59,7 +63,13 @@ export async function merchantListPrices(
   if (productIds.length === 0) return prices;
   const pricing = await accountPriceList(db, customerId);
   if (!pricing) return prices;
-  const states = await productRoutingStates(db, productIds, context, pricing.effectiveList.id);
+  const earlyAccess = await merchantEarlyAccess(db, customerId);
+  const states = await productRoutingStates(
+    db,
+    productIds,
+    { ...context, earlyAccess },
+    pricing.effectiveList.id,
+  );
   for (const [productId, state] of states) {
     prices.set(productId, {
       productId,
@@ -71,8 +81,11 @@ export async function merchantListPrices(
   return prices;
 }
 
-/** The store's shown games (S09 SF1), category then game order. */
-export function shownGames(db: Executor) {
+/**
+ * The store's shown games (S09 SF1), category then game order; S23 OP5: a game in early access
+ * only for a merchant whose tier has it (`earlyAccess`).
+ */
+export function shownGames(db: Executor, earlyAccess = false, now = new Date()) {
   return db
     .select({ id: catalogGames.id, slug: catalogGames.slug, nameAr: catalogGames.nameAr })
     .from(catalogGames)
@@ -82,6 +95,7 @@ export function shownGames(db: Executor) {
         eq(catalogGames.status, 'active'),
         isNull(catalogGames.archivedAt),
         isNull(catalogCategories.archivedAt),
+        earlyAccess ? undefined : outsideEarlyAccess(catalogGames.earlyAccessUntil, now),
       ),
     )
     .orderBy(
@@ -117,8 +131,16 @@ export async function recentGameUnits(
   return new Map(rows.map((row) => [row.gameId, Math.max(0, row.units)]));
 }
 
-/** A game's unarchived packs in the store's order (paused ones included). */
-export function gameProducts(db: Executor, gameIds: readonly string[]) {
+/**
+ * A game's unarchived packs in the store's order (paused ones included); S23 OP5: packs in early
+ * access only with `earlyAccess`.
+ */
+export function gameProducts(
+  db: Executor,
+  gameIds: readonly string[],
+  earlyAccess = false,
+  now = new Date(),
+) {
   if (gameIds.length === 0) return Promise.resolve([]);
   return db
     .select({
@@ -128,7 +150,13 @@ export function gameProducts(db: Executor, gameIds: readonly string[]) {
       kind: catalogProducts.kind,
     })
     .from(catalogProducts)
-    .where(and(inArray(catalogProducts.gameId, [...gameIds]), isNull(catalogProducts.archivedAt)))
+    .where(
+      and(
+        inArray(catalogProducts.gameId, [...gameIds]),
+        isNull(catalogProducts.archivedAt),
+        earlyAccess ? undefined : outsideEarlyAccess(catalogProducts.earlyAccessUntil, now),
+      ),
+    )
     .orderBy(asc(catalogProducts.sortOrder), asc(catalogProducts.createdAt));
 }
 
@@ -441,4 +469,48 @@ export async function recentPlayers(
     playerName: row.player_name,
     lastUsedAt: new Date(row.last_used_at),
   }));
+}
+
+/**
+ * S23 OP5: who is told a game (or one of its packs) opened early: merchants whose tier has early
+ * access and who follow the game or one of its packs (S21 follows) or bought from it in 30 days.
+ */
+export async function earlyAccessAudience(
+  db: Executor,
+  gameId: string,
+  now: Date,
+): Promise<string[]> {
+  const eligible = await merchantsWith(db, 'earlyAccess');
+  if (eligible.length === 0) return [];
+  const since = new Date(now.getTime() - 30 * 86_400_000);
+  const [followers, buyers] = await readAll(db, [
+    () =>
+      db
+        .selectDistinct({ customerId: merchantWatches.customerId })
+        .from(merchantWatches)
+        .leftJoin(catalogProducts, eq(catalogProducts.id, merchantWatches.productId))
+        .where(
+          and(
+            inArray(merchantWatches.customerId, eligible),
+            or(eq(merchantWatches.gameId, gameId), eq(catalogProducts.gameId, gameId)),
+          ),
+        ),
+    () =>
+      db
+        .selectDistinct({ customerId: orders.customerId })
+        .from(orders)
+        .where(
+          and(
+            inArray(orders.customerId, eligible),
+            eq(orders.gameId, gameId),
+            isNotNull(orders.paidAt),
+            gte(orders.createdAt, since),
+          ),
+        ),
+  ]);
+  return [
+    ...new Set(
+      [...followers, ...buyers].flatMap((row) => (row.customerId ? [row.customerId] : [])),
+    ),
+  ].sort();
 }

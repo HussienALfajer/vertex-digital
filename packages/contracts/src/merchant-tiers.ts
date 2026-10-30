@@ -719,10 +719,40 @@ export const merchantTierSummarySchema = z
     privileges: tierPrivilegesSchema,
     /** ID4: the celebration sheet is due. */
     celebrate: z.boolean(),
+    /**
+     * OP4: the Diamond contact links, only for a tier with `directContact` and only those the
+     * merchant settings name; null otherwise.
+     */
+    contact: z
+      .object({ whatsappUrl: z.url().nullable(), telegramUrl: z.url().nullable() })
+      .nullable(),
   })
   .meta({ id: 'MerchantTierSummary' });
 
 export type MerchantTierSummary = z.infer<typeof merchantTierSummarySchema>;
+
+/* The Diamond contact (OP4, decision 12) ---------------------------------------------------- */
+
+/** OP4: a Telegram username as `t.me` takes it. */
+export const telegramUsernameSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_]{5,32}$/);
+
+/**
+ * OP4: the contact buttons' links from the merchant settings (an E.164 number, a username); null
+ * when neither is set.
+ */
+export function directContactLinks(
+  whatsapp: string | null,
+  telegram: string | null,
+): { whatsappUrl: string | null; telegramUrl: string | null } | null {
+  if (whatsapp === null && telegram === null) return null;
+  return {
+    whatsappUrl: whatsapp === null ? null : `https://wa.me/${whatsapp.replace(/^\+/, '')}`,
+    telegramUrl: telegram === null ? null : `https://t.me/${telegram}`,
+  };
+}
 
 /** PG2: the three packs whose prices the tier table shows. */
 export const TIER_TABLE_PACKS = 3;
@@ -792,3 +822,92 @@ export const welcomeTextSchema = z
   .refine((text) => !CONTROL.test(text), 'Control characters are not allowed')
   .refine((text) => !LINK.test(text.normalize('NFKC')), 'Links are not allowed')
   .refine((text) => !DIGIT_RUN.test(text.normalize('NFKC')), 'Long digit runs are not allowed');
+
+/* The Diamond best-sellers helper (PX5) ------------------------------------------------------ */
+
+/** PX5: the packs merchants bought most, by delivered units in the last 30 days. */
+export const TIER_BEST_SELLERS_LIMIT = 20;
+
+export const TIER_BEST_SELLERS_DAYS = 30;
+
+/**
+ * `GET /api/admin/merchant-tiers/best-sellers` (PX5): the packs with their basis cost and each
+ * tier's price and margin; `diamondListId` opens S20's fixed price dialog (null without a live
+ * Diamond level). A price is null where the tier's list has none.
+ */
+export const tierBestSellersSchema = z
+  .object({
+    diamondListId: z.uuid().nullable(),
+    items: z.array(
+      z.object({
+        productId: z.uuid(),
+        gameId: z.uuid(),
+        gameNameAr: z.string(),
+        nameAr: z.string(),
+        deliveredUnits: z.int().positive(),
+        /** The basis route's unit cost; null with no usable route. */
+        costUsdUnits: amountUnitsSchema.nullable(),
+        tiers: z.array(
+          z.object({
+            tier: merchantTierSchema,
+            priceUsdUnits: amountUnitsSchema.nullable(),
+            /** Price − cost; null without both. */
+            marginUsdUnits: z.int().nullable(),
+            /** The row comes from a fixed price on the tier's list. */
+            fixed: z.boolean(),
+          }),
+        ),
+      }),
+    ),
+  })
+  .meta({ id: 'MerchantTierBestSellers' });
+
+export type TierBestSellers = z.infer<typeof tierBestSellersSchema>;
+
+/* The report by tier (AD4) ------------------------------------------------------------------- */
+
+/** `GET /api/admin/reports/merchant-tiers` and its export (AD4): a `YYYY-MM` month. */
+export const merchantTierReportQuerySchema = z
+  .object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) })
+  .meta({ id: 'MerchantTierReportQuery' });
+
+export type MerchantTierReportQuery = z.infer<typeof merchantTierReportQuerySchema>;
+
+/**
+ * AD4: per tier, the merchants holding it at the month's end (now for the current month) and
+ * their net purchases; sales, cost and profit of the month's delivered orders by the tier whose
+ * list priced them (wholesale is Bronze); rises into and falls out of the tier in the month.
+ * Test merchants are left out.
+ */
+export const merchantTierReportSchema = z
+  .object({
+    month: z.string(),
+    /** The month is still running: holders are today's. */
+    current: z.boolean(),
+    generatedAt: z.iso.datetime(),
+    rows: z.array(
+      z.object({
+        tier: merchantTierSchema,
+        merchants: z.int().nonnegative(),
+        netPurchasesUsdUnits: z.int(),
+        delivered: z.int().nonnegative(),
+        salesUsdUnits: z.int(),
+        costUsdUnits: z.int(),
+        profitUsdUnits: z.int(),
+        rises: z.int().nonnegative(),
+        falls: z.int().nonnegative(),
+      }),
+    ),
+  })
+  .meta({ id: 'MerchantTierReport' });
+
+export type MerchantTierReport = z.infer<typeof merchantTierReportSchema>;
+
+/**
+ * AD4: a change counts as a rise into its new tier, or a fall out of its old one, when it moves up
+ * or down the ladder.
+ */
+export function tierMove(from: MerchantTier, to: MerchantTier): 'rise' | 'fall' | null {
+  const delta = tierRank(to) - tierRank(from);
+  return delta > 0 ? 'rise' : delta < 0 ? 'fall' : null;
+}

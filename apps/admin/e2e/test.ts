@@ -1,4 +1,5 @@
 import { test as base, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import type { MerchantTier } from '@vertex-digital/contracts';
 import {
   type AuditEntry,
   approvalFlags,
@@ -136,6 +137,12 @@ const ADJUSTMENTS_PATH = /^\/api\/admin\/wallets\/([^/]+)\/adjustments$/;
 const REVERSE_PATH = /^\/api\/admin\/wallet-adjustments\/([^/]+)\/reverse$/;
 const RESET_PASSWORD_PATH = /^\/api\/admin\/test-customers\/[^/]+\/reset-password$/;
 const OWN_SESSION_PATH = /^\/api\/admin\/me\/sessions\/([^/]+)$/;
+/** S23 OP1: a Sham Cash deposit of a Gold or Diamond merchant (TS2's deposit priority). */
+const depositPriority = (deposit: MockDeposit) => {
+  const tier = (deposit.customer as { tier?: MerchantTier | null }).tier;
+  return deposit.method === 'sham_cash' && (tier === 'gold' || tier === 'diamond');
+};
+
 const DEPOSIT_PATH = /^\/api\/admin\/deposits\/([^/]+)$/;
 const DEPOSIT_ACTION_PATH =
   /^\/api\/admin\/deposits\/([^/]+)\/(approve|approve-usdt|reject|request-receipt|recheck)$/;
@@ -700,8 +707,10 @@ export class AdminApi {
             !url.searchParams.get('customerId') ||
             (deposit.customer as { id: string }).id === url.searchParams.get('customerId'),
         )
-        // Rule RV10: flagged first, then the oldest submission.
+        // Rule RV10: flagged first, then the oldest submission; S23 OP1: Gold's and Diamond's
+        // Sham Cash deposits before them.
         .sort((a, b) => Number(b.flags.length > 0) - Number(a.flags.length > 0))
+        .sort((a, b) => Number(depositPriority(b)) - Number(depositPriority(a)))
         .map((deposit) => ({
           ...deposit,
           customer: {
@@ -709,6 +718,7 @@ export class AdminApi {
             name: (deposit.customer as { name: string }).name,
             email: (deposit.customer as { email: string }).email,
             isTest: (deposit.customer as { isTest: boolean }).isTest,
+            tier: (deposit.customer as { tier?: MerchantTier | null }).tier ?? null,
           },
           flags: [...new Set(deposit.flags.map((flag) => flag.code))],
         }));
@@ -1033,6 +1043,10 @@ export class AdminApi {
       path.startsWith('/api/admin/treasury') ||
       path.startsWith('/api/admin/reports')
     ) {
+      // S23 AD4: the report by tier reads the merchants' tiers.
+      if (request.method() === 'GET' && path === '/api/admin/reports/merchant-tiers') {
+        return json(200, this.merchants.tierReport(url.searchParams.get('month') ?? '2026-10'));
+      }
       if (request.method() === 'GET' && path.endsWith('/export')) {
         return route.fulfill({
           status: 200,

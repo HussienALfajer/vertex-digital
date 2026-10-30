@@ -79,3 +79,41 @@ export function useExportReport() {
     },
   });
 }
+
+/** S23 AD4: the report by tier of a `YYYY-MM` month. */
+export const merchantTierReportQuery = (month: string) =>
+  queryOptions({
+    queryKey: ['reports', 'merchant-tiers', month],
+    queryFn: () =>
+      call(api.GET('/api/admin/reports/merchant-tiers', { params: { query: { month } } })),
+    placeholderData: keepPreviousData,
+  });
+
+/** S23 AD4: the report by tier's `.xlsx`, as `useExportReport`. */
+export function useExportMerchantTierReport() {
+  return useMutation({
+    mutationFn: async (month: string) => {
+      const { data, error, response } = await api.GET('/api/admin/reports/merchant-tiers/export', {
+        params: { query: { month } },
+        parseAs: 'blob',
+      });
+      if (!response.ok || !data) {
+        const body = (error ?? {}) as { code?: string; details?: unknown; message?: string };
+        throw new ApiError(
+          response.status,
+          body.code,
+          body.details,
+          body.message ?? `HTTP ${response.status}`,
+        );
+      }
+      const url = URL.createObjectURL(data as Blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `vertex-merchant-tiers-${month}.xlsx`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    },
+  });
+}
