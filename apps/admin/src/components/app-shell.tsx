@@ -95,7 +95,6 @@ interface NavChild {
     | 'nav.depositSettings'
     | 'nav.tickets'
     | 'nav.supportSettings'
-    | 'nav.pricingRules'
     | 'nav.priceReviews'
     | 'nav.priceLists'
     | 'nav.priceMatrix'
@@ -170,15 +169,10 @@ const navItems: NavItem[] = [
   { to: '/content', label: 'nav.content', icon: NewspaperIcon },
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   {
-    to: '/pricing',
+    to: '/pricing/lists',
     label: 'nav.pricing',
     icon: PercentIcon,
     children: [
-      {
-        to: '/pricing',
-        label: 'nav.pricingRules',
-        except: ['/pricing/reviews', '/pricing/lists', '/pricing/matrix'],
-      },
       { to: '/pricing/lists', label: 'nav.priceLists' },
       { to: '/pricing/matrix', label: 'nav.priceMatrix' },
       { to: '/pricing/reviews', label: 'nav.priceReviews' },

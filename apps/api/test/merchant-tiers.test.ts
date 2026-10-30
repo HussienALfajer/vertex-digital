@@ -392,6 +392,17 @@ describe('levels per tier (S23 TS1, the levels rules, PX2, MG7)', () => {
       priceUsdUnits: silverPrice?.priceUsdUnits,
       ruleId: silverPrice?.ruleId,
     });
+    // The calculator prices it the same way: the stored row at its own cost.
+    const row = await newestPrice(item.id, goldList.id);
+    const preview = await json<{ priceUsdUnits: number; source: string }>(
+      await adminSend('POST', '/api/admin/pricing/preview', {
+        target: { scope: 'product', targetId: item.id },
+        costUsdUnits: row?.costUsdUnits,
+        priceListId: goldList.id,
+      }),
+      200,
+    );
+    expect(preview).toMatchObject({ priceUsdUnits: row?.priceUsdUnits, source: 'parent_cap' });
     // Its threshold changes without the chain check (edge case 3).
     await json(
       await setLevel('gold', { monthlyThresholdUsdUnits: usd(1200), priceListId: goldList.id }),

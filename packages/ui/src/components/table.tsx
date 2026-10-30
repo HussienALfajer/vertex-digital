@@ -3,11 +3,21 @@ import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn';
 
 /** Data table. Figures use tabular numerals; icons inside cells default to 16 px (§3, §7). */
-function Table({ className, ...props }: ComponentProps<'table'>) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: ComponentProps<'table'> & {
+  /** The scrolling frame's classes, for a sticky header inside a height limit. */
+  containerClassName?: string;
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto rounded-lg border border-border bg-surface"
+      className={cn(
+        'relative w-full overflow-x-auto rounded-lg border border-border bg-surface',
+        containerClassName,
+      )}
     >
       <table
         data-slot="table"

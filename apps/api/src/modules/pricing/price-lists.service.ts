@@ -12,6 +12,7 @@ import {
   type PriceMatrix,
   type PriceMatrixQuery,
   ROOT_PRICE_LIST_IDS,
+  selectMatrixRows,
 } from '@vertex-digital/contracts';
 import {
   accountsOnList,
@@ -25,6 +26,7 @@ import {
   liveLevelsOnList,
   lockAccountsOnList,
   marginRules,
+  matrixScope,
   newId,
   type PriceRow,
   priceListFixedPrices,
@@ -66,6 +68,11 @@ const LIST_PAGE_ACCOUNTS = 100;
  */
 @Injectable()
 export class PriceListsService {
+  /** Wide matrix reads running or queued, by scope. */
+  private readonly matrixReads = new Map<string, Promise<Pick<PriceMatrix, 'lists' | 'rows'>>>();
+  /** Settles when the last wide matrix read does: the next one starts after it. */
+  private lastMatrixRead: Promise<unknown> = Promise.resolve();
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
@@ -307,9 +314,28 @@ export class PriceListsService {
     });
   }
 
-  /** `GET /api/admin/pricing/matrix`. */
-  matrix(query: PriceMatrixQuery): Promise<PriceMatrix> {
-    return priceMatrix(this.db, query, routingContext(this.env));
+  /**
+   * `GET /api/admin/pricing/matrix`. A wide scope reads thousands of products in the process that
+   * serves purchases: one such read runs at a time, and chips, sorts and pages of a scope being
+   * read share it. A single game stays a small direct read.
+   */
+  async matrix(query: PriceMatrixQuery): Promise<PriceMatrix> {
+    if (query.gameId) return priceMatrix(this.db, query, routingContext(this.env));
+    const { q, categoryId, listIds } = query;
+    const key = JSON.stringify([q, categoryId, listIds]);
+    let read = this.matrixReads.get(key);
+    if (!read) {
+      read = this.lastMatrixRead.then(() =>
+        matrixScope(this.db, { q, categoryId, listIds }, routingContext(this.env)),
+      );
+      this.matrixReads.set(key, read);
+      this.lastMatrixRead = read.then(
+        () => this.matrixReads.delete(key),
+        () => this.matrixReads.delete(key),
+      );
+    }
+    const { lists, rows } = await read;
+    return { lists, ...selectMatrixRows(rows, query) };
   }
 
   // ---------------------------------------------------------------------------------------------

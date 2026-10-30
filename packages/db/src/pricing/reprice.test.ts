@@ -905,11 +905,14 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
       [usd(1.1), usd(1.32), ['held', 'unavailable']],
       [usd(1.05), usd(1.26), ['held', 'unavailable']],
     ]);
+    // Each list's availability, from its row in one read, is the list's own routing read.
+    const onWholesale = (await productRoutingStates(db, [p.id], context(), wholesale)).get(p.id);
+    expect(held?.cells[1]?.availability).toBe(onWholesale?.availability);
     // A search finds the product by name; the warnings filter keeps rows with one.
     const [named] = await pool
       .query<{ name_ar: string }>('select name_ar from catalog_products where id = $1', [p.id])
       .then((result) => result.rows);
-    const found = await read({ q: named?.name_ar as string, warnings: true });
+    const found = await read({ q: named?.name_ar as string, status: 'held' });
     expect(found.rows.map((r) => r.productId)).toEqual([p.id]);
     expect(found.lists.map((list) => list.id)).toEqual([retail, wholesale, cost]);
   });

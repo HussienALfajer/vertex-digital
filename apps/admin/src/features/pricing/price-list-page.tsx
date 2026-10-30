@@ -40,6 +40,7 @@ import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { customerListQuery, useSetCustomerPriceList } from '../customers/customers.queries';
 import { FixedPriceDialog, SourceBadge } from './fixed-price-dialog';
+import { ListCalculator } from './list-calculator';
 import { ListRules } from './list-rules';
 import { KindBadge } from './price-lists-page';
 import { listRulesQuery, priceListQuery, useArchiveFixedPrice } from './pricing.queries';
@@ -94,6 +95,7 @@ export function PriceListPage({ id }: { id: string }) {
       />
       <div className="flex flex-col gap-8">
         {live && list.ready && <ListRules chain={chain} />}
+        {live && list.ready && <ListCalculator key={list.id} priceListId={list.id} />}
         {live && !list.ready && <Callout tone="warning" title={t('pricing.list.notReady')} />}
         <section className="flex flex-col gap-3" aria-labelledby="fixed-prices">
           <div className="flex flex-wrap items-center justify-between gap-3">

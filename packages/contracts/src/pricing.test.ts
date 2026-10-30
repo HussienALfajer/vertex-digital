@@ -5,15 +5,21 @@ import {
   createPriceListSchema,
   decideReviewsSchema,
   effectivePriceListId,
+  isLowMargin,
   isProfitable,
+  LOW_MARGIN_BP,
   listChain,
   listPrice,
   type MarginRuleValues,
   marginBasisPoints,
   marginRuleListQuerySchema,
   matrixCellWarnings,
+  matrixRowStatuses,
   needsReview,
   PRICE_LIST_MAX_DEPTH,
+  PRICE_MATRIX_GAMES_PER_PAGE,
+  PRICE_MATRIX_ROWS_PER_PAGE,
+  type PriceMatrix,
   parentCappedPrice,
   priceFromCost,
   priceKindOf,
@@ -26,6 +32,7 @@ import {
   resolveMarginRule,
   savings,
   savingsWarning,
+  selectMatrixRows,
   setFixedPriceSchema,
   setMarginRuleSchema,
 } from './pricing.js';
@@ -552,16 +559,172 @@ describe('list schemas (S20 PR 2)', () => {
     expect(
       priceMatrixQuerySchema.parse({ gameId: id, listIds: `${id},${ROOT_PRICE_LIST_IDS.cost}` }),
     ).toEqual({ gameId: id, listIds: [id, ROOT_PRICE_LIST_IDS.cost] });
-    expect(priceMatrixQuerySchema.parse({ q: ' شدة ', warnings: 'true' })).toEqual({
-      q: 'شدة',
-      warnings: true,
-    });
+    expect(
+      priceMatrixQuerySchema.parse({
+        q: ' شدة ',
+        categoryId: id,
+        status: 'held',
+        marginBelowBp: '500',
+        page: '2',
+      }),
+    ).toEqual({ q: 'شدة', categoryId: id, status: 'held', marginBelowBp: 500, page: 2 });
     expect(priceMatrixQuerySchema.parse({ q: 'x', listIds: [id] }).listIds).toEqual([id]);
-    expect(priceMatrixQuerySchema.safeParse({}).success).toBe(false);
+    // Nothing named is every game; a game takes no search or category.
+    expect(priceMatrixQuerySchema.parse({})).toEqual({});
     expect(priceMatrixQuerySchema.safeParse({ gameId: id, q: 'x' }).success).toBe(false);
+    expect(priceMatrixQuerySchema.safeParse({ gameId: id, categoryId: id }).success).toBe(false);
+    expect(priceMatrixQuerySchema.safeParse({ marginBelowBp: '0' }).success).toBe(false);
     expect(
       priceMatrixQuerySchema.safeParse({ q: 'x', listIds: Array(9).fill(id).join(',') }).success,
     ).toBe(false);
+  });
+});
+
+describe('the matrix selection', () => {
+  const retail = ROOT_PRICE_LIST_IDS.retail;
+  const cost = ROOT_PRICE_LIST_IDS.cost;
+  type Row = PriceMatrix['rows'][number];
+  type Cell = Row['cells'][number];
+  const cell = (priceListId: string, over: Partial<Cell> = {}): Cell => ({
+    priceListId,
+    priceUsdUnits: usd(1),
+    source: 'rule',
+    marginUsdUnits: usd(0.1),
+    marginBp: 1000,
+    availability: 'available',
+    targetPriceUsdUnits: null,
+    fixedPriceUsdUnits: null,
+    estimatedPriceUsdUnits: null,
+    warnings: [],
+    ...over,
+  });
+  const row = (productId: string, gameId: string, over: Partial<Row> = {}): Row => ({
+    productId,
+    productNameAr: productId,
+    gameId,
+    gameNameAr: gameId,
+    costUsdUnits: usd(0.9),
+    supplierCode: 'wdgzone',
+    estimate: null,
+    held: false,
+    cells: [cell(retail), cell(cost, { marginBp: 100 })],
+    ...over,
+  });
+  const ids = (rows: readonly Row[]) => rows.map((item) => item.productId);
+
+  it('calls a margin low below the threshold, never an unknown one', () => {
+    expect(LOW_MARGIN_BP).toBe(500);
+    expect(isLowMargin(499)).toBe(true);
+    expect(isLowMargin(500)).toBe(false);
+    expect(isLowMargin(null)).toBe(false);
+    expect(isLowMargin(900, 1000)).toBe(true);
+  });
+
+  it('counts a row under each state, the low margin on the margin list alone', () => {
+    const plain = row('a', 'g');
+    expect(matrixRowStatuses(plain, retail)).toEqual([]);
+    expect(matrixRowStatuses(plain, cost)).toEqual(['low_margin']);
+    expect(
+      matrixRowStatuses(
+        row('b', 'g', {
+          held: true,
+          cells: [
+            cell(retail, {
+              priceUsdUnits: null,
+              marginBp: null,
+              fixedPriceUsdUnits: usd(1),
+              warnings: ['no_row'],
+            }),
+          ],
+        }),
+        retail,
+      ),
+    ).toEqual(['no_price', 'fixed', 'held']);
+    expect(
+      matrixRowStatuses(
+        row('c', 'g', {
+          cells: [cell(retail, { availability: 'paused', warnings: ['unavailable'] })],
+        }),
+        retail,
+      ),
+    ).toEqual(['paused']);
+    expect(
+      matrixRowStatuses(
+        row('d', 'g', {
+          cells: [cell(retail, { availability: 'out_of_stock', warnings: ['unavailable'] })],
+        }),
+        retail,
+      ),
+    ).toEqual(['unavailable']);
+  });
+
+  it('keeps the counts on the other filters and the rows on the chip', () => {
+    const rows = [
+      row('a', 'g1', { held: true }),
+      row('b', 'g1', { supplierCode: 'manual', held: true }),
+      row('c', 'g2', { cells: [cell(retail, { marginBp: 300 })] }),
+    ];
+    const held = selectMatrixRows(rows, { status: 'held' });
+    expect(ids(held.rows)).toEqual(['a', 'b']);
+    expect(held.total).toBe(2);
+    expect(held.counts).toMatchObject({ all: 3, held: 2, low_margin: 1, fixed: 0 });
+
+    const manual = selectMatrixRows(rows, { supplier: 'manual', status: 'held' });
+    expect(ids(manual.rows)).toEqual(['b']);
+    expect(manual.counts).toMatchObject({ all: 1, held: 1, low_margin: 0 });
+
+    const below = selectMatrixRows(rows, { marginBelowBp: 400 });
+    expect(ids(below.rows)).toEqual(['c']);
+    const onCost = selectMatrixRows(rows, { marginBelowBp: 200, marginList: cost });
+    expect(ids(onCost.rows)).toEqual(['a', 'b']);
+    expect(onCost.counts.low_margin).toBe(2);
+    expect(selectMatrixRows(rows, { marginBelowBp: 200, marginList: 'none' }).total).toBe(0);
+  });
+
+  it('sorts each column, unknown values last in either direction', () => {
+    const rows = [
+      row('a', 'g', { cells: [cell(retail, { marginBp: 900, priceUsdUnits: usd(3) })] }),
+      row('b', 'g', {
+        costUsdUnits: null,
+        cells: [cell(retail, { marginBp: null, marginUsdUnits: null, priceUsdUnits: null })],
+      }),
+      row('c', 'g', {
+        costUsdUnits: usd(0.1),
+        cells: [cell(retail, { marginBp: 100, marginUsdUnits: usd(0.5), priceUsdUnits: usd(2) })],
+      }),
+    ];
+    const sorted = (query: Parameters<typeof selectMatrixRows>[1]) =>
+      ids(selectMatrixRows(rows, query).rows);
+    expect(sorted({ sort: 'margin' })).toEqual(['c', 'a', 'b']);
+    expect(sorted({ sort: 'margin', direction: 'desc' })).toEqual(['a', 'c', 'b']);
+    expect(sorted({ sort: 'price', sortList: retail })).toEqual(['c', 'a', 'b']);
+    expect(sorted({ sort: 'cost' })).toEqual(['c', 'a', 'b']);
+    expect(sorted({ sort: 'difference', direction: 'desc' })).toEqual(['c', 'a', 'b']);
+    expect(sorted({ sort: 'margin', sortList: 'none' })).toEqual(['a', 'b', 'c']);
+  });
+
+  it('pages through whole games, or through rows when sorted, and keeps a page in range', () => {
+    const rows = Array.from({ length: PRICE_MATRIX_GAMES_PER_PAGE + 1 }, (_, index) => [
+      row(`a${index}`, `g${index}`),
+      row(`b${index}`, `g${index}`),
+    ]).flat();
+    const first = selectMatrixRows(rows, {});
+    expect(first).toMatchObject({ page: 1, pageCount: 2, total: rows.length });
+    expect(first.rows).toHaveLength(PRICE_MATRIX_GAMES_PER_PAGE * 2);
+    expect(ids(selectMatrixRows(rows, { page: 2 }).rows)).toEqual([
+      `a${PRICE_MATRIX_GAMES_PER_PAGE}`,
+      `b${PRICE_MATRIX_GAMES_PER_PAGE}`,
+    ]);
+    expect(selectMatrixRows(rows, { page: 9 }).page).toBe(2);
+
+    const many = Array.from({ length: PRICE_MATRIX_ROWS_PER_PAGE + 1 }, (_, index) =>
+      row(`p${index}`, 'g'),
+    );
+    expect(selectMatrixRows(many, {}).rows).toHaveLength(many.length);
+    const sorted = selectMatrixRows(many, { sort: 'price', page: 9 });
+    expect(sorted).toMatchObject({ page: 2, pageCount: 2 });
+    expect(sorted.rows).toHaveLength(1);
+    expect(selectMatrixRows([], {})).toMatchObject({ rows: [], page: 1, pageCount: 1, total: 0 });
   });
 });
 

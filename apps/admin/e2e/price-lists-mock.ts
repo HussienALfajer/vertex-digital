@@ -16,8 +16,10 @@ import {
   type PriceMatrixCell,
   priceKindOf,
   priceListNameSchema,
+  priceMatrixQuerySchema,
   ROOT_PRICE_LIST_IDS,
   resolveListEntry,
+  selectMatrixRows,
 } from '@vertex-digital/contracts';
 import { type Answer, type CatalogMock, nextId } from './catalog-mock';
 
@@ -351,11 +353,19 @@ export class PriceListsMock {
     const lists = wanted.flatMap((id) =>
       this.lists.filter((row) => row.id === id && !row.archivedAt),
     );
-    const products = this.catalog.products.filter(
-      (product) =>
-        !product.archivedAt &&
-        (gameId ? product.gameId === gameId : !!q && product.nameAr.includes(q)),
-    );
+    const categoryId = url.searchParams.get('categoryId');
+    const games = (id: string) => this.catalog.games.find((item) => item.id === id);
+    const products = this.catalog.products
+      .filter(
+        (product) =>
+          !product.archivedAt &&
+          (!gameId || product.gameId === gameId) &&
+          (!q || product.nameAr.includes(q)) &&
+          (!categoryId || games(product.gameId)?.categoryId === categoryId),
+      )
+      .sort((a, b) =>
+        (games(a.gameId)?.nameAr ?? '').localeCompare(games(b.gameId)?.nameAr ?? '', 'ar'),
+      );
     const rows = products.flatMap((product) => {
       const pricing = this.catalog.pricing?.(product.id);
       const held = pricing?.reviewOpen ?? false;
@@ -386,10 +396,7 @@ export class PriceListsMock {
           }),
         };
       });
-      if (url.searchParams.get('warnings') === 'true' && cells.every((c) => !c.warnings.length)) {
-        return [];
-      }
-      const game = this.catalog.games.find((item) => item.id === product.gameId);
+      const game = games(product.gameId);
       return [
         {
           productId: product.id,
@@ -404,6 +411,10 @@ export class PriceListsMock {
         },
       ];
     });
-    return { lists: lists.map(({ id, kind, name }) => ({ id, kind, name })), rows };
+    const query = priceMatrixQuerySchema.parse(Object.fromEntries(url.searchParams));
+    return {
+      lists: lists.map(({ id, kind, name }) => ({ id, kind, name })),
+      ...selectMatrixRows(rows, query),
+    };
   }
 }

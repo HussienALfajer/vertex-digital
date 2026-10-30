@@ -101,6 +101,107 @@ test.describe('price lists', () => {
     await expect(row).toContainText('$0.89');
   });
 
+  test('filters the whole catalog, with chips, sort, the URL and the / key', async ({
+    page,
+    admin,
+  }) => {
+    const { game, product } = seed(admin);
+    const other = admin.catalog.addGame({
+      categorySlug: 'games',
+      slug: 'free-fire',
+      nameAr: 'فري فاير',
+      nameEn: 'Free Fire',
+      status: 'active',
+    });
+    admin.catalog.addField(other.id, { key: 'player_id', labelAr: 'معرّف اللاعب' });
+    const diamonds = admin.catalog.addProduct(other.id, { nameAr: '100 جوهرة', gameAmount: 100 });
+    admin.suppliers.map(diamonds.id, 'fake', 'fake-uc-60', { playerId: 'player_id' });
+    admin.priceLists.setFixed(ROOT_PRICE_LIST_IDS.wholesale, product.id, 950_000);
+
+    await page.goto('/pricing/matrix');
+    // Every game, each under its sticky row.
+    await expect(page.getByRole('rowheader', { name: 'ببجي موبايل' })).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: 'فري فاير' })).toBeVisible();
+    const chips = page.getByRole('group', { name: ar.pricing.matrix.statusLabel });
+    await expect(chips.getByRole('button', { name: /الكل/ })).toContainText('2');
+    const fixedChip = chips.getByRole('button', { name: ar.pricing.matrix.statuses.fixed });
+    await expect(fixedChip).toContainText('1');
+
+    await fixedChip.click();
+    await expect(page).toHaveURL(/status=fixed/);
+    await expect(page.getByRole('row', { name: /60 UC/ })).toBeVisible();
+    await expect(page.getByRole('row', { name: /100 جوهرة/ })).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByRole('row', { name: /100 جوهرة/ })).toBeVisible();
+
+    // The margin filter and the chip share one rule.
+    await field(page, ar.pricing.matrix.marginBelow).fill('50');
+    await field(page, ar.pricing.matrix.marginBelow).press('Enter');
+    await expect(page).toHaveURL(/marginBelowBp=5000/);
+    await expect(page.getByRole('row', { name: /100 جوهرة/ })).toBeVisible();
+    await field(page, ar.pricing.matrix.marginBelow).fill('1');
+    await field(page, ar.pricing.matrix.marginBelow).press('Enter');
+    await expect(page.getByText(ar.pricing.matrix.empty)).toBeVisible();
+    await expect(chips.getByRole('button', { name: /الكل/ })).toContainText('0');
+    await page.getByRole('button', { name: ar.pricing.matrix.clear }).click();
+    await expect(page.getByRole('row', { name: /60 UC/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: ar.pricing.matrix.clear })).toHaveCount(0);
+
+    // A sort is flat across games, and the header says so.
+    await page
+      .getByRole('button', {
+        name: ar.pricing.matrix.sortBy
+          .replace('{{list}}', 'الجملة')
+          .replace('{{column}}', ar.pricing.matrix.sorts.price),
+      })
+      .click();
+    await expect(page).toHaveURL(/sort=price/);
+    await expect(page.getByRole('columnheader', { name: /الجملة/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    await expect(page.getByRole('rowheader', { name: 'ببجي موبايل' })).toHaveCount(0);
+
+    // `/` focuses the search, but is a character while typing.
+    await page.locator('body').click();
+    await page.keyboard.press('/');
+    const box = page.getByLabel(ar.pricing.matrix.search, { exact: true });
+    await expect(box).toBeFocused();
+    await page.keyboard.type('a/b');
+    await expect(box).toHaveValue('a/b');
+    await box.fill('');
+    await box.press('Enter');
+
+    // The shared picker: search, arrow keys and Enter.
+    await page.getByRole('button', { name: ar.pricing.matrix.chooseGame }).click();
+    const dialog = page.getByRole('dialog');
+    const picker = dialog.getByLabel(ar.orders.buy.picker.search, { exact: true });
+    await expect(picker).toBeFocused();
+    await picker.fill('free');
+    await picker.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`gameId=${other.id}`));
+    await expect(page.getByRole('row', { name: /60 UC/ })).toHaveCount(0);
+    expect(game.id).not.toBe(other.id);
+  });
+
+  test('a failed matrix read offers a retry', async ({ page, admin }) => {
+    seed(admin);
+    let fail = true;
+    await page.route('**/api/admin/pricing/matrix**', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto('/pricing/matrix');
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByRole('row', { name: /60 UC/ })).toBeVisible();
+  });
+
   test('unticking every list shows retail alone (A05-33)', async ({ page, admin }) => {
     const { game } = seed(admin);
     await page.goto(`/pricing/matrix?gameId=${game.id}`);
@@ -277,6 +378,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       );
       await expect(page.getByRole('row', { name: /60 UC/ })).toContainText('$0.91');
       await screenshot(page, testInfo, `price-matrix-${colorScheme}`, { fullPage: true });
+
+      await page.goto(`/pricing/matrix?status=fixed&lists=${vip.id}`);
+      await expect(page.getByRole('rowheader', { name: 'ببجي موبايل' })).toBeVisible();
+      await screenshot(page, testInfo, `price-matrix-all-games-${colorScheme}`, { fullPage: true });
 
       await page.goto(`/customers/${CUSTOMER_IDS.layla}`);
       await expect(page.getByRole('link', { name: 'VIP' })).toBeVisible();

@@ -2,14 +2,16 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   formatUsd,
   PRICE_MATRIX_MAX_LISTS,
-  PRICE_MATRIX_MAX_PRODUCTS,
+  PRICE_MATRIX_STATUSES,
   type PriceMatrixCell,
+  type PriceMatrixSort,
+  type PriceMatrixStatus,
   ROOT_PRICE_LIST_IDS,
+  type SupplierCode,
 } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
-  Callout,
   Checkbox,
   Dialog,
   DialogContent,
@@ -17,31 +19,42 @@ import {
   DialogTitle,
   EmptyState,
   Field,
+  FieldError,
   FieldLabel,
   Input,
   PageHeader,
+  Pagination,
   Skeleton,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  TableSortHead,
+  ToggleGroup,
+  ToggleGroupItem,
 } from '@vertex-digital/ui';
 import { Grid3x3Icon } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { Fragment, type Ref, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { ReadFailure } from '../../components/read-failure';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
-import { allGamesQuery } from '../catalog/catalog.queries';
+import { categoriesQuery } from '../catalog/catalog.queries';
+import { ChosenGame, GamePicker } from '../catalog/game-picker';
+import { purchaseGamesQuery } from '../orders/orders.queries';
 import { FixedPriceDialog, SourceBadge } from './fixed-price-dialog';
-import type { MatrixSearch } from './matrix-search';
+import {
+  clearMatrixFilters,
+  hasMatrixFilters,
+  type MatrixSearch,
+  nextMatrixSort,
+} from './matrix-search';
 import { Picker } from './picker';
 import { listRulesQuery, priceListsQuery, priceMatrixQuery } from './pricing.queries';
-import { formatPercentBp } from './pricing-format';
+import { formatPercentBp, parsePercentBp } from './pricing-format';
 
 const WARNING_TONES = {
   fallback: 'warning',
@@ -52,10 +65,28 @@ const WARNING_TONES = {
   no_row: 'neutral',
 } as const;
 
+/** The suppliers a basis route can be on in production. */
+const SUPPLIERS: readonly SupplierCode[] = ['wdgzone', 'fazercards', 'manual'];
+
+const LIST_SORTS: readonly PriceMatrixSort[] = ['price', 'margin', 'difference'];
+
+/** A picker's or a chip's "everything". */
+const ALL = 'all';
+
+/** The sticky head's height, and the game rows stuck right under it. */
+const HEAD_CLASS = 'sticky top-0 z-20 h-[4.5rem] bg-surface';
+const GAME_ROW_CLASS = 'sticky top-[4.5rem] z-10 h-9 bg-muted font-bold text-foreground';
+
+/** Not while typing: `/` is then a character; nor behind a dialog. */
+const typingIn = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') !== null;
+
 /**
- * "مصفوفة الأسعار" (S20 screens): a game's packs (or a search) by the chosen lists, retail first;
- * each cell its price, margin, source and warnings, a held pack's target in a muted line. A cell
- * opens that list's fixed price for the pack.
+ * "مصفوفة الأسعار" (S20 screens): every game's packs in pages grouped by game, or a game's, by the
+ * chosen lists, retail first; each cell its price, margin, source and warnings, a held pack's
+ * target in a muted line. The filters, sort and page live in the URL and run on the server, so the
+ * chips' counts always match the rows. A cell opens that list's fixed price for the pack.
  */
 export function MatrixPage({
   search,
@@ -65,11 +96,28 @@ export function MatrixPage({
   onSearch: (next: MatrixSearch) => void;
 }) {
   const { t } = useTranslation();
-  const games = useQuery(allGamesQuery);
+  const games = useQuery(purchaseGamesQuery);
+  const categories = useQuery(categoriesQuery());
   const lists = useQuery(priceListsQuery);
   const matrix = useQuery(priceMatrixQuery(search));
   const [opened, setOpened] = useState<{ listId: string; row: MatrixRow } | null>(null);
-  const warningsId = useId();
+  const [pickingGame, setPickingGame] = useState(false);
+  const listsId = useId();
+  const searchInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (typingIn(event.target)) return;
+      event.preventDefault();
+      searchInput.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  /** Any filter's change starts from the first page. */
+  const filter = (next: MatrixSearch) => onSearch({ ...next, page: undefined });
 
   const live = (lists.data ?? []).filter(
     (list) => list.archivedAt === null && list.id !== ROOT_PRICE_LIST_IDS.retail,
@@ -77,29 +125,91 @@ export function MatrixPage({
   const chosen = search.lists ?? [ROOT_PRICE_LIST_IDS.wholesale, ROOT_PRICE_LIST_IDS.cost];
   const toggle = (id: string) => {
     const next = chosen.includes(id) ? chosen.filter((item) => item !== id) : [...chosen, id];
-    onSearch({ ...search, lists: next.slice(0, PRICE_MATRIX_MAX_LISTS - 1) });
+    const gone = next.includes(id) ? null : id;
+    filter({
+      ...search,
+      lists: next.slice(0, PRICE_MATRIX_MAX_LISTS - 1),
+      // A list leaving the table takes its sort and its margin filter with it.
+      ...(search.sortList === gone
+        ? { sort: undefined, sortList: undefined, direction: undefined }
+        : {}),
+      ...(search.marginList === gone ? { marginList: undefined, marginBelowBp: undefined } : {}),
+    });
   };
+  const game = games.data?.games.find((item) => item.id === search.gameId);
+  const retailName = lists.data?.find((list) => list.id === ROOT_PRICE_LIST_IDS.retail)?.name ?? '';
+  const shownLists = [
+    { value: ROOT_PRICE_LIST_IDS.retail as string, label: retailName },
+    ...live
+      .filter((list) => chosen.includes(list.id))
+      .map((list) => ({ value: list.id, label: list.name })),
+  ];
+  const grouped = !search.gameId && !search.sort;
+  const direction = (sort: PriceMatrixSort, listId?: string) =>
+    search.sort === sort && search.sortList === listId ? (search.direction ?? 'asc') : null;
+  const ariaSort = (listId: string) => {
+    const sorted = search.sort && search.sort !== 'cost' && search.sortList === listId;
+    if (!sorted) return undefined;
+    return search.direction === 'desc' ? 'descending' : 'ascending';
+  };
+  const counts = matrix.data?.counts;
 
   return (
     <>
       <PageHeader title={t('pricing.matrix.title')} description={t('pricing.matrix.subtitle')} />
       <div className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid items-end gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Field>
-            <FieldLabel render={<span />}>{t('pricing.scopes.game')}</FieldLabel>
+            <FieldLabel render={<span />}>{t('pricing.matrix.game')}</FieldLabel>
+            {game ? (
+              <ChosenGame game={game} onChange={() => setPickingGame(true)} />
+            ) : (
+              <Button
+                variant="outline"
+                className="justify-start"
+                onClick={() => setPickingGame(true)}
+              >
+                {t('pricing.matrix.chooseGame')}
+              </Button>
+            )}
+          </Field>
+          <Field>
+            <FieldLabel render={<span />}>{t('pricing.matrix.category')}</FieldLabel>
             <Picker
-              label={t('pricing.scopes.game')}
-              placeholder={t('pricing.calculator.choose')}
-              items={(games.data?.items ?? []).map((item) => ({
-                value: item.id,
-                label: item.nameAr,
-              }))}
-              value={search.gameId ?? null}
-              onChange={(gameId) => onSearch({ ...search, gameId, q: undefined })}
-              read={games}
+              label={t('pricing.matrix.category')}
+              items={[
+                { value: ALL, label: t('pricing.matrix.allCategories') },
+                ...(categories.data ?? []).map((item) => ({ value: item.id, label: item.nameAr })),
+              ]}
+              value={search.categoryId ?? ALL}
+              onChange={(value) =>
+                filter({
+                  ...search,
+                  gameId: undefined,
+                  categoryId: value === ALL ? undefined : value,
+                })
+              }
+              read={categories}
             />
           </Field>
-          <MatrixSearchForm search={search} onSearch={onSearch} />
+          <MatrixSearchForm search={search} onSearch={filter} inputRef={searchInput} />
+          <Field>
+            <FieldLabel render={<span />}>{t('pricing.matrix.supplier')}</FieldLabel>
+            <Picker
+              label={t('pricing.matrix.supplier')}
+              items={[
+                { value: ALL, label: t('pricing.matrix.allSuppliers') },
+                ...SUPPLIERS.map((code) => ({ value: code, label: t(`suppliers.names.${code}`) })),
+              ]}
+              value={search.supplier ?? ALL}
+              onChange={(value) =>
+                filter({
+                  ...search,
+                  supplier: value === ALL ? undefined : (value as SupplierCode),
+                })
+              }
+            />
+          </Field>
         </div>
         <fieldset className="flex flex-wrap items-center gap-4">
           <legend className="mb-2 text-sm font-medium">{t('pricing.matrix.lists')}</legend>
@@ -107,11 +217,11 @@ export function MatrixPage({
           {live.map((list) => (
             <label
               key={list.id}
-              htmlFor={`${warningsId}-${list.id}`}
+              htmlFor={`${listsId}-${list.id}`}
               className="flex items-center gap-2 text-sm"
             >
               <Checkbox
-                id={`${warningsId}-${list.id}`}
+                id={`${listsId}-${list.id}`}
                 checked={chosen.includes(list.id)}
                 disabled={!chosen.includes(list.id) && chosen.length >= PRICE_MATRIX_MAX_LISTS - 1}
                 onCheckedChange={() => toggle(list.id)}
@@ -119,22 +229,45 @@ export function MatrixPage({
               {list.name}
             </label>
           ))}
-          <label htmlFor={warningsId} className="ms-auto flex items-center gap-2 text-sm">
-            <Switch
-              id={warningsId}
-              checked={!!search.warnings}
-              onCheckedChange={(on) => onSearch({ ...search, warnings: on ? true : undefined })}
-            />
-            {t('pricing.matrix.warningsOnly')}
-          </label>
         </fieldset>
-        {!search.gameId && !search.q ? (
-          <EmptyState
-            icon={<Grid3x3Icon />}
-            title={t('pricing.matrix.choose')}
-            description={t('pricing.matrix.chooseHint')}
+        <div className="flex flex-wrap items-end gap-4">
+          <MarginFilter
+            search={search}
+            onSearch={filter}
+            lists={shownLists}
+            key={search.marginBelowBp ?? 'none'}
           />
-        ) : matrix.isPending ? (
+          {hasMatrixFilters(search) && (
+            <Button variant="ghost" onClick={() => onSearch(clearMatrixFilters(search))}>
+              {t('pricing.matrix.clear')}
+            </Button>
+          )}
+        </div>
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <ToggleGroup
+            aria-label={t('pricing.matrix.statusLabel')}
+            value={[search.status ?? ALL]}
+            onValueChange={(value) => {
+              const next = value[0];
+              filter({
+                ...search,
+                status: !next || next === ALL ? undefined : (next as PriceMatrixStatus),
+              });
+            }}
+          >
+            {[ALL, ...PRICE_MATRIX_STATUSES].map((status) => (
+              <ToggleGroupItem key={status} value={status}>
+                {t(`pricing.matrix.statuses.${status as 'all' | PriceMatrixStatus}`)}
+                {counts && (
+                  <span className="ms-1.5 tabular-nums text-muted-foreground">
+                    {counts[status as 'all' | PriceMatrixStatus]}
+                  </span>
+                )}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        {matrix.isPending ? (
           <Skeleton className="h-64 w-full" aria-hidden="true" />
         ) : matrix.isError ? (
           <div className="flex flex-col items-start gap-3">
@@ -144,66 +277,128 @@ export function MatrixPage({
             </Button>
           </div>
         ) : matrix.data.rows.length === 0 ? (
-          <EmptyState icon={<Grid3x3Icon />} title={t('pricing.matrix.empty')} />
+          <EmptyState
+            icon={<Grid3x3Icon />}
+            title={t('pricing.matrix.empty')}
+            description={hasMatrixFilters(search) ? t('pricing.matrix.emptyHint') : undefined}
+          />
         ) : (
           <>
-            {matrix.data.rows.length >= PRICE_MATRIX_MAX_PRODUCTS && (
-              <Callout
-                tone="info"
-                title={t('pricing.matrix.truncated', { max: PRICE_MATRIX_MAX_PRODUCTS })}
-              />
-            )}
             <Table
               // Audit A05-37: another game's or search's rows stay while the next load, dimmed.
               className={matrix.isPlaceholderData ? 'opacity-60' : undefined}
+              containerClassName="max-h-[calc(100dvh-7rem)] overflow-y-auto"
               aria-busy={matrix.isPlaceholderData}
             >
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('pricing.columns.product')}</TableHead>
-                  <TableHead>{t('pricing.matrix.cost')}</TableHead>
+                  <TableHead className={HEAD_CLASS}>{t('pricing.columns.product')}</TableHead>
+                  <TableSortHead
+                    className={HEAD_CLASS}
+                    direction={direction('cost', undefined)}
+                    onSort={() => onSearch(nextMatrixSort(search, 'cost', undefined))}
+                  >
+                    {t('pricing.matrix.cost')}
+                  </TableSortHead>
                   {matrix.data.lists.map((list) => (
-                    <TableHead key={list.id}>{list.name}</TableHead>
+                    <TableHead key={list.id} className={HEAD_CLASS} aria-sort={ariaSort(list.id)}>
+                      <span className="block text-foreground">{list.name}</span>
+                      <span className="flex gap-1 text-xs">
+                        {LIST_SORTS.map((sort) => (
+                          <SortButton
+                            key={sort}
+                            sort={sort}
+                            list={list.name}
+                            direction={direction(sort, list.id)}
+                            onSort={() => onSearch(nextMatrixSort(search, sort, list.id))}
+                          />
+                        ))}
+                      </span>
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {matrix.data.rows.map((row) => (
-                  <TableRow key={row.productId}>
-                    <TableCell className="whitespace-normal">
-                      <span className="font-medium">{row.productNameAr}</span>
-                      <span className="block text-xs text-muted-foreground">{row.gameNameAr}</span>
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {row.costUsdUnits === null ? '—' : ltr(formatUsd(row.costUsdUnits))}
-                    </TableCell>
-                    {row.cells.map((cell) => (
-                      <TableCell key={cell.priceListId} className="align-top">
-                        <button
-                          type="button"
-                          disabled={matrix.isPlaceholderData}
-                          className="flex w-full flex-col items-start gap-1 rounded-md p-1 text-start hover:bg-muted"
-                          onClick={() => setOpened({ listId: cell.priceListId, row })}
+                {matrix.data.rows.map((row, index) => (
+                  <Fragment key={row.productId}>
+                    {grouped && row.gameId !== matrix.data.rows[index - 1]?.gameId && (
+                      <TableRow>
+                        <TableHead
+                          scope="rowgroup"
+                          colSpan={matrix.data.lists.length + 2}
+                          className={GAME_ROW_CLASS}
                         >
-                          {/* Audit A05-39: the price and warnings stay in the button's name. */}
-                          <span className="sr-only">
-                            {t('pricing.matrix.openCell', {
-                              list: matrix.data.lists.find((list) => list.id === cell.priceListId)
-                                ?.name,
-                              product: row.productNameAr,
-                            })}
+                          <bdi>{row.gameNameAr}</bdi>
+                        </TableHead>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell className="whitespace-normal">
+                        <span className="font-medium">{row.productNameAr}</span>
+                        {!grouped && (
+                          <span className="block text-xs text-muted-foreground">
+                            {row.gameNameAr}
                           </span>
-                          <MatrixCell cell={cell} />
-                        </button>
+                        )}
                       </TableCell>
-                    ))}
-                  </TableRow>
+                      <TableCell className="tabular-nums">
+                        {row.costUsdUnits === null ? '—' : ltr(formatUsd(row.costUsdUnits))}
+                      </TableCell>
+                      {row.cells.map((cell) => (
+                        <TableCell key={cell.priceListId} className="align-top">
+                          <button
+                            type="button"
+                            disabled={matrix.isPlaceholderData}
+                            className="flex w-full flex-col items-start gap-1 rounded-md p-1 text-start hover:bg-muted"
+                            onClick={() => setOpened({ listId: cell.priceListId, row })}
+                          >
+                            {/* Audit A05-39: the price and warnings stay in the button's name. */}
+                            <span className="sr-only">
+                              {t('pricing.matrix.openCell', {
+                                list: matrix.data.lists.find((list) => list.id === cell.priceListId)
+                                  ?.name,
+                                product: row.productNameAr,
+                              })}
+                            </span>
+                            <MatrixCell cell={cell} />
+                          </button>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
+            <Pagination
+              page={matrix.data.page}
+              pageCount={matrix.data.pageCount}
+              onPageChange={(next) => onSearch({ ...search, page: next > 1 ? next : undefined })}
+              summary={t('pricing.matrix.total', { total: matrix.data.total })}
+              previousLabel={t('common.previous')}
+              nextLabel={t('common.next')}
+            />
           </>
         )}
       </div>
+      <Dialog open={pickingGame} onOpenChange={setPickingGame}>
+        {pickingGame && (
+          <DialogContent className="sm:max-w-3xl" closeLabel={t('common.close')}>
+            <DialogHeader>
+              <DialogTitle>{t('pricing.matrix.chooseGame')}</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[70dvh] overflow-y-auto p-0.5">
+              <GamePicker
+                focus
+                onPick={(gameId) => {
+                  setPickingGame(false);
+                  filter({ ...search, gameId, categoryId: undefined, q: undefined });
+                }}
+                onCancel={() => setPickingGame(false)}
+              />
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
       <Dialog open={!!opened} onOpenChange={(open) => !open && setOpened(null)}>
         {opened && lists.data && (
           <CellDialog
@@ -218,6 +413,35 @@ export function MatrixPage({
   );
 }
 
+/** One of a list column's sorts; the arrow marks the one in force. */
+function SortButton({
+  sort,
+  list,
+  direction,
+  onSort,
+}: {
+  sort: PriceMatrixSort;
+  list: string;
+  direction: 'asc' | 'desc' | null;
+  onSort: () => void;
+}) {
+  const { t } = useTranslation();
+  const column = t(`pricing.matrix.sorts.${sort as 'price' | 'margin' | 'difference'}`);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={`h-6 px-1 text-xs ${direction ? 'font-bold text-foreground' : 'font-normal'}`}
+      aria-label={t('pricing.matrix.sortBy', { list, column })}
+      onClick={onSort}
+    >
+      {column}
+      {direction === 'asc' && ' ↑'}
+      {direction === 'desc' && ' ↓'}
+    </Button>
+  );
+}
+
 /**
  * The search box on its own: typing re-renders this form, not the whole table (audit A05-38). It
  * follows the URL on back and forward.
@@ -225,9 +449,11 @@ export function MatrixPage({
 function MatrixSearchForm({
   search,
   onSearch,
+  inputRef,
 }: {
   search: MatrixSearch;
   onSearch: (next: MatrixSearch) => void;
+  inputRef: Ref<HTMLInputElement>;
 }) {
   const { t } = useTranslation();
   const [q, setQ] = useState(search.q ?? '');
@@ -246,9 +472,75 @@ function MatrixSearchForm({
     >
       <Field>
         <FieldLabel>{t('pricing.matrix.search')}</FieldLabel>
-        <Input name="q" value={q} onChange={(event) => setQ(event.target.value)} />
+        <Input
+          ref={inputRef}
+          name="q"
+          placeholder={t('pricing.matrix.searchPlaceholder')}
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+        />
       </Field>
     </form>
+  );
+}
+
+/** "الهامش أقل من" on one shown list; a typed percent applies on Enter or on leaving the field. */
+function MarginFilter({
+  search,
+  onSearch,
+  lists,
+}: {
+  search: MatrixSearch;
+  onSearch: (next: MatrixSearch) => void;
+  lists: { value: string; label: string }[];
+}) {
+  const { t } = useTranslation();
+  const [text, setText] = useState(
+    search.marginBelowBp === undefined ? '' : formatPercentBp(search.marginBelowBp),
+  );
+  const typed = text.trim() === '' ? undefined : parsePercentBp(text);
+  const invalid = typed === null || typed === 0;
+  const apply = () => {
+    if (!invalid && typed !== search.marginBelowBp) onSearch({ ...search, marginBelowBp: typed });
+  };
+  return (
+    <>
+      <Field className="w-44">
+        <FieldLabel render={<span />}>{t('pricing.matrix.marginList')}</FieldLabel>
+        <Picker
+          label={t('pricing.matrix.marginList')}
+          items={lists}
+          value={search.marginList ?? ROOT_PRICE_LIST_IDS.retail}
+          onChange={(value) =>
+            onSearch({
+              ...search,
+              marginList: value === ROOT_PRICE_LIST_IDS.retail ? undefined : value,
+            })
+          }
+        />
+      </Field>
+      <form
+        className="w-44"
+        onSubmit={(event) => {
+          event.preventDefault();
+          apply();
+        }}
+      >
+        <Field invalid={invalid}>
+          <FieldLabel>{t('pricing.matrix.marginBelow')}</FieldLabel>
+          <Input
+            name="marginBelow"
+            dir="ltr"
+            inputMode="decimal"
+            autoComplete="off"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onBlur={apply}
+          />
+          <FieldError match={invalid}>{t('pricing.matrix.marginInvalid')}</FieldError>
+        </Field>
+      </form>
+    </>
   );
 }
 

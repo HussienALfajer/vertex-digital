@@ -45,11 +45,12 @@ import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
 import { gameQuery } from '../catalog/catalog.queries';
+import { ChosenGame, GamePicker } from '../catalog/game-picker';
 import { customerListQuery } from '../customers/customers.queries';
 import type { NewOrderSearch } from './new-order-search';
 import { purchaseContextQuery, useAdminPlayerCheck, useCreateAdminOrder } from './orders.queries';
 import { PlayerCheckAnswer } from './player-check-answer';
-import { ChosenGame, GamePicker, PackCards, PriceListLine } from './sale-picker';
+import { PackCards, PriceListLine } from './sale-picker';
 
 /** The fields of the form a refusal may name. */
 type FieldKey = 'customerId' | 'productId' | 'quantity' | 'reason' | 'customerNote' | 'fields';

@@ -72,7 +72,10 @@ export function FixedPriceDialog({
   const { ref, focusInvalid } = useFocusInvalid();
   const games = useQuery(allGamesQuery);
   const game = useQuery({ ...gameQuery(gameId ?? ''), enabled: !!gameId });
-  const matrix = useQuery(priceMatrixQuery({ gameId: gameId ?? undefined, lists: [listId] }));
+  const matrix = useQuery({
+    ...priceMatrixQuery({ gameId: gameId ?? undefined, lists: [listId] }),
+    enabled: !!gameId,
+  });
 
   const price = parseUsd(priceText);
   const valid = price !== null && setFixedPriceSchema.safeParse({ priceUsdUnits: price }).success;

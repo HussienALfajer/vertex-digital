@@ -14,6 +14,7 @@ The admin panel at `digital-admin.vertexmedia.pro`: React 19 + Vite SPA, TanStac
 - Form: `features/account/login-page.tsx` (React Hook Form + contract schema + `standardSchemaResolver`; errors via `errorMessage()` and `FormAlert`; a server error on a field is set with `type: 'server'`).
 - Money action: `features/wallet/adjust-dialog.tsx` (Idempotency-Key, typed amount confirmation, refusals under their field).
 - Money action built in steps (customer search, pack picker, live account check, summary, re-auth, page-level key, presets from the URL): `features/orders/new-order-page.tsx`.
+- Choosing a game (live search, arrow keys and Enter, most sold, category grid): `features/catalog/game-picker.tsx`. Server-filtered table with chips and their counts, sort and every filter in the URL, sticky header and group rows, `/` to search: `features/pricing/matrix-page.tsx`.
 - List with URL filters (`validateSearch`), cursor list with "load more", detail sheet: `features/audit/`. Paged list with tabs and filters in the URL, detail page with a decision panel (one dialog per decision): `features/orders/`.
 - Review page with a decision form: `features/deposits/`. Decision list with a bulk action and a result per row: `features/pricing/reviews-page.tsx`.
 - Waiting on something outside the panel (background polling, single-use link, QR, countdown): `features/telegram/`.

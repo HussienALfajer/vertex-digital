@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { type MarginScope, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
+import type { MarginScope } from '@vertex-digital/contracts';
 import {
   Card,
   CardDescription,
@@ -8,37 +8,19 @@ import {
   Field,
   FieldLabel,
   Input,
-  PageHeader,
 } from '@vertex-digital/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { allGamesQuery, categoriesQuery, gameQuery } from '../catalog/catalog.queries';
-import { ListRules } from './list-rules';
 import { Picker } from './picker';
 import { PricePreview } from './price-preview';
 import { parseCostUsd } from './pricing-format';
 
 /**
- * "التسعير" (S06, F10): the retail list's rules (S20: `ListRules`), each editable
- * (re-authentication) and archivable but the global one, and a calculator for any cost.
+ * "جرّب تكلفة" (rule PR10, S20): what a list prices a cost at for a product, game or category. The
+ * API computes it through the list's chain, capped as a stored row is.
  */
-export function PricingPage() {
-  const { t } = useTranslation();
-  return (
-    <>
-      <PageHeader title={t('pricing.title')} description={t('pricing.subtitle')} />
-      <ListRules
-        chain={[
-          { id: ROOT_PRICE_LIST_IDS.retail, kind: 'retail', name: t('pricing.lists.retail') },
-        ]}
-      />
-      <Calculator />
-    </>
-  );
-}
-
-/** "جرّب تكلفة" (rule PR10): the rule in force for a product, game or category and a cost. */
-function Calculator() {
+export function ListCalculator({ priceListId }: { priceListId: string }) {
   const { t } = useTranslation();
   const [scope, setScope] = useState<MarginScope>('global');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -60,7 +42,7 @@ function Calculator() {
   const cost = parseCostUsd(costText);
   const request =
     cost && (scope === 'global' || targetId)
-      ? { target: { scope, targetId }, costUsdUnits: cost }
+      ? { target: { scope, targetId }, costUsdUnits: cost, priceListId }
       : null;
 
   const scopes = (['global', 'category', 'game', 'product'] as const).map((value) => ({
