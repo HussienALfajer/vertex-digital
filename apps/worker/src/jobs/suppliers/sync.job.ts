@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import {
   FAILING_SYNC_RUNS,
   type FieldSpec,
@@ -357,6 +358,12 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    // Never stops the boot: fulfilment must not wait on this, and the next runs close it (SY1).
+    await this.closeInterrupted().catch((error: unknown) => {
+      const reported = withoutQueryParameters(error) as Error;
+      this.logger.error(reported, 'Closing interrupted sync runs failed');
+      Sentry.captureException(reported);
+    });
     await this.pgBoss.work<SuppliersSyncPayload>(QUEUES.suppliersSync, async (data) => {
       const run = await this.sync(suppliersSyncPayloadSchema.parse(data));
       if (run) this.logger.log(`Sync ${run.id} of ${data.supplierCode}: ${run.status}`);
@@ -622,6 +629,35 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload, { retryLimit: 0 }),
     );
     this.logger.log(`Credentials of ${supplier.code} replaced during a run: testing them`);
+  }
+
+  /**
+   * Rule SY1 at boot: the worker is one process, so a run `running` before it started lost its
+   * reader to a deploy or a crash and would hold the supplier's sync for up to 45 minutes. Only a
+   * panel run whose job still waits in the queue has yet to start.
+   */
+  async closeInterrupted(db: Executor = this.db): Promise<void> {
+    const running = await db
+      .select({ id: supplierSyncRuns.id })
+      .from(supplierSyncRuns)
+      .where(eq(supplierSyncRuns.status, 'running'));
+    for (const { id } of running) {
+      const queued = await this.pgBoss.boss.findJobs(QUEUES.suppliersSync, {
+        data: { runId: id },
+        queued: true,
+      });
+      if (queued.length > 0) continue;
+      await db
+        .update(supplierSyncRuns)
+        .set({
+          status: 'failed',
+          finishedAt: new Date(),
+          errorCode: 'INTERRUPTED',
+          errorMessage: 'The worker restarted during this run',
+        })
+        .where(and(eq(supplierSyncRuns.id, id), eq(supplierSyncRuns.status, 'running')));
+      this.logger.log(`Sync ${id} closed: the worker restarted during it`);
+    }
   }
 
   /** Runs left `running` over `ABANDONED_RUN_MINUTES` by a crash, but the payload's own (SY1). */

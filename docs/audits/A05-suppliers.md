@@ -114,7 +114,7 @@ What changed:
 
 ## Deferred
 - **A05-43** (the rest): a free product search in the fixed price dialog (S20 screens); the game then pack pickers work, with typeahead. A follow-up with the S20 screens.
-- **A05-44** (the rest): E2E of route restore and priority, the runs tab, the statement's transactions and its `RATE_LIMITED` wait, the category page's import and link, the error states of the supplier page, tree and failed calls, 375 px screenshots of the supplier and pricing screens; a real concurrent sync and a sync racing a charge in the worker tests.
+- **A05-44** (the rest): written on 2026-10-31 (`supplier-panel-states.spec.ts`: route restore and priority, the runs tab, the `RATE_LIMITED` wait, the category page's import and link, read failures, 375 px screenshots). The sync racing a charge was already covered (audit A05-8's test). Not written: a concurrent sync with committed runs, which would leave rows the suite's streak tests read; the running-run unique index that decides that race is tested in `packages/db/src/suppliers.test.ts`.
 - **A05-46** (narrower invalidation), **A05-70** (the matrix's availability per list without `productRoutingStates`), **A05-72** (counting new packs in SQL), **A05-73** (caching a failed thumbnail): fine at today's catalog size; for A10's performance pass.
 - **A05-49** (a row action's error by its row), **A05-50** (the timing check before the policy loads; the server refuses `ROUTE_TIMING_INVALID` anyway), **A05-52** (unconfirmed: a suggested archived pack), **A05-75** (the calculator's cost bounds; the server refuses, with a retry now): polish.
 - **A05-55** (the player check's own timeout): an adapter contract change (a signal or a per-call timeout), for A07 or A10.

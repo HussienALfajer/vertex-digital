@@ -139,6 +139,7 @@ const RUN_ERRORS = [
   'SUPPLIER_ERROR',
   'CATALOG_SUSPICIOUS',
   'ABANDONED',
+  'INTERRUPTED',
   'INTERNAL',
 ] as const;
 

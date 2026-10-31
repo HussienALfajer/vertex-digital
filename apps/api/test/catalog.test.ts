@@ -1253,6 +1253,28 @@ describe('store routes (S09 rules SF1, SF5, SS1–SS3, SR2, AD1)', () => {
       expect.objectContaining({ id: shown.id, status: 'unavailable' }),
     ]);
     expect(JSON.stringify(storefront)).not.toContain(paused.id);
+    // A paused pack has no routing state in these two reads: it reads as not available.
+    const [listed] = await test.db
+      .select({ id: catalogProducts.id })
+      .from(catalogProducts)
+      .where(eq(catalogProducts.gameId, shown.id));
+    await test.db
+      .update(catalogProducts)
+      .set({ status: 'paused' })
+      .where(eq(catalogProducts.id, listed?.id as string));
+    const index = await json<{
+      games: { id: string; status: string }[];
+      products: { id: string; available: boolean; priceUsdUnits: number | null }[];
+    }>(await client.get('/api/catalog/search-index'), 200);
+    expect(index.games.find((game) => game.id === shown.id)?.status).toBe('unavailable');
+    expect(index.products.find((product) => product.id === listed?.id)).toMatchObject({
+      available: false,
+      priceUsdUnits: null,
+    });
+    await test.db
+      .update(catalogProducts)
+      .set({ status: 'active' })
+      .where(eq(catalogProducts.id, listed?.id as string));
 
     const [row] = await test.db.select().from(catalogGames).where(eq(catalogGames.id, shown.id));
     const page = await json<{

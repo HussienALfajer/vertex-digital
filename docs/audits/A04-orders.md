@@ -85,8 +85,8 @@ What changed:
 - **A04-21 → Q24** (answered 2026-10-27, `docs/open-questions.md`): an unexpired cached player check applies when the day's check quota is used up; with nothing cached the ID stays unchecked. Fixed after the A04 deploy, in a PR of its own.
 
 ## Deferred
-- **A04-17 (rest):** store E2E for "load more" on `/orders`, a refused reservation cancel or share link, the cart's `PURCHASE_LIMIT_EXCEEDED` and `MERCHANT_TERMS_REQUIRED`, "معرّفاتي" and "تنبيهاتي" failures, `TICKET_ALREADY_OPEN`. The screens' code for these is unchanged and their refusal texts exist; a follow-up test PR.
-- **A04-18 (rest):** admin E2E confirming a held order delivered (units and codes) or failed, `/orders/new` refusals (`PRICE_CHANGED`, `INSUFFICIENT_BALANCE`, `PLAYER_NOT_CONFIRMED`, `EMAIL_NOT_VERIFIED`), reroute `ROUTE_NOT_ELIGIBLE`, the proof's refusals. Same follow-up.
+- **A04-17 (rest):** written on 2026-10-31 (`orders`, `convenience`, `order-help`, `merchant` specs).
+- **A04-18 (rest):** written on 2026-10-31 (`order-refusals.spec.ts`).
 - **A04-35 (part):** a failed saved-IDs read still hides the chips; the customer types the ID, nothing is lost.
 - **A04-37:** "اشترِ مجدداً" reads the order twice on an explicit tap; passing it between the shop and the buy box is a refactor for little gain.
 - **A04-42:** the merchant's receipt preview shows a placeholder for the trade name; the real name needs another read on every receipt sheet.

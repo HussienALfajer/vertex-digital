@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { MerchantApplication, MerchantApplicationState } from '@vertex-digital/contracts';
 import ar from '../src/messages/ar.json' with { type: 'json' };
-import { PUBG, pack } from './catalog';
+import { PUBG, pack, searchIndex } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
 
 /*
@@ -301,6 +301,54 @@ test.describe('merchant accounts', () => {
       expect(api.last('POST /api/merchant/terms')?.body).toEqual({ versionId: TERMS });
     });
   }
+
+  test('a refused cart without the merchant terms opens the sheet and keeps the cart (MT2)', async ({
+    page,
+    api,
+  }) => {
+    const p60 = pack(PUBG, '60 UC');
+    await page.addInitScript((cart) => localStorage.setItem('vd-cart', JSON.stringify(cart)), {
+      v: 1,
+      lines: [
+        {
+          id: `line-${p60.id}`,
+          productId: p60.id,
+          gameSlug: 'pubg-mobile',
+          quantity: 1,
+          maxQuantity: p60.maxQuantity,
+          fields: { player_id: '51234567' },
+          expectedUnitPriceUsdUnits: p60.priceUsdUnits,
+          confirmPlayer: false,
+          playerCheck: { result: 'valid', playerName: 'Lina_99' },
+          display: {
+            gameNameAr: PUBG.game.nameAr,
+            productNameAr: p60.nameAr,
+            cover: PUBG.game.cover,
+            fields: [
+              {
+                key: 'player_id',
+                labelAr: 'معرّف اللاعب (ID)',
+                value: '51234567',
+                valueLabelAr: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    signedIn(api)
+      .on('GET /api/wallet', 200, { balanceUnits: 50_000_000, syp: null, reservedUsdUnits: 0 })
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('POST /api/checkouts', 409, { code: 'MERCHANT_TERMS_REQUIRED' })
+      .on('GET /api/merchant/application', 200, open({ canApply: false }));
+    await page.goto('/cart');
+    await page.getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page.getByTestId('terms-sheet')).toBeVisible();
+    expect(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('vd-cart') ?? '{}').lines.length),
+    ).toBe(1);
+  });
 
   test('a refused buy without the merchant terms opens the sheet (MT2)', async ({ page, api }) => {
     const p60 = pack(PUBG, '60 UC');

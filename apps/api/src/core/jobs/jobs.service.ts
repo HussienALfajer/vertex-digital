@@ -24,7 +24,11 @@ export class JobsService implements OnApplicationShutdown {
   private readonly queues = new Map<string, Promise<void>>();
 
   constructor(@Inject(ENV) env: Env) {
-    this.boss = createPgBoss(env.DATABASE_URL, { supervise: false, schedule: false });
+    this.boss = createPgBoss(env.DATABASE_URL, {
+      max: env.DATABASE_POOL_MAX,
+      supervise: false,
+      schedule: false,
+    });
     // pg-boss reports its pool's errors as events: without a listener one would end the process.
     this.boss.on('error', (error) => {
       const reported = withoutQueryParameters(error);

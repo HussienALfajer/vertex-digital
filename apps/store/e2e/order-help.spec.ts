@@ -294,6 +294,15 @@ test.describe('product alerts (S22 PA1, PA7)', () => {
     await expect(page.getByText('660 UC')).toHaveCount(0);
   });
 
+  test('"تنبيهاتي" offers a retry when its read fails (audit A04-17)', async ({ page, api }) => {
+    signedIn(api).on('GET /api/product-alerts?status=active', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/account/alerts');
+    await expect(page.getByText(pa.page.loadFailed)).toBeVisible();
+    api.on('GET /api/product-alerts?status=active', 200, { items: [alert({})] });
+    await page.getByRole('button', { name: pa.page.retry }).click();
+    await expect(page.getByRole('heading', { name: pa.page.active })).toBeVisible();
+  });
+
   test('"تنبيهاتي" without alerts points to the games', async ({ page, api }) => {
     signedIn(api);
     await page.goto('/account/alerts');

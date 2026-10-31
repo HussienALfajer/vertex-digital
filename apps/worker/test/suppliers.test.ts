@@ -106,6 +106,7 @@ const sent: Sent[] = [];
 const pgBoss = {
   work: async () => {},
   boss: {
+    findJobs: async (_queue: string, _options?: { data?: object }): Promise<unknown[]> => [],
     send: async (
       queue: string,
       data: Record<string, unknown>,
@@ -754,6 +755,52 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         .where(eq(supplierSyncRuns.id, lost?.id as string));
       expect(closed).toMatchObject({ status: 'failed', errorCode: 'ABANDONED' });
     }));
+
+  it('closes a run the restart cut at boot, not a panel run still queued (SY1)', () =>
+    isolated(async (tx) => {
+      const [cut] = await tx
+        .insert(supplierSyncRuns)
+        .values({ id: newId(), supplierId: ids.fake, trigger: 'schedule' })
+        .returning();
+      const [waiting] = await tx
+        .insert(supplierSyncRuns)
+        .values({ id: newId(), supplierId: ids.wdgzone, trigger: 'admin' })
+        .returning();
+      const findJobs = vi
+        .spyOn(pgBoss.boss, 'findJobs')
+        .mockImplementation(async (_queue, options) =>
+          (options?.data as { runId?: string })?.runId === waiting?.id
+            ? ([{ id: 'job' }] as never)
+            : [],
+        );
+      await sync.closeInterrupted(tx);
+      expect(findJobs).toHaveBeenCalledWith(QUEUES.suppliersSync, {
+        data: { runId: cut?.id },
+        queued: true,
+      });
+      const rows = await tx
+        .select()
+        .from(supplierSyncRuns)
+        .where(inArray(supplierSyncRuns.id, [cut?.id as string, waiting?.id as string]));
+      expect(rows.find((row) => row.id === cut?.id)).toMatchObject({
+        status: 'failed',
+        errorCode: 'INTERRUPTED',
+      });
+      expect(rows.find((row) => row.id === waiting?.id)).toMatchObject({ status: 'running' });
+      // The supplier is free at once: the next run starts instead of ending without a row.
+      current = listing(offer('a', 1));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ status: 'succeeded' });
+    }));
+
+  it('a failed cleanup at boot never stops the worker (SY1)', async () => {
+    const work = vi.spyOn(pgBoss, 'work');
+    const failing = vi.spyOn(sync, 'closeInterrupted').mockRejectedValueOnce(new Error('down'));
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    await sync.onApplicationBootstrap();
+    expect(failing).toHaveBeenCalledOnce();
+    expect(logged).toHaveBeenCalled();
+    expect(work).toHaveBeenCalledWith(QUEUES.suppliersSync, expect.any(Function));
+  });
 
   it('catches up a price built on a cost the sync had already changed', () =>
     isolated(async (tx) => {

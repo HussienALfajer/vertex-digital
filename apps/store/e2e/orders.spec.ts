@@ -405,6 +405,54 @@ test.describe('orders', () => {
     await expect(page.getByRole('heading', { name: o.reservation.title })).toBeHidden();
   });
 
+  test('a refused cancel keeps the reservation and says why (audit A04-17)', async ({
+    page,
+    api,
+  }) => {
+    withOrders(api)
+      .on('GET /api/wallet', 200, { balanceUnits: 5_000_000, syp: null, reservedUsdUnits: 0 })
+      .on(`POST /api/orders/${IDS.reserved}/cancel`, 409, { code: 'ORDER_NOT_CANCELLABLE' });
+    await page.goto(`/orders/${IDS.reserved}`);
+    await page.getByRole('button', { name: o.reservation.cancel }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: o.reservation.cancelConfirm })
+      .click();
+    await expect(page.getByText(ar.errors.ORDER_NOT_CANCELLABLE)).toBeVisible();
+    await expect(page.getByRole('heading', { name: o.reservation.title })).toBeVisible();
+  });
+
+  test('"load more" adds the next page; a failed one keeps the list and can retry (audit A04-17)', async ({
+    page,
+    api,
+  }) => {
+    const [first, second] = Object.values(ORDERS).map(summary);
+    signedIn(api)
+      .on('GET /api/orders', 200, {
+        items: [first],
+        nextCursor: 'page-2',
+        checkout: null,
+      })
+      .on('GET /api/orders?cursor=page-2', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/orders');
+    await expect(
+      page.getByRole('link', { name: new RegExp(first?.number as string) }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: o.loadMore }).click();
+    await expect(page.getByText(ar.errors.UNKNOWN)).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: new RegExp(first?.number as string) }),
+    ).toBeVisible();
+    api.on('GET /api/orders?cursor=page-2', 200, {
+      items: [{ ...second, number: 'VO-NEXT22' }],
+      nextCursor: null,
+      checkout: null,
+    });
+    await page.getByRole('button', { name: o.loadMore }).click();
+    await expect(page.getByRole('link', { name: /VO-NEXT22/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: o.loadMore })).toHaveCount(0);
+  });
+
   test('a paid order moves to delivered live over the stream, with the success mark (step 5)', async ({
     page,
     api,
