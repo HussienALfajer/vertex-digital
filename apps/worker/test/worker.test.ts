@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { QUEUE_POLICIES, QUEUES } from '@vertex-digital/contracts';
@@ -112,6 +113,20 @@ describe('worker against the test database', () => {
       ).toEqual([{ worker: name, beatAt: new Date('2026-10-07T10:01:00.000Z') }]);
     } finally {
       await db.delete(workerHeartbeats).where(eq(workerHeartbeats.worker, name));
+    }
+  });
+
+  it('finds a queued job by its run, as closing interrupted syncs relies on (SY1)', async () => {
+    const { boss } = app.get(PgBossService);
+    const runId = randomUUID();
+    // `suppliers.sync` has no worker here (`IDLE_JOBS`): the job stays queued.
+    const jobId = await boss.send(QUEUES.suppliersSync, { runId });
+    try {
+      const options = (id: string) => ({ data: { runId: id }, queued: true });
+      expect(await boss.findJobs(QUEUES.suppliersSync, options(runId))).toHaveLength(1);
+      expect(await boss.findJobs(QUEUES.suppliersSync, options(randomUUID()))).toHaveLength(0);
+    } finally {
+      if (jobId) await boss.deleteJob(QUEUES.suppliersSync, jobId);
     }
   });
 

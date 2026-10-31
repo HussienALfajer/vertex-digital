@@ -441,6 +441,25 @@ test.describe('the cart (CT1–CT6)', () => {
     expect(api.last('GET /api/orders')).toBeTruthy();
   });
 
+  test('a daily limit refuses the whole cart with what remains, and keeps it (S12 LM4)', async ({
+    page,
+    api,
+  }) => {
+    await seedCart(page, [line(p60)]);
+    signedIn(api)
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('POST /api/checkouts', 409, {
+        code: 'PURCHASE_LIMIT_EXCEEDED',
+        details: { remainingUnits: 500_000 },
+      });
+    await page.goto('/cart');
+    await page.getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page.getByText(fill(p.capExceeded, { remaining: '⁦$0.50⁩' }))).toBeVisible();
+    expect(await cartCount(page)).toBe(1);
+    await expect(page.getByRole('slider')).toBeVisible();
+  });
+
   test('a refused cart marks each line; the fixed cart goes with a new key (CT6, edge 1)', async ({
     page,
     api,
@@ -663,6 +682,23 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
     await expect(page.getByText(GIFT_LINK.url)).toBeVisible();
   });
 
+  test('a refused revocation keeps the link and says why (audit A04-17)', async ({ page, api }) => {
+    signedIn(api)
+      .on(`GET /api/orders/${GIFT_ORDER_ID}`, 200, giftOrder())
+      .on(`POST /api/orders/${GIFT_ORDER_ID}/share-links/${GIFT_LINK.id}/revoke`, 404, {
+        code: 'NOT_FOUND',
+      })
+      .image('GET /api/shares/G1ftT0kenAAAAAAAAAAAAA/image');
+    await page.goto(`/orders/${GIFT_ORDER_ID}`);
+    await page.getByRole('button', { name: ar.orders.share.revoke }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: ar.orders.share.revokeConfirm })
+      .click();
+    await expect(page.getByText(ar.errors.NOT_FOUND)).toBeVisible();
+    await expect(page.getByText(GIFT_LINK.url)).toBeVisible();
+  });
+
   test('the receipt sheet previews the choices, then creates the link (step 7)', async ({
     page,
     api,
@@ -728,6 +764,15 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
 });
 
 test.describe('"معرّفاتي" (SP5)', () => {
+  test('a failed read offers a retry (audit A04-17)', async ({ page, api }) => {
+    signedIn(api).on('GET /api/saved-players', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/account/players');
+    await expect(page.getByText(ar.players.loadFailed)).toBeVisible();
+    api.on('GET /api/saved-players', 200, { items: [MINE] });
+    await page.getByRole('button', { name: ar.players.retry }).click();
+    await expect(page.getByRole('heading', { name: PUBG.game.nameAr })).toBeVisible();
+  });
+
   test('lists by game, renames, deletes, and opens the game with the ID chosen', async ({
     page,
     api,

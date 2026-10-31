@@ -18,7 +18,7 @@ export const PG_BOSS_SCHEMA = 'pgboss';
  */
 export function createPgBoss(
   connectionString: string,
-  options: { supervise?: boolean; schedule?: boolean } = {},
+  options: { supervise?: boolean; schedule?: boolean; max?: number } = {},
 ): PgBoss {
   return new PgBoss({
     connectionString,

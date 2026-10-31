@@ -32,7 +32,7 @@ export class PgBossService implements OnModuleInit, OnApplicationShutdown {
     @Inject(ENV) env: Env,
     private readonly alerts: TelegramAlerts,
   ) {
-    this.boss = createPgBoss(env.DATABASE_URL);
+    this.boss = createPgBoss(env.DATABASE_URL, { max: env.DATABASE_POOL_MAX });
     this.boss.on('error', (error) => {
       this.logger.error(error);
       Sentry.captureException(error);

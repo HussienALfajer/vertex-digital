@@ -41,6 +41,7 @@ import { refusals, toImage } from './catalog-records.js';
 
 type GameRow = typeof catalogGames.$inferSelect;
 type ProductRow = typeof catalogProducts.$inferSelect;
+type ProductStatusRow = Pick<ProductRow, 'id' | 'gameId' | 'status'>;
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -64,13 +65,13 @@ export class CatalogStoreService {
   async storefront(): Promise<Storefront> {
     const shown = await this.shownGames();
     const [products, images] = await Promise.all([
-      this.liveProducts(shown.map(({ game }) => game.id)),
+      this.storefrontProducts(shown.map(({ game }) => game.id)),
       this.images(
         shown.map(({ game }) => game),
         shown.flatMap(({ category }) => (category.imageFileId ? [category.imageFileId] : [])),
       ),
     ]);
-    const states = await this.states(products);
+    const states = await this.sellableStates(products);
     const statusOf = serviceStatusOf(products, states);
     const categories: Storefront['categories'] = [];
     for (const { game, category } of shown) {
@@ -262,7 +263,7 @@ export class CatalogStoreService {
     const shown = await this.shownGames();
     const products = await this.liveProducts(shown.map(({ game }) => game.id));
     const [states, rate, images] = await Promise.all([
-      this.states(products),
+      this.sellableStates(products),
       this.rates.current(),
       this.images(shown.map(({ game }) => game)),
     ]);
@@ -364,7 +365,35 @@ export class CatalogStoreService {
       .orderBy(asc(catalogProducts.sortOrder), asc(catalogProducts.createdAt));
   }
 
-  private states(products: readonly ProductRow[], earlyAccess = false) {
+  /** What `storefront` needs of `liveProducts`: the catalog's texts stay out of the home read. */
+  private async storefrontProducts(gameIds: readonly string[]): Promise<ProductStatusRow[]> {
+    if (gameIds.length === 0) return [];
+    return this.db
+      .select({
+        id: catalogProducts.id,
+        gameId: catalogProducts.gameId,
+        status: catalogProducts.status,
+      })
+      .from(catalogProducts)
+      .where(
+        and(
+          uuidIn(catalogProducts.gameId, gameIds),
+          isNull(catalogProducts.archivedAt),
+          outsideEarlyAccess(catalogProducts.earlyAccessUntil, new Date()),
+        ),
+      );
+  }
+
+  /**
+   * The states of the products that can be available. A paused product never is, so for the
+   * storefront and the search index (rules SS1, SR2) a missing state means the same as its own,
+   * and those reads skip the routes and offers of the catalog's paused packs.
+   */
+  private sellableStates(products: readonly ProductStatusRow[]) {
+    return this.states(products.filter((product) => product.status === 'active'));
+  }
+
+  private states(products: readonly Pick<ProductRow, 'id'>[], earlyAccess = false) {
     return productRoutingStates(
       this.db,
       products.map((product) => product.id),
@@ -419,7 +448,7 @@ function serviceFacts(state: ProductRoutingState | undefined) {
 
 /** Each game's service status, its products grouped once rather than searched per game. */
 function serviceStatusOf(
-  products: readonly ProductRow[],
+  products: readonly ProductStatusRow[],
   states: Map<string, ProductRoutingState>,
 ): (gameId: string) => ReturnType<typeof gameServiceStatus> {
   const facts = new Map<string, ReturnType<typeof serviceFacts>[]>();
