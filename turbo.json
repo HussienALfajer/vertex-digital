@@ -16,7 +16,7 @@
     "build": {
       "dependsOn": ["^build"],
       "env": ["MADANI_FONTS_DIR"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"]
