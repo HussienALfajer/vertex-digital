@@ -116,7 +116,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Admin: create and edit games and products, reorder, archive.
 
 #### F09 — Suppliers, product mapping and price sync
-- Supplier connections: WDGZone (automatic), Manual, Fake (development and tests) (ADR 0005, 0031). API keys entered in the admin panel and stored encrypted; balance shown per supplier.
+- Supplier connections: WDGZone, FazerCards and jneedcontur (automatic; jneedcontur through a generic zddk adapter, S25), Manual, Fake (development and tests) (ADR 0005, 0031, 0034, 0039). API keys entered in the admin panel and stored encrypted; balance shown per supplier.
 - Mapping: each store product maps to one or more supplier offers, with priority and per-offer enable switch.
 - Price sync: supplier costs refreshed on a schedule; changes beyond a threshold go to the **price change review queue** (accept new price, adjust margin, pause).
 - **Supplier catalog browser** (S16): the supplier's category tree with images, counts and a state per category; import a category as a new game (paused, mapped, priced) or link it to a game; ignore; new-pack notices; stock with low-stock alerts; the supplier's wallet transactions and order history matched to our orders.
@@ -269,6 +269,13 @@ Added by the owner on 2026-10-29; extends F39 (S23).
 - Privileges per tier, set in the panel: deposit limits, player-check quota, merchant checkout lines (named bulk lines; bulk orders were removed 2026-10-30) and codes per order, deposit and ticket queue priority with a reply promise, a direct contact for Diamond, early access to packs the admin chooses, faster alerts, receipt customisation.
 - The admin grants a higher tier for up to 90 days; tier column, filter and report; Telegram alerts for Gold and Diamond changes; a preview of a threshold change.
 
+#### F44 — Syrian credit, bills and cash
+Added by the owner on 2026-11-04, replacing the 2026-10-29 "not planned" line (S25, ADR 0039).
+- A "الرصيد والفواتير" section: Syriatel and MTN credit as fixed packs; Syriatel and MTN bills and Syriatel and MTN Cash by a free amount the customer types (from 1,000 SYP in steps of 100); supplied by jneedcontur; priced in USD and shown SYP first; merchants buy at their list price.
+- The recipient number has a fixed type per operator (prefix check, normalised to 09…), is typed twice and confirmed before paying; credit sent to a wrong number is not refunded, a supplier refusal is.
+- Limits: a daily section cap per customer (retail $50, merchants $500), a daily order count per number across all accounts (5, merchants 20), an alert when a number is topped up from a third account.
+- Cash products: paid only from balance credited 72 hours ago or more, never reserved, $20 a day (merchants $100), held for the admin's approval above $10 (merchants $50), refunded when rejected or left 24 hours.
+
 ## 5. Automations (fixed rules in V1)
 
 | ID | Trigger | Automatic result |
@@ -295,7 +302,7 @@ Added by the owner on 2026-10-29; extends F39 (S23).
 
 | Deferred | Why |
 |---|---|
-| Wallet withdrawals | Funds are for purchases; withdrawals invite fraud and money laundering. Exceptional cash refunds are done by the owner, recorded in the ledger (ADR 0003) |
+| Wallet withdrawals | Funds are for purchases; withdrawals invite fraud and money laundering. Exceptional cash refunds are done by the owner, recorded in the ledger (ADR 0003). The cash products of F44 are the one controlled exception (ADR 0039) |
 | English UI | Arabic-only at launch; i18n from day one keeps English cheap if it is ever wanted; not planned (owner, 2026-10-29) |
 | Reseller API, merchant staff (cashier) accounts and the merchant mini-store | Declined for now (owner, 2026-10-20) |
 | Merchant credit lines; merchants as cash-in points and prepaid wallet vouchers | Later, after the merchant features (owner, 2026-10-20): ledger transfers between accounts need their own anti-fraud and anti-money-laundering design |
@@ -303,7 +310,6 @@ Added by the owner on 2026-10-29; extends F39 (S23).
 | Loyalty points, cashback and referrals | Declined (owner, 2026-10-20) |
 | Merchant tier rewards beyond prices (deposit bonus, monthly cashback, buying on credit, locking Diamond), merchant referral rewards and seasonal challenges | Declined (owner, 2026-10-29, S23): a tier changes only the price and the privileges |
 | Delivery-time guarantee, price history chart, Eid and scheduled gifts, group gifts, season calendar, renewal reminders, Telegram customer notifications, onboarding steps, account story page | Proposed on 2026-10-20 and declined by the owner |
-| Syrian mobile credit (Syriatel, MTN) | Not planned (owner, 2026-10-29) |
 | Sham Cash automation | No API today; manual review with fraud checks in V1; not planned (owner, 2026-10-29) |
 | Other payment methods (cards, other e-wallets) | Not available or not needed at launch |
 | Phone OTP | Paid SMS; phone is format-validated only |
