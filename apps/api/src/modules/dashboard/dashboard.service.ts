@@ -170,6 +170,7 @@ export class DashboardService {
       medianDeliveryMs: orders.medianDeliveryMs,
       salesLine: orders.salesLine,
       now: {
+        cashHold: live.cash_hold,
         atSupplier: live.at_supplier,
         manual: live.manual,
         review: live.review,

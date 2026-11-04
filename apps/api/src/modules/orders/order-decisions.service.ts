@@ -187,6 +187,10 @@ export class OrderDecisionsService {
           // S11 rule MF1: a manual attempt is delivered by the manual fulfil, with its proof.
           if (!decisions.resolveDelivered) throw orderRefusals.useFulfil();
           if (body.quantity > attempt.quantity) throw orderRefusals.tooManyUnits(attempt.quantity);
+          // S25 AM3: an amount order is delivered whole or failed whole.
+          if (order.kind === 'amount' && body.quantity !== attempt.quantity) {
+            throw orderRefusals.wholeAmount(attempt.quantity);
+          }
           const expected = order.kind === 'code' ? body.quantity : 0;
           if (body.codes.length !== expected) throw orderRefusals.codesCount();
         }

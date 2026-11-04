@@ -18,16 +18,18 @@ import {
   auditEntries,
   creditPolicy,
   customers,
+  fulfilmentAttempts,
   orders,
   telegramMessages,
 } from '../schema/index.js';
+import { fulfilOrderManually } from './admin-actions.js';
 import { checkoutOrders } from './checkout.js';
 import { creditLimitsFor, currentCreditPolicy, decideCashHold, expireCashHolds } from './credit.js';
 import { liveBoard } from './live.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
 import { adminOrder, adminOrderCounts, customerOrder } from './reads.js';
 import { payWaitingOrders } from './reservations.js';
-import type { OrderContext, OrderRow } from './transition.js';
+import { lockOrder, type OrderContext, type OrderRow, transitionOrder } from './transition.js';
 
 /*
  * The credit section (S25 AM1–AM4, CL2–CL6, CS1–CS5) on PostgreSQL as the app role: amount
@@ -186,7 +188,7 @@ async function sectionProduct(
      where product_id = $1 and price_list_id = $2 order by created_at desc, id desc limit 1`,
     [id, ROOT_PRICE_LIST_IDS.retail],
   );
-  return { id, game, price: Number(rows[0]?.price) };
+  return { id, game, offer, route, cost, price: Number(rows[0]?.price) };
 }
 
 const hash = (value: object) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -325,6 +327,62 @@ describe('section limits (CL2–CL5)', () => {
     expect(await balance(buyer)).toBe(usd(100) - usd(48.5));
   });
 
+  it('counts every spelling of one number under one key (CL3)', async () => {
+    const item = await sectionProduct();
+    const line = number();
+    const spellings = [line, line.slice(1), `963${line.slice(1)}`, `00963${line.slice(1)}`];
+    for (const spelling of spellings) await buy(request(await customer(usd(10)), item, spelling));
+    await buy(request(await customer(usd(10)), item, `+963 ${line.slice(1)}`));
+    expect(await refusal(buy(request(await customer(usd(10)), item, line)))).toMatchObject({
+      code: 'RECIPIENT_DAILY_LIMIT',
+    });
+  });
+
+  it('delivers an amount order whole from the admin (AM3)', async () => {
+    const item = await sectionProduct();
+    const { order } = await buy(request(await customer(usd(10)), item, number()));
+    await db.transaction(async (tx) => {
+      const locked = (await lockOrder(tx, order.id)) as OrderRow;
+      const attemptId = newId();
+      await tx.insert(fulfilmentAttempts).values({
+        id: attemptId,
+        orderId: order.id,
+        routeId: item.route,
+        supplierId: fake,
+        offerId: item.offer,
+        supplierOfferId: 'o-test',
+        quantity: locked.quantity,
+        unitCostUsdUnits: item.cost,
+        status: 'unknown',
+        candidates: [],
+        sentAt: new Date(),
+      });
+      const sentRow = await transitionOrder(tx, locked, 'sent_to_supplier', {
+        actor: 'system',
+        attemptId,
+      });
+      await transitionOrder(tx, sentRow as OrderRow, 'needs_review', {
+        actor: 'system',
+        attemptId,
+      });
+    });
+    const partial = refusal(
+      db.transaction((tx) =>
+        fulfilOrderManually(tx, context(), {
+          orderId: order.id,
+          quantity: 5,
+          codes: [],
+          unitCostUsdUnits: item.cost,
+          acceptLoss: false,
+          proofFileId: newId(),
+          reference: null,
+          admin: { id: newId(), reason: 'Delivered by hand', idempotencyKey: newId() },
+        }),
+      ),
+    );
+    expect(await partial).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
   it('counts a checkout as a whole', async () => {
     const item = await sectionProduct();
     const buyer = await customer(usd(60));
@@ -387,9 +445,7 @@ describe('cash (CS1–CS5)', () => {
     });
     const poor = await customer();
     expect(
-      await refusal(
-        buy(request(poor, item, number(), { whenBalanceShort: 'reserve' })),
-      ),
+      await refusal(buy(request(poor, item, number(), { whenBalanceShort: 'reserve' }))),
     ).toMatchObject({ code: 'CASH_BALANCE_TOO_RECENT' });
   });
 
@@ -489,6 +545,34 @@ describe('cash (CS1–CS5)', () => {
   });
 });
 
+describe('the Telegram ceiling (CS4)', () => {
+  it('lets Telegram decide only up to the ceiling; above it the hold waits for the panel', async () => {
+    const item = await sectionProduct({ serviceClass: 'cash' });
+    const buyer = await customer(usd(20));
+    const { order } = await buy(request(buyer, item, number(), { quantity: 11 }));
+    const telegram = { kind: 'admin', adminId: newId(), channel: 'telegram' } as const;
+    try {
+      await setPolicy({ cashTelegramCeilingUsdUnits: usd(10) });
+      sent.length = 0;
+      expect(
+        await refusal(
+          db.transaction((tx) =>
+            decideCashHold(tx, context(), { orderId: order.id, decision: 'approve', by: telegram }),
+          ),
+        ),
+      ).toEqual({ code: 'ORDER_NOT_DECIDABLE', details: { reason: 'panel_only' } });
+      expect(await orderRow(order.id)).toMatchObject({ status: 'paid', cashHold: 'held' });
+      expect(fulfilJobs(order.id)).toHaveLength(0);
+    } finally {
+      await setPolicy({});
+    }
+    const approved = await db.transaction((tx) =>
+      decideCashHold(tx, context(), { orderId: order.id, decision: 'approve', by: telegram }),
+    );
+    expect(approved.cashHold).toBe('approved');
+  });
+});
+
 describe('policy changes (CS5, CL6)', () => {
   it('expires holds past the policy hours, and cancels a reservation a limit now refuses', async () => {
     const cash = await sectionProduct({ serviceClass: 'cash' });
@@ -497,9 +581,7 @@ describe('policy changes (CS5, CL6)', () => {
 
     const credit = await sectionProduct();
     const waiting = await customer();
-    const reserved = await buy(
-      request(waiting, credit, number(), { whenBalanceShort: 'reserve' }),
-    );
+    const reserved = await buy(request(waiting, credit, number(), { whenBalanceShort: 'reserve' }));
     expect(reserved.order.status).toBe('awaiting_balance');
 
     try {

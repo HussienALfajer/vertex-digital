@@ -48,10 +48,28 @@ describe('fake supplier', () => {
       originalCost: { currency: 'USD', amountUnits: 990_000 },
       fieldSpecs: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
     });
-    expect(offers).toHaveLength(14);
+    expect(offers).toHaveLength(18);
     expect(new Set(offers.map((offer) => offer.group))).toEqual(
-      new Set(['PUBG Mobile', 'Free Fire', 'iTunes', 'Mobile Legends', 'Genshin Impact']),
+      new Set([
+        'PUBG Mobile',
+        'Free Fire',
+        'iTunes',
+        'Mobile Legends',
+        'Genshin Impact',
+        'Syrian credit',
+      ]),
     );
+    // S25: a fixed credit value, and a free amount with its units per order.
+    expect(offers.find((offer) => offer.offerId === 'fake-mtn:1000')).toMatchObject({
+      kind: 'direct',
+      requiredFields: ['playerId'],
+    });
+    expect(offers.find((offer) => offer.offerId === 'fake-mtn-bill@100')).toMatchObject({
+      kind: 'amount',
+      cost: { currency: 'USD', amountUnits: 850_000 },
+      minQuantity: 10,
+      maxQuantity: 1_000,
+    });
     expect(offers.find((offer) => offer.offerId === 'fake-gift-10')).toMatchObject({
       kind: 'code',
       requiredFields: [],
@@ -452,6 +470,7 @@ describe('fake supplier catalog tree, stock, statement and status (S16)', () => 
       'fake-itunes',
       'fake-ml',
       'fake-gi',
+      'fake-syria',
     ]);
     expect(categories[0]).toEqual({
       categoryId: 'fake-pubg',

@@ -70,7 +70,11 @@ const FAKE_TREE: [string, string | null, string, ProductKind][] = [
 ];
 
 /** Rule SC14: the store category of a node's kind. */
-const STORE_CATEGORY: Record<ProductKind, string> = { direct: 'games', code: 'gift-cards' };
+const STORE_CATEGORY: Record<ProductKind, string> = {
+  direct: 'games',
+  code: 'gift-cards',
+  amount: 'credit-bills',
+};
 
 const error = (status: number, code: string, details?: unknown): Answer => ({
   status,

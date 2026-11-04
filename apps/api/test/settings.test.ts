@@ -150,6 +150,7 @@ describe('changing a switch (rules SW1, SW2)', () => {
       'usdt_bep20_paused',
       'wdgzone_paused',
       'fazercards_paused',
+      'jneedcontur_paused',
       'manual_paused',
       'fake_paused',
     ]);

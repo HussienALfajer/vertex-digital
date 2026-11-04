@@ -308,6 +308,7 @@ describe('access', () => {
         '/api/admin/suppliers/fazercards/credentials',
         { values: { apiKey: 'x', webhookSecret: SECRET } },
       ],
+      ['PUT', '/api/admin/suppliers/jneedcontur/credentials', { values: { apiToken: 'x' } }],
       ['PATCH', '/api/admin/suppliers/fake', { lowBalanceUsdUnits: usd(10) }],
       ['PUT', '/api/admin/suppliers/policy', SUPPLIER_POLICY_DEFAULTS],
       [
@@ -347,16 +348,19 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the four suppliers, FazerCards with its adapter (S19 FC2)', async () => {
+  it('lists the five suppliers, FazerCards with its adapter, jneedcontur without (S25 ZD2)', async () => {
     const list = await json<
       { code: string; available: boolean; configured: boolean; lowBalanceUsdUnits: number }[]
     >(await get('/api/admin/suppliers'), 200);
     expect(list.map((item) => [item.code, item.available])).toEqual([
       ['wdgzone', true],
       ['fazercards', true],
+      ['jneedcontur', false],
       ['manual', true],
       ['fake', true],
     ]);
+    // S25: jneedcontur's low-balance alert starts at $10.
+    expect(list.find((item) => item.code === 'jneedcontur')?.lowBalanceUsdUnits).toBe(usd(10));
     // D8: FazerCards' low-balance alert starts at $5.
     expect(list.find((item) => item.code === 'fazercards')?.lowBalanceUsdUnits).toBe(usd(5));
     expect(list.find((item) => item.code === 'manual')?.configured).toBe(true);
@@ -377,6 +381,7 @@ describe('suppliers (rules SP1–SP3)', () => {
       ['manual', { apiKey: 'x' }],
       ['fazercards', { apiKey: 'x' }],
       ['fazercards', { webhookSecret: SECRET }],
+      ['jneedcontur', { apiKey: 'x' }],
     ] as const) {
       expect(
         await body(await put(`/api/admin/suppliers/${code}/credentials`, { values })),
@@ -439,6 +444,27 @@ describe('suppliers (rules SP1–SP3)', () => {
     });
     expect(detail.credentialFields).toEqual(['apiKey', 'webhookSecret']);
     expect(detail.credentials.hints).toEqual({ apiKey: 'c3d4', webhookSecret: 'a1b2' });
+  });
+
+  it('stores the jneedcontur token before its adapter, starting no sync (S25 ZD1, ZD2)', async () => {
+    const detail = await json<{
+      available: boolean;
+      configured: boolean;
+      credentialFields: string[];
+      credentials: { hints: Record<string, string> };
+    }>(
+      await put('/api/admin/suppliers/jneedcontur/credentials', {
+        values: { apiToken: `jnc-${run}-e5f6` },
+      }),
+      200,
+    );
+    expect(detail).toMatchObject({ available: false, configured: true });
+    expect(detail.credentialFields).toEqual(['apiToken']);
+    expect(detail.credentials.hints).toEqual({ apiToken: 'e5f6' });
+    expect(await body(await post('/api/admin/suppliers/jneedcontur/sync'))).toMatchObject({
+      status: 409,
+      code: 'SUPPLIER_UNAVAILABLE',
+    });
   });
 
   it('starts a sync once: the running run, then one a minute (rule SY1)', async () => {

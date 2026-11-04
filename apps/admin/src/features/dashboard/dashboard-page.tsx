@@ -370,6 +370,7 @@ function Kpi({
 }
 
 const NOW_COUNTS: Record<LiveColumn, keyof Dashboard['now']> = {
+  cash_hold: 'cashHold',
   at_supplier: 'atSupplier',
   manual: 'manual',
   review: 'review',
@@ -387,7 +388,9 @@ function OrdersNow({ data }: { data: Dashboard }) {
           return (
             <Badge
               key={column}
-              tone={column === 'review' && count > 0 ? 'danger' : 'neutral'}
+              tone={
+                (column === 'review' || column === 'cash_hold') && count > 0 ? 'danger' : 'neutral'
+              }
               render={<Link to="/orders/live" />}
             >
               {t(`orders.live.columns.${column}`)}: {count}

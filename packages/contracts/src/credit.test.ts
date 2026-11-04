@@ -17,13 +17,15 @@ import {
   maskRecipient,
   normalizeSyrianMobile,
   quantityOfAmount,
+  recipientKey,
   recipientNeedsAlert,
   recipientNumberSchema,
+  SECTION_FIELD_TYPES,
   syrianOperatorOf,
   WRONG_OPERATOR,
 } from './credit.js';
 import { USD_CENT } from './money.js';
-import { orderFieldValuesSchema } from './orders.js';
+import { orderFieldValuesSchema, resolveAttemptSchema } from './orders.js';
 
 const usd = (dollars: number) => Math.round(dollars * 100) * USD_CENT;
 
@@ -293,5 +295,24 @@ describe('cash hold (CS3–CS5)', () => {
   it('alerts from the third account (CL4)', () => {
     expect(recipientNeedsAlert(CREDIT_POLICY_DEFAULTS, 2)).toBe(false);
     expect(recipientNeedsAlert(CREDIT_POLICY_DEFAULTS, 3)).toBe(true);
+  });
+});
+
+describe('recipient keys (CL3) and section fields (RN4)', () => {
+  it('counts every spelling of a line under one key, any other value as typed', () => {
+    expect(recipientKey('+963 933 123 456')).toBe('0933123456');
+    expect(recipientKey('933123456')).toBe('0933123456');
+    expect(recipientKey('12345678')).toBe('12345678');
+    expect(SECTION_FIELD_TYPES).toEqual(['syriatel_number', 'mtn_number', 'digits']);
+  });
+
+  it('lets the admin settle an amount order of up to 1,000 units (AM3)', () => {
+    const delivered = {
+      outcome: 'delivered',
+      quantity: 1_000,
+      reason: 'Delivered at the supplier',
+    };
+    expect(resolveAttemptSchema.safeParse(delivered).success).toBe(true);
+    expect(resolveAttemptSchema.safeParse({ ...delivered, quantity: 1_001 }).success).toBe(false);
   });
 });

@@ -41,7 +41,16 @@ describe('Telegram button data (S05 rule TG6)', () => {
       expect(parseTelegramCallback(data)).toEqual(callback);
     }
     expect(telegramCallbackData({ action: 'confirm', promptId })).toBe(`ok:${promptId}`);
-    expect(Object.values(TELEGRAM_CALLBACKS)).toEqual(['st', 'ok', 'no', 'ap', 'rj', 'rr', 'ca', 'cr']);
+    expect(Object.values(TELEGRAM_CALLBACKS)).toEqual([
+      'st',
+      'ok',
+      'no',
+      'ap',
+      'rj',
+      'rr',
+      'ca',
+      'cr',
+    ]);
     expect(telegramCallbackData({ action: 'reason', promptId, reason: 'not_received' })).toBe(
       `rr:${promptId}:not_received`,
     );

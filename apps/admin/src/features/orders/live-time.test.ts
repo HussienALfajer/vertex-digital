@@ -67,6 +67,7 @@ describe('finishedInMs', () => {
 
 describe('new waiting orders (rule LR6)', () => {
   const columns = (review: string[], manual: string[]) => ({
+    cash_hold: { cards: [] },
     at_supplier: { cards: [card({ id: 'a' })] },
     manual: { cards: manual.map((id) => card({ id })) },
     review: { cards: review.map((id) => card({ id })) },

@@ -53,6 +53,7 @@ type Body = Record<string, unknown> | null;
 const NAMES: Record<SupplierCode, string> = {
   wdgzone: 'WDGZone',
   fazercards: 'FazerCards',
+  jneedcontur: 'jneedcontur',
   manual: 'يدوي',
   fake: 'مورد تجريبي',
 };

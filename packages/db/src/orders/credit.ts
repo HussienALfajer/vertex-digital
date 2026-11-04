@@ -491,7 +491,13 @@ export async function expireCashHolds(
   const due = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.cashHold, 'held'), lte(orders.paidAt, since(policy.cashHoldHours))))
+    .where(
+      and(
+        eq(orders.cashHold, 'held'),
+        eq(orders.status, 'paid'),
+        lte(orders.paidAt, since(policy.cashHoldHours)),
+      ),
+    )
     .orderBy(asc(orders.paidAt))
     .limit(limit);
   const expired: string[] = [];
@@ -500,7 +506,7 @@ export async function expireCashHolds(
       const [free] = await tx
         .select({ id: orders.id })
         .from(orders)
-        .where(and(eq(orders.id, id), eq(orders.cashHold, 'held')))
+        .where(and(eq(orders.id, id), eq(orders.cashHold, 'held'), eq(orders.status, 'paid')))
         .for('update', { skipLocked: true });
       if (!free) return false;
       await decideCashHold(tx, context, {

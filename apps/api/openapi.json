@@ -345,6 +345,7 @@
                 "usdt_bep20_paused",
                 "wdgzone_paused",
                 "fazercards_paused",
+                "jneedcontur_paused",
                 "manual_paused",
                 "fake_paused"
               ]
@@ -1176,6 +1177,7 @@
                 "catalog_game.reordered",
                 "catalog_game.activated_all",
                 "catalog_game.player_check_set",
+                "catalog_game.service_class_set",
                 "catalog_input_field.created",
                 "catalog_input_field.updated",
                 "catalog_input_field.archived",
@@ -1235,6 +1237,8 @@
                 "price_review.paused",
                 "price_review.margin_adjusted",
                 "order.paid",
+                "order.cash_approved",
+                "order.cash_rejected",
                 "order.reserved",
                 "order.cancelled",
                 "order.cost_posted",
@@ -1288,7 +1292,8 @@
                 "announcement.archived",
                 "announcement.restored",
                 "content_settings.set",
-                "order_policy.set"
+                "order_policy.set",
+                "credit_policy.set"
               ]
             }
           },
@@ -1325,6 +1330,7 @@
                 "price_review",
                 "order",
                 "order_policy",
+                "credit_policy",
                 "customer_note",
                 "support_ticket",
                 "support_settings",
@@ -6121,6 +6127,7 @@
                 "usdt_bep20",
                 "supplier:wdgzone",
                 "supplier:fazercards",
+                "supplier:jneedcontur",
                 "supplier:manual",
                 "supplier:fake",
                 "outside_usd",
@@ -7668,6 +7675,46 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EarlyAccessInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The game",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/admin/catalog/games/{id}/service-class": {
+      "put": {
+        "operationId": "CatalogAdminController_setGameServiceClass",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceClassInput"
               }
             }
           }
@@ -9822,6 +9869,7 @@
               "enum": [
                 "wdgzone",
                 "fazercards",
+                "jneedcontur",
                 "manual",
                 "fake"
               ]
@@ -10218,6 +10266,7 @@
               "enum": [
                 "wdgzone",
                 "fazercards",
+                "jneedcontur",
                 "manual",
                 "fake"
               ]
@@ -11467,7 +11516,8 @@
               "type": "string",
               "enum": [
                 "direct",
-                "code"
+                "code",
+                "amount"
               ]
             }
           },
@@ -12745,6 +12795,7 @@
                 "all",
                 "review",
                 "manual",
+                "cash_hold",
                 "active",
                 "delivered",
                 "refunded"
@@ -12809,6 +12860,7 @@
               "enum": [
                 "wdgzone",
                 "fazercards",
+                "jneedcontur",
                 "manual",
                 "fake"
               ]
@@ -13057,6 +13109,7 @@
               "enum": [
                 "wdgzone",
                 "fazercards",
+                "jneedcontur",
                 "manual",
                 "fake"
               ]
@@ -13144,6 +13197,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OrderPolicy"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/cash-approval": {
+      "post": {
+        "operationId": "OrdersAdminController_decideCash",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashApprovalInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order as decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrder"
                 }
               }
             }
@@ -13616,6 +13709,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminRevealedCode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/credit-limits": {
+      "get": {
+        "operationId": "CreditController_limits",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The remaining amounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditLimits"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/credit-policy": {
+      "get": {
+        "operationId": "CreditAdminController_policy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The policy in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPolicy"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      },
+      "put": {
+        "operationId": "CreditAdminController_setPolicy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new policy, in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPolicy"
                 }
               }
             }
@@ -14632,7 +14796,8 @@
                       "price_rose",
                       "product_changed",
                       "frozen",
-                      "price_list_changed"
+                      "price_list_changed",
+                      "limit_reached"
                     ]
                   }
                 },
@@ -15762,7 +15927,8 @@
           "no_route",
           "routes_exhausted",
           "input_rejected",
-          "admin"
+          "admin",
+          "cash_rejected"
         ]
       },
       "PriceKind": {
@@ -16201,6 +16367,7 @@
           "usdt_bep20_paused",
           "wdgzone_paused",
           "fazercards_paused",
+          "jneedcontur_paused",
           "manual_paused",
           "fake_paused"
         ]
@@ -17067,6 +17234,7 @@
           "catalog_game.reordered",
           "catalog_game.activated_all",
           "catalog_game.player_check_set",
+          "catalog_game.service_class_set",
           "catalog_input_field.created",
           "catalog_input_field.updated",
           "catalog_input_field.archived",
@@ -17126,6 +17294,8 @@
           "price_review.paused",
           "price_review.margin_adjusted",
           "order.paid",
+          "order.cash_approved",
+          "order.cash_rejected",
           "order.reserved",
           "order.cancelled",
           "order.cost_posted",
@@ -17179,7 +17349,8 @@
           "announcement.archived",
           "announcement.restored",
           "content_settings.set",
-          "order_policy.set"
+          "order_policy.set",
+          "credit_policy.set"
         ]
       },
       "AuditEntityType": {
@@ -17211,6 +17382,7 @@
           "price_review",
           "order",
           "order_policy",
+          "credit_policy",
           "customer_note",
           "support_ticket",
           "support_settings",
@@ -26434,6 +26606,7 @@
           "usdt_bep20",
           "supplier:wdgzone",
           "supplier:fazercards",
+          "supplier:jneedcontur",
           "supplier:manual",
           "supplier:fake",
           "outside_usd",
@@ -26634,6 +26807,7 @@
           "usdt_bep20",
           "supplier:wdgzone",
           "supplier:fazercards",
+          "supplier:jneedcontur",
           "supplier:manual",
           "supplier:fake",
           "outside_usd",
@@ -26747,6 +26921,7 @@
         "enum": [
           "wdgzone",
           "fazercards",
+          "jneedcontur",
           "manual",
           "fake"
         ]
@@ -28778,6 +28953,9 @@
               "regionNotesAr": {
                 "nullable": true,
                 "type": "string"
+              },
+              "serviceClass": {
+                "$ref": "#/components/schemas/ServiceClass"
               }
             },
             "required": [
@@ -28789,7 +28967,8 @@
               "accentColor",
               "status",
               "idGuide",
-              "regionNotesAr"
+              "regionNotesAr",
+              "serviceClass"
             ],
             "additionalProperties": false
           },
@@ -28819,6 +28998,14 @@
           "rateId"
         ],
         "additionalProperties": false
+      },
+      "ServiceClass": {
+        "type": "string",
+        "enum": [
+          "none",
+          "credit",
+          "cash"
+        ]
       },
       "StoreField": {
         "type": "object",
@@ -28879,7 +29066,9 @@
           "select",
           "phone",
           "hoyoverse_uid",
-          "supercell_tag"
+          "supercell_tag",
+          "syriatel_number",
+          "mtn_number"
         ]
       },
       "SelectOption": {
@@ -28923,6 +29112,23 @@
             "maximum": 9007199254740991
           },
           "maxQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "minQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "amountUnitAr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "amountStep": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
@@ -29026,6 +29232,9 @@
           "nameAr",
           "gameAmount",
           "maxQuantity",
+          "minQuantity",
+          "amountUnitAr",
+          "amountStep",
           "available",
           "priceUsdUnits",
           "priceSypUnits",
@@ -29044,7 +29253,8 @@
         "type": "string",
         "enum": [
           "direct",
-          "code"
+          "code",
+          "amount"
         ]
       },
       "SearchIndex": {
@@ -29488,6 +29698,9 @@
           "bestValueEnabled": {
             "type": "boolean"
           },
+          "serviceClass": {
+            "$ref": "#/components/schemas/ServiceClass"
+          },
           "productCount": {
             "type": "integer",
             "minimum": 0,
@@ -29511,6 +29724,7 @@
           "accentColor",
           "regionNotesAr",
           "bestValueEnabled",
+          "serviceClass",
           "productCount"
         ],
         "additionalProperties": false
@@ -29742,6 +29956,9 @@
           "bestValueEnabled": {
             "type": "boolean"
           },
+          "serviceClass": {
+            "$ref": "#/components/schemas/ServiceClass"
+          },
           "productCount": {
             "type": "integer",
             "minimum": 0,
@@ -29786,6 +30003,7 @@
           "accentColor",
           "regionNotesAr",
           "bestValueEnabled",
+          "serviceClass",
           "productCount",
           "categoryArchived",
           "searchTerms",
@@ -29951,6 +30169,22 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "minQuantity": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "amountUnitAr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "amountStep": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
           "regionAr": {
             "nullable": true,
             "type": "string"
@@ -30053,6 +30287,9 @@
           "quickLinkUrl",
           "waitingAlerts",
           "maxQuantity",
+          "minQuantity",
+          "amountUnitAr",
+          "amountStep",
           "regionAr",
           "redemptionAr",
           "status",
@@ -30175,6 +30412,17 @@
         },
         "required": [
           "on"
+        ]
+      },
+      "ServiceClassInput": {
+        "type": "object",
+        "properties": {
+          "serviceClass": {
+            "$ref": "#/components/schemas/ServiceClass"
+          }
+        },
+        "required": [
+          "serviceClass"
         ]
       },
       "CreateInputField": {
@@ -30541,6 +30789,128 @@
               "required",
               "type"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "labelAr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "helpAr": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "syriatel_number"
+                ]
+              },
+              "minLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "maxLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "options": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "labelAr",
+              "required",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "labelAr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "helpAr": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mtn_number"
+                ]
+              },
+              "minLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "maxLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "options": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "labelAr",
+              "required",
+              "type"
+            ]
           }
         ]
       },
@@ -30767,6 +31137,58 @@
               "kind",
               "nameAr"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "amount"
+                ]
+              },
+              "nameAr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "gameAmount": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000000
+              },
+              "officialPriceUsdUnits": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000000000
+              },
+              "minQuantity": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "maxQuantity": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "amountUnitAr": {
+                "default": "ل.س",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              }
+            },
+            "required": [
+              "kind",
+              "nameAr"
+            ]
           }
         ]
       },
@@ -30794,7 +31216,18 @@
           "maxQuantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50
+            "maximum": 1000
+          },
+          "minQuantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "amountUnitAr": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "regionAr": {
             "nullable": true,
@@ -35388,7 +35821,8 @@
         "type": "string",
         "enum": [
           "fields_unsupported",
-          "manual_delivery"
+          "manual_delivery",
+          "cost_precision"
         ]
       },
       "ImportOffers": {
@@ -37276,7 +37710,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 1000
           },
           "fields": {
             "default": {},
@@ -37401,6 +37835,17 @@
               "redemptionAr": {
                 "nullable": true,
                 "type": "string"
+              },
+              "amountStep": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "amountUnitAr": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
@@ -37408,7 +37853,9 @@
               "nameAr",
               "kind",
               "regionAr",
-              "redemptionAr"
+              "redemptionAr",
+              "amountStep",
+              "amountUnitAr"
             ],
             "additionalProperties": false
           },
@@ -37533,6 +37980,18 @@
           "customerNote": {
             "nullable": true,
             "type": "string"
+          },
+          "recipient": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cashHold": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CashHoldState"
+              }
+            ]
           },
           "timeline": {
             "type": "array",
@@ -37720,6 +38179,8 @@
           "refundReason",
           "placedByStore",
           "customerNote",
+          "recipient",
+          "cashHold",
           "timeline",
           "codes",
           "expiresAt",
@@ -37753,6 +38214,15 @@
           "partially_refunded",
           "refunded",
           "cancelled"
+        ]
+      },
+      "CashHoldState": {
+        "type": "string",
+        "enum": [
+          "held",
+          "approved",
+          "rejected",
+          "expired"
         ]
       },
       "OrderTimelineStep": {
@@ -37809,7 +38279,8 @@
           "price_rose",
           "product_changed",
           "frozen",
-          "price_list_changed"
+          "price_list_changed",
+          "limit_reached"
         ]
       },
       "DeliveryStats": {
@@ -38047,7 +38518,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 1000
           },
           "fields": {
             "default": {},
@@ -38162,6 +38633,25 @@
           "productKind": {
             "$ref": "#/components/schemas/ProductKind"
           },
+          "amountStep": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "amountUnitAr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cashHold": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CashHoldState"
+              }
+            ]
+          },
           "game": {
             "type": "object",
             "properties": {
@@ -38255,6 +38745,9 @@
           "stage",
           "productNameAr",
           "productKind",
+          "amountStep",
+          "amountUnitAr",
+          "cashHold",
           "game",
           "quantity",
           "totalUsdUnits",
@@ -38547,6 +39040,17 @@
               "redemptionAr": {
                 "nullable": true,
                 "type": "string"
+              },
+              "amountStep": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "amountUnitAr": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
@@ -38554,7 +39058,9 @@
               "nameAr",
               "kind",
               "regionAr",
-              "redemptionAr"
+              "redemptionAr",
+              "amountStep",
+              "amountUnitAr"
             ],
             "additionalProperties": false
           },
@@ -38679,6 +39185,18 @@
           "customerNote": {
             "nullable": true,
             "type": "string"
+          },
+          "recipient": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cashHold": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CashHoldState"
+              }
+            ]
           },
           "timeline": {
             "type": "array",
@@ -38858,6 +39376,8 @@
           "refundReason",
           "placedByStore",
           "customerNote",
+          "recipient",
+          "cashHold",
           "timeline",
           "codes",
           "expiresAt",
@@ -39212,7 +39732,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 1000
           },
           "fields": {
             "default": {},
@@ -39353,12 +39873,25 @@
               },
               "kind": {
                 "$ref": "#/components/schemas/ProductKind"
+              },
+              "amountStep": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "amountUnitAr": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "id",
               "nameAr",
-              "kind"
+              "kind",
+              "amountStep",
+              "amountUnitAr"
             ],
             "additionalProperties": false
           },
@@ -39423,6 +39956,45 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "recipient": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cashHold": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/CashHoldState"
+              },
+              "decidedAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "adminName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "telegramDecides": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "state",
+              "decidedAt",
+              "adminName",
+              "expiresAt",
+              "telegramDecides"
+            ],
+            "additionalProperties": false
           },
           "unitPriceUsdUnits": {
             "type": "integer",
@@ -39744,6 +40316,8 @@
           "quantity",
           "deliveredQuantity",
           "refundedQuantity",
+          "recipient",
+          "cashHold",
           "unitPriceUsdUnits",
           "totalUsdUnits",
           "totalSypUnits",
@@ -40113,7 +40687,8 @@
           "already_tried",
           "unprofitable",
           "balance_below_order",
-          "quantity_above_offer"
+          "quantity_above_offer",
+          "quantity_below_offer"
         ]
       },
       "AttemptResolver": {
@@ -40716,6 +41291,7 @@
           "all",
           "review",
           "manual",
+          "cash_hold",
           "active",
           "delivered",
           "refunded"
@@ -40868,6 +41444,14 @@
           "manualWaiting": {
             "type": "boolean"
           },
+          "cashHold": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CashHoldState"
+              }
+            ]
+          },
           "checkoutId": {
             "nullable": true,
             "type": "string",
@@ -40902,6 +41486,7 @@
           "totalUsdUnits",
           "supplierCode",
           "manualWaiting",
+          "cashHold",
           "checkoutId",
           "isGift",
           "since",
@@ -40921,11 +41506,17 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "cashHeld": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "needsReview",
-          "manualWaiting"
+          "manualWaiting",
+          "cashHeld"
         ],
         "additionalProperties": false
       },
@@ -40961,6 +41552,28 @@
           "columns": {
             "type": "object",
             "properties": {
+              "cash_hold": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cards": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LiveOrderCard"
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "cards"
+                ],
+                "additionalProperties": false
+              },
               "at_supplier": {
                 "type": "object",
                 "properties": {
@@ -41051,6 +41664,7 @@
               }
             },
             "required": [
+              "cash_hold",
               "at_supplier",
               "manual",
               "review",
@@ -41287,6 +41901,27 @@
         ],
         "additionalProperties": false
       },
+      "CashApprovalInput": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
       "NearbySupplierOrders": {
         "type": "object",
         "properties": {
@@ -41334,7 +41969,7 @@
               "quantity": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 100
+                "maximum": 1000
               },
               "codes": {
                 "default": [],
@@ -41552,7 +42187,7 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 1000
           },
           "codes": {
             "default": [],
@@ -41608,6 +42243,125 @@
         },
         "required": [
           "code"
+        ],
+        "additionalProperties": false
+      },
+      "CreditLimits": {
+        "type": "object",
+        "properties": {
+          "sectionRemainingUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cashRemainingUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cashEligibleUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cashEligibleMoreAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "sectionRemainingUsdUnits",
+          "cashRemainingUsdUnits",
+          "cashEligibleUsdUnits",
+          "cashEligibleMoreAt"
+        ],
+        "additionalProperties": false
+      },
+      "CreditPolicy": {
+        "type": "object",
+        "properties": {
+          "retailDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "merchantDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "recipientDailyOrdersRetail": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "recipientDailyOrdersMerchant": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "recipientAccountsAlert": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "recipientAlertDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90
+          },
+          "cashRetailDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "cashMerchantDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "cashRetailApprovalAboveUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "cashMerchantApprovalAboveUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "cashBalanceAgeHours": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "cashHoldHours": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "cashTelegramCeilingUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          }
+        },
+        "required": [
+          "retailDailyUsdUnits",
+          "merchantDailyUsdUnits",
+          "recipientDailyOrdersRetail",
+          "recipientDailyOrdersMerchant",
+          "recipientAccountsAlert",
+          "recipientAlertDays",
+          "cashRetailDailyUsdUnits",
+          "cashMerchantDailyUsdUnits",
+          "cashRetailApprovalAboveUsdUnits",
+          "cashMerchantApprovalAboveUsdUnits",
+          "cashBalanceAgeHours",
+          "cashHoldHours",
+          "cashTelegramCeilingUsdUnits"
         ],
         "additionalProperties": false
       },
@@ -42179,7 +42933,9 @@
           "merchant_application",
           "merchant_tier_changed",
           "merchant_tier_grant_ending",
-          "ticket_overdue"
+          "ticket_overdue",
+          "cash_hold",
+          "credit_recipient_alert"
         ]
       },
       "TelegramMessageStatus": {
@@ -42379,6 +43135,11 @@
           "now": {
             "type": "object",
             "properties": {
+              "cashHold": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
               "atSupplier": {
                 "type": "integer",
                 "minimum": 0,
@@ -42411,6 +43172,7 @@
               }
             },
             "required": [
+              "cashHold",
               "atSupplier",
               "manual",
               "review",

@@ -12,12 +12,12 @@ PR 2 (the zddk adapter) waits for Q31, Q32 and Q34.
 - [x] contracts: error codes (`CREDIT_DAILY_LIMIT`, `RECIPIENT_DAILY_LIMIT`, `CASH_BALANCE_TOO_RECENT`, `CASH_DAILY_LIMIT`) with store/admin Arabic text; audit actions with labels; job `orders.cash-hold-expiry`
 - [x] db (`/db-migration`): enums extended the safe way, seeded jneedcontur row (fixed UUID, S19 pattern), treasury place and account, `catalog_products` (`min_quantity`, `amount_unit_ar`, `amount_step`, checks), `catalog_games.service_class`, `orders` (`recipient`, `cash_hold`, decided at/by, index), `credit_policy` single row
 - [x] db: limit counting (CL2, CL3, CS1, CS2) and the cash hold transitions (approve, reject/expire with the refund journal) in the shared write paths, with concurrency tests
-- [ ] api: order and checkout paths: amount products, recipient normalisation, CL5 locks, CL2/CL3/CS1/CS2 checks, CS3 hold, reservations refused for cash and rechecked on payment (CL6)
-- [ ] api: `GET /api/credit-limits`, `GET/PUT /api/admin/credit-policy`, `PUT /api/admin/catalog/games/:id/service-class`, `POST /api/admin/orders/:id/cash-approval`, product create/update with `amount`; access tests
-- [ ] api: jneedcontur credential and switch in the suppliers module (not in `ADAPTERS_READY`: "not available")
-- [ ] worker: fulfilment skips held orders; `orders.cash-hold-expiry` job; Telegram cash card with approve/reject (ceiling) and the CL4 recipient alert
-- [ ] worker: fake supplier `@100` and value-list offers; amount orders sent as `quantity × 100`; `quantity_unsupported` routing for amount offers
-- [ ] bridge: OpenAPI export and admin client
+- [x] api: order and checkout paths: amount products, recipient normalisation, CL5 locks, CL2/CL3/CS1/CS2 checks, CS3 hold, reservations refused for cash and rechecked on payment (CL6)
+- [x] api: `GET /api/credit-limits`, `GET/PUT /api/admin/credit-policy`, `PUT /api/admin/catalog/games/:id/service-class`, `POST /api/admin/orders/:id/cash-approval`, product create/update with `amount`; access tests
+- [x] api: jneedcontur credential and switch in the suppliers module (not in `ADAPTERS_READY`: "not available")
+- [x] worker: fulfilment skips held orders; `orders.cash-hold-expiry` job; Telegram cash card (outbox message with buttons, the API's bot decides) and the CL4 recipient alert
+- [x] worker: fake supplier `@100` and value-list offers; `quantity_unsupported` / `quantity_below_offer` routing for amount offers (`quantity × 100` is the zddk adapter's, PR 2)
+- [x] bridge: OpenAPI export and admin client; admin/store translations of the new codes and mocks
 - [ ] checks, reviewer, PR and merge
 
 ## PR 1b — `feat/s25-credit-screens`: admin, store, E2E

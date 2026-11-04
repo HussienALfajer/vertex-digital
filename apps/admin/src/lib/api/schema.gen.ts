@@ -2932,6 +2932,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/catalog/games/{id}/service-class": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CatalogAdminController_setGameServiceClass"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/catalog/games/{id}/archive": {
         parameters: {
             query?: never;
@@ -4964,6 +4980,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orders/{id}/cash-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersAdminController_decideCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/orders/{id}": {
         parameters: {
             query?: never;
@@ -5134,6 +5166,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["OrdersAdminController_reveal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/credit-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CreditController_limits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/credit-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CreditAdminController_policy"];
+        put: operations["CreditAdminController_setPolicy"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5501,7 +5565,7 @@ export interface components {
                 orderNumber: string;
                 productNameAr: string;
                 /** @enum {string} */
-                reason: "expired" | "price_rose" | "product_changed" | "frozen" | "price_list_changed";
+                reason: "expired" | "price_rose" | "product_changed" | "frozen" | "price_list_changed" | "limit_reached";
             };
         } | {
             /** Format: uuid */
@@ -5776,7 +5840,7 @@ export interface components {
         /** @enum {string} */
         AdjustmentCategory: "compensation" | "correction" | "cash_refund" | "manual_deposit" | "test_funds";
         /** @enum {string} */
-        RefundReason: "no_route" | "routes_exhausted" | "input_rejected" | "admin";
+        RefundReason: "no_route" | "routes_exhausted" | "input_rejected" | "admin" | "cash_rejected";
         /** @enum {string} */
         PriceKind: "retail" | "wholesale" | "special";
         /** @enum {string} */
@@ -5856,7 +5920,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "fazercards_paused" | "manual_paused" | "fake_paused";
+        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "fazercards_paused" | "jneedcontur_paused" | "manual_paused" | "fake_paused";
         /** @enum {string} */
         SwitchChannel: "admin" | "telegram";
         ChangeSwitch: {
@@ -6060,9 +6124,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.passkey_added" | "customer.passkey_removed" | "customer.passkeys_cleared" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "merchant.tier_granted" | "merchant.tier_grant_ended" | "merchant.certificate_reissued" | "merchant.logo_removed" | "merchant.welcome_text_removed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "catalog_game.early_access_set" | "catalog_game.early_access_ended" | "catalog_product.early_access_set" | "catalog_product.early_access_ended" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_tier.level_changed" | "merchant_tier.settings_changed" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "report.merchant_tiers_exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.passkey_added" | "customer.passkey_removed" | "customer.passkeys_cleared" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "merchant.tier_granted" | "merchant.tier_grant_ended" | "merchant.certificate_reissued" | "merchant.logo_removed" | "merchant.welcome_text_removed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_game.service_class_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "catalog_game.early_access_set" | "catalog_game.early_access_ended" | "catalog_product.early_access_set" | "catalog_product.early_access_ended" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_tier.level_changed" | "merchant_tier.settings_changed" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.cash_approved" | "order.cash_rejected" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "report.merchant_tiers_exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set" | "credit_policy.set";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "merchant_tier_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "merchant_tier_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "credit_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -8146,7 +8210,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        TreasuryPlace: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+        TreasuryPlace: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:jneedcontur" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
         TreasuryMovementQuery: {
             cursor?: string;
             /** @default 50 */
@@ -8191,7 +8255,7 @@ export interface components {
         /** @enum {string} */
         TreasuryMovementKind: "transfer" | "supplier_correction";
         /** @enum {string} */
-        TreasuryEndpoint: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp" | "supplier_corrections";
+        TreasuryEndpoint: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:jneedcontur" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp" | "supplier_corrections";
         /** @enum {string} */
         OutsideCategory: "owner" | "unclaimed_receipt" | "return_to_sender" | "other";
         CreateTreasuryMovement: {
@@ -8216,7 +8280,7 @@ export interface components {
             amountConfirmationUnits?: number;
         };
         /** @enum {string} */
-        SupplierCode: "wdgzone" | "fazercards" | "manual" | "fake";
+        SupplierCode: "wdgzone" | "fazercards" | "jneedcontur" | "manual" | "fake";
         /** @enum {string} */
         SupplierCorrectionDirection: "increase" | "decrease";
         ReverseTreasuryMovement: {
@@ -8641,12 +8705,15 @@ export interface components {
                 status: components["schemas"]["GameServiceStatus"];
                 idGuide: components["schemas"]["CatalogImage"] | null;
                 regionNotesAr: string | null;
+                serviceClass: components["schemas"]["ServiceClass"];
             };
             fields: components["schemas"]["StoreField"][];
             products: components["schemas"]["StoreProduct"][];
             /** Format: uuid */
             rateId: string | null;
         };
+        /** @enum {string} */
+        ServiceClass: "none" | "credit" | "cash";
         StoreField: {
             key: string;
             labelAr: string;
@@ -8658,7 +8725,7 @@ export interface components {
             options: components["schemas"]["SelectOption"][] | null;
         };
         /** @enum {string} */
-        InputFieldType: "digits" | "text" | "select" | "phone" | "hoyoverse_uid" | "supercell_tag";
+        InputFieldType: "digits" | "text" | "select" | "phone" | "hoyoverse_uid" | "supercell_tag" | "syriatel_number" | "mtn_number";
         SelectOption: {
             value: string;
             labelAr: string;
@@ -8670,6 +8737,9 @@ export interface components {
             nameAr: string;
             gameAmount: number | null;
             maxQuantity: number;
+            minQuantity: number;
+            amountUnitAr: string | null;
+            amountStep: number | null;
             available: boolean;
             priceUsdUnits: number | null;
             priceSypUnits: number | null;
@@ -8690,7 +8760,7 @@ export interface components {
             earlyAccess: boolean;
         };
         /** @enum {string} */
-        ProductKind: "direct" | "code";
+        ProductKind: "direct" | "code" | "amount";
         SearchIndex: {
             games: {
                 /** Format: uuid */
@@ -8792,6 +8862,7 @@ export interface components {
             accentColor: string | null;
             regionNotesAr: string | null;
             bestValueEnabled: boolean;
+            serviceClass: components["schemas"]["ServiceClass"];
             productCount: number;
         };
         /** @enum {string} */
@@ -8850,6 +8921,7 @@ export interface components {
             accentColor: string | null;
             regionNotesAr: string | null;
             bestValueEnabled: boolean;
+            serviceClass: components["schemas"]["ServiceClass"];
             productCount: number;
             categoryArchived: boolean;
             searchTerms: string[];
@@ -8898,6 +8970,9 @@ export interface components {
             quickLinkUrl: string;
             waitingAlerts: number;
             maxQuantity: number;
+            minQuantity: number;
+            amountUnitAr: string | null;
+            amountStep: number | null;
             regionAr: string | null;
             redemptionAr: string | null;
             status: components["schemas"]["CatalogStatus"];
@@ -8940,6 +9015,9 @@ export interface components {
         };
         EarlyAccessInput: {
             on: boolean;
+        };
+        ServiceClassInput: {
+            serviceClass: components["schemas"]["ServiceClass"];
         };
         CreateInputField: {
             key: string;
@@ -9057,6 +9135,50 @@ export interface components {
              * @enum {string|null}
              */
             options?: null;
+        } | {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "syriatel_number";
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            minLength?: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            maxLength?: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            options?: null;
+        } | {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "mtn_number";
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            minLength?: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            maxLength?: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            options?: null;
         };
         SelectOptionInput: {
             value: string;
@@ -9105,12 +9227,26 @@ export interface components {
             maxQuantity?: number;
             regionAr?: string | null;
             redemptionAr?: string | null;
+        } | {
+            /** @enum {string} */
+            kind: "amount";
+            nameAr: string;
+            gameAmount?: number | null;
+            officialPriceUsdUnits?: number | null;
+            /** @default 1 */
+            minQuantity?: number;
+            /** @default 1000 */
+            maxQuantity?: number;
+            /** @default ل.س */
+            amountUnitAr?: string;
         };
         UpdateProduct: {
             nameAr?: string;
             gameAmount?: number | null;
             officialPriceUsdUnits?: number | null;
             maxQuantity?: number;
+            minQuantity?: number;
+            amountUnitAr?: string;
             regionAr?: string | null;
             redemptionAr?: string | null;
             status?: components["schemas"]["CatalogStatus"];
@@ -10143,7 +10279,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        OfferUnsupportedReason: "fields_unsupported" | "manual_delivery";
+        OfferUnsupportedReason: "fields_unsupported" | "manual_delivery" | "cost_precision";
         ImportOffers: {
             /** Format: uuid */
             gameId: string;
@@ -10609,6 +10745,8 @@ export interface components {
                 kind: components["schemas"]["ProductKind"];
                 regionAr: string | null;
                 redemptionAr: string | null;
+                amountStep: number | null;
+                amountUnitAr: string | null;
             };
             game: {
                 /** Format: uuid */
@@ -10634,6 +10772,8 @@ export interface components {
             /** @enum {string|null} */
             placedByStore: "on_behalf" | "gift" | "compensation" | null;
             customerNote: string | null;
+            recipient: string | null;
+            cashHold: components["schemas"]["CashHoldState"] | null;
             timeline: {
                 step: components["schemas"]["OrderTimelineStep"];
                 /** Format: date-time */
@@ -10676,6 +10816,8 @@ export interface components {
         /** @enum {string} */
         OrderStage: "awaiting_balance" | "processing" | "delayed" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
         /** @enum {string} */
+        CashHoldState: "held" | "approved" | "rejected" | "expired";
+        /** @enum {string} */
         OrderTimelineStep: "reserved" | "paid" | "sent" | "retrying" | "delayed" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
         OrderCode: {
             /** Format: uuid */
@@ -10686,7 +10828,7 @@ export interface components {
             firstRevealedAt: string | null;
         };
         /** @enum {string} */
-        CancelReason: "expired" | "customer" | "price_rose" | "product_changed" | "frozen" | "price_list_changed";
+        CancelReason: "expired" | "customer" | "price_rose" | "product_changed" | "frozen" | "price_list_changed" | "limit_reached";
         DeliveryStats: {
             medianMs: number;
             p90Ms: number;
@@ -10776,6 +10918,9 @@ export interface components {
             stage: components["schemas"]["OrderStage"];
             productNameAr: string;
             productKind: components["schemas"]["ProductKind"];
+            amountStep: number | null;
+            amountUnitAr: string | null;
+            cashHold: components["schemas"]["CashHoldState"] | null;
             game: {
                 /** Format: uuid */
                 id: string;
@@ -10865,6 +11010,8 @@ export interface components {
                 kind: components["schemas"]["ProductKind"];
                 regionAr: string | null;
                 redemptionAr: string | null;
+                amountStep: number | null;
+                amountUnitAr: string | null;
             };
             game: {
                 /** Format: uuid */
@@ -10890,6 +11037,8 @@ export interface components {
             /** @enum {string|null} */
             placedByStore: "on_behalf" | "gift" | "compensation" | null;
             customerNote: string | null;
+            recipient: string | null;
+            cashHold: components["schemas"]["CashHoldState"] | null;
             timeline: {
                 step: components["schemas"]["OrderTimelineStep"];
                 /** Format: date-time */
@@ -11045,6 +11194,8 @@ export interface components {
                 id: string;
                 nameAr: string;
                 kind: components["schemas"]["ProductKind"];
+                amountStep: number | null;
+                amountUnitAr: string | null;
             };
             game: {
                 /** Format: uuid */
@@ -11060,6 +11211,16 @@ export interface components {
             quantity: number;
             deliveredQuantity: number;
             refundedQuantity: number;
+            recipient: string | null;
+            cashHold: {
+                state: components["schemas"]["CashHoldState"];
+                /** Format: date-time */
+                decidedAt: string | null;
+                adminName: string | null;
+                /** Format: date-time */
+                expiresAt: string;
+                telegramDecides: boolean;
+            } | null;
             unitPriceUsdUnits: number;
             totalUsdUnits: number;
             totalSypUnits: number | null;
@@ -11204,7 +11365,7 @@ export interface components {
             skipReason: components["schemas"]["RouteSkipReason"] | null;
         };
         /** @enum {string} */
-        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "kind_mismatch" | "quantity_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order" | "quantity_above_offer";
+        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "kind_mismatch" | "quantity_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order" | "quantity_above_offer" | "quantity_below_offer";
         /** @enum {string} */
         AttemptResolver: "supplier" | "poll" | "webhook" | "admin";
         /** @enum {string} */
@@ -11349,7 +11510,7 @@ export interface components {
             purpose?: components["schemas"]["AdminOrderPurpose"];
         };
         /** @enum {string} */
-        AdminOrderTab: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
+        AdminOrderTab: "all" | "review" | "manual" | "cash_hold" | "active" | "delivered" | "refunded";
         AdminOrderPage: {
             items: components["schemas"]["AdminOrderSummary"][];
             total: number;
@@ -11385,6 +11546,7 @@ export interface components {
             totalUsdUnits: number;
             supplierCode: components["schemas"]["SupplierCode"] | null;
             manualWaiting: boolean;
+            cashHold: components["schemas"]["CashHoldState"] | null;
             /** Format: uuid */
             checkoutId: string | null;
             isGift: boolean;
@@ -11396,6 +11558,7 @@ export interface components {
         AdminOrderCounts: {
             needsReview: number;
             manualWaiting: number;
+            cashHeld: number;
         };
         LiveBoardQuery: {
             supplier?: components["schemas"]["SupplierCode"];
@@ -11409,6 +11572,10 @@ export interface components {
         };
         LiveBoard: {
             columns: {
+                cash_hold: {
+                    count: number;
+                    cards: components["schemas"]["LiveOrderCard"][];
+                };
                 at_supplier: {
                     count: number;
                     cards: components["schemas"]["LiveOrderCard"][];
@@ -11476,6 +11643,11 @@ export interface components {
             manualReminderMinutes: number;
             ownerDailyCapUsdUnits: number;
         };
+        CashApprovalInput: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            reason?: string;
+        };
         NearbySupplierOrders: {
             items: components["schemas"]["SupplierOrder"][];
             complete: boolean;
@@ -11542,6 +11714,28 @@ export interface components {
         };
         AdminRevealedCode: {
             code: string;
+        };
+        CreditLimits: {
+            sectionRemainingUsdUnits: number;
+            cashRemainingUsdUnits: number;
+            cashEligibleUsdUnits: number;
+            /** Format: date-time */
+            cashEligibleMoreAt: string | null;
+        };
+        CreditPolicy: {
+            retailDailyUsdUnits: number;
+            merchantDailyUsdUnits: number;
+            recipientDailyOrdersRetail: number;
+            recipientDailyOrdersMerchant: number;
+            recipientAccountsAlert: number;
+            recipientAlertDays: number;
+            cashRetailDailyUsdUnits: number;
+            cashMerchantDailyUsdUnits: number;
+            cashRetailApprovalAboveUsdUnits: number;
+            cashMerchantApprovalAboveUsdUnits: number;
+            cashBalanceAgeHours: number;
+            cashHoldHours: number;
+            cashTelegramCeilingUsdUnits: number;
         };
         AdminPlayerCheck: components["schemas"]["PlayerCheckRequest"];
         GamePlayerCheckState: {
@@ -11665,7 +11859,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed" | "supplier_stock_low" | "supplier_charge_mismatch" | "supplier_subscription" | "fixed_price_fallback" | "merchant_application" | "merchant_tier_changed" | "merchant_tier_grant_ending" | "ticket_overdue";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed" | "supplier_stock_low" | "supplier_charge_mismatch" | "supplier_subscription" | "fixed_price_fallback" | "merchant_application" | "merchant_tier_changed" | "merchant_tier_grant_ending" | "ticket_overdue" | "cash_hold" | "credit_recipient_alert";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {
@@ -11710,6 +11904,7 @@ export interface components {
                 salesUsdUnits: number;
             }[];
             now: {
+                cashHold: number;
                 atSupplier: number;
                 manual: number;
                 review: number;
@@ -12071,7 +12266,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
-                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "fazercards_paused" | "manual_paused" | "fake_paused";
+                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "fazercards_paused" | "jneedcontur_paused" | "manual_paused" | "fake_paused";
             };
             header?: never;
             path?: never;
@@ -12640,8 +12835,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.passkey_added" | "customer.passkey_removed" | "customer.passkeys_cleared" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "merchant.tier_granted" | "merchant.tier_grant_ended" | "merchant.certificate_reissued" | "merchant.logo_removed" | "merchant.welcome_text_removed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "catalog_game.early_access_set" | "catalog_game.early_access_ended" | "catalog_product.early_access_set" | "catalog_product.early_access_ended" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_tier.level_changed" | "merchant_tier.settings_changed" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "report.merchant_tiers_exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "merchant_tier_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.passkey_added" | "customer.passkey_removed" | "customer.passkeys_cleared" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "merchant.tier_granted" | "merchant.tier_grant_ended" | "merchant.certificate_reissued" | "merchant.logo_removed" | "merchant.welcome_text_removed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_game.service_class_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "catalog_game.early_access_set" | "catalog_game.early_access_ended" | "catalog_product.early_access_set" | "catalog_product.early_access_ended" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_tier.level_changed" | "merchant_tier.settings_changed" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.cash_approved" | "order.cash_rejected" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "report.merchant_tiers_exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set" | "credit_policy.set";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "merchant_tier_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "credit_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -15730,7 +15925,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
-                place?: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+                place?: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:fazercards" | "supplier:jneedcontur" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
             };
             header?: never;
             path?: never;
@@ -16677,6 +16872,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EarlyAccessInput"];
+            };
+        };
+        responses: {
+            /** @description The game */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_setGameServiceClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceClassInput"];
             };
         };
         responses: {
@@ -18159,7 +18380,7 @@ export interface operations {
                 page?: number;
                 pageSize?: number;
                 status?: "open" | "accepted" | "margin_adjusted" | "paused" | "superseded";
-                supplier?: "wdgzone" | "fazercards" | "manual" | "fake";
+                supplier?: "wdgzone" | "fazercards" | "jneedcontur" | "manual" | "fake";
             };
             header?: never;
             path?: never;
@@ -18398,7 +18619,7 @@ export interface operations {
                 categoryId?: string;
                 listIds?: string[];
                 status?: "unavailable" | "no_price" | "low_margin" | "fixed" | "held" | "paused";
-                supplier?: "wdgzone" | "fazercards" | "manual" | "fake";
+                supplier?: "wdgzone" | "fazercards" | "jneedcontur" | "manual" | "fake";
                 sort?: "margin" | "price" | "cost" | "difference";
                 sortList?: string;
                 direction?: "asc" | "desc";
@@ -19078,7 +19299,7 @@ export interface operations {
                 pageSize?: number;
                 parentId?: string;
                 state?: "not_imported" | "linked" | "new_packs" | "ignored";
-                kind?: "direct" | "code";
+                kind?: "direct" | "code" | "amount";
                 q?: string;
             };
             header?: never;
@@ -19858,12 +20079,12 @@ export interface operations {
             query?: {
                 page?: number;
                 pageSize?: number;
-                tab?: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
+                tab?: "all" | "review" | "manual" | "cash_hold" | "active" | "delivered" | "refunded";
                 status?: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
                 q?: string;
                 productId?: string;
                 customerId?: string;
-                supplier?: "wdgzone" | "fazercards" | "manual" | "fake";
+                supplier?: "wdgzone" | "fazercards" | "jneedcontur" | "manual" | "fake";
                 test?: "true" | "false";
                 from?: string;
                 to?: string;
@@ -20009,7 +20230,7 @@ export interface operations {
     OrdersAdminController_live: {
         parameters: {
             query?: {
-                supplier?: "wdgzone" | "fazercards" | "manual" | "fake";
+                supplier?: "wdgzone" | "fazercards" | "jneedcontur" | "manual" | "fake";
                 gameId?: string;
                 test?: "all" | "hide" | "only";
             };
@@ -20070,6 +20291,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderPolicy"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_decideCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashApprovalInput"];
+            };
+        };
+        responses: {
+            /** @description The order as decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
                 };
             };
         };
@@ -20354,6 +20601,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRevealedCode"];
+                };
+            };
+        };
+    };
+    CreditController_limits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The remaining amounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditLimits"];
+                };
+            };
+        };
+    };
+    CreditAdminController_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicy"];
+                };
+            };
+        };
+    };
+    CreditAdminController_setPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditPolicy"];
+            };
+        };
+        responses: {
+            /** @description The new policy, in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPolicy"];
                 };
             };
         };

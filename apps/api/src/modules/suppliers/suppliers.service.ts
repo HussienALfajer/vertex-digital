@@ -631,6 +631,10 @@ export class SuppliersService {
           input.rows.map((row, index) => ({
             nameAr: row.nameAr,
             kind: offerAt(index).kind ?? input.kind ?? 'direct',
+            quantityBounds: {
+              min: offerAt(index).minQuantity,
+              max: offerAt(index).maxQuantity,
+            },
           })),
         );
         // Rule RT8: each route keeps only the fields its own offer asks for (`offerMaps`).

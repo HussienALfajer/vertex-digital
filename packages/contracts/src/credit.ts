@@ -148,6 +148,20 @@ export const serviceClassInputSchema = z
 
 export type ServiceClassInput = z.infer<typeof serviceClassInputSchema>;
 
+/**
+ * S25 Data, RN4: the field types a section game's one recipient field may have: a line of an
+ * operator, or digits (bills and cash until Q39).
+ */
+export const SECTION_FIELD_TYPES = ['syriatel_number', 'mtn_number', 'digits'] as const;
+
+/**
+ * CL3, CL4: the key a recipient is counted under: a Syrian mobile number in any spelling as
+ * `09XXXXXXXX`, any other value as typed.
+ */
+export function recipientKey(value: string): string {
+  return normalizeSyrianMobile(value) ?? value;
+}
+
 /** CL1: the game is in the "الرصيد والفواتير" section. */
 export function inCreditSection(serviceClass: ServiceClass): boolean {
   return serviceClass !== 'none';

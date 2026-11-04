@@ -11,6 +11,7 @@ import type {
   ImportCategory,
   ImportOffers,
   LinkCategory,
+  ProductKind,
   SetSupplierCredentials,
   SupplierCategoryState,
   SupplierCode,
@@ -197,7 +198,7 @@ export interface CategoryQuery {
   /** A level under this node; absent for the roots. */
   parentId?: string;
   state?: SupplierCategoryState;
-  kind?: 'direct' | 'code';
+  kind?: ProductKind;
   q?: string;
   page: number;
 }

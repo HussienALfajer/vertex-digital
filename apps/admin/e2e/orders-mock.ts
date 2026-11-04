@@ -188,12 +188,14 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     purpose: null,
     adminReason: null,
     customerNote: null,
-    product: { id: id(70), nameAr: '60 UC', kind: 'direct' },
+    product: { id: id(70), nameAr: '60 UC', kind: 'direct', amountStep: null, amountUnitAr: null },
     game: pubg,
     fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789', valueLabelAr: null }],
     quantity: 1,
     deliveredQuantity: 0,
     refundedQuantity: 0,
+    recipient: null,
+    cashHold: null,
     unitPriceUsdUnits: 990_000,
     totalUsdUnits: 990_000,
     totalSypUnits: 1_287_000,
@@ -265,7 +267,13 @@ function seed(): AdminOrder[] {
     order('manual', 'VO-MANU45', {
       status: 'sent_to_supplier',
       customer: testCustomer,
-      product: { id: id(71), nameAr: 'بطاقة آيتونز 10$', kind: 'code' },
+      product: {
+        id: id(71),
+        nameAr: 'بطاقة آيتونز 10$',
+        kind: 'code',
+        amountStep: null,
+        amountUnitAr: null,
+      },
       game: itunes,
       fields: [],
       quantity: 2,
@@ -282,7 +290,13 @@ function seed(): AdminOrder[] {
     }),
     order('delivered', 'VO-DONE67', {
       status: 'delivered',
-      product: { id: id(72), nameAr: 'بطاقة آيتونز 10$', kind: 'code' },
+      product: {
+        id: id(72),
+        nameAr: 'بطاقة آيتونز 10$',
+        kind: 'code',
+        amountStep: null,
+        amountUnitAr: null,
+      },
       game: itunes,
       fields: [],
       deliveredQuantity: 1,
@@ -438,6 +452,7 @@ function summary(row: AdminOrder): AdminOrderSummary {
     totalUsdUnits: row.totalUsdUnits,
     supplierCode: latest?.supplierCode ?? null,
     manualWaiting: open?.supplierCode === 'manual',
+    cashHold: row.cashHold?.state ?? null,
     checkoutId: row.checkout?.id ?? null,
     isGift: row.gift !== null,
     since: row.reviewSince ?? row.finishedAt ?? row.paidAt ?? row.createdAt,
@@ -677,7 +692,13 @@ export class OrdersMock {
       purpose: input.purpose,
       adminReason: input.reason,
       customerNote: input.customerNote ?? null,
-      product: { id: product.id, nameAr: product.nameAr, kind: product.kind },
+      product: {
+        id: product.id,
+        nameAr: product.nameAr,
+        kind: product.kind,
+        amountStep: product.amountStep,
+        amountUnitAr: product.amountUnitAr,
+      },
       game,
       fields: Object.entries(input.fields).map(([key, value]) => ({
         key,
@@ -781,7 +802,9 @@ export class OrdersMock {
             ? true
             : tab === 'manual'
               ? row.manualWaiting
-              : ADMIN_ORDER_TAB_STATUSES[tab].includes(row.status),
+              : tab === 'cash_hold'
+                ? row.cashHold === 'held'
+                : ADMIN_ORDER_TAB_STATUSES[tab].includes(row.status),
         )
         .filter(
           (row) =>

@@ -5,6 +5,7 @@ import {
   Header,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -35,6 +36,8 @@ import {
   adminPurchaseContextSchema,
   adminPurchaseGamesSchema,
   adminRevealedCodeSchema,
+  type CashApprovalInput,
+  cashApprovalInputSchema,
   createAdminOrderSchema,
   DELIVERY_PROOF_MAX_BYTES,
   deliveryProofSchema,
@@ -64,6 +67,7 @@ import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { sendImage, uploadBody } from '../files/index.js';
 import { type AdminPurchaseBody, AdminPurchasesService } from './admin-purchases.service.js';
+import { CreditService } from './credit.service.js';
 import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { ShareLinksService } from './share-links.service.js';
@@ -86,6 +90,7 @@ export class OrdersAdminController {
     private readonly shareLinks: ShareLinksService,
     private readonly actions: OrderActionsService,
     private readonly purchases: AdminPurchasesService,
+    private readonly credit: CreditService,
   ) {}
 
   /**
@@ -223,6 +228,23 @@ export class OrdersAdminController {
     @Req() request: Request,
   ) {
     return this.decisions.setPolicy({ adminId: admin.id, meta: requestMeta(request) }, body);
+  }
+
+  /** S25 CS4: approve or reject a held cash order (`ORDER_NOT_DECIDABLE` once decided). */
+  @Post(':id/cash-approval')
+  @AdminRoute()
+  @Sensitive()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: adminOrderSchema })
+  @ApiOkResponse({ description: 'The order as decided', standardSchema: adminOrderSchema })
+  decideCash(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body({ schema: cashApprovalInputSchema }) body: CashApprovalInput,
+    @Req() request: Request,
+  ) {
+    return this.credit.decide({ adminId: admin.id, meta: requestMeta(request) }, id, body);
   }
 
   @Get(':id')

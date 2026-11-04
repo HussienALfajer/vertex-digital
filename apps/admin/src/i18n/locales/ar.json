@@ -373,7 +373,11 @@
       "PASSKEYS_LIMIT_REACHED": "لدى العميل 10 بصمات، وهو الحد الأقصى.",
       "ORDER_PROBLEM_UNAVAILABLE": "لا يتيح الطلب هذه المشكلة في حالته الحالية.",
       "PRODUCT_ALERTS_LIMIT_REACHED": "لدى العميل 30 تنبيهاً فعّالاً، وهو الحد الأقصى.",
-      "PRODUCT_ALERT_INVALID": "لا تناسب حالة الباقة نوع هذا التنبيه."
+      "PRODUCT_ALERT_INVALID": "لا تناسب حالة الباقة نوع هذا التنبيه.",
+      "CREDIT_DAILY_LIMIT": "تجاوز الحد اليومي لقسم الرصيد والفواتير.",
+      "RECIPIENT_DAILY_LIMIT": "وصل هذا الرقم إلى عدد طلباته اليومي.",
+      "CASH_BALANCE_TOO_RECENT": "الرصيد المضاف حديثاً لا يُستعمل للكاش قبل مرور المدة المحددة.",
+      "CASH_DAILY_LIMIT": "تجاوز الحد اليومي للكاش."
     }
   },
   "changePassword": {
@@ -520,6 +524,7 @@
       "price_review": "مراجعة سعر",
       "order": "طلب",
       "order_policy": "سياسة الطلبات",
+      "credit_policy": "حدود الرصيد والكاش",
       "customer_note": "ملاحظة عميل",
       "support_ticket": "تذكرة دعم",
       "support_settings": "إعدادات الدعم",
@@ -760,6 +765,7 @@
       "order.proof_uploaded": "رفع إثبات تسليم",
       "order.share_revoked": "إلغاء رابط مشاركة",
       "order_policy.set": "تعديل سياسة الطلبات",
+      "credit_policy.set": "تعديل حدود الرصيد والكاش",
       "customer.frozen": "تجميد عميل",
       "customer.unfrozen": "إلغاء تجميد عميل",
       "customer.passkey_added": "إضافة بصمة دخول",
@@ -843,9 +849,12 @@
       "merchant_tier.settings_changed": "تعديل امتيازات فئة تجّار",
       "catalog_game.early_access_set": "فتح وصول مبكر للعبة",
       "catalog_game.early_access_ended": "إنهاء الوصول المبكر للعبة",
+      "catalog_game.service_class_set": "تغيير نوع خدمة اللعبة",
       "catalog_product.early_access_set": "فتح وصول مبكر لباقة",
       "catalog_product.early_access_ended": "إنهاء الوصول المبكر لباقة",
-      "report.merchant_tiers_exported": "تصدير تقرير فئات التجار"
+      "report.merchant_tiers_exported": "تصدير تقرير فئات التجار",
+      "order.cash_approved": "موافقة على طلب كاش",
+      "order.cash_rejected": "رفض طلب كاش أو انتهاء مهلته"
     }
   },
   "testCustomers": {
@@ -1131,6 +1140,7 @@
       "usdt_bep20_paused": "USDT BEP20",
       "wdgzone_paused": "WDGZone",
       "fazercards_paused": "FazerCards",
+      "jneedcontur_paused": "jneedcontur",
       "manual_paused": "المورد اليدوي",
       "fake_paused": "المورد التجريبي"
     },
@@ -1164,6 +1174,10 @@
         "false": "يعمل"
       },
       "fazercards_paused": {
+        "true": "موقوف مؤقتاً",
+        "false": "يعمل"
+      },
+      "jneedcontur_paused": {
         "true": "موقوف مؤقتاً",
         "false": "يعمل"
       },
@@ -1276,6 +1290,18 @@
         "false": {
           "title": "استئناف المورد FazerCards؟",
           "body": "تعود مسارات هذا المورد صالحة إن توفرت شروطها، وتتبعها الأسعار فوراً.",
+          "action": "استئناف"
+        }
+      },
+      "jneedcontur_paused": {
+        "true": {
+          "title": "إيقاف المورد jneedcontur مؤقتاً؟",
+          "body": "تتوقف طلباته الجديدة وتنتقل الطلبات إلى المسار التالي إن وُجد، ولا تتأثر الطلبات المرسلة.",
+          "action": "إيقاف مؤقت"
+        },
+        "false": {
+          "title": "استئناف المورد jneedcontur؟",
+          "body": "تعود طلباته الجديدة إليه حسب الترتيب، وتُحسب أسعاره من جديد.",
           "action": "استئناف"
         }
       },
@@ -1401,7 +1427,9 @@
       "merchant_application": "طلب تاجر جديد",
       "merchant_tier_changed": "تغيّر فئة تاجر",
       "merchant_tier_grant_ending": "قرب انتهاء فئة ممنوحة",
-      "ticket_overdue": "تذكرة تجاوزت وعد الرد"
+      "ticket_overdue": "تذكرة تجاوزت وعد الرد",
+      "cash_hold": "طلب كاش بانتظار الموافقة",
+      "credit_recipient_alert": "رقم شُحن من عدة حسابات"
     }
   },
   "rates": {
@@ -2066,7 +2094,9 @@
         "select": "قائمة خيارات",
         "phone": "رقم هاتف",
         "hoyoverse_uid": "رقم حساب HoYoverse",
-        "supercell_tag": "وسم Supercell"
+        "supercell_tag": "وسم Supercell",
+        "syriatel_number": "رقم سيريتل",
+        "mtn_number": "رقم MTN"
       },
       "typeHints": {
         "digits": "أرقام 0-9 فقط، بطول بين الحدّين.",
@@ -2074,7 +2104,9 @@
         "select": "خيار واحد من القائمة.",
         "phone": "رقم هاتف دولي، سوري افتراضيًا.",
         "hoyoverse_uid": "9 أو 10 أرقام؛ يُرفض خادم يخالف أول أرقامه.",
-        "supercell_tag": "# ثم 3 إلى 15 حرفًا من 0289CGJLPQRUVY، يُصحَّح O إلى 0."
+        "supercell_tag": "# ثم 3 إلى 15 حرفًا من 0289CGJLPQRUVY، يُصحَّح O إلى 0.",
+        "syriatel_number": "رقم يبدأ بـ 093 أو 098 أو 099، يُكتب مرتين في المتجر.",
+        "mtn_number": "رقم يبدأ بـ 094 أو 095 أو 096، يُكتب مرتين في المتجر."
       },
       "label": "العنوان الظاهر للعميل",
       "help": "نص المساعدة (اختياري)",
@@ -2127,11 +2159,13 @@
       "kind": "النوع",
       "kinds": {
         "direct": "شحن مباشر",
-        "code": "كود"
+        "code": "كود",
+        "amount": "مبلغ حر"
       },
       "kindHints": {
         "direct": "يُشحن إلى معرّف اللاعب الذي يكتبه العميل.",
-        "code": "يستلم العميل كودًا يستخدمه بنفسه."
+        "code": "يستلم العميل كودًا يستخدمه بنفسه.",
+        "amount": "يكتب العميل المبلغ بخطوات 100 ل.س، والسعر لكل 100 ل.س."
       },
       "kindFixed": "نوع الباقة ثابت بعد الإنشاء.",
       "name": "الاسم",
@@ -2520,12 +2554,14 @@
     "names": {
       "wdgzone": "WDGZone",
       "fazercards": "FazerCards",
+      "jneedcontur": "jneedcontur",
       "manual": "يدوي",
       "fake": "مورد تجريبي"
     },
     "descriptions": {
       "wdgzone": "مورد آلي: تُقرأ عروضه وتكاليفه بالمزامنة، وتُنفَّذ الطلبات عبر واجهته.",
       "fazercards": "مورد آلي ثانٍ: تُقرأ فئاته وعروضه بالمزامنة، وتُنفَّذ الطلبات عبر واجهته، ويرسل نتائجها بالإشعارات. يحتاج مفتاحه وسرّ إشعاراته واشتراكاً فعّالاً.",
+      "jneedcontur": "رصيد سيريتل وMTN وفواتيرهما والكاش، وجواكر وتطبيقات الدردشة. الربط الآلي يصل في التحديث القادم.",
       "manual": "ملجأ أخير تنفّذه بنفسك: عروضه هي المسارات اليدوية للباقات وتكاليفها التي تكتبها.",
       "fake": "مورد للتطوير والاختبار فقط، لا يعمل في الإنتاج."
     },
@@ -2784,7 +2820,8 @@
       "options": "خيارات: {{count}}",
       "unsupported": {
         "fields_unsupported": "حقول لا يمكن إرسالها",
-        "manual_delivery": "يُسلَّم يدوياً عند المورد"
+        "manual_delivery": "يُسلَّم يدوياً عند المورد",
+        "cost_precision": "سعر بكسور أدق من المسموح"
       },
       "ignored": "متجاهل",
       "ignore": "تجاهل {{name}}",
@@ -3338,6 +3375,7 @@
       "all": "الكل",
       "review": "بحاجة لمراجعة",
       "manual": "يدوي بانتظارك",
+      "cash_hold": "بانتظار الموافقة",
       "active": "قيد التنفيذ",
       "delivered": "مكتملة",
       "refunded": "مستردة"
@@ -3346,6 +3384,7 @@
       "all": "لا طلبات بعد",
       "review": "لا طلبات بحاجة لمراجعة",
       "manual": "لا طلبات يدوية بانتظارك",
+      "cash_hold": "لا طلبات كاش بانتظار الموافقة",
       "active": "لا طلبات قيد التنفيذ",
       "delivered": "لا طلبات مكتملة",
       "refunded": "لا طلبات مستردة"
@@ -3393,6 +3432,7 @@
     "suppliers": {
       "wdgzone": "WDGZone",
       "fazercards": "FazerCards",
+      "jneedcontur": "jneedcontur",
       "manual": "يدوي",
       "fake": "مورد تجريبي"
     },
@@ -3400,6 +3440,7 @@
       "no_route": "لا مورد متاح",
       "routes_exhausted": "فشلت كل المسارات",
       "input_rejected": "بيانات الحساب مرفوضة",
+      "cash_rejected": "طلب كاش مرفوض أو انتهت مهلته",
       "admin": "قرار الإدارة"
     },
     "cancelReasons": {
@@ -3408,7 +3449,8 @@
       "price_rose": "ارتفع السعر",
       "product_changed": "تغيّرت بيانات الباقة",
       "frozen": "جُمّد الحساب",
-      "price_list_changed": "تغيّرت قائمة أسعار الحساب"
+      "price_list_changed": "تغيّرت قائمة أسعار الحساب",
+      "limit_reached": "تجاوز حدود قسم الرصيد"
     },
     "playerChecks": {
       "valid": "تم التحقق: {{name}}",
@@ -3438,7 +3480,8 @@
       "already_tried": "جُرّب لهذا الطلب",
       "unprofitable": "دون الهامش الأدنى للسعر المدفوع",
       "balance_below_order": "رصيد المورد أقل من الطلب",
-      "quantity_above_offer": "كمية الطلب أكبر من حد العرض"
+      "quantity_above_offer": "كمية الطلب أكبر من حد العرض",
+      "quantity_below_offer": "الكمية أقل مما يقبله العرض"
     },
     "webhookResults": {
       "applied": "طُبّق",
@@ -3780,7 +3823,8 @@
         "at_supplier": "عند المورد",
         "manual": "يدوي بانتظارك",
         "review": "بحاجة لمراجعة",
-        "finished": "انتهت خلال آخر ساعة"
+        "finished": "انتهت خلال آخر ساعة",
+        "cash_hold": "بانتظار الموافقة"
       },
       "emptyColumn": "لا طلبات هنا",
       "emptyBoard": "لا طلبات مفتوحة الآن",

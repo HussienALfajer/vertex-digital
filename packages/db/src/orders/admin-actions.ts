@@ -337,7 +337,8 @@ export async function fulfilOrderManually(
   }
   const manualAttempt = open?.supplierCode === 'manual' ? open.attempt : null;
   const max = manualAttempt ? manualAttempt.quantity : remainingUnits(order);
-  if (input.quantity > max) {
+  // S25 AM3: an amount order is delivered whole.
+  if (input.quantity > max || (order.kind === 'amount' && input.quantity !== max)) {
     throw new OrderError('VALIDATION_FAILED', `At most ${max} units were asked`, [
       { path: ['quantity'], message: `Expected at most ${max}` },
     ]);

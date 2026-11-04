@@ -33,6 +33,11 @@ const STATUS: Partial<Record<ErrorCode, 400 | 403 | 404 | 409>> = {
   MERCHANT_TERMS_REQUIRED: 409,
   // S21 CR1.
   CODES_NOT_DELIVERED: 409,
+  // S25 CL2, CL3, CS1, CS2.
+  CREDIT_DAILY_LIMIT: 409,
+  RECIPIENT_DAILY_LIMIT: 409,
+  CASH_BALANCE_TOO_RECENT: 409,
+  CASH_DAILY_LIMIT: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */
@@ -65,6 +70,11 @@ export const orderRefusals = {
   tooManyUnits: (max: number) =>
     new CodedException(400, 'VALIDATION_FAILED', `At most ${max} units were asked`, [
       { path: ['quantity'], message: `Expected at most ${max}` },
+    ]),
+  /** S25 AM3: an amount order's units are delivered all at once. */
+  wholeAmount: (units: number) =>
+    new CodedException(400, 'VALIDATION_FAILED', `An amount order is delivered whole: ${units}`, [
+      { path: ['quantity'], message: `Expected ${units}` },
     ]),
   notShareable: (reason: 'status' | 'not_gift' | 'link_exists') =>
     new CodedException(409, 'ORDER_NOT_SHAREABLE', 'The order cannot have this link', { reason }),

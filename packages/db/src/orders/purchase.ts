@@ -12,9 +12,10 @@ import {
   type PlayerCheckState,
   type QuickLinkAttribution,
   RESERVATION_HOURS,
-  type ServiceClass,
   RESERVATIONS_MAX,
   rateFromNumeric,
+  recipientKey,
+  type ServiceClass,
   sypDisplayPrice,
   type TierQuantities,
 } from '@vertex-digital/contracts';
@@ -347,7 +348,10 @@ export async function prepareLine(
     if (!takes) {
       throw new OrderError('PRODUCT_UNAVAILABLE', 'No route takes this amount', {
         availability: 'out_of_stock',
-        maxQuantity: Math.max(0, ...bounds.map((offer) => offer.maxQuantity ?? product.maxQuantity)),
+        maxQuantity: Math.max(
+          0,
+          ...bounds.map((offer) => offer.maxQuantity ?? product.maxQuantity),
+        ),
       });
     }
   }
@@ -369,7 +373,9 @@ export async function prepareLine(
     .from(catalogGames)
     .where(eq(catalogGames.id, product.gameId));
   const serviceClass = game?.serviceClass ?? 'none';
-  const recipient = serviceClass === 'none' ? null : (Object.values(fields)[0] ?? null);
+  const typed = serviceClass === 'none' ? undefined : Object.values(fields)[0];
+  // CL3: every spelling of one line counts under one key (a `digits` bill or cash field too).
+  const recipient = typed === undefined ? null : recipientKey(typed);
   if (serviceClass !== 'none' && recipient === null) {
     throw new OrderError('VALIDATION_FAILED', 'The recipient is missing', {
       fields: { recipient: 'required' },

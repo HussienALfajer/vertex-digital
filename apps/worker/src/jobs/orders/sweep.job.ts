@@ -22,7 +22,20 @@ import {
   type Transaction,
   transitionOrder,
 } from '@vertex-digital/db';
-import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  notExists,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 
@@ -352,6 +365,8 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
         and(
           inArray(orders.status, ['paid', 'failed', 'needs_review']),
           lt(orders.updatedAt, late),
+          // S25 CS3: a held cash order is not routed until the admin approves it.
+          or(isNull(orders.cashHold), ne(orders.cashHold, 'held')),
           notExists(
             db
               .select({ id: fulfilmentAttempts.id })

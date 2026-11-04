@@ -64,6 +64,10 @@ const SWITCH_NOTICES: Record<StoreSwitch, { on: string; off: string }> = {
     on: '⏸ أُوقف المورد FazerCards مؤقتاً',
     off: '▶️ استُؤنف المورد FazerCards',
   },
+  jneedcontur_paused: {
+    on: '⏸ أُوقف المورد jneedcontur مؤقتاً',
+    off: '▶️ استُؤنف المورد jneedcontur',
+  },
   manual_paused: { on: '⏸ أُوقف المورد اليدوي مؤقتاً', off: '▶️ استُؤنف المورد اليدوي' },
   fake_paused: { on: '⏸ أُوقف المورد التجريبي مؤقتاً', off: '▶️ استُؤنف المورد التجريبي' },
 };
@@ -263,6 +267,7 @@ const SWITCH_NAMES: Record<StoreSwitch, string> = {
   usdt_bep20_paused: 'USDT BEP20 متوقف مؤقتاً',
   wdgzone_paused: 'WDGZone متوقف مؤقتاً',
   fazercards_paused: 'FazerCards متوقف مؤقتاً',
+  jneedcontur_paused: 'jneedcontur متوقف مؤقتاً',
   manual_paused: 'المورد اليدوي متوقف مؤقتاً',
   fake_paused: 'المورد التجريبي متوقف مؤقتاً',
 };
@@ -470,6 +475,7 @@ const PLACES: Partial<Record<string, string>> = {
   usdt_bep20: 'USDT BEP20',
   'supplier:wdgzone': 'WDGZone',
   'supplier:fazercards': 'FazerCards',
+  'supplier:jneedcontur': 'jneedcontur',
   'supplier:manual': 'المورد اليدوي',
   'supplier:fake': 'المورد التجريبي',
   'ledger:USD': 'USD',
@@ -895,6 +901,46 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
             : []),
           'إن لم تفعل ذلك بنفسك فأوقف الشراء وغيّر كلمة المرور فوراً.',
           `${links.admin}/orders/${order.orderId}`,
+        ].join('\n'),
+      };
+    }
+    case 'cash_hold': {
+      // S25 CS3: the buttons only within the Telegram ceiling (CS4); the number masked.
+      const hold = params as TelegramMessageParams<'cash_hold'>;
+      return {
+        text: [
+          `💵 طلب كاش بانتظار الموافقة ${hold.orderNumber} · ${formatUsd(hold.totalUsdUnits)}`,
+          `${hold.gameNameAr} إلى ${hold.recipientMasked}`,
+          `${hold.merchant ? 'التاجر' : 'العميل'}: ${hold.customerEmail} · عمر الحساب ${hold.accountAgeDays} يوم`,
+          `آخر 30 يوماً: إيداعات ${formatUsd(hold.deposits30dUsdUnits)} · كاش ${formatUsd(hold.cash30dUsdUnits)}`,
+          ...(hold.telegramDecides ? [] : ['فوق حد تيليجرام: القرار من اللوحة.']),
+          `${links.admin}/orders/${hold.orderId}`,
+        ].join('\n'),
+        ...(hold.telegramDecides && {
+          buttons: [
+            [
+              {
+                text: 'موافقة',
+                data: telegramCallbackData({ action: 'cashApprove', orderId: hold.orderId }),
+              },
+              {
+                text: 'رفض',
+                data: telegramCallbackData({ action: 'cashReject', orderId: hold.orderId }),
+              },
+            ],
+          ],
+        }),
+      };
+    }
+    case 'credit_recipient_alert': {
+      // S25 CL4: the number masked, nothing is blocked.
+      const alert = params as TelegramMessageParams<'credit_recipient_alert'>;
+      return {
+        text: [
+          `⚠️ الرقم ${alert.recipientMasked} شُحن من ${alert.accounts.length} حسابات خلال ${alert.days} أيام`,
+          ...alert.accounts.map(
+            (account) => `• ${account.customerEmail}: ${formatUsd(account.totalUsdUnits)}`,
+          ),
         ].join('\n'),
       };
     }

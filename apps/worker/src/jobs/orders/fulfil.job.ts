@@ -117,7 +117,10 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
     if (!order) return { kind: 'skipped' };
     const routable =
       order.status === 'paid' || order.status === 'failed' || order.status === 'needs_review';
-    if (!routable || (await openAttempt(tx, orderId))) return { kind: 'skipped' };
+    // S25 CS3: a held cash order waits for the admin's decision.
+    if (!routable || order.cashHold === 'held' || (await openAttempt(tx, orderId))) {
+      return { kind: 'skipped' };
+    }
     const remainingUnits = order.quantity - order.deliveredQuantity - order.refundedQuantity;
     if (remainingUnits <= 0) return { kind: 'skipped' };
 
@@ -142,6 +145,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
           balanceUsdUnits:
             route.supplier.balance?.currency === 'USD' ? route.supplier.balance.amountUnits : null,
           offerMaxQuantity: route.offer.maxQuantity,
+          offerMinQuantity: route.offer.minQuantity,
         }),
       ),
       {

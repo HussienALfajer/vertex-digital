@@ -23,6 +23,7 @@ import { MerchantStatementEmailsJob } from './jobs/merchants/statement-emails.jo
 import { MerchantTierGrantsJob } from './jobs/merchants/tier-grants.job.js';
 import { MerchantTierRemindersJob } from './jobs/merchants/tier-reminders.job.js';
 import { MerchantWatchAlertsJob } from './jobs/merchants/watch-alerts.job.js';
+import { OrdersCashHoldExpiryJob } from './jobs/orders/cash-hold-expiry.job.js';
 import { OrdersFulfilJob } from './jobs/orders/fulfil.job.js';
 import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from './jobs/orders/poll.job.js';
@@ -142,6 +143,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     OrdersPollJob,
     OrdersSweepJob,
     OrdersPayWaitingJob,
+    OrdersCashHoldExpiryJob,
     OrdersWaitingSweepJob,
     SupplierWebhookJob,
     StoreRevalidateJob,

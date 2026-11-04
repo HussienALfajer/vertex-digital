@@ -73,6 +73,7 @@ export function quietDashboard(rate: { sypPerUsd: string; createdAt: string } | 
       salesUsdUnits: 0,
     })),
     now: {
+      cashHold: 0,
       atSupplier: 0,
       manual: 0,
       review: 0,
@@ -116,6 +117,7 @@ export function busyDashboard(): Dashboard {
       salesUsdUnits: Math.round(dollars * USD),
     })),
     now: {
+      cashHold: 0,
       atSupplier: 4,
       manual: 1,
       review: 1,

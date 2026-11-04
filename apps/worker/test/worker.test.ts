@@ -14,6 +14,7 @@ import { UsdtVerifyJob } from '../src/jobs/deposits/usdt-verify.job.js';
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
 import { MerchantTierGrantsJob } from '../src/jobs/merchants/tier-grants.job.js';
 import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
+import { OrdersCashHoldExpiryJob } from '../src/jobs/orders/cash-hold-expiry.job.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
@@ -48,6 +49,7 @@ const IDLE_JOBS = [
   OrdersSweepJob,
   OrdersPayWaitingJob,
   OrdersWaitingSweepJob,
+  OrdersCashHoldExpiryJob,
   ReconciliationRunJob,
   ReconciliationRecheckJob,
   StoreRevalidateJob,

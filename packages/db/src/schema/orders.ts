@@ -275,9 +275,7 @@ export const orders = pgTable(
       .on(table.recipient, table.createdAt)
       .where(sql`${table.recipient} is not null`),
     /** S25 CS3, CS5: the held cash orders, oldest first. */
-    index('orders_cash_held_paid_at_idx')
-      .on(table.paidAt)
-      .where(sql`${table.cashHold} = 'held'`),
+    index('orders_cash_held_paid_at_idx').on(table.paidAt).where(sql`${table.cashHold} = 'held'`),
     check(
       'orders_cash_hold_check',
       sql`char_length(${table.recipient}) between 1 and 32

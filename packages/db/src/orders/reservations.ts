@@ -265,7 +265,9 @@ async function breaksCreditLimit(
       customerId: orderCustomerId(order),
       merchant: customer.accountType === 'merchant',
       walletId,
-      lines: [{ serviceClass: game.serviceClass, recipient: order.recipient, totalUsdUnits: total }],
+      lines: [
+        { serviceClass: game.serviceClass, recipient: order.recipient, totalUsdUnits: total },
+      ],
       excludeOrderId: order.id,
     });
     return false;

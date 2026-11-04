@@ -2341,7 +2341,8 @@ export const resolveAttemptSchema = z
   .discriminatedUnion('outcome', [
     z.object({
       outcome: z.literal('delivered'),
-      quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
+      /** S25 AM3: an `amount` order is delivered whole, up to `ORDER_QUANTITY_CEILING` units. */
+      quantity: z.int().min(1).max(ORDER_QUANTITY_CEILING),
       /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
       codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
       reason: decisionReason,
@@ -2554,7 +2555,7 @@ export const deliveryReferenceSchema = z
 /** `POST /api/admin/orders/:id/fulfil` (rules MF1–MF4). */
 export const fulfilOrderSchema = z
   .object({
-    quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
+    quantity: z.int().min(1).max(ORDER_QUANTITY_CEILING),
     /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
     codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
     unitCostUsdUnits: usdCentsSchema.max(FULFIL_COST_MAX_USD_UNITS),

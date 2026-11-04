@@ -34,6 +34,8 @@ import {
   gameSchema,
   type Reorder,
   reorderSchema,
+  type ServiceClassInput,
+  serviceClassInputSchema,
   type UpdateCategory,
   type UpdateGame,
   updateCategorySchema,
@@ -240,6 +242,22 @@ export class CatalogAdminController {
     @Req() request: Request,
   ) {
     return this.catalog.setGameEarlyAccess(actor(admin, request), id, body.on);
+  }
+
+  /** S25 CL1: the game's service class (none, credit and bills, cash). */
+  @Put('games/:id/service-class')
+  @AdminRoute()
+  @Sensitive()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: gameDetailSchema })
+  @ApiOkResponse({ description: 'The game', standardSchema: gameDetailSchema })
+  setGameServiceClass(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body({ schema: serviceClassInputSchema }) body: ServiceClassInput,
+    @Req() request: Request,
+  ) {
+    return this.catalog.setGameServiceClass(actor(admin, request), id, body.serviceClass);
   }
 
   @Post('games/:id/archive')
