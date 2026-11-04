@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
+  amountOfQuantity,
   formatSyp,
   formatUsd,
   type GameDetail,
@@ -208,7 +209,13 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                     <ProductCost product={product} sheet={sheets.get(product.id)} />
                   )}
                 </TableCell>
-                <TableCell className="tabular-nums">{product.maxQuantity}</TableCell>
+                <TableCell className="tabular-nums">
+                  {product.kind === 'amount' ? (
+                    <AmountRange product={product} />
+                  ) : (
+                    product.maxQuantity
+                  )}
+                </TableCell>
                 <TableCell>
                   <span className="flex flex-col items-start gap-1">
                     <StatusBadge status={product.status} />
@@ -526,6 +533,7 @@ function ProductPrice({ product, sheet }: { product: Product; sheet: PriceSheet 
           </bdi>
           <EstimatedBadge />
         </span>
+        {product.kind === 'amount' && <PerUnit product={product} />}
         <span className="text-xs text-muted-foreground">{t('catalog.products.estimatedHint')}</span>
       </span>
     );
@@ -535,6 +543,7 @@ function ProductPrice({ product, sheet }: { product: Product; sheet: PriceSheet 
       <bdi dir="ltr" className="font-medium tabular-nums">
         {formatUsd(retail.price)}
       </bdi>
+      {product.kind === 'amount' && <PerUnit product={product} />}
       {product.priceSypUnits !== null && (
         <span className="text-xs text-muted-foreground tabular-nums">
           {t('catalog.products.syp', { amount: formatSyp(product.priceSypUnits) })}
@@ -551,6 +560,34 @@ function ProductPrice({ product, sheet }: { product: Product; sheet: PriceSheet 
         </span>
       )}
       {product.basisStockLevel && <StockChip level={product.basisStockLevel} quiet />}
+    </span>
+  );
+}
+
+/** S25 AM2: an `amount` product's price is the price of one step ("لكل 100 ل.س"). */
+function PerUnit({ product }: { product: Product }) {
+  const { t } = useTranslation();
+  return (
+    <span className="text-xs text-muted-foreground">
+      {t('catalog.products.perStep', {
+        step: amountOfQuantity(1, product.amountStep ?? undefined).toLocaleString('en-US'),
+        unit: product.amountUnitAr ?? '',
+      })}
+    </span>
+  );
+}
+
+/** S25 AM6: "مبلغ حر · من 1,000 إلى 100,000 ل.س". */
+function AmountRange({ product }: { product: Product }) {
+  const { t } = useTranslation();
+  const step = product.amountStep ?? undefined;
+  return (
+    <span className="text-sm">
+      {t('catalog.products.amountRange', {
+        min: amountOfQuantity(product.minQuantity, step).toLocaleString('en-US'),
+        max: amountOfQuantity(product.maxQuantity, step).toLocaleString('en-US'),
+        unit: product.amountUnitAr ?? '',
+      })}
     </span>
   );
 }

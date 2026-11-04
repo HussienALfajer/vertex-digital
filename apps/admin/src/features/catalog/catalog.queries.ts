@@ -14,6 +14,7 @@ import type {
   GameListQuery,
   GamePage,
   QuickLinkStatsQuery,
+  ServiceClass,
   UpdateGame,
   UpdateInputField,
   UpdateProduct,
@@ -297,3 +298,14 @@ export const quickLinksQuery = (query: QuickLinkStatsQuery) =>
     queryKey: ['catalog', 'quick-links', query],
     queryFn: () => call(api.GET('/api/admin/quick-links', { params: { query } })),
   });
+
+/** S25 CL1: the game's service class (re-authenticated, audited). */
+export const useSetServiceClass = (id: string) =>
+  useCatalogMutation((serviceClass: ServiceClass) =>
+    call(
+      api.PUT('/api/admin/catalog/games/{id}/service-class', {
+        params: { path: { id } },
+        body: { serviceClass },
+      }),
+    ),
+  );

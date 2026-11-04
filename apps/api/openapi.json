@@ -33867,6 +33867,17 @@
                 "productNameAr": {
                   "type": "string"
                 },
+                "amountStep": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "amountUnitAr": {
+                  "nullable": true,
+                  "type": "string"
+                },
                 "gameId": {
                   "type": "string",
                   "format": "uuid",
@@ -33927,6 +33938,8 @@
               "required": [
                 "productId",
                 "productNameAr",
+                "amountStep",
+                "amountUnitAr",
                 "gameId",
                 "gameNameAr",
                 "costUsdUnits",
@@ -38817,13 +38830,26 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "amountStep": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "amountUnitAr": {
+                      "nullable": true,
+                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "nameAr",
                     "kind",
-                    "gameAmount"
+                    "gameAmount",
+                    "amountStep",
+                    "amountUnitAr"
                   ],
                   "additionalProperties": false
                 },
@@ -41395,11 +41421,24 @@
               },
               "nameAr": {
                 "type": "string"
+              },
+              "amountStep": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "amountUnitAr": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "id",
-              "nameAr"
+              "nameAr",
+              "amountStep",
+              "amountUnitAr"
             ],
             "additionalProperties": false
           },
@@ -41732,11 +41771,24 @@
               },
               "nameAr": {
                 "type": "string"
+              },
+              "amountStep": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "amountUnitAr": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "id",
-              "nameAr"
+              "nameAr",
+              "amountStep",
+              "amountUnitAr"
             ],
             "additionalProperties": false
           },

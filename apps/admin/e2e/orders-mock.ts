@@ -7,7 +7,11 @@ import {
   type AdminPurchaseGames,
   adminOrderShape,
   type CheckCategory,
+  CREDIT_POLICY_DEFAULTS,
+  type CreditPolicy,
+  cashApprovalInputSchema,
   createAdminOrderSchema,
+  creditPolicySchema,
   fulfilIsLoss,
   fulfilOrderSchema,
   type GamePlayerCheck,
@@ -377,7 +381,12 @@ function card(row: AdminOrder): LiveOrderCard {
     number: row.number,
     status: row.status,
     game: row.game,
-    product: { id: row.product.id, nameAr: row.product.nameAr },
+    product: {
+      id: row.product.id,
+      nameAr: row.product.nameAr,
+      amountStep: row.product.amountStep,
+      amountUnitAr: row.product.amountUnitAr,
+    },
     quantity: row.quantity,
     totalUsdUnits: row.totalUsdUnits,
     isTest: row.customer?.isTest ?? false,
@@ -446,7 +455,12 @@ function summary(row: AdminOrder): AdminOrderSummary {
     placedBy: row.placedBy,
     payer: row.payer,
     purpose: row.purpose,
-    product: { id: row.product.id, nameAr: row.product.nameAr },
+    product: {
+      id: row.product.id,
+      nameAr: row.product.nameAr,
+      amountStep: row.product.amountStep,
+      amountUnitAr: row.product.amountUnitAr,
+    },
     game: row.game,
     quantity: row.quantity,
     totalUsdUnits: row.totalUsdUnits,
@@ -463,6 +477,82 @@ function summary(row: AdminOrder): AdminOrderSummary {
 export class OrdersMock {
   orders: AdminOrder[] = seed();
   policy: OrderPolicy = { ...ORDER_POLICY_DEFAULTS };
+  /** S25: the credit section's limits and cash rules. */
+  creditPolicy: CreditPolicy = { ...CREDIT_POLICY_DEFAULTS };
+
+  /**
+   * S25 CS3: two paid cash orders held for approval (a $15 Syriatel Cash amount order and a $12
+   * one), and a delivered bill of 7,300 SYP for the order page's amount and recipient.
+   */
+  addCashOrders() {
+    const cash = (n: 'slow' | 'fresh', number: string, quantity: number, total: number) =>
+      order(n, number, {
+        status: 'paid',
+        product: {
+          id: id(75),
+          nameAr: 'سيريتل كاش',
+          kind: 'amount',
+          amountStep: 100,
+          amountUnitAr: 'ل.س',
+        },
+        game: { id: id(85), nameAr: 'سيريتل كاش' },
+        fields: [
+          { key: 'number', labelAr: 'رقم سيريتل كاش', value: '0933123456', valueLabelAr: null },
+        ],
+        recipient: '0933123456',
+        quantity,
+        unitPriceUsdUnits: total / quantity,
+        totalUsdUnits: total,
+        totalSypUnits: null,
+        cashHold: {
+          state: 'held',
+          decidedAt: null,
+          adminName: null,
+          expiresAt: at(-23 * 60),
+          telegramDecides: true,
+        },
+      });
+    this.orders = [
+      ...this.orders,
+      cash('slow', 'VO-CASH15', 150, 15_000_000),
+      cash('fresh', 'VO-CASH12', 120, 12_000_000),
+    ];
+  }
+
+  /** S25 CS4: the decision as the write path makes it, guarded by `held`. */
+  private decideCash(orderId: string, body: Body): Answer {
+    const row = this.find(orderId);
+    if (!row) return error(404, 'NOT_FOUND');
+    const parsed = cashApprovalInputSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    if (row.cashHold?.state !== 'held') return error(409, 'ORDER_NOT_DECIDABLE');
+    const now = new Date().toISOString();
+    const hold = { ...row.cashHold, decidedAt: now, adminName: 'ريم الخطيب' };
+    if (parsed.data.decision === 'approve') {
+      return {
+        status: 200,
+        json: this.replace({ ...row, cashHold: { ...hold, state: 'approved' } }),
+      };
+    }
+    return {
+      status: 200,
+      json: this.replace(
+        withDecisions({
+          ...row,
+          status: 'refunded',
+          cashHold: { ...hold, state: 'rejected' },
+          refundedQuantity: row.quantity,
+          refundedUsdUnits: row.totalUsdUnits,
+          refundReason: 'cash_rejected',
+          finishedAt: now,
+          journals: [
+            ...row.journals,
+            { id: id(520), kind: 'refund', amountUsdUnits: row.totalUsdUnits, createdAt: now },
+          ],
+        }),
+      ),
+    };
+  }
   /** The codes a reveal returns, by code id. */
   readonly codeValues = new Map<string, string>([[id(700), 'ITUNES-7K2M-9Q4X-7Q2M']]);
   /** A decision's key and its order, for the replay of the first result. */
@@ -530,6 +620,7 @@ export class OrdersMock {
                 {
                   status: row.status,
                   finishedAt: row.finishedAt ? new Date(row.finishedAt) : null,
+                  cashHold: row.cashHold?.state ?? null,
                 },
                 open ? { supplierCode: open.supplierCode } : null,
                 now,
@@ -764,6 +855,7 @@ export class OrdersMock {
     return {
       needsReview: this.orders.filter((row) => row.status === 'needs_review').length,
       manualWaiting: this.orders.filter((row) => summary(row).manualWaiting).length,
+      cashHeld: this.orders.filter((row) => row.cashHold?.state === 'held').length,
     };
   }
 
@@ -782,6 +874,19 @@ export class OrdersMock {
       if (!parsed.success) return error(400, 'VALIDATION_FAILED');
       this.policy = parsed.data;
       return { status: 200, json: this.policy };
+    }
+    if (key === 'GET /api/admin/credit-policy') return { status: 200, json: this.creditPolicy };
+    if (key === 'PUT /api/admin/credit-policy') {
+      const refused = sensitive();
+      if (refused) return refused;
+      const parsed = creditPolicySchema.safeParse(body);
+      if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+      this.creditPolicy = parsed.data;
+      return { status: 200, json: this.creditPolicy };
+    }
+    const cashApproval = path.match(/^\/api\/admin\/orders\/([^/]+)\/cash-approval$/);
+    if (cashApproval && method === 'POST') {
+      return sensitive() ?? this.decideCash(cashApproval[1] as string, body);
     }
     if (key === 'GET /api/admin/orders') {
       const tab = (url.searchParams.get('tab') ?? 'all') as AdminOrderTab;

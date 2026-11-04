@@ -13,6 +13,8 @@ export interface QuickBuyRow {
     nameAr: string;
     kind: ProductKind;
     gameAmount: number | null;
+    amountStep: number | null;
+    amountUnitAr: string | null;
     /** Active and unarchived; availability and price are the caller's (S09 SF1, S20). */
     live: boolean;
   };
@@ -42,6 +44,8 @@ export async function quickBuyRows(db: Executor, customerId: string): Promise<Qu
         nameAr: catalogProducts.nameAr,
         kind: catalogProducts.kind,
         gameAmount: catalogProducts.gameAmount,
+        amountStep: catalogProducts.amountStep,
+        amountUnitAr: catalogProducts.amountUnitAr,
         live: sql<boolean>`(${catalogProducts.status} = 'active' and ${catalogProducts.archivedAt} is null)`,
       },
     })

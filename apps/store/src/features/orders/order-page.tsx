@@ -38,6 +38,8 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { deliveryDetailText } from '@/features/catalog/delivery';
+import { tcr } from '@/features/credit/i18n';
+import { amountText, shownLine } from '@/features/credit/section';
 import { centsParam } from '@/features/deposits/amounts';
 import { CopyButton } from '@/features/deposits/copy-button';
 import { Line } from '@/features/deposits/panel';
@@ -153,6 +155,7 @@ export function OrderPage() {
   }
 
   const { order } = state;
+  const held = order.cashHold === 'held';
   return (
     <div className="flex flex-col gap-6">
       {state.stale && (
@@ -192,9 +195,11 @@ export function OrderPage() {
         )}
         <div className="flex items-center gap-3">
           {order.stage === 'delivered' && <Celebration orderId={order.id} />}
-          <p className="text-lg font-bold">{stageSentence(order)}</p>
+          {/* S25 CS5: "قيد المراجعة" while a cash order is held; then the delivery or the refund. */}
+          {held && <Badge tone="warning">{tcr('hold.badge')}</Badge>}
+          <p className="text-lg font-bold">{held ? tcr('hold.sentence') : stageSentence(order)}</p>
         </div>
-        {(order.stage === 'processing' || order.stage === 'delayed') && (
+        {(order.stage === 'processing' || order.stage === 'delayed') && !held && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
             {/* S17 WR10: the open attempt's expected time replaces the measured one. */}
@@ -272,14 +277,31 @@ export function OrderPage() {
           </div>
         </div>
         <dl className="flex flex-col gap-2">
-          {order.fields.map((field) => (
-            <Line key={field.key} label={field.labelAr}>
-              {field.valueLabelAr ?? (
-                <bdi dir="ltr">{field.value || t('orders.detail.emptyField')}</bdi>
-              )}
+          {/* S25 RN3: a credit or cash order's recipient, grouped; its field is the same line. */}
+          {order.recipient ? (
+            <Line label={tcr('order.recipient')}>
+              <bdi dir="ltr" className="font-bold tabular-nums">
+                {shownLine(order.recipient)}
+              </bdi>
             </Line>
-          ))}
-          <Line label={t('orders.detail.quantity')}>{order.quantity}</Line>
+          ) : (
+            order.fields.map((field) => (
+              <Line key={field.key} label={field.labelAr}>
+                {field.valueLabelAr ?? (
+                  <bdi dir="ltr">{field.value || t('orders.detail.emptyField')}</bdi>
+                )}
+              </Line>
+            ))
+          )}
+          {order.product.kind === 'amount' ? (
+            <Line label={tcr('order.amount')}>
+              <bdi className="font-bold tabular-nums">
+                {amountText(order.product, order.quantity)}
+              </bdi>
+            </Line>
+          ) : (
+            <Line label={t('orders.detail.quantity')}>{order.quantity}</Line>
+          )}
           {/* S16 AP11: a gift or a compensation from the store shows no price. */}
           {order.unitPriceUsdUnits !== null && (
             <Line label={t('orders.detail.unitPrice')}>

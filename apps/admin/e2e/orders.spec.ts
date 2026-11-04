@@ -119,7 +119,9 @@ test.describe('orders', () => {
   }) => {
     await open(page, admin, '/orders');
     await expect(rows(page)).toHaveCount(4);
-    const badge = page.getByLabel(fill(ar.nav.ordersBadge, { needsReview: 1, manualWaiting: 1 }));
+    const badge = page.getByLabel(
+      fill(ar.nav.ordersBadge, { needsReview: 1, manualWaiting: 1, cashHeld: 0 }),
+    );
     await expect(badge.first()).toHaveText('2');
 
     await page.getByRole('tab', { name: o.tabs.review }).click();

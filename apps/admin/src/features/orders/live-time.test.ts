@@ -17,7 +17,12 @@ const card = (fields: Partial<LiveOrderCard> = {}): LiveOrderCard => ({
   number: 'VO-ABCD23',
   status: 'sent_to_supplier',
   game: { id: '0199b000-0000-7000-8000-000000000080', nameAr: 'ببجي موبايل' },
-  product: { id: '0199b000-0000-7000-8000-000000000070', nameAr: '60 UC' },
+  product: {
+    id: '0199b000-0000-7000-8000-000000000070',
+    nameAr: '60 UC',
+    amountStep: null,
+    amountUnitAr: null,
+  },
   quantity: 1,
   totalUsdUnits: 990_000,
   isTest: false,

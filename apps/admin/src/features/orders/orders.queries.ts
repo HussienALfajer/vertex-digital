@@ -1,7 +1,9 @@
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   AdminPlayerCheck,
+  CashApprovalInput,
   CreateAdminOrder,
+  CreditPolicy,
   DeliveryProof,
   FulfilOrder,
   LiveBoardQuery,
@@ -344,3 +346,23 @@ export function useSetGamePlayerCheck(gameId: string) {
 
 export const useSetOrderPolicy = () =>
   useOrdersMutation((body: OrderPolicy) => call(api.PUT('/api/admin/orders/policy', { body })));
+
+/** S25 CS4: approve or reject a held cash order; the hold's guard makes a second decision refused. */
+export const useCashApproval = (orderId: string) =>
+  useOrdersMutation((body: CashApprovalInput) =>
+    call(
+      api.POST('/api/admin/orders/{id}/cash-approval', {
+        params: { path: { id: orderId } },
+        body,
+      }),
+    ),
+  );
+
+/** S25: the credit section's limits and cash rules (single row, audited). */
+export const creditPolicyQuery = queryOptions({
+  queryKey: ['orders', 'credit-policy'],
+  queryFn: () => call(api.GET('/api/admin/credit-policy')),
+});
+
+export const useSetCreditPolicy = () =>
+  useOrdersMutation((body: CreditPolicy) => call(api.PUT('/api/admin/credit-policy', { body })));

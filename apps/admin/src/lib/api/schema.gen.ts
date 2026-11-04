@@ -9873,6 +9873,8 @@ export interface components {
                 /** Format: uuid */
                 productId: string;
                 productNameAr: string;
+                amountStep: number | null;
+                amountUnitAr: string | null;
                 /** Format: uuid */
                 gameId: string;
                 gameNameAr: string;
@@ -10957,6 +10959,8 @@ export interface components {
                     nameAr: string;
                     kind: components["schemas"]["ProductKind"];
                     gameAmount: number | null;
+                    amountStep: number | null;
+                    amountUnitAr: string | null;
                 };
                 quantity: number;
                 unitPriceUsdUnits: number | null;
@@ -11536,6 +11540,8 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 nameAr: string;
+                amountStep: number | null;
+                amountUnitAr: string | null;
             };
             game: {
                 /** Format: uuid */
@@ -11611,6 +11617,8 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 nameAr: string;
+                amountStep: number | null;
+                amountUnitAr: string | null;
             };
             quantity: number;
             totalUsdUnits: number;

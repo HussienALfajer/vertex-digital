@@ -28,6 +28,7 @@ import { EarlyAccessBadge, EarlyAccessButton } from './early-access';
 import { FieldsTab } from './fields-tab';
 import { GameForm } from './game-form';
 import { ProductsTab } from './products-tab';
+import { ServiceClassCard } from './service-class-card';
 
 /** "/catalog/games/new" (S06 screens): the data tab only, until the game exists. */
 export function NewGamePage({ categoryId }: { categoryId?: string }) {
@@ -127,6 +128,7 @@ export function GamePage({
         <TabsContent value="fields">
           <div className="flex flex-col gap-6">
             <FieldsTab game={data} />
+            <ServiceClassCard game={data} />
             <GamePlayerCheckCard game={data} />
           </div>
         </TabsContent>

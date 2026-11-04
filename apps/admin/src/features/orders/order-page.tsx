@@ -4,6 +4,7 @@ import {
   type AdminOrder,
   type FulfilmentAttempt,
   formatUsd,
+  groupRecipient,
   RESEND_REFUSED_REASON,
 } from '@vertex-digital/contracts';
 import {
@@ -31,6 +32,7 @@ import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-s
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
 import { CustomerMarks } from '../customers/customer-marks';
+import { CASH_HOLD_TONES, CashHoldCard } from './cash-hold';
 import { NearbySupplierOrders, showsNearbyOrders } from './nearby-supplier-orders';
 import {
   hasActions,
@@ -38,6 +40,7 @@ import {
   OrderActionButtons,
   OrderActionDialog,
 } from './order-actions';
+import { OrderAmount } from './order-amount';
 import { ATTEMPT_TONES, PURPOSE_TONES, playerCheckText, STATUS_TONES } from './order-labels';
 import { orderQuery, orderStreamRead, proofUrl, useRevealCode } from './orders.queries';
 import { CheckoutBlock, GiftBlock, ShareLinksBlock } from './share-links';
@@ -108,6 +111,7 @@ export function OrderPage({ id, decide }: { id: string; decide?: 'fulfil' }) {
       {order.isSuccess && (
         <div className="flex flex-col gap-6">
           <Header order={order.data} />
+          {order.data.cashHold && <CashHoldCard order={order.data} hold={order.data.cashHold} />}
           <Decisions order={order.data} onAction={setAction} />
           <Fields order={order.data} />
           {order.data.checkout && (
@@ -153,6 +157,11 @@ function Header({ order }: { order: AdminOrder }) {
         {order.cancelReason && (
           <Badge tone="neutral">{t(`orders.cancelReasons.${order.cancelReason}`)}</Badge>
         )}
+        {order.cashHold && (
+          <Badge tone={CASH_HOLD_TONES[order.cashHold.state]}>
+            {t(`orders.cashHold.states.${order.cashHold.state}`)}
+          </Badge>
+        )}
       </div>
       <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={t('orders.detail.customer')}>
@@ -187,13 +196,38 @@ function Header({ order }: { order: AdminOrder }) {
             {t('orders.detail.unitPrice', { price: ltr(formatUsd(order.unitPriceUsdUnits)) })}
           </span>
         </Fact>
-        <Fact label={t('orders.detail.units')}>
-          {t('orders.detail.unitsValue', {
-            quantity: order.quantity,
-            delivered: order.deliveredQuantity,
-            refunded: order.refundedQuantity,
-          })}
-        </Fact>
+        {order.product.kind === 'amount' ? (
+          <Fact label={t('orders.detail.amount')}>
+            <OrderAmount product={order.product} quantity={order.quantity} />
+            {order.refundedQuantity > 0 && (
+              <span className="block text-sm font-normal text-muted-foreground">
+                {t('orders.detail.amountRefunded')}{' '}
+                <OrderAmount product={order.product} quantity={order.refundedQuantity} />
+              </span>
+            )}
+          </Fact>
+        ) : (
+          <Fact label={t('orders.detail.units')}>
+            {t('orders.detail.unitsValue', {
+              quantity: order.quantity,
+              delivered: order.deliveredQuantity,
+              refunded: order.refundedQuantity,
+            })}
+          </Fact>
+        )}
+        {order.recipient && (
+          <Fact label={t('orders.detail.recipient')}>
+            <span className="flex items-center gap-2">
+              <bdi dir="ltr" className="text-lg">
+                {groupRecipient(order.recipient)}
+              </bdi>
+              <CopyButton
+                value={order.recipient}
+                label={t('orders.detail.copyField', { field: t('orders.detail.recipient') })}
+              />
+            </span>
+          </Fact>
+        )}
         <Fact label={t('orders.detail.refunded')}>
           <bdi dir="ltr">{formatUsd(order.refundedUsdUnits)}</bdi>
         </Fact>

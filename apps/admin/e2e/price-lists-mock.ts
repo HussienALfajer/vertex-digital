@@ -401,6 +401,8 @@ export class PriceListsMock {
         {
           productId: product.id,
           productNameAr: product.nameAr,
+          amountStep: product.amountStep,
+          amountUnitAr: product.amountUnitAr,
           gameId: product.gameId,
           gameNameAr: game?.nameAr ?? '',
           costUsdUnits: cost,

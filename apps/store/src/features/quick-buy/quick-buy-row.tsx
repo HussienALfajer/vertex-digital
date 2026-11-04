@@ -16,6 +16,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
+import { amountText } from '@/features/credit/section';
 import { setQuickBuyHidden } from '@/features/players/requests';
 import { tq } from '@/features/quick-buy/i18n';
 import { ltr } from '@/lib/format';
@@ -192,9 +193,11 @@ function QuickBuyCard({
         <span className="flex min-w-0 flex-col">
           <bdi className="truncate text-sm">{item.game.nameAr}</bdi>
           <bdi className="truncate text-sm text-muted-foreground">
-            {item.quantity > 1
-              ? tq('row.packTimes', { pack: item.product.nameAr, count: item.quantity })
-              : item.product.nameAr}
+            {item.product.kind === 'amount'
+              ? `${item.product.nameAr} · ${amountText(item.product, item.quantity)}`
+              : item.quantity > 1
+                ? tq('row.packTimes', { pack: item.product.nameAr, count: item.quantity })
+                : item.product.nameAr}
           </bdi>
         </span>
         {price !== null && item.state !== 'unavailable' && (

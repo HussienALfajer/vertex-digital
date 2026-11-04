@@ -38,7 +38,9 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
+import { CASH_HOLD_TONES } from './cash-hold';
 import { ALL, FilterSelect } from './filter-select';
+import { OrderAmount } from './order-amount';
 import { PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import { type OrderSearch, tabOf, withFilter } from './order-search';
 import { orderListQuery } from './orders.queries';
@@ -356,7 +358,13 @@ export function OrderTable({
                 )}
               </span>
             </TableCell>
-            <TableCell className="tabular-nums">{order.quantity}</TableCell>
+            <TableCell className="tabular-nums">
+              {order.product.amountStep === null ? (
+                order.quantity
+              ) : (
+                <OrderAmount product={order.product} quantity={order.quantity} />
+              )}
+            </TableCell>
             <TableCell className="tabular-nums">
               <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
             </TableCell>
@@ -366,6 +374,11 @@ export function OrderTable({
                   {t(`orders.statuses.${order.status}`)}
                 </Badge>
                 {order.manualWaiting && <Badge tone="gold">{t('orders.manualWaiting')}</Badge>}
+                {order.cashHold && (
+                  <Badge tone={CASH_HOLD_TONES[order.cashHold]}>
+                    {t(`orders.cashHold.states.${order.cashHold}`)}
+                  </Badge>
+                )}
               </span>
             </TableCell>
             <TableCell>

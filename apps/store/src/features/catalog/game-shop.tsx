@@ -102,6 +102,8 @@ export function GameShop({
   const desktop = useDesktop();
   const customer = useCustomer();
   const prices = usePrivatePrices(data.game.slug, customer, data.products);
+  // S25 SC2: SYP first on a section game's cards; `inSection` without the contracts' values.
+  const section = data.game.serviceClass === 'credit' || data.game.serviceClass === 'cash';
   const products = prices.status === 'ready' ? prices.products : data.products;
   // AT4: no buy while an account's own prices are unknown (its last read had them, or it failed).
   const waiting = prices.status === 'failed' || (prices.status === 'loading' && prices.hinted);
@@ -125,7 +127,7 @@ export function GameShop({
   const resting = products.filter((product) => !buyable(product));
   const card = (product: StoreProduct) =>
     prices.status === 'ready' ? (
-      <PrivatePackContent product={product} cached={false} />
+      <PrivatePackContent product={product} cached={false} section={section} />
     ) : (
       cards[product.id]
     );

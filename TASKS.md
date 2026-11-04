@@ -21,9 +21,12 @@ PR 2 (the zddk adapter) waits for Q31, Q32 and Q34.
 - [x] checks, reviewer (3 blocking findings fixed), PR and merge
 
 ## PR 1b — `feat/s25-credit-screens`: admin, store, E2E
-- [ ] admin: product form kind `amount` ("لكل 100 ل.س" in the price matrix), game service-class select, settings "حدود الرصيد والكاش", jneedcontur in the suppliers list, live room "بانتظار الموافقة" and the order's recipient, amount and hold actions
-- [ ] store: section category and SYP-first prices (SC2), amount input, twice-typed recipient and confirmation (RN2), limit messages, held state on the order page, cart line, quick buy, sale mode (merchants)
-- [ ] seed: the section's six games with service classes and an amount product on the fake supplier (`pnpm db:seed-local`)
-- [ ] e2e: section flows and RTL screenshots (store phone dark/light, admin light/dark)
-- [ ] browser check of the spec's PR 1 acceptance
-- [ ] checks, reviewer, PR and merge; ROADMAP
+- [x] admin: product form kind `amount` ("لكل 100 ل.س" in the price matrix), game service-class select, settings "حدود الرصيد والكاش", jneedcontur in the suppliers list, live room "بانتظار الموافقة" and the order's recipient, amount and hold actions
+- [x] store: section category and SYP-first prices (SC2), amount input, twice-typed recipient and confirmation (RN2), limit messages, held state on the order page, cart line, quick buy, sale mode (merchants)
+- [x] seed: the section's six games with service classes and an amount product on the fake supplier (`pnpm db:seed-local`)
+- [x] e2e: section flows and RTL screenshots (store phone dark/light, admin light/dark)
+- [x] api: the amount's step and unit on the admin order list, the live cards, the price matrix rows and quick buy items (so they read "7,300 ل.س")
+- [x] seed: the quick-code sequence moved past the snapshot's codes (any product created after the seed collided)
+- [x] browser check of the spec's PR 1 acceptance (7,300 SYP bill, credit pack, wrong operator, section, cash and per-number limits, the recipient alert, a cash hold approved and one rejected in the panel)
+- [x] reviewer (2 blocking findings fixed: the cart's number confirmation, E2E for the cart, sale mode and quick buy)
+- [x] checks, PR and merge; ROADMAP

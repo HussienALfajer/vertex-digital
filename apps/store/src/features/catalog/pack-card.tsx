@@ -2,6 +2,8 @@ import { formatSyp, formatUsd, type StoreProduct } from '@vertex-digital/contrac
 import { Badge } from '@vertex-digital/ui/components/badge';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ClockIcon } from 'lucide-react';
+import { tcr } from '@/features/credit/i18n';
+import { amountBounds } from '@/features/credit/section';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { deliveryChipText } from './delivery';
@@ -15,13 +17,18 @@ export const packAvailable = (product: StoreProduct) =>
  * What a pack card shows (rule SF2): the Arabic name and in-game amount, the USD price large, the
  * SYP after "≈" muted, the savings badge (S06 PR7) and the delivery chip (SF3); an unavailable
  * pack has no price (S06 CT9). S22 BV2: the price per 100 units and "أفضل قيمة". Rendered on the server, so the money formatting never reaches the
- * game page's first load; `PackButton` makes it selectable.
+ * game page's first load; `PackButton` makes it selectable. S25 SC2: a section game's pack shows
+ * the SYP first ("تدفع ≈ 1,100 ل.س") and the USD small, USD alone without a rate; AM6: an
+ * `amount` pack reads "مبلغ حر · من 1,000 إلى 100,000 ل.س" and its price is per 100 of its unit.
  */
 export function PackContent({
   product,
   cached = true,
+  section = false,
 }: {
   product: StoreProduct;
+  /** S25 SC2: the game is in the credit section. */
+  section?: boolean;
   /**
    * S20: the cached retail card, hidden under a skeleton while a private-prices account's own
    * prices load (`data-private-prices-hint`); false for those prices themselves.
@@ -31,6 +38,8 @@ export function PackContent({
   const available = packAvailable(product);
   const delivery = available ? deliveryChipText(product.deliveryStats) : null;
   const amount = packAmountText(product.nameAr, product.gameAmount);
+  const free = product.kind === 'amount' ? amountBounds(product) : null;
+  const sypFirst = section && product.priceSypUnits !== null;
   return (
     <>
       {/* S23 OP5: a pack open early to the merchant's tier; never on the cached public card. */}
@@ -55,22 +64,43 @@ export function PackContent({
           </span>
         )}
       </span>
-      {amount && (
-        <span className="text-sm text-muted-foreground">
-          {t('catalog.amount', { amount: ltr(amount) })}
-        </span>
+      {free ? (
+        <span className="text-sm text-muted-foreground">{tcr('pack.freeAmount', free)}</span>
+      ) : (
+        amount && (
+          <span className="text-sm text-muted-foreground">
+            {t('catalog.amount', { amount: ltr(amount) })}
+          </span>
+        )
       )}
       {available && cached && (
         <Skeleton className="hidden h-7 w-20 [[data-private-prices-hint]_&]:block" />
       )}
       {available && product.priceUsdUnits !== null ? (
         <span className={`flex flex-col ${cached ? '[[data-private-prices-hint]_&]:hidden' : ''}`}>
-          <bdi dir="ltr" className="text-xl font-bold tabular-nums">
+          {sypFirst && product.priceSypUnits !== null && (
+            <span className="text-xl font-bold tabular-nums">
+              {tcr('price.pay', { amount: formatSyp(product.priceSypUnits) })}
+            </span>
+          )}
+          <bdi
+            dir="ltr"
+            className={
+              sypFirst
+                ? 'text-sm text-muted-foreground tabular-nums'
+                : 'text-xl font-bold tabular-nums'
+            }
+          >
             {formatUsd(product.priceUsdUnits)}
           </bdi>
-          {product.priceSypUnits !== null && (
+          {!sypFirst && product.priceSypUnits !== null && (
             <span className="text-sm text-muted-foreground tabular-nums">
               {t('catalog.price.syp', { amount: formatSyp(product.priceSypUnits) })}
+            </span>
+          )}
+          {free && (
+            <span className="text-xs text-muted-foreground">
+              {tcr('price.perUnit', { step: free.step, unit: free.unit })}
             </span>
           )}
           {product.perHundredUsdUnits !== null && (

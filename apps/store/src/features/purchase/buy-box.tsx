@@ -53,6 +53,20 @@ import {
 } from '@/features/cart/cart';
 import { useCart } from '@/features/cart/use-cart';
 import { deliveryDetailText } from '@/features/catalog/delivery';
+import { AmountField } from '@/features/credit/amount-field';
+import { tcr } from '@/features/credit/i18n';
+import { RemainingLimits } from '@/features/credit/limits';
+import { RepeatRecipient } from '@/features/credit/recipient';
+import { RecipientConfirm } from '@/features/credit/recipient-confirm';
+import {
+  amountBounds,
+  amountInput,
+  amountQuantity,
+  amountText,
+  inSection,
+  recipientFieldOf,
+  sameRecipient,
+} from '@/features/credit/section';
 import { getOrder } from '@/features/orders/requests';
 import { listSavedPlayers } from '@/features/players/requests';
 import { quickLinkFor } from '@/features/quick-links/handoff';
@@ -142,7 +156,9 @@ type Sending =
  * fields with the ID guide, saving the ID, the gift, the quantity, the totals, the player check,
  * and the actions the visitor can take (sign in, verify the email, buy, reserve when the balance
  * is short, add to the cart); then the confirmation with slide-to-pay. The server decides
- * everything again.
+ * everything again. S25: a section game shows the SYP first (SC2) and asks for its recipient twice
+ * (RN2), "متابعة" off until both are one number, then shows it large with the no-refund line; an
+ * `amount` pack takes a free amount instead of a quantity (AM1, AM6); a cash pack is never reserved.
  */
 export function BuyBox({
   game,
@@ -182,6 +198,17 @@ export function BuyBox({
   const [showErrors, setShowErrors] = useState<Set<string> | 'all'>(new Set());
   const [quantity, setQuantity] = useState(
     Math.min(editing?.quantity ?? initialQuantity, product.maxQuantity),
+  );
+  // S25 AM1: an `amount` pack's amount as typed; its units replace the quantity.
+  const amountPack = product.kind === 'amount';
+  const [amountTyped, setAmountTyped] = useState(() =>
+    amountPack && editing ? amountInput(product, editing.quantity) : '',
+  );
+  const section = inSection(game.serviceClass);
+  const recipientField = recipientFieldOf(game.serviceClass, fields);
+  // RN2: the recipient typed a second time; an edited cart line's was confirmed when added.
+  const [repeat, setRepeat] = useState(
+    (recipientField && editing?.fields[recipientField.key]) ?? '',
   );
   const [step, setStep] = useState<'details' | 'confirm'>('details');
   const [mode, setMode] = useState<Mode>('buy');
@@ -230,12 +257,13 @@ export function BuyBox({
   const saveId = useId();
 
   // Rule BB3: the fields typed before signing in come back with the same pack.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `setUnits` only sets state.
   useEffect(() => {
     if (editing) return;
     const draft = takeDraft(game.slug, product.id);
     if (!draft) return;
     setTyped(draft.fields);
-    setQuantity(Math.min(Math.max(1, draft.quantity), product.maxQuantity));
+    setUnits(Math.min(Math.max(1, draft.quantity), product.maxQuantity));
   }, [editing, game.slug, product.id, product.maxQuantity]);
 
   useEffect(() => {
@@ -251,6 +279,9 @@ export function BuyBox({
     priceOverride !== null && priceOverride !== product.priceUsdUnits ? priceOverride : null;
   const staleProduct = newerPrice !== null;
   const unitPrice = newerPrice ?? product.priceUsdUnits;
+  const typedUnits = amountPack ? amountQuantity(product, amountTyped) : null;
+  /** The units bought: the quantity, or the typed amount's (none while it is not valid). */
+  const units = amountPack ? (typedUnits ?? 0) : quantity;
   const total = bundle
     ? checkoutTotal(
         bundle.map((line) => ({
@@ -258,7 +289,7 @@ export function BuyBox({
           quantity: line.count,
         })),
       )
-    : orderTotal(unitPrice, quantity);
+    : orderTotal(unitPrice, units);
   const totalSyp = bundle
     ? bundle.every((line) => line.product.priceSypUnits !== null)
       ? displaySypTotal(
@@ -266,7 +297,7 @@ export function BuyBox({
         )
       : null
     : !staleProduct && product.priceSypUnits !== null
-      ? displaySypTotal([{ sypUnits: product.priceSypUnits, count: quantity }])
+      ? displaySypTotal([{ sypUnits: product.priceSypUnits, count: units }])
       : null;
   const fieldsCheck = checkFields(fields, typed);
   const isTrusted = fieldsCheck.ok && trusted !== null && fieldsKey(fieldsCheck.values) === trusted;
@@ -291,12 +322,14 @@ export function BuyBox({
   const gameSaved =
     saved.status === 'ready' ? saved.items.filter((item) => item.gameId === game.id) : [];
   const chosen = gameSaved.find((item) => item.id === chosenId) ?? null;
-  const giftable = product.kind === 'direct' && !bundle;
+  // S25 AM5: an `amount` pack is given and its recipient saved like a direct one.
+  const toAccount = product.kind === 'direct' || amountPack;
+  const giftable = toAccount && !bundle;
   const giftProblems = giftable ? giftErrors(gift) : {};
   // Rule SP1: a direct pack with fields, under both limits, for an ID not saved yet.
   const canSave =
     signedIn &&
-    product.kind === 'direct' &&
+    toAccount &&
     fields.length > 0 &&
     !bundle &&
     saved.status === 'ready' &&
@@ -307,13 +340,23 @@ export function BuyBox({
       gameSaved.some((item) => fieldsKey(item.fields) === fieldsKey(fieldsCheck.values))
     );
   const labelValid = savedPlayerLabelSchema.safeParse(save.label).success;
+  const recipientTyped = recipientField ? (typed[recipientField.key] ?? '') : '';
+  // RN2: a saved or a delivered order's recipient was confirmed before; any other is typed twice.
+  const recipientMatch =
+    !recipientField || isTrusted || sameRecipient(recipientField, recipientTyped, repeat);
+  const shown = (key: string) => showErrors === 'all' || showErrors.has(key);
+  const amountRefused = amountPack && typedUnits === null && shown('amount');
+  const repeatRefused =
+    !recipientMatch && (showErrors === 'all' || (shown('repeat') && repeat !== ''));
   const { ref, focusInvalid } = useFocusInvalid<HTMLDivElement>();
   /** Fields, gift texts or the label refused by the last press (the confirmation has its own). */
   const refusedFields =
     showErrors === 'all' &&
     (!fieldsCheck.ok ||
       Object.keys(giftProblems).length > 0 ||
-      (canSave && save.on && !labelValid));
+      (canSave && save.on && !labelValid) ||
+      (amountPack && typedUnits === null) ||
+      !recipientMatch);
   const savePlayer = canSave && save.on && labelValid ? { label: save.label.trim() } : undefined;
 
   /** Rule PV8: a checkable pack needs the confirmation unless its id is known `valid`. */
@@ -325,6 +368,12 @@ export function BuyBox({
       result.result !== 'valid' &&
       result.result !== 'not_supported' &&
       result.result !== 'region_mismatch');
+
+  /** A quantity read back (a draft, a repeat): an `amount` pack's into its typed amount too. */
+  function setUnits(count: number) {
+    setQuantity(count);
+    if (amountPack) setAmountTyped(amountInput(product, count));
+  }
 
   function change(key: string, value: string) {
     setTyped((current) => ({ ...current, [key]: value }));
@@ -430,7 +479,7 @@ export function BuyBox({
         if (value) values[field.key] = value;
       }
       setTyped(values);
-      setQuantity(Math.min(order.quantity, product.maxQuantity));
+      setUnits(Math.min(order.quantity, product.maxQuantity));
       const checked = checkFields(fields, values);
       if (!checked.ok) {
         setShowErrors('all');
@@ -448,7 +497,7 @@ export function BuyBox({
   }, []);
 
   function signIn() {
-    saveDraft({ gameSlug: game.slug, packId: product.id, quantity, fields: typed });
+    saveDraft({ gameSlug: game.slug, packId: product.id, quantity: units || 1, fields: typed });
     // S22 DL3: a direct link's pack comes back with its saved-ID choice (the campaign stays in
     // this tab's session storage).
     const back = `/games/${game.slug}?${new URLSearchParams({
@@ -470,7 +519,9 @@ export function BuyBox({
     if (
       !fieldsCheck.ok ||
       Object.keys(giftProblems).length > 0 ||
-      (canSave && save.on && !labelValid)
+      (canSave && save.on && !labelValid) ||
+      (amountPack && typedUnits === null) ||
+      !recipientMatch
     ) {
       focusInvalid();
       return null;
@@ -520,6 +571,13 @@ export function BuyBox({
         gameNameAr: game.nameAr,
         productNameAr: pack.nameAr,
         cover: game.cover,
+        ...(amountPack && {
+          amount: { step: product.amountStep ?? 100, unitAr: product.amountUnitAr ?? '' },
+        }),
+        ...(section && { section: true }),
+        ...(recipientField && {
+          recipient: { key: recipientField.key, type: recipientField.type },
+        }),
         fields: fields
           .filter((field) => values[field.key])
           .map((field) => ({
@@ -531,7 +589,7 @@ export function BuyBox({
     });
     const giftValue = giftable ? giftOf(gift) : undefined;
     const single: NewCartLine = {
-      ...line(product, quantity, unitPrice),
+      ...line(product, units, unitPrice),
       ...(savePlayer && { savePlayer }),
       ...(giftValue && { gift: giftValue }),
     };
@@ -641,8 +699,13 @@ export function BuyBox({
       case 'INTERNAL_ERROR':
         return setSending({ status: 'failed', message: errorText(reason), retry: true });
       default:
+        // S25: the section's limits say what remains (CL2, CS2) or when more is eligible (CS1).
         again();
-        return setSending({ status: 'failed', message: errorText(reason), retry: false });
+        return setSending({
+          status: 'failed',
+          message: purchaseRefusalText(reason, details),
+          retry: false,
+        });
     }
   }
 
@@ -652,7 +715,7 @@ export function BuyBox({
     const quickLink = quickLinkFor(product.id);
     return {
       productId: product.id,
-      quantity,
+      quantity: units,
       fields: fieldsCheck.values,
       expectedUnitPriceUsdUnits: unitPrice,
       whenBalanceShort: mode === 'reserve' ? 'reserve' : 'refuse',
@@ -673,12 +736,14 @@ export function BuyBox({
         </h2>
         {!bundle && (
           <div className="flex shrink-0 flex-col items-end">
-            <bdi dir="ltr" className="text-2xl font-bold tabular-nums">
-              {formatUsd(unitPrice)}
-            </bdi>
-            {!staleProduct && product.priceSypUnits !== null && (
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {t('catalog.price.syp', { amount: formatSyp(product.priceSypUnits) })}
+            <Money
+              usd={unitPrice}
+              syp={staleProduct ? null : product.priceSypUnits}
+              sypFirst={section}
+            />
+            {amountPack && (
+              <span className="text-xs text-muted-foreground">
+                {tcr('price.perUnit', amountBounds(product))}
               </span>
             )}
           </div>
@@ -736,13 +801,21 @@ export function BuyBox({
           )}
           {fields
             .filter((field) => fieldsCheck.ok && fieldsCheck.values[field.key])
-            .map((field) => (
-              <Row key={field.key} label={field.labelAr}>
-                <bdi dir="ltr" className="text-xl font-bold break-all">
-                  {shownValue(field, fieldsCheck.ok ? (fieldsCheck.values[field.key] ?? '') : '')}
-                </bdi>
-              </Row>
-            ))}
+            .map((field) =>
+              field === recipientField ? (
+                <RecipientConfirm
+                  key={field.key}
+                  field={field}
+                  value={fieldsCheck.ok ? (fieldsCheck.values[field.key] ?? '') : ''}
+                />
+              ) : (
+                <Row key={field.key} label={field.labelAr}>
+                  <bdi dir="ltr" className="text-xl font-bold break-all">
+                    {shownValue(field, fieldsCheck.ok ? (fieldsCheck.values[field.key] ?? '') : '')}
+                  </bdi>
+                </Row>
+              ),
+            )}
           {lastName ? (
             <Row label={t('purchase.playerName')}>
               <bdi className="text-lg font-bold">{lastName}</bdi>
@@ -776,13 +849,17 @@ export function BuyBox({
               </span>
             </Row>
           )}
-          <Row label={t('purchase.quantity')}>
-            <span className="tabular-nums">{quantity}</span>
-          </Row>
+          {amountPack ? (
+            <Row label={tcr('order.amount')}>
+              <bdi className="text-xl font-bold tabular-nums">{amountText(product, units)}</bdi>
+            </Row>
+          ) : (
+            <Row label={t('purchase.quantity')}>
+              <span className="tabular-nums">{quantity}</span>
+            </Row>
+          )}
           <Row label={t('purchase.total')}>
-            <bdi dir="ltr" className="text-2xl font-bold tabular-nums">
-              {formatUsd(total)}
-            </bdi>
+            <Money usd={total} syp={section ? totalSyp : null} sypFirst={section} />
           </Row>
           {mode === 'buy' && balance.status === 'ready' && total <= balance.units && (
             <Row label={t('purchase.balanceAfter')}>
@@ -884,6 +961,19 @@ export function BuyBox({
               }}
             />
           ))}
+          {recipientField && !isTrusted && (
+            <RepeatRecipient
+              field={recipientField}
+              value={repeat}
+              mismatch={repeatRefused}
+              onChange={(value) => {
+                setRepeat(value);
+                setNotice(null);
+                setAdded(null);
+              }}
+              onBlur={() => reveal('repeat')}
+            />
+          )}
           {game.idGuide && <IdGuideButton image={game.idGuide} gameName={game.nameAr} />}
         </div>
       )}
@@ -945,20 +1035,31 @@ export function BuyBox({
         </div>
       )}
       {giftable && <GiftBox draft={gift} showErrors={showErrors === 'all'} onChange={setGift} />}
-      {!bundle && product.maxQuantity > 1 && (
-        <Stepper value={quantity} max={product.maxQuantity} onChange={setQuantity} />
+      {amountPack ? (
+        <AmountField
+          pack={product}
+          value={amountTyped}
+          invalid={amountRefused}
+          onChange={(value) => {
+            setAmountTyped(value);
+            setNotice(null);
+            setAdded(null);
+          }}
+          onBlur={() => reveal('amount')}
+        />
+      ) : (
+        !bundle &&
+        product.maxQuantity > 1 && (
+          <Stepper value={quantity} max={product.maxQuantity} onChange={setQuantity} />
+        )
       )}
       <div className="flex flex-col gap-1 border-t border-border pt-4">
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-base">{t('purchase.total')}</span>
-          <bdi dir="ltr" className="text-2xl font-bold tabular-nums">
-            {formatUsd(total)}
-          </bdi>
+          <Money usd={total} syp={totalSyp} sypFirst={section} />
         </div>
-        {totalSyp !== null && (
-          <span className="text-end text-sm text-muted-foreground tabular-nums">
-            {t('catalog.price.syp', { amount: formatSyp(totalSyp) })}
-          </span>
+        {section && signedIn && !frozen && (
+          <RemainingLimits cash={game.serviceClass === 'cash'} refresh={slide} />
         )}
       </div>
       {notice && <FormAlert>{notice}</FormAlert>}
@@ -972,7 +1073,9 @@ export function BuyBox({
           total={total}
           shortfall={shortfall}
           gap={gap}
-          reserveBlocked={reserveBlocked}
+          // S25 CS1: a cash order is never reserved.
+          reserveBlocked={reserveBlocked || game.serviceClass === 'cash'}
+          continueOff={!recipientMatch}
           orderBack={`/games/${game.slug}?pack=${product.id}`}
           onSignIn={signIn}
           onRetryBalance={refreshBalance}
@@ -1030,6 +1133,7 @@ function Actions({
   shortfall,
   gap,
   reserveBlocked,
+  continueOff,
   orderBack,
   onSignIn,
   onRetryBalance,
@@ -1043,6 +1147,8 @@ function Actions({
   shortfall: number | null;
   gap: number | null;
   reserveBlocked: boolean;
+  /** RN2: the recipient's two typings differ. */
+  continueOff: boolean;
   orderBack: string;
   onSignIn: () => void;
   onRetryBalance: () => void;
@@ -1099,7 +1205,7 @@ function Actions({
           </Button>
         </div>
       )}
-      <Button size="xl" onClick={() => onProceed('buy')}>
+      <Button size="xl" disabled={continueOff} onClick={() => onProceed('buy')}>
         {t('purchase.continue')}
       </Button>
     </div>
@@ -1195,6 +1301,37 @@ function Stepper({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * A price or total: USD large with the SYP after "≈" small, or (S25 SC2, a section game) the SYP
+ * large ("تدفع ≈ 7,300 ل.س") with the USD small; USD alone without a rate.
+ */
+function Money({ usd, syp, sypFirst }: { usd: number; syp: number | null; sypFirst: boolean }) {
+  if (sypFirst && syp !== null) {
+    return (
+      <span className="flex flex-col items-end">
+        <span className="text-2xl font-bold tabular-nums">
+          {tcr('price.pay', { amount: formatSyp(syp) })}
+        </span>
+        <bdi dir="ltr" className="text-sm text-muted-foreground tabular-nums">
+          {formatUsd(usd)}
+        </bdi>
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col items-end">
+      <bdi dir="ltr" className="text-2xl font-bold tabular-nums">
+        {formatUsd(usd)}
+      </bdi>
+      {syp !== null && (
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {t('catalog.price.syp', { amount: formatSyp(syp) })}
+        </span>
+      )}
+    </span>
   );
 }
 

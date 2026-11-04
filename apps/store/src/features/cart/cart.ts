@@ -23,6 +23,15 @@ export interface CartLineDisplay {
   productNameAr: string;
   cover: { url: string; width: number; height: number } | null;
   fields: { key: string; labelAr: string; value: string }[];
+  /** S25 AM6: an `amount` pack's step and unit, so the line shows "7,300 ل.س", not a quantity. */
+  amount?: { step: number; unitAr: string };
+  /** S25 SC2: the game is in the credit section (SYP first). */
+  section?: boolean;
+  /**
+   * S25 RN2: a section line's recipient field (its game's one field) and type, so the cart shows
+   * the number large with the no-refund line before the slide.
+   */
+  recipient?: { key: string; type: string };
 }
 
 export interface CartLine {
@@ -131,14 +140,16 @@ const newId = () =>
 /**
  * Rule CT2: adds lines, all or none. A line with the same `cartLineKey` (product, canonical
  * fields, no gift) adds its quantity to an existing line up to `max_quantity`, the rest starting a
- * new line; a gift line is always its own. More than 10 lines in all: `full`, nothing added.
+ * new line; a gift line and an `amount` line (S25) are always their own. More than 10 lines in
+ * all: `full`, nothing added.
  */
 export function addToCart(added: readonly NewCartLine[]): AddResult {
   const current = readCart();
   if (current === null) return { status: 'off' };
   const lines = current.map((line) => ({ ...line }));
   for (const line of added) {
-    const key = cartLineKey(line);
+    // S25: two amounts to one number are two payments, never one summed line.
+    const key = line.display.amount ? null : cartLineKey(line);
     let left = line.quantity;
     if (key !== null) {
       for (const existing of lines) {

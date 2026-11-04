@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { formatUsd } from '@vertex-digital/contracts';
+import { formatUsd, groupRecipient } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -17,12 +17,14 @@ import { useTranslation } from 'react-i18next';
 import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
+import { CashHoldCard } from './cash-hold';
 import {
   hasActions,
   type OrderAction,
   OrderActionButtons,
   OrderActionDialog,
 } from './order-actions';
+import { OrderAmount } from './order-amount';
 import { ATTEMPT_TONES, PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import { orderQuery, orderStreamRead } from './orders.queries';
 
@@ -119,13 +121,24 @@ function SheetBody({ orderId }: { orderId: string }) {
         <Row label={t('orders.detail.customer')}>
           {data.customer ? <bdi dir="ltr">{data.customer.email}</bdi> : t('orders.walkInCustomer')}
         </Row>
-        <Row label={t('orders.detail.units')}>
-          {t('orders.detail.unitsValue', {
-            quantity: data.quantity,
-            delivered: data.deliveredQuantity,
-            refunded: data.refundedQuantity,
-          })}
-        </Row>
+        {data.product.kind === 'amount' ? (
+          <Row label={t('orders.detail.amount')}>
+            <OrderAmount product={data.product} quantity={data.quantity} />
+          </Row>
+        ) : (
+          <Row label={t('orders.detail.units')}>
+            {t('orders.detail.unitsValue', {
+              quantity: data.quantity,
+              delivered: data.deliveredQuantity,
+              refunded: data.refundedQuantity,
+            })}
+          </Row>
+        )}
+        {data.recipient && (
+          <Row label={t('orders.detail.recipient')}>
+            <bdi dir="ltr">{groupRecipient(data.recipient)}</bdi>
+          </Row>
+        )}
         <Row label={t('orders.detail.total')}>
           <bdi dir="ltr">{formatUsd(data.totalUsdUnits)}</bdi>
         </Row>
@@ -158,6 +171,7 @@ function SheetBody({ orderId }: { orderId: string }) {
           </dl>
         </section>
       )}
+      {data.cashHold && <CashHoldCard order={data} hold={data.cashHold} />}
       {hasActions(data) && (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-bold">{t('orders.decisions.title')}</h3>

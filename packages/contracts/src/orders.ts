@@ -1873,6 +1873,17 @@ const adminOrigin = {
   purpose: adminOrderPurposeSchema.nullable(),
 };
 
+/**
+ * An order's product in the admin's lists and live room; S25 AM6: an `amount` product's step and
+ * unit, so the order reads "7,300 ل.س" instead of a quantity (null for other kinds).
+ */
+const adminOrderProduct = z.object({
+  id: z.uuid(),
+  nameAr: z.string(),
+  amountStep: z.int().positive().nullable(),
+  amountUnitAr: z.string().nullable(),
+});
+
 export const adminOrderSummarySchema = z
   .object({
     id: z.uuid(),
@@ -1881,7 +1892,7 @@ export const adminOrderSummarySchema = z
     /** Null for a walk-in order (S16 rule AP1). */
     customer: orderCustomer.nullable(),
     ...adminOrigin,
-    product: z.object({ id: z.uuid(), nameAr: z.string() }),
+    product: adminOrderProduct,
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
     quantity: z.int().positive(),
     totalUsdUnits: z.int().positive(),
@@ -2447,7 +2458,7 @@ export const liveOrderCardSchema = z
     number: z.string(),
     status: orderStatusSchema,
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
-    product: z.object({ id: z.uuid(), nameAr: z.string() }),
+    product: adminOrderProduct,
     quantity: z.int().positive(),
     totalUsdUnits: z.int().positive(),
     isTest: z.boolean(),

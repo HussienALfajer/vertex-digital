@@ -33,7 +33,12 @@ export function EarlyGameView({ game }: { game: StoreGame }) {
             cards={Object.fromEntries(
               game.products.map((product) => [
                 product.id,
-                <PackContent key={product.id} product={product} cached={false} />,
+                <PackContent
+                  key={product.id}
+                  product={product}
+                  cached={false}
+                  section={game.game.serviceClass === 'credit' || game.game.serviceClass === 'cash'}
+                />,
               ]),
             )}
           />
