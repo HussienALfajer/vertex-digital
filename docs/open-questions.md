@@ -4,6 +4,18 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 
 | ID | Question | Needed before | Recommendation |
 |---|---|---|---|
+| Q31 | jneedcontur: the key of each `params` field in `newOrder`, how a product with two fields (id and zone or server) is sent, and how to tell a code product before buying | S25 PR 2 | Until answered, only one-field offers, sent as `playerId` (ZD4) |
+| Q32 | jneedcontur: the error reply's JSON and HTTP status for each documented code (an example) | S25 PR 2 | Until answered, every reply outside the success shape is `unknown` (ZD6) |
+| Q33 | jneedcontur: does a repeated `newOrder` with the same `order_uuid` return the original order, even after `reject`; is the balance returned on `reject` | S25 live routes | Treat `reject` as definitive and check the balance in the pilot |
+| Q34 | jneedcontur: what `check?uuid=1` returns for a key no order was created with (empty list or an error) | S25 PR 2 | Needed for the re-send of a `111` or a lost first send (ZD7) |
+| Q35 | jneedcontur: are the balance and every price always in USD | S25 live routes | Assume USD; confirm in the pilot against the panel |
+| Q36 | jneedcontur: the request rate limit per minute, and whether 2FA is required for API orders (code 108) | S25 live routes | Turn 2FA on in the account before the pilot |
+| Q37 | jneedcontur: can `wait` turn into `reject` hours later, the longest `wait`, and the deposit and refund methods | S25 live routes | Keep the float at about a week of sales |
+| Q38 | jneedcontur, Syriatel credit: does the line receive the chosen value (96.15) or the face value (100), why ÷1.04, and is `qty` sent with its decimals | S25 Syriatel credit | No Syriatel credit pack active before the answer and one live order (edge 9) |
+| Q39 | jneedcontur, bills and cash: what the "ID" field holds (phone, subscription or contract number; wallet or phone number) | S25 bills and cash | Until answered, `digits` 6–16 and the routes off (RN4) |
+| Q40 | jneedcontur: are all quantities in new SYP; is MTN Cash in old SYP | S25 bills and cash | Confirm before pricing MTN Cash |
+| Q41 | jneedcontur: is "one order a minute" per number or per account, and the most credit orders a day | S25 live routes | May lower CL3's per-number counts |
+| Q42 | jneedcontur: a well-formed number that is inactive or of another operator: `reject` with the balance returned, or lost | S25 live routes | Shapes the no-refund text (RN2) |
 
 ## Resolved
 
