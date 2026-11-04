@@ -125,9 +125,15 @@ export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]>
 /**
  * Suppliers whose adapter this build has (rule SP1). `manual` needs none; `fake` counts only where
  * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here (S19 FC2: `fazercards`;
- * S25 ZD2: `jneedcontur` arrives with the zddk adapter, PR 2).
+ * S25 ZD2: `jneedcontur`, through the zddk adapter).
  */
-const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'fazercards', 'manual', 'fake'];
+const ADAPTERS_READY: readonly SupplierCode[] = [
+  'wdgzone',
+  'fazercards',
+  'jneedcontur',
+  'manual',
+  'fake',
+];
 
 /** Rule SP1: the running app has this supplier's adapter. */
 export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: boolean }): boolean {

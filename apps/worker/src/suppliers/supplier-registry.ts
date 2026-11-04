@@ -12,6 +12,7 @@ import {
   FazercardsAdapter,
   type SupplierAdapter,
   WdgzoneAdapter,
+  ZddkAdapter,
 } from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../core/config/env.js';
@@ -75,6 +76,12 @@ export class SupplierRegistry {
         apiKey: credentials.apiKey,
         webhookSecret: credentials.webhookSecret,
       });
+    }
+    if (code === 'jneedcontur') {
+      // S25 ZD1: a zddk store, one token; its host is in the adapter, never in the panel.
+      return credentials.apiToken
+        ? new ZddkAdapter({ store: code, apiToken: credentials.apiToken })
+        : null;
     }
     if (code !== 'fake') return null;
     const file = this.env.FAKE_SUPPLIER_STATE_FILE;

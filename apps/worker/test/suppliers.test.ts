@@ -47,6 +47,7 @@ import {
   type SupplierMoney,
   type SupplierOffer,
   WdgzoneAdapter,
+  ZddkAdapter,
 } from '@vertex-digital/suppliers';
 import {
   and,
@@ -1944,8 +1945,9 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       expect(await real.get('fazercards', { apiKey: SECRET })).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
       expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(18);
-      // S25 ZD2: no jneedcontur adapter before PR 2, whatever its token.
-      expect(await real.get('jneedcontur', { apiToken: SECRET })).toBeNull();
+      // S25 ZD1, ZD2: jneedcontur through the zddk adapter, with its token.
+      expect(await real.get('jneedcontur', { apiToken: SECRET })).toBeInstanceOf(ZddkAdapter);
+      expect(await real.get('jneedcontur', {})).toBeNull();
     }));
 
   it('masks credentials and URL queries in messages', () => {

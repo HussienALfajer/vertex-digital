@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 /** The credential fields the panel names (`SUPPLIER_CREDENTIAL_FIELDS`); others show as they are. */
-const LABELLED = ['apiKey', 'webhookSecret'] as const;
+const LABELLED = ['apiKey', 'webhookSecret', 'apiToken'] as const;
 
 type Labelled = (typeof LABELLED)[number];
 

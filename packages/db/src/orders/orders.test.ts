@@ -561,6 +561,35 @@ describe('outcomes (rules F1, F2, M2)', () => {
     expect((await orderRow(order.id)).status).toBe('delivered');
   });
 
+  it("keeps a supplier's delivery text for the admin, printable and clipped (S25 ZD8)", async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    const attemptId = await send(order, item);
+    const result = await apply(attemptId, {
+      status: 'delivered',
+      quantity: 1,
+      reference: `\tOP-77120\n${'x'.repeat(300)}`,
+    });
+    expect(result.attempt.result).toMatchObject({
+      status: 'delivered',
+      reference: `OP-77120 ${'x'.repeat(191)}`,
+    });
+    expect(result.attempt.deliveryReference).toBeNull();
+    const admin = await adminOrder(db, order.id);
+    expect(admin?.attempts[0]?.deliveryReference).toBe(`OP-77120 ${'x'.repeat(191)}`);
+
+    // No text, nothing kept: the reference stays empty.
+    const other = await buy(request(buyer, item));
+    const plain = await apply(await send(other.order, item), {
+      status: 'delivered',
+      quantity: 1,
+      reference: ' \n ',
+    });
+    expect(plain.attempt.result).not.toHaveProperty('reference');
+    expect((await adminOrder(db, other.order.id))?.attempts[0]?.deliveryReference).toBeNull();
+  });
+
   it('stores codes encrypted, one per unit, and routes the rest of a partial delivery', async () => {
     const item = await product({ kind: 'code', cost: usd(9.6) });
     const buyer = await customer({ funds: usd(100) });

@@ -1,32 +1,15 @@
-# TASKS — S25 PR 1: Syrian credit, bills and cash with the fake supplier
+# TASKS — S25 PR 2: the zddk adapter for jneedcontur
 
-Spec: `docs/specs/S25-zddk-supplier-and-syrian-credit.md` (Approved 2026-11-04) · ADR 0039.
-The spec's PR 1, split in two so the money code gets its own review (owner prefers the fewest safe PRs).
-PR 2 (the zddk adapter) waits for Q31, Q32 and Q34.
+Spec: `docs/specs/S25-zddk-supplier-and-syrian-credit.md` (Approved 2026-11-04) · ADR 0039 · doc `docs/suppliers/jneedcontur.md`.
+Q31, Q32 and Q34 are still open in `docs/open-questions.md`: the owner chose (2026-11-05) to build on the spec's safe fallbacks now (one-field offers sent as `playerId`, every reply outside the success shape `unknown`, an unknown key `unknown`). After the merge: the production deploy (it carries PR 1 too) and the owner's live pilot.
 
-## PR 1a — `feat/s25-credit-core`: contracts, db, api, worker
-- [x] contracts: `jneedcontur` supplier code, `jneedcontur_paused` switch, credentials `apiToken`, RT14 precedence, `cost_precision` reason
-- [x] contracts: product kind `amount` (`minQuantity`, `amountUnitAr`, `amountStep` 100, `MAX_AMOUNT_UNITS`), AM1 amount ↔ quantity rules, `ROUTE_KIND_MISMATCH`
-- [x] contracts: `syriatel_number` / `mtn_number` field types with RN1 normalisation and prefixes (unit tests)
-- [x] contracts: `service_class`, `creditPolicySchema`, cash hold states, cancel reason `limit_reached`, refund reason `cash_rejected`
-- [x] contracts: error codes (`CREDIT_DAILY_LIMIT`, `RECIPIENT_DAILY_LIMIT`, `CASH_BALANCE_TOO_RECENT`, `CASH_DAILY_LIMIT`) with store/admin Arabic text; audit actions with labels; job `orders.cash-hold-expiry`
-- [x] db (`/db-migration`): enums extended the safe way, seeded jneedcontur row (fixed UUID, S19 pattern), treasury place and account, `catalog_products` (`min_quantity`, `amount_unit_ar`, `amount_step`, checks), `catalog_games.service_class`, `orders` (`recipient`, `cash_hold`, decided at/by, index), `credit_policy` single row
-- [x] db: limit counting (CL2, CL3, CS1, CS2) and the cash hold transitions (approve, reject/expire with the refund journal) in the shared write paths, with concurrency tests
-- [x] api: order and checkout paths: amount products, recipient normalisation, CL5 locks, CL2/CL3/CS1/CS2 checks, CS3 hold, reservations refused for cash and rechecked on payment (CL6)
-- [x] api: `GET /api/credit-limits`, `GET/PUT /api/admin/credit-policy`, `PUT /api/admin/catalog/games/:id/service-class`, `POST /api/admin/orders/:id/cash-approval`, product create/update with `amount`; access tests
-- [x] api: jneedcontur credential and switch in the suppliers module (not in `ADAPTERS_READY`: "not available")
-- [x] worker: fulfilment skips held orders; `orders.cash-hold-expiry` job; Telegram cash card (outbox message with buttons, the API's bot decides) and the CL4 recipient alert
-- [x] worker: fake supplier `@100` and value-list offers; `quantity_unsupported` / `quantity_below_offer` routing for amount offers (`quantity × 100` is the zddk adapter's, PR 2)
-- [x] bridge: OpenAPI export and admin client; admin/store translations of the new codes and mocks
-- [x] checks, reviewer (3 blocking findings fixed), PR and merge
-
-## PR 1b — `feat/s25-credit-screens`: admin, store, E2E
-- [x] admin: product form kind `amount` ("لكل 100 ل.س" in the price matrix), game service-class select, settings "حدود الرصيد والكاش", jneedcontur in the suppliers list, live room "بانتظار الموافقة" and the order's recipient, amount and hold actions
-- [x] store: section category and SYP-first prices (SC2), amount input, twice-typed recipient and confirmation (RN2), limit messages, held state on the order page, cart line, quick buy, sale mode (merchants)
-- [x] seed: the section's six games with service classes and an amount product on the fake supplier (`pnpm db:seed-local`)
-- [x] e2e: section flows and RTL screenshots (store phone dark/light, admin light/dark)
-- [x] api: the amount's step and unit on the admin order list, the live cards, the price matrix rows and quick buy items (so they read "7,300 ل.س")
-- [x] seed: the quick-code sequence moved past the snapshot's codes (any product created after the seed collided)
-- [x] browser check of the spec's PR 1 acceptance (7,300 SYP bill, credit pack, wrong operator, section, cash and per-number limits, the recipient alert, a cash hold approved and one rejected in the panel)
-- [x] reviewer (2 blocking findings fixed: the cart's number confirmation, E2E for the cart, sale mode and quick buy)
-- [x] checks, PR and merge; ROADMAP
+## PR 2 — `feat/supplier-jneedcontur`
+- [x] `packages/suppliers/src/zddk/`: schemas from the public docs, exact decimal costs (`decimal.ts`), offers per `qty_values` (`<id>`, `<id>:<value>`, `<id>@100`), `cost_precision`, `fields_unsupported` for zero or several params
+- [x] orders: derived v4 `order_uuid`, `qty` per offer shape, only `playerId`, `accept`/`wait`/`reject`, everything else `unknown`; poll by key; balance; quote by `products_id`; categories from the products' own fields (`content/<id>` undocumented)
+- [x] ZD8: the delivery text as the attempt's reference (`result.reference`), shown to the admin as "رقم العملية"
+- [x] registries (worker, API), `ADAPTERS_READY`, the panel's `apiToken` label and description
+- [x] tests: adapter against the fake server, decimals, db reference, registry, API supplier list, admin E2E
+- [x] docs: `docs/suppliers/jneedcontur.md`, ROADMAP, architecture, `packages/suppliers/CLAUDE.md`
+- [x] checks, reviewer (2 blocking findings fixed: amount ranges with no whole unit, one-unit bounds on packages and value lists), PR and merge
+- [ ] deploy `main` (S25 PR 1 + PR 2), health checks, the deploy log
+- [ ] live pilot steps for the owner (token, IP allowlist, 2FA, test, sync, funding, one MTN 1,000 SYP order, one Jawaker pack)

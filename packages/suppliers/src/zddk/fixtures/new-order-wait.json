@@ -1,0 +1,10 @@
+{
+  "status": "OK",
+  "data": {
+    "order_id": "ID_0000aaaa2222cccc",
+    "status": "wait",
+    "price": 72.324,
+    "data": { "playerId": "0940000000" },
+    "replay_api": null
+  }
+}

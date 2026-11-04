@@ -348,14 +348,14 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the five suppliers, FazerCards with its adapter, jneedcontur without (S25 ZD2)', async () => {
+  it('lists the five suppliers, FazerCards and jneedcontur with their adapters (S25 ZD2)', async () => {
     const list = await json<
       { code: string; available: boolean; configured: boolean; lowBalanceUsdUnits: number }[]
     >(await get('/api/admin/suppliers'), 200);
     expect(list.map((item) => [item.code, item.available])).toEqual([
       ['wdgzone', true],
       ['fazercards', true],
-      ['jneedcontur', false],
+      ['jneedcontur', true],
       ['manual', true],
       ['fake', true],
     ]);
@@ -446,7 +446,7 @@ describe('suppliers (rules SP1–SP3)', () => {
     expect(detail.credentials.hints).toEqual({ apiKey: 'c3d4', webhookSecret: 'a1b2' });
   });
 
-  it('stores the jneedcontur token before its adapter, starting no sync (S25 ZD1, ZD2)', async () => {
+  it('stores the jneedcontur token, its one credential (S25 ZD1, ZD2)', async () => {
     const detail = await json<{
       available: boolean;
       configured: boolean;
@@ -458,13 +458,10 @@ describe('suppliers (rules SP1–SP3)', () => {
       }),
       200,
     );
-    expect(detail).toMatchObject({ available: false, configured: true });
+    // No sync or connection test here: either would call the live store.
+    expect(detail).toMatchObject({ available: true, configured: true });
     expect(detail.credentialFields).toEqual(['apiToken']);
     expect(detail.credentials.hints).toEqual({ apiToken: 'e5f6' });
-    expect(await body(await post('/api/admin/suppliers/jneedcontur/sync'))).toMatchObject({
-      status: 409,
-      code: 'SUPPLIER_UNAVAILABLE',
-    });
   });
 
   it('starts a sync once: the running run, then one a minute (rule SY1)', async () => {

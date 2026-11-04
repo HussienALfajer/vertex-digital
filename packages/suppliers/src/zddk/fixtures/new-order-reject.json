@@ -1,0 +1,10 @@
+{
+  "status": "OK",
+  "data": {
+    "order_id": "ID_0000aaaa3333dddd",
+    "status": "reject",
+    "price": 1.094,
+    "data": { "playerId": "5000000001" },
+    "replay_api": null
+  }
+}
