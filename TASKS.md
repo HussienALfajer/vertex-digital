@@ -18,7 +18,7 @@ PR 2 (the zddk adapter) waits for Q31, Q32 and Q34.
 - [x] worker: fulfilment skips held orders; `orders.cash-hold-expiry` job; Telegram cash card (outbox message with buttons, the API's bot decides) and the CL4 recipient alert
 - [x] worker: fake supplier `@100` and value-list offers; `quantity_unsupported` / `quantity_below_offer` routing for amount offers (`quantity × 100` is the zddk adapter's, PR 2)
 - [x] bridge: OpenAPI export and admin client; admin/store translations of the new codes and mocks
-- [ ] checks, reviewer, PR and merge
+- [x] checks, reviewer (3 blocking findings fixed), PR and merge
 
 ## PR 1b — `feat/s25-credit-screens`: admin, store, E2E
 - [ ] admin: product form kind `amount` ("لكل 100 ل.س" in the price matrix), game service-class select, settings "حدود الرصيد والكاش", jneedcontur in the suppliers list, live room "بانتظار الموافقة" and the order's recipient, amount and hold actions
