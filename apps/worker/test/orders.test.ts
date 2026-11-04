@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import {
+  CREDIT_POLICY_DEFAULTS,
   CURRENCY_SCALE,
   ORDER_POLICY_DEFAULTS,
   QUEUES,
@@ -17,13 +18,16 @@ import {
   catalogProducts,
   checkoutOrders,
   createDatabase,
+  creditPolicy,
   customerNotifications,
   customers,
+  type Database,
   emailOutbox,
   encryptCredentials,
   encryptSecret,
   ensureCustomerWallet,
   ensureSystemAccount,
+  expireCashHolds,
   findCustomerWallet,
   fulfilmentAttempts,
   fulfilOrderManually,
@@ -710,6 +714,37 @@ describe('routing and sending (rules R1–R6, F1)', () => {
       expect(order.isTest).toBe(true);
       await fulfil.fulfil(order.id, tx);
       expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
+    });
+  });
+});
+
+describe('the cash hold (S25 CS3, CS5)', () => {
+  it('routes no held order, from the job or the sweep, and refunds it once the hold expires', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const order = await buy(tx, item);
+      await tx.execute(
+        sql`update orders set recipient = '0955123456', cash_hold = 'held',
+              updated_at = now() - interval '5 minutes' where id = ${order.id}`,
+      );
+      expect((await fulfil.fulfil(order.id, tx)).kind).toBe('skipped');
+      expect(await attemptsOf(tx, order.id)).toHaveLength(0);
+      await tx.execute(
+        sql`update orders set updated_at = now() where status in ('paid', 'failed') and id <> ${order.id}`,
+      );
+      expect((await sweep.sweep(new Date(), tx)).fulfilled).not.toContain(order.id);
+
+      await tx
+        .insert(creditPolicy)
+        .values({ id: newId(), ...CREDIT_POLICY_DEFAULTS, cashHoldHours: 0 });
+      sent.length = 0;
+      expect(await expireCashHolds(tx as unknown as Database, { jobs }, 100)).toContain(order.id);
+      expect(await orderOf(tx, order.id)).toMatchObject({
+        status: 'refunded',
+        refundReason: 'cash_rejected',
+        cashHold: 'expired',
+      });
+      expect(queued(QUEUES.ordersFulfil, 'orderId', order.id)).toHaveLength(0);
     });
   });
 });

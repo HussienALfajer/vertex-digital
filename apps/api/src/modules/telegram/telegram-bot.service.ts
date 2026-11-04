@@ -19,7 +19,9 @@ import {
 } from '@vertex-digital/contracts';
 import {
   type Database,
+  decideCashHold,
   newId,
+  OrderError,
   queueTelegramMessage,
   readAll,
   recordAudit,
@@ -79,6 +81,9 @@ const ANSWERS = {
   overLimit: 'فوق حد تيليجرام، اعتمد من اللوحة.',
   off: 'الاعتماد من تيليجرام متوقف، اعتمد من اللوحة.',
   frozen: 'العميل مجمّد، الاعتماد من اللوحة.',
+  cashApproved: 'تمت الموافقة، يُرسل الطلب الآن.',
+  cashRejected: 'رُفض الطلب وأُعيد المبلغ إلى المحفظة.',
+  cashPanelOnly: 'فوق حد تيليجرام، قرّر من اللوحة.',
 } as const;
 
 const APPROVAL_ANSWERS = {
@@ -406,6 +411,9 @@ export class TelegramBotService {
       case 'approve':
       case 'reject':
         return this.onDecisionButton(tx, link, query, callback);
+      case 'cashApprove':
+      case 'cashReject':
+        return this.onCashButton(tx, link, query, callback, meta);
       default:
         break;
     }
@@ -488,6 +496,44 @@ export class TelegramBotService {
       reasons: telegramRejectReasons(facts.method),
     });
     return answer(query);
+  }
+
+  /**
+   * S25 CS4: "موافقة" or "رفض" on a held cash order's card, decided at once within the policy's
+   * Telegram ceiling, as a savepoint so a refusal leaves the update's transaction usable.
+   */
+  private async onCashButton(
+    tx: Transaction,
+    link: TelegramLink,
+    query: CallbackQuery,
+    callback: Extract<TelegramCallback, { action: 'cashApprove' | 'cashReject' }>,
+    meta: RequestMeta,
+  ): Promise<CallbackAnswer> {
+    const decision = callback.action === 'cashApprove' ? 'approve' : 'reject';
+    try {
+      await tx.transaction((step) =>
+        decideCashHold(
+          step,
+          { jobs: this.jobs },
+          {
+            orderId: callback.orderId,
+            decision,
+            by: {
+              kind: 'admin',
+              adminId: link.adminId,
+              channel: 'telegram',
+              ipAddress: meta.ipAddress,
+              userAgent: meta.userAgent,
+            },
+          },
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof OrderError)) throw error;
+      const panelOnly = (error.details as { reason?: string } | null)?.reason === 'panel_only';
+      return answer(query, panelOnly ? ANSWERS.cashPanelOnly : ANSWERS.decided);
+    }
+    return answer(query, decision === 'approve' ? ANSWERS.cashApproved : ANSWERS.cashRejected);
   }
 
   /** True when the pressed message is this deposit's card for its current submission (F4-12). */

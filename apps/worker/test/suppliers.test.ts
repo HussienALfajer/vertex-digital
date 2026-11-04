@@ -95,7 +95,7 @@ const offerKey = (name: string) => `w-${run}-${name}`;
 const SECRET = `sk-${run}-do-not-leak-0123456789`;
 const LINKS = { admin: 'http://127.0.0.1:5173' };
 
-const ids = { fake: '', manual: '', wdgzone: '', fazercards: '' };
+const ids = { fake: '', manual: '', wdgzone: '', fazercards: '', jneedcontur: '' };
 
 interface Sent {
   queue: string;
@@ -1920,7 +1920,8 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       const connected = await real.connect(tx, { id: ids.fake, code: 'fake' });
       expect(connected?.secrets).toEqual([SECRET]);
       const offers = (await connected?.adapter.listOffers()) ?? [];
-      expect(offers).toHaveLength(13);
+      // One removed by the script: the 18 offers of the fake catalog with S25's credit offers.
+      expect(offers).toHaveLength(17);
       expect(offers.find((item) => item.offerId === 'fake-uc-60')?.cost.amountUnits).toBe(
         usd(0.92),
       );
@@ -1942,7 +1943,9 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       ).toBeInstanceOf(FazercardsAdapter);
       expect(await real.get('fazercards', { apiKey: SECRET })).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
-      expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(14);
+      expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(18);
+      // S25 ZD2: no jneedcontur adapter before PR 2, whatever its token.
+      expect(await real.get('jneedcontur', { apiToken: SECRET })).toBeNull();
     }));
 
   it('masks credentials and URL queries in messages', () => {

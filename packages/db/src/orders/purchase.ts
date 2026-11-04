@@ -14,6 +14,8 @@ import {
   RESERVATION_HOURS,
   RESERVATIONS_MAX,
   rateFromNumeric,
+  recipientKey,
+  type ServiceClass,
   sypDisplayPrice,
   type TierQuantities,
 } from '@vertex-digital/contracts';
@@ -38,7 +40,22 @@ import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
 import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { type ProductRoutingState, productRoutingStates } from '../pricing/index.js';
 import { recordQuickLinkOrder } from '../quick-links/index.js';
-import { catalogInputFields, catalogProducts, exchangeRates, orders } from '../schema/index.js';
+import {
+  catalogGames,
+  catalogInputFields,
+  catalogProducts,
+  exchangeRates,
+  orders,
+} from '../schema/index.js';
+import {
+  afterSectionOrder,
+  cashEligibility,
+  cashHoldFor,
+  checkCreditLimits,
+  currentCreditPolicy,
+  lockRecipients,
+  type SectionLine,
+} from './credit.js';
 import { OrderError } from './errors.js';
 import { findSavedPlayer, type SavedPlayerRow, touchSavedPlayer } from './saved-players.js';
 import { createShareLink } from './share-links.js';
@@ -247,6 +264,18 @@ export interface PreparedLine {
   playerRegion: string | null;
   gift: { senderName: string | null; message: string | null } | null;
   savePlayer: { label: string } | null;
+  /** S25 CL1: the game's service class, and the recipient line of a section game (RN3). */
+  serviceClass: ServiceClass;
+  recipient: string | null;
+}
+
+/** S25 CL1: the lines of the section, as its limits read them. */
+export function sectionLines(lines: readonly PreparedLine[]): SectionLine[] {
+  return lines.flatMap((line) =>
+    line.serviceClass === 'none' || line.recipient === null
+      ? []
+      : [{ serviceClass: line.serviceClass, recipient: line.recipient, totalUsdUnits: line.total }],
+  );
 }
 
 /**
@@ -300,7 +329,33 @@ export async function prepareLine(
       fields: { quantity: 'too_big' },
     });
   }
-  if (line.gift && product.kind !== 'direct') {
+  // S25 AM1: an amount product's fewest units (1 for every other kind).
+  if (line.quantity < product.minQuantity) {
+    throw new OrderError('VALIDATION_FAILED', 'Quantity below the product minimum', {
+      fields: { quantity: 'too_small' },
+    });
+  }
+  // S25 AM3, edge case 4: an amount no usable route takes is out of stock for that amount.
+  if (product.kind === 'amount') {
+    const bounds = usable.routes
+      .filter((route) => route.unusableReason === null)
+      .map((route) => route.offer);
+    const takes = bounds.some(
+      (offer) =>
+        (offer.minQuantity ?? 1) <= line.quantity &&
+        (offer.maxQuantity ?? Number.MAX_SAFE_INTEGER) >= line.quantity,
+    );
+    if (!takes) {
+      throw new OrderError('PRODUCT_UNAVAILABLE', 'No route takes this amount', {
+        availability: 'out_of_stock',
+        maxQuantity: Math.max(
+          0,
+          ...bounds.map((offer) => offer.maxQuantity ?? product.maxQuantity),
+        ),
+      });
+    }
+  }
+  if (line.gift && product.kind === 'code') {
     throw new OrderError('VALIDATION_FAILED', 'Only a direct top-up can be a gift', {
       gift: 'code_product',
     });
@@ -312,21 +367,39 @@ export async function prepareLine(
     });
   }
   const fields = checked.fields;
+  // S25 CL1, RN3: a section game's one required field is the recipient.
+  const [game] = await tx
+    .select({ serviceClass: catalogGames.serviceClass })
+    .from(catalogGames)
+    .where(eq(catalogGames.id, product.gameId));
+  const serviceClass = game?.serviceClass ?? 'none';
+  const typed = serviceClass === 'none' ? undefined : Object.values(fields)[0];
+  // CL3: every spelling of one line counts under one key (a `digits` bill or cash field too).
+  const recipient = typed === undefined ? null : recipientKey(typed);
+  if (serviceClass !== 'none' && recipient === null) {
+    throw new OrderError('VALIDATION_FAILED', 'The recipient is missing', {
+      fields: { recipient: 'required' },
+    });
+  }
 
   // S09 rule PV8: a player id not known valid needs the customer's confirmation. S19 PC3: an
   // account outside the game's regions is refused, confirmed or not.
   let playerCheck: PlayerCheckState = 'none';
   let playerName: string | null = null;
   let playerRegion: string | null = null;
-  const lookup = await common.playerCheck(tx, {
-    productId: product.id,
-    gameId: product.gameId,
-    productKind: product.kind,
-    isTest: common.isTest,
-    fields,
-    // Read once per line: a 50-line checkout holds its locks for every query (audit A04-6).
-    routing: usable,
-  });
+  // S25: a recipient line is never a player id to check.
+  const lookup =
+    product.kind === 'amount' || serviceClass !== 'none'
+      ? null
+      : await common.playerCheck(tx, {
+          productId: product.id,
+          gameId: product.gameId,
+          productKind: product.kind,
+          isTest: common.isTest,
+          fields,
+          // Read once per line: a 50-line checkout holds its locks for every query (audit A04-6).
+          routing: usable,
+        });
   if (lookup?.result === 'region_mismatch') {
     throw new OrderError('PLAYER_REGION_MISMATCH', 'The account is on another region', {
       region: lookup.region,
@@ -361,7 +434,9 @@ export async function prepareLine(
     gift: line.gift
       ? { senderName: line.gift.senderName || null, message: line.gift.message || null }
       : null,
-    savePlayer: product.kind === 'direct' && line.savePlayer ? line.savePlayer : null,
+    savePlayer: product.kind !== 'code' && line.savePlayer ? line.savePlayer : null,
+    serviceClass,
+    recipient,
   };
 }
 
@@ -405,6 +480,7 @@ export function lineValues(line: PreparedLine) {
     isGift: line.gift !== null,
     giftSenderName: line.gift?.senderName ?? null,
     giftMessage: line.gift?.message ?? null,
+    recipient: line.recipient,
   };
 }
 
@@ -466,10 +542,37 @@ export async function purchaseOrder(
   const orderId = newId();
   const total = line.total;
   const display = await displayTotal(tx, total);
+  // S25 CL5: the recipient's lock before the wallet's, so racing accounts count each other.
+  const section = sectionLines([line]);
+  const policy = section.length > 0 ? await currentCreditPolicy(tx) : null;
+  await lockRecipients(
+    tx,
+    section.map((entry) => entry.recipient),
+  );
   // The wallet lock first (S09 rule RS2): the balance and the reservations count under it.
   const wallet = await lockCustomerWallet(tx, input.customerId);
   const reserve =
     input.whenBalanceShort === 'reserve' && (await accountBalance(tx, wallet)) < total;
+  const merchant = customer.accountType === 'merchant';
+  if (policy) {
+    // S25 CS1: a cash order is never reserved.
+    if (reserve && line.serviceClass === 'cash') {
+      const cash = await cashEligibility(tx, wallet, policy);
+      throw new OrderError('CASH_BALANCE_TOO_RECENT', 'A cash order is never reserved', {
+        eligibleUsdUnits: cash.eligibleUsdUnits,
+        eligibleMoreAt: cash.moreAt?.toISOString() ?? null,
+      });
+    }
+    await checkCreditLimits(tx, {
+      policy,
+      customerId: input.customerId,
+      merchant,
+      walletId: wallet,
+      lines: section,
+    });
+  }
+  const cashHold =
+    policy && !reserve ? cashHoldFor(policy, { ...line, totalUsdUnits: total }, merchant) : null;
   // S12 LM4: the cap read under the wallet lock, so the customer's purchases see each other.
   if (reserve) checkReservationCap(customer, total);
   else await checkPurchaseCap(tx, customer, total);
@@ -509,6 +612,7 @@ export async function purchaseOrder(
     paidAt: reserve ? null : sql`now()`,
     reservedAt: reserve ? sql`now()` : null,
     expiresAt: reserve ? sql`now() + ${`${RESERVATION_HOURS} hours`}::interval` : null,
+    cashHold,
   });
 
   const audit = purchaseAudit(input, order.id);
@@ -549,13 +653,16 @@ export async function purchaseOrder(
         totalUsdUnits: total,
         journalId: journalId as string,
         ...(order.isGift && { gift: true }),
+        ...(cashHold && { cashHeld: true }),
       },
     });
     if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
-    await queueFulfil(tx, context.jobs, order.id);
+    // S25 CS3: a held cash order waits for the admin's decision.
+    if (!cashHold) await queueFulfil(tx, context.jobs, order.id);
     // S21 LV4, AL5: the level recomputed and the low-balance alert after the debit.
     await afterMerchantPurchase(tx, context.jobs, customer);
   }
+  if (policy) await afterSectionOrder(tx, context, policy, order);
   return { order, created: true, savedPlayer };
 }
 

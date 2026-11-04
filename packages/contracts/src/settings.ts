@@ -17,6 +17,7 @@ export const STORE_SWITCHES = [
   'usdt_bep20_paused',
   'wdgzone_paused',
   'fazercards_paused',
+  'jneedcontur_paused',
   'manual_paused',
   'fake_paused',
 ] as const;
@@ -41,6 +42,7 @@ export const STORE_SWITCH_DEFAULTS: StoreSwitchValues = {
   usdt_bep20_paused: false,
   wdgzone_paused: false,
   fazercards_paused: false,
+  jneedcontur_paused: false,
   manual_paused: false,
   fake_paused: false,
 };
@@ -63,6 +65,7 @@ export const DEPOSIT_PAUSE_SWITCHES: Record<DepositMethod, StoreSwitch> = {
 export const SUPPLIER_PAUSE_SWITCHES: Record<SupplierCode, StoreSwitch> = {
   wdgzone: 'wdgzone_paused',
   fazercards: 'fazercards_paused',
+  jneedcontur: 'jneedcontur_paused',
   manual: 'manual_paused',
   fake: 'fake_paused',
 };

@@ -7,6 +7,9 @@ import { RatesModule } from '../rates/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
 import { AdminPurchasesService } from './admin-purchases.service.js';
+import { CreditAdminController } from './credit.admin.controller.js';
+import { CreditController } from './credit.controller.js';
+import { CreditService } from './credit.service.js';
 import { GamePlayerChecksAdminController } from './game-player-checks.admin.controller.js';
 import { GamePlayerChecksService } from './game-player-checks.service.js';
 import { OrderActionsService } from './order-actions.service.js';
@@ -49,6 +52,8 @@ import { VerifyController } from './verify.controller.js';
   controllers: [
     OrdersController,
     OrdersAdminController,
+    CreditController,
+    CreditAdminController,
     PlayerChecksAdminController,
     GamePlayerChecksAdminController,
     SharesController,
@@ -56,6 +61,7 @@ import { VerifyController } from './verify.controller.js';
   ],
   providers: [
     OrdersService,
+    CreditService,
     AdminPurchasesService,
     OrderDecisionsService,
     OrderActionsService,

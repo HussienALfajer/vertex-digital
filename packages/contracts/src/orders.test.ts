@@ -385,6 +385,12 @@ describe('routing candidates (rules R2, R4)', () => {
       null,
       'quantity_above_offer',
     ]);
+    // S25 AM3: an amount offer that takes more units per order than the order has.
+    const bounded = [route('1', { offerMinQuantity: 1 }), route('2', { offerMinQuantity: 1_000 })];
+    expect(orderCandidates(bounded, order).map((c) => c.skipReason)).toEqual([
+      null,
+      'quantity_below_offer',
+    ]);
   });
 
   it("computes a test customer's availability over the test routes only (rule O3)", () => {
@@ -618,9 +624,10 @@ describe('order field values (rule O5, S06 CT7)', () => {
       whenBalanceShort: 'refuse',
       confirmPlayer: false,
     });
-    // S23 TS5: up to the highest tier's limit; the account's own limit is the purchase's check.
-    expect(createOrderSchema.safeParse({ ...request, quantity: 100 }).success).toBe(true);
-    expect(createOrderSchema.safeParse({ ...request, quantity: 101 }).success).toBe(false);
+    // S23 TS5, S25 AM1: up to an amount product's most; the product's and the account's own limits
+    // are the purchase's check.
+    expect(createOrderSchema.safeParse({ ...request, quantity: 1_000 }).success).toBe(true);
+    expect(createOrderSchema.safeParse({ ...request, quantity: 1_001 }).success).toBe(false);
     expect(createOrderSchema.safeParse({ ...request, expectedUnitPriceUsdUnits: 1 }).success).toBe(
       false,
     );

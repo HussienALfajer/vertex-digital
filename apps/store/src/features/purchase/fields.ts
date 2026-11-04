@@ -2,6 +2,8 @@ import {
   orderFieldValuesSchema,
   SERVER_MISMATCH,
   type StoreField,
+  type SyrianOperator,
+  WRONG_OPERATOR,
 } from '@vertex-digital/contracts';
 import { t } from '@/lib/i18n';
 
@@ -27,11 +29,17 @@ export function checkFields(fields: readonly StoreField[], typed: FieldValues): 
     const key = String(issue.path[0]);
     const field = fields.find((item) => item.key === key);
     if (!field || errors[key]) continue;
-    // S19 ID2: a server that contradicts the HoYoverse uid.
+    // S19 ID2: a server that contradicts the HoYoverse uid. S25 RN1: a line of the other operator.
+    const params = issue.code === 'custom' ? issue.params : undefined;
+    const reason = params?.reason;
     errors[key] =
-      issue.code === 'custom' && issue.params?.reason === SERVER_MISMATCH
+      reason === SERVER_MISMATCH
         ? t('purchase.fieldErrors.serverMismatch')
-        : fieldMessage(field, input[key] ?? '');
+        : reason === WRONG_OPERATOR
+          ? t('purchase.fieldErrors.wrongOperator', {
+              operator: t(`purchase.operators.${params?.operator as SyrianOperator}`),
+            })
+          : fieldMessage(field, input[key] ?? '');
   }
   return { ok: false, errors };
 }
@@ -59,5 +67,8 @@ function fieldMessage(field: StoreField, value: string): string {
       return t('purchase.fieldErrors.hoyoverseUid');
     case 'supercell_tag':
       return t('purchase.fieldErrors.supercellTag');
+    case 'syriatel_number':
+    case 'mtn_number':
+      return t('purchase.fieldErrors.syrianNumber');
   }
 }

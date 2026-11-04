@@ -135,6 +135,7 @@ export class CatalogStoreService {
         status: gameServiceStatus(products.map((product) => serviceFacts(states.get(product.id)))),
         idGuide: game.idGuideFileId ? imageOf(game.idGuideFileId, images) : null,
         regionNotesAr: game.regionNotesAr,
+        serviceClass: game.serviceClass,
       },
       fields: fields.map((field) => ({
         key: field.key,
@@ -180,6 +181,9 @@ export class CatalogStoreService {
         nameAr: row.nameAr,
         gameAmount: row.gameAmount,
         maxQuantity: row.maxQuantity,
+        minQuantity: row.minQuantity,
+        amountUnitAr: row.amountUnitAr,
+        amountStep: row.amountStep,
         available: available && price !== null,
         priceUsdUnits: price,
         priceSypUnits:

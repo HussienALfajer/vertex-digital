@@ -12,6 +12,13 @@ import {
   productSchema,
   quickLinkAttributionSchema,
 } from './catalog.js';
+import {
+  type CashHoldState,
+  cashHoldStateSchema,
+  MAX_AMOUNT_UNITS,
+  RECIPIENT_FIELD_OPERATOR,
+  recipientNumberSchema,
+} from './credit.js';
 import { customerMarksSchema } from './customer-status.js';
 import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
@@ -175,6 +182,7 @@ export const RESERVATIONS_MAX = 3;
 /** Why an order was cancelled (rules RS7–RS9); set only on `cancelled` orders. */
 /** `frozen` (S12 CF1): the admin froze the customer. */
 /** `price_list_changed` (S20 AT3, PO3): the account's type or price list changed. */
+/** `limit_reached` (S25 CL6): paying it now would break a section limit. */
 export const CANCEL_REASONS = [
   'expired',
   'customer',
@@ -182,6 +190,7 @@ export const CANCEL_REASONS = [
   'product_changed',
   'frozen',
   'price_list_changed',
+  'limit_reached',
 ] as const;
 
 export const cancelReasonSchema = z.enum(CANCEL_REASONS).meta({ id: 'CancelReason' });
@@ -332,6 +341,9 @@ export const CART_LINES_MAX = 10;
  * S23 TS5: the schema's ceiling is the highest a tier may allow (`TIER_QUANTITY_CEILING`).
  */
 export const CHECKOUT_LINES_MAX = 100;
+
+/** The most units one order may ask for: a tier's ceiling, or an `amount` product's (S25 AM1). */
+export const ORDER_QUANTITY_CEILING = Math.max(TIER_QUANTITY_CEILING, MAX_AMOUNT_UNITS);
 
 /** A saved id's label ("حسابي"): 1–30 printable characters, trimmed, no bidi or format controls. */
 export const savedPlayerLabelSchema = z
@@ -635,8 +647,14 @@ export const orderEventActorSchema = z.enum(ORDER_EVENT_ACTORS).meta({ id: 'Orde
 
 export type OrderEventActor = z.infer<typeof orderEventActorSchema>;
 
-/** Why units were refunded (rules R5, F1, D5). */
-export const REFUND_REASONS = ['no_route', 'routes_exhausted', 'input_rejected', 'admin'] as const;
+/** Why units were refunded (rules R5, F1, D5); S25 CS4, CS5: a cash hold rejected or expired. */
+export const REFUND_REASONS = [
+  'no_route',
+  'routes_exhausted',
+  'input_rejected',
+  'admin',
+  'cash_rejected',
+] as const;
 
 export const refundReasonSchema = z.enum(REFUND_REASONS).meta({ id: 'RefundReason' });
 
@@ -651,6 +669,8 @@ export const ROUTE_SKIP_REASONS = [
   'balance_below_order',
   /** S21 QT3: the offer allows fewer units per order than the order still needs. */
   'quantity_above_offer',
+  /** S25 AM3: the offer takes more units per order than the order has. */
+  'quantity_below_offer',
 ] as const;
 
 export const routeSkipReasonSchema = z.enum(ROUTE_SKIP_REASONS).meta({ id: 'RouteSkipReason' });
@@ -768,6 +788,8 @@ export interface CandidateRoute {
   balanceUsdUnits: number | null;
   /** S21 QT3: the offer's most units per order; null without a limit. */
   offerMaxQuantity: number | null;
+  /** S25 AM3: the offer's fewest units per order; null or absent without a limit. */
+  offerMinQuantity?: number | null;
 }
 
 /** What the router knows of the order (rule R1). */
@@ -806,6 +828,9 @@ function skipReason(route: CandidateRoute, order: CandidateOrder): RouteSkipReas
   }
   if (route.offerMaxQuantity !== null && route.offerMaxQuantity < order.remainingUnits) {
     return 'quantity_above_offer';
+  }
+  if (route.offerMinQuantity != null && route.offerMinQuantity > order.remainingUnits) {
+    return 'quantity_below_offer';
   }
   if (
     route.balanceUsdUnits !== null &&
@@ -1110,6 +1135,9 @@ function fieldValueSchema(field: OrderFieldRules): z.ZodType<string, string> {
         .pipe(z.string().regex(SUPERCELL_TAG));
     case 'select':
       return z.enum((field.options ?? []).map((option) => option.value) as [string, ...string[]]);
+    case 'syriatel_number':
+    case 'mtn_number':
+      return recipientNumberSchema(RECIPIENT_FIELD_OPERATOR[field.type]);
   }
 }
 
@@ -1172,7 +1200,7 @@ export const SERVER_MISMATCH = 'server_mismatch';
 /**
  * Rule O5: the values of an order for a game's unarchived input fields (S06 CT7). Required fields
  * must be present; an empty optional field is left out; unknown keys are refused. Values come out
- * trimmed (phones in E.164, Supercell tags normalized). S19 ID2: a `select` whose value names
+ * trimmed (phones in E.164, Supercell tags normalized, S25 recipient lines as `09XXXXXXXX`). S19 ID2: a `select` whose value names
  * another server than the game's HoYoverse uid is refused (`params.reason` `server_mismatch`).
  * Issues carry the field's key as their first path element.
  */
@@ -1225,8 +1253,11 @@ export function orderFieldValuesSchema(
 export const createOrderSchema = z
   .object({
     productId: z.uuid(),
-    /** The account's own limit (the pack's, a merchant tier's for codes) is checked at purchase (TS5). */
-    quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
+    /**
+     * The account's own limit (the pack's, a merchant tier's for codes) is checked at purchase (TS5).
+     * S25 AM1: an `amount` product's quantity is the typed amount over `AMOUNT_STEP`.
+     */
+    quantity: z.int().min(1).max(ORDER_QUANTITY_CEILING),
     fields: z
       .record(z.string().max(32), typedValue)
       .refine((fields) => Object.keys(fields).length <= MAX_INPUT_FIELDS_PER_GAME, {
@@ -1368,6 +1399,11 @@ export const orderSummarySchema = z
     productNameAr: z.string(),
     /** S21 PS5: a code pack's delivered order offers "طباعة الأكواد" at the counter. */
     productKind: productKindSchema,
+    /** S25 AM6: an `amount` order shows its amount (`quantity × amountStep`) and unit. */
+    amountStep: z.int().positive().nullable(),
+    amountUnitAr: z.string().nullable(),
+    /** S25 CS3: a cash order's hold; null for every other order. */
+    cashHold: cashHoldStateSchema.nullable(),
     game: orderGame.extend({ cover: catalogImageSchema.nullable() }),
     quantity: z.int().positive(),
     /** S16 rule AP11: null on a gift or a compensation from the store (no price shown). */
@@ -1475,6 +1511,9 @@ export const orderSchema = z
       kind: productKindSchema,
       regionAr: z.string().nullable(),
       redemptionAr: z.string().nullable(),
+      /** S25 AM6: an `amount` product's face amount per unit and its unit; null otherwise. */
+      amountStep: z.int().positive().nullable(),
+      amountUnitAr: z.string().nullable(),
     }),
     game: orderGame.extend({ cover: catalogImageSchema.nullable() }),
     fields: z.array(orderFieldValue),
@@ -1488,6 +1527,10 @@ export const orderSchema = z
     refundedUsdUnits: z.int().nonnegative().nullable(),
     refundReason: refundReasonSchema.nullable(),
     ...placedByStore,
+    /** S25 RN3: the recipient line of a credit or cash order, as `09XXXXXXXX`. */
+    recipient: z.string().nullable(),
+    /** S25 CS3, CS5: a cash order's hold ("قيد المراجعة" while `held`); null otherwise. */
+    cashHold: cashHoldStateSchema.nullable(),
     /** Rule LT1, oldest first. */
     timeline: z.array(z.object({ step: orderTimelineStepSchema, at: z.iso.datetime() })),
     codes: z.array(orderCodeSchema),
@@ -1764,6 +1807,8 @@ export const ADMIN_ORDER_TABS = [
   'all',
   'review',
   'manual',
+  /** S25 CS3: cash orders held for the admin's approval. */
+  'cash_hold',
   'active',
   'delivered',
   'refunded',
@@ -1773,9 +1818,12 @@ export const adminOrderTabSchema = z.enum(ADMIN_ORDER_TABS).meta({ id: 'AdminOrd
 
 export type AdminOrderTab = z.infer<typeof adminOrderTabSchema>;
 
-/** The statuses of each tab; `manual` is the orders with an open manual attempt. */
+/**
+ * The statuses of each tab; `manual` is the orders with an open manual attempt, `cash_hold` the
+ * orders whose cash hold is `held`.
+ */
 export const ADMIN_ORDER_TAB_STATUSES: Readonly<
-  Record<Exclude<AdminOrderTab, 'all' | 'manual'>, readonly OrderStatus[]>
+  Record<Exclude<AdminOrderTab, 'all' | 'manual' | 'cash_hold'>, readonly OrderStatus[]>
 > = {
   review: ['needs_review'],
   active: ['paid', 'sent_to_supplier', 'failed'],
@@ -1841,6 +1889,8 @@ export const adminOrderSummarySchema = z
     supplierCode: supplierCodeSchema.nullable(),
     /** The open attempt is the manual supplier's (rule MN1). */
     manualWaiting: z.boolean(),
+    /** S25 CS3: a cash order's hold; null for every other order. */
+    cashHold: cashHoldStateSchema.nullable(),
     /** S10 rule AD2: the "سلة" and "هدية" badges. */
     checkoutId: z.uuid().nullable(),
     isGift: z.boolean(),
@@ -1858,7 +1908,12 @@ export type AdminOrderPage = z.infer<typeof adminOrderPageSchema>;
 
 /** `GET /api/admin/orders/counts`: the navigation badge. */
 export const adminOrderCountsSchema = z
-  .object({ needsReview: z.int().nonnegative(), manualWaiting: z.int().nonnegative() })
+  .object({
+    needsReview: z.int().nonnegative(),
+    manualWaiting: z.int().nonnegative(),
+    /** S25 CS3: cash orders waiting for the admin's approval. */
+    cashHeld: z.int().nonnegative(),
+  })
   .meta({ id: 'AdminOrderCounts' });
 
 export type AdminOrderCounts = z.infer<typeof adminOrderCountsSchema>;
@@ -2016,12 +2071,32 @@ export const adminOrderSchema = z
     ...adminOrigin,
     adminReason: z.string().nullable(),
     customerNote: z.string().nullable(),
-    product: z.object({ id: z.uuid(), nameAr: z.string(), kind: productKindSchema }),
+    product: z.object({
+      id: z.uuid(),
+      nameAr: z.string(),
+      kind: productKindSchema,
+      /** S25 AM6. */
+      amountStep: z.int().positive().nullable(),
+      amountUnitAr: z.string().nullable(),
+    }),
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
     fields: z.array(orderFieldValue),
     quantity: z.int().positive(),
     deliveredQuantity: z.int().nonnegative(),
     refundedQuantity: z.int().nonnegative(),
+    /** S25 RN3: a credit or cash order's recipient line. */
+    recipient: z.string().nullable(),
+    /** S25 CS3–CS5: a cash order's hold, who decided it and when; null for every other order. */
+    cashHold: z
+      .object({
+        state: cashHoldStateSchema,
+        decidedAt: z.iso.datetime().nullable(),
+        adminName: z.string().nullable(),
+        expiresAt: z.iso.datetime(),
+        /** CS4: Telegram may decide it (at most the policy's ceiling). */
+        telegramDecides: z.boolean(),
+      })
+      .nullable(),
     unitPriceUsdUnits: z.int().positive(),
     totalUsdUnits: z.int().positive(),
     totalSypUnits: z.int().nullable(),
@@ -2266,7 +2341,8 @@ export const resolveAttemptSchema = z
   .discriminatedUnion('outcome', [
     z.object({
       outcome: z.literal('delivered'),
-      quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
+      /** S25 AM3: an `amount` order is delivered whole, up to `ORDER_QUANTITY_CEILING` units. */
+      quantity: z.int().min(1).max(ORDER_QUANTITY_CEILING),
       /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
       codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
       reason: decisionReason,
@@ -2298,8 +2374,8 @@ export type AdminRevealedCode = z.infer<typeof adminRevealedCodeSchema>;
 
 // Live operations (S11, F17) --------------------------------------------------------------------
 
-/** The live room's columns (rule LR1). */
-export const LIVE_COLUMNS = ['at_supplier', 'manual', 'review', 'finished'] as const;
+/** The live room's columns (rule LR1); S25 CS3: `cash_hold` ("بانتظار الموافقة"). */
+export const LIVE_COLUMNS = ['cash_hold', 'at_supplier', 'manual', 'review', 'finished'] as const;
 
 export const liveColumnSchema = z.enum(LIVE_COLUMNS).meta({ id: 'LiveColumn' });
 
@@ -2313,13 +2389,15 @@ export const LIVE_COLUMN_LIMIT = 100;
 
 /**
  * Rule LR1: the column of an order, from its status, the supplier of its open attempt and when it
- * finished; null for reservations, cancels and orders finished over an hour ago.
+ * finished; null for reservations, cancels and orders finished over an hour ago. S25 CS3: a paid
+ * order whose cash hold is `held` waits in `cash_hold`.
  */
 export function liveColumn(
-  order: { status: OrderStatus; finishedAt: Date | null },
+  order: { status: OrderStatus; finishedAt: Date | null; cashHold?: CashHoldState | null },
   openAttempt: { supplierCode: SupplierCode } | null,
   now: Date,
 ): LiveColumn | null {
+  if (order.status === 'paid' && order.cashHold === 'held') return 'cash_hold';
   switch (order.status) {
     case 'needs_review':
       return 'review';
@@ -2405,6 +2483,7 @@ const liveColumnContent = z.object({
 export const liveBoardSchema = z
   .object({
     columns: z.object({
+      cash_hold: liveColumnContent,
       at_supplier: liveColumnContent,
       manual: liveColumnContent,
       review: liveColumnContent,
@@ -2476,7 +2555,7 @@ export const deliveryReferenceSchema = z
 /** `POST /api/admin/orders/:id/fulfil` (rules MF1–MF4). */
 export const fulfilOrderSchema = z
   .object({
-    quantity: z.int().min(1).max(TIER_QUANTITY_CEILING),
+    quantity: z.int().min(1).max(ORDER_QUANTITY_CEILING),
     /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
     codes: z.array(deliveredCodeSchema).max(TIER_QUANTITY_CEILING).default([]),
     unitCostUsdUnits: usdCentsSchema.max(FULFIL_COST_MAX_USD_UNITS),

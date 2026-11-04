@@ -131,6 +131,7 @@ const PLACES: Record<string, string> = {
   usdt_bep20: 'USDT (BEP20)',
   'supplier:wdgzone': 'WDGZone',
   'supplier:fazercards': 'FazerCards',
+  'supplier:jneedcontur': 'jneedcontur',
   'supplier:manual': 'المورد اليدوي',
   'supplier:fake': 'المورد التجريبي',
   outside_usd: 'خارج المتجر (دولار)',

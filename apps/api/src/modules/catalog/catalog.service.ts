@@ -17,6 +17,8 @@ import {
   type MarginScope,
   type Product,
   type ProductKind,
+  SECTION_FIELD_TYPES,
+  type ServiceClass,
   stockLevel,
   sypDisplayPrice,
   type UpdateCategory,
@@ -680,6 +682,40 @@ export class CatalogService {
     });
   }
 
+  /**
+   * S25 CL1: a game's service class. A `credit` or `cash` game has exactly one input field, and it
+   * is required: the recipient (Data).
+   */
+  setGameServiceClass(actor: Actor, id: string, serviceClass: ServiceClass): Promise<GameDetail> {
+    return this.db.transaction(async (tx) => {
+      const row = await this.lockGame(tx, id);
+      if (row.archivedAt) throw refusals.parentArchived();
+      if (serviceClass !== 'none') {
+        const fields = await tx
+          .select({ required: catalogInputFields.required, type: catalogInputFields.type })
+          .from(catalogInputFields)
+          .where(and(eq(catalogInputFields.gameId, id), isNull(catalogInputFields.archivedAt)));
+        const [field] = fields;
+        const allowed: readonly string[] = SECTION_FIELD_TYPES;
+        if (fields.length !== 1 || !field?.required || !allowed.includes(field.type)) {
+          throw refusals.invalid(
+            'A credit or cash game needs exactly one required number or digits field',
+          );
+        }
+      }
+      if (row.serviceClass !== serviceClass) {
+        await tx.update(catalogGames).set({ serviceClass }).where(eq(catalogGames.id, id));
+        await auditCatalog(tx, actor, 'catalog_game.service_class_set', gameEntity(id), {
+          nameAr: row.nameAr,
+          before: row.serviceClass,
+          after: serviceClass,
+        });
+        await queueStoreRevalidate(tx, this.jobs);
+      }
+      return this.game(id, tx);
+    });
+  }
+
   // For the game's fields and products (`CatalogItemsService`) --------------------------------------
 
   /**
@@ -1148,6 +1184,7 @@ function toGame(
     accentColor: row.accentColor,
     regionNotesAr: row.regionNotesAr,
     bestValueEnabled: row.bestValueEnabled,
+    serviceClass: row.serviceClass,
     productCount,
   };
 }

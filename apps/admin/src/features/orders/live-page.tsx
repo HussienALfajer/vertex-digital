@@ -57,6 +57,7 @@ const EVENT_DEBOUNCE_MS = 1_000;
 
 /** "+N أخرى" opens the matching tab of the orders list (rule LR1). */
 const LIST_TABS: Record<LiveColumn, OrderSearch['tab']> = {
+  cash_hold: 'cash_hold',
   at_supplier: 'active',
   manual: 'manual',
   review: 'review',

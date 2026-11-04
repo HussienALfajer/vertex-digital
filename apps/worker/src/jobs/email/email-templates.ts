@@ -150,6 +150,8 @@ const REFUND_REASON_LABELS: Record<RefundReason, string> = {
   routes_exhausted: 'لا يتوفّر مورد لهذه الباقة الآن',
   input_rejected: 'بيانات الحساب مرفوضة',
   admin: 'قرّرت الإدارة استرداده',
+  // S25 CS4, CS5: a held cash order rejected, or left undecided.
+  cash_rejected: 'لم تتم الموافقة على طلب الكاش',
 };
 
 /** The words of a reservation cancelled by the system (S09 rule RS9). */
@@ -159,6 +161,8 @@ const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = 
   product_changed: 'تغيّرت بيانات الباقة',
   frozen: 'أُوقف حسابك مؤقتاً، تواصل مع الدعم',
   price_list_changed: 'تغيّرت أسعار حسابك',
+  // S25 CL6.
+  limit_reached: 'تجاوز الحد اليومي لقسم الرصيد والفواتير',
 };
 
 /** A browser or system the user agent did not name reads as "unknown", in Arabic (feature 2 audit). */

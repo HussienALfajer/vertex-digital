@@ -79,7 +79,15 @@ interface RowError {
 }
 
 /** The store categories of rule SC14, by the product kind of the node. */
-const STORE_CATEGORY_SLUGS: Record<ProductKind, string> = { direct: 'games', code: 'gift-cards' };
+const STORE_CATEGORY_SLUGS: Record<ProductKind, string> = {
+  direct: 'games',
+  code: 'gift-cards',
+  // S25 SC1: the "الرصيد والفواتير" section.
+  amount: 'credit-bills',
+};
+
+/** S25 AM3: an offer's units per order, an imported `amount` product's bounds. */
+const boundsOf = (offer: OfferRow) => ({ min: offer.minQuantity, max: offer.maxQuantity });
 
 const categoryEntity = (id: string) => ({ type: 'supplier_category' as const, id });
 const offerEntity = (id: string) => ({ type: 'supplier_offer' as const, id });
@@ -456,6 +464,7 @@ export class SupplierCatalogService {
             nameAr: item.nameAr,
             kind: kindOf(offers.get(item.offerId) as OfferRow, row),
             gameAmount: item.gameAmount ?? null,
+            quantityBounds: boundsOf(offers.get(item.offerId) as OfferRow),
           })),
         );
         const routes = await this.insertRoutes(
@@ -557,6 +566,7 @@ export class SupplierCatalogService {
                     nameAr: item.nameAr,
                     kind: kindOf(offers.get(item.offerId) as OfferRow, row),
                     gameAmount: item.gameAmount ?? null,
+                    quantityBounds: boundsOf(offers.get(item.offerId) as OfferRow),
                   })),
                 )
                 .catch((error: unknown) => {

@@ -278,9 +278,31 @@ const withFields = (offer: FakeOffer, extra: FieldSpec): FakeOffer => ({
   fieldSpecs: [PLAYER_FIELD, extra],
 });
 
+/** S25: the recipient line of a Syrian credit, bill or cash offer, sent as `playerId` (RN3). */
+const LINE_FIELD: FieldSpec = { key: 'playerId', label: 'Number', type: 'text' };
+
+/** S25 Data: a fixed credit value (`<product>:<value>`, as a value list's offer). */
+const credit = (offerId: string, name: string, cents: number): FakeOffer => ({
+  ...topUp(offerId, name, 'Syrian credit', cents, 'fake-syria'),
+  fieldSpecs: [LINE_FIELD],
+});
+
+/** S25 AM1: a free-amount offer (`<product>@100`): the cost of one unit of 100 SYP. */
+const amount = (
+  offerId: string,
+  name: string,
+  cents: number,
+  bounds: { minQuantity: number; maxQuantity: number },
+): FakeOffer => ({
+  ...credit(offerId, name, cents),
+  kind: 'amount',
+  ...bounds,
+});
+
 /**
- * The fake catalog: PUBG Mobile and Free Fire top-ups, iTunes codes, and (S16 PR 4) Mobile Legends
- * with a zone and Genshin Impact with a region select.
+ * The fake catalog: PUBG Mobile and Free Fire top-ups, iTunes codes, (S16 PR 4) Mobile Legends
+ * with a zone and Genshin Impact with a region select, and (S25) Syrian credit packs, bills and
+ * cash by free amount.
  */
 const OFFERS: readonly FakeOffer[] = [
   topUp('fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 88, 'fake-pubg-global', 99),
@@ -306,6 +328,10 @@ const OFFERS: readonly FakeOffer[] = [
     topUp('fake-gi-330', 'Fake Genesis Crystals 330', 'Genshin Impact', 420, 'fake-gi'),
     REGION_FIELD,
   ),
+  credit('fake-mtn:1000', 'Fake MTN credit 1000', 85),
+  credit('fake-mtn:5000', 'Fake MTN credit 5000', 425),
+  amount('fake-mtn-bill@100', 'Fake MTN bill', 85, { minQuantity: 10, maxQuantity: 1_000 }),
+  amount('fake-syriatel-cash@100', 'Fake Syriatel Cash', 86, { minQuantity: 10, maxQuantity: 100 }),
 ];
 
 /** The host of the fake's category images (rule IM1); `.invalid` never resolves. */
@@ -348,6 +374,7 @@ const CATEGORIES: readonly (SupplierCategory & { color: [number, number, number]
   },
   { categoryId: 'fake-ml', name: 'Mobile Legends', kind: 'direct', color: [90, 60, 180] },
   { categoryId: 'fake-gi', name: 'Genshin Impact', kind: 'direct', color: [60, 170, 160] },
+  { categoryId: 'fake-syria', name: 'Syrian credit', kind: 'direct', color: [200, 40, 60] },
 ];
 
 /** A solid 64×64 PNG, so the fake needs no image files (rule IM1's bundled images). */

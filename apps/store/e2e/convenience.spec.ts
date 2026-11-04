@@ -101,6 +101,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
       kind: 'direct',
       regionAr: null,
       redemptionAr: null,
+      amountStep: null,
+      amountUnitAr: null,
     },
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
     fields: [
@@ -114,6 +116,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     totalSypUnits: null,
     refundedUsdUnits: 0,
     refundReason: null,
+    recipient: null,
+    cashHold: null,
     timeline: [
       { step: 'paid', at: '2026-10-09T10:00:00.000Z' },
       { step: 'delivered', at: '2026-10-09T10:00:12.000Z' },
@@ -150,6 +154,9 @@ function summary(product: StoreProduct, changes: Partial<OrderSummary> = {}): Or
     customerNote: null,
     productNameAr: product.nameAr,
     productKind: 'direct',
+    amountStep: null,
+    amountUnitAr: null,
+    cashHold: null,
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
     quantity: 1,
     totalUsdUnits: product.priceUsdUnits as number,
@@ -322,6 +329,8 @@ test('a repeat link for an order that was not delivered is typed again (OT1, OT3
   const refused = order(p60, {
     stage: 'refunded',
     refundReason: 'input_rejected',
+    recipient: null,
+    cashHold: null,
     deliveredQuantity: 0,
     repeatable: false,
   });

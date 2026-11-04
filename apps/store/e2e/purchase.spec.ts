@@ -47,6 +47,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
       kind: 'direct',
       regionAr: null,
       redemptionAr: null,
+      amountStep: null,
+      amountUnitAr: null,
     },
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
     fields: [
@@ -60,6 +62,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     totalSypUnits: product.priceSypUnits,
     refundedUsdUnits: 0,
     refundReason: null,
+    recipient: null,
+    cashHold: null,
     timeline: [{ step: 'paid', at: new Date().toISOString() }],
     codes: [],
     expiresAt: null,

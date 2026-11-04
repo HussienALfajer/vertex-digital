@@ -26,6 +26,13 @@ export {
   checkoutOrderRows,
   checkoutOrders,
 } from './checkout.js';
+export {
+  type CashHoldDecider,
+  creditLimitsFor,
+  currentCreditPolicy,
+  decideCashHold,
+  expireCashHolds,
+} from './credit.js';
 export { type OrderFigures, orderFigures, type PeriodFigures } from './figures.js';
 export { liveBoard, liveCounts } from './live.js';
 export {

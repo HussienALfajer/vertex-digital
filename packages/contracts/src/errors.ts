@@ -314,6 +314,17 @@ export const ERROR_CODES = [
   'PRODUCT_ALERTS_LIMIT_REACHED',
   /** S22 PA1: the pack's state does not fit the alert's kind; `details.reason`. */
   'PRODUCT_ALERT_INVALID',
+  /** S25 CL2: the section's 24-hour cap would be passed; `details.remainingUsdUnits`. */
+  'CREDIT_DAILY_LIMIT',
+  /** S25 CL3: the number has had its orders of the day; `details.recipient`, `details.limit`. */
+  'RECIPIENT_DAILY_LIMIT',
+  /**
+   * S25 CS1: balance credited too recently cannot pay cash; `details.eligibleUsdUnits`,
+   * `details.eligibleMoreAt`.
+   */
+  'CASH_BALANCE_TOO_RECENT',
+  /** S25 CS2: the cash 24-hour cap would be passed; `details.remainingUsdUnits`. */
+  'CASH_DAILY_LIMIT',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

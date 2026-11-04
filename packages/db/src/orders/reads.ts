@@ -6,6 +6,8 @@ import {
   type AdminOrderSummary,
   type CatalogImage,
   type CheckoutInfo,
+  cashHoldExpiresAt,
+  cashTelegramDecides,
   catalogImagePath,
   DELIVERY_STATS_SAMPLE_DAYS,
   DELIVERY_STATS_SAMPLE_SIZE,
@@ -52,6 +54,7 @@ import { type Database, readAll, type Transaction } from '../client.js';
 import { customerMarks } from '../customers/reads.js';
 import { newId } from '../id.js';
 import {
+  adminUsers,
   catalogCategories,
   catalogGames,
   catalogInputFields,
@@ -74,6 +77,7 @@ import {
   supplierWebhookEvents,
   supportTickets,
 } from '../schema/index.js';
+import { currentCreditPolicy } from './credit.js';
 import { codeReleaseLog, merchantBranding, sellingPriceOf, shownFields } from './receipts.js';
 import { decryptSecret } from './secrets.js';
 import type { OrderRow } from './transition.js';
@@ -168,6 +172,7 @@ const summaryColumns = {
   /** The database's own text, microseconds kept (the API's cursor). */
   at: sql<string>`${orders.createdAt}::text`,
   productNameAr: catalogProducts.nameAr,
+  amount: { step: catalogProducts.amountStep, unitAr: catalogProducts.amountUnitAr },
   shown: packShown,
   game: {
     id: catalogGames.id,
@@ -183,6 +188,7 @@ async function summaries(
   rows: {
     order: OrderRow;
     productNameAr: string;
+    amount: { step: number | null; unitAr: string | null };
     shown: boolean;
     game: { id: string; slug: string; nameAr: string; coverFileId: string | null };
   }[],
@@ -191,7 +197,7 @@ async function summaries(
     db,
     rows.map((row) => row.game.coverFileId),
   );
-  return rows.map(({ order, productNameAr, shown, game }) => {
+  return rows.map(({ order, productNameAr, amount, shown, game }) => {
     const store = placedByStore(order);
     return {
       id: order.id,
@@ -199,6 +205,9 @@ async function summaries(
       stage: orderCustomerStage(order.status),
       productNameAr,
       productKind: order.kind,
+      amountStep: amount.step,
+      amountUnitAr: amount.unitAr,
+      cashHold: order.cashHold,
       game: {
         id: game.id,
         slug: game.slug,
@@ -364,6 +373,8 @@ export async function customerOrder(
       kind: product.kind,
       regionAr: product.regionAr,
       redemptionAr: product.redemptionAr,
+      amountStep: product.amountStep,
+      amountUnitAr: product.amountUnitAr,
     },
     game: {
       id: game.id,
@@ -382,6 +393,8 @@ export async function customerOrder(
     placedByStore: store.placedByStore,
     customerNote: store.customerNote,
     refundReason: order.refundReason,
+    recipient: order.recipient,
+    cashHold: order.cashHold,
     timeline: orderTimeline(
       statusEvents.flatMap((event) =>
         event.status ? [{ status: event.status, at: event.at }] : [],
@@ -517,6 +530,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function adminFilters(query: AdminOrderListQuery): SQL | undefined {
   const conditions: (SQL | undefined)[] = [];
   if (query.tab === 'manual') conditions.push(manualWaiting);
+  else if (query.tab === 'cash_hold') conditions.push(eq(orders.cashHold, 'held'));
   else if (query.tab !== 'all') {
     conditions.push(inArray(orders.status, [...ADMIN_ORDER_TAB_STATUSES[query.tab]]));
   }
@@ -611,6 +625,7 @@ export async function adminOrderPage(
           attempt !== undefined &&
           attempt.supplierCode === 'manual' &&
           isOpenAttempt(attempt.status),
+        cashHold: order.cashHold,
         checkoutId: order.checkoutId,
         isGift: order.isGift,
         since: order.updatedAt.toISOString(),
@@ -629,10 +644,37 @@ export async function adminOrderCounts(db: Executor): Promise<AdminOrderCounts> 
         Number,
       ),
       manualWaiting: sql<number>`count(*) filter (where ${manualWaiting})`.mapWith(Number),
+      cashHeld: sql<number>`count(*) filter (where ${orders.cashHold} = 'held')`.mapWith(Number),
     })
     .from(orders)
     .where(sql`${orders.finishedAt} is null`);
-  return { needsReview: row?.needsReview ?? 0, manualWaiting: row?.manualWaiting ?? 0 };
+  return {
+    needsReview: row?.needsReview ?? 0,
+    manualWaiting: row?.manualWaiting ?? 0,
+    cashHeld: row?.cashHeld ?? 0,
+  };
+}
+
+/** S25 CS3–CS5: a cash order's hold as the admin's order page shows it; null without one. */
+async function adminCashHold(db: Executor, order: OrderRow): Promise<AdminOrder['cashHold']> {
+  if (order.cashHold === null) return null;
+  const [policy, admins] = await readAll(db, [
+    () => currentCreditPolicy(db),
+    () =>
+      order.cashHoldAdminId
+        ? db
+            .select({ name: adminUsers.name })
+            .from(adminUsers)
+            .where(eq(adminUsers.id, order.cashHoldAdminId))
+        : [],
+  ]);
+  return {
+    state: order.cashHold,
+    decidedAt: iso(order.cashHoldDecidedAt),
+    adminName: admins[0]?.name ?? null,
+    expiresAt: cashHoldExpiresAt(order.paidAt ?? order.createdAt, policy).toISOString(),
+    telegramDecides: cashTelegramDecides(policy, order.totalUsdUnits),
+  };
 }
 
 /** The order's open attempt with its supplier, for the admin's decisions (rule D1). */
@@ -655,6 +697,8 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
         id: catalogProducts.id,
         nameAr: catalogProducts.nameAr,
         kind: catalogProducts.kind,
+        amountStep: catalogProducts.amountStep,
+        amountUnitAr: catalogProducts.amountUnitAr,
       },
       game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
     })
@@ -758,6 +802,8 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     quantity: order.quantity,
     deliveredQuantity: order.deliveredQuantity,
     refundedQuantity: order.refundedQuantity,
+    recipient: order.recipient,
+    cashHold: await adminCashHold(db, order),
     unitPriceUsdUnits: order.unitPriceUsdUnits,
     totalUsdUnits: order.totalUsdUnits,
     totalSypUnits: order.totalSypUnits,

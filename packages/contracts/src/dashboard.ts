@@ -139,6 +139,8 @@ export const dashboardSchema = z
     salesLine: z.array(z.object({ date: z.iso.date(), salesUsdUnits: z.int().nonnegative() })),
     /** Rule DB4: test orders included in the counts, not in the value. */
     now: z.object({
+      /** S25 CS3: cash orders waiting for the admin's approval. */
+      cashHold: countSchema,
       atSupplier: countSchema,
       manual: countSchema,
       review: countSchema,

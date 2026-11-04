@@ -2,18 +2,23 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   type ActivateAllResult,
   type ActivateSkipReason,
+  AMOUNT_STEP,
   type createInputFieldSchema,
   type createProductSchema,
+  DEFAULT_AMOUNT_UNIT_AR,
   DEFAULT_MAX_QUANTITY,
   earlyAccessEnd,
   type ImportRowError,
   type InputField,
   inEarlyAccess,
   inputFieldShapeSchema,
+  MAX_AMOUNT_UNITS,
   MAX_INPUT_FIELDS_PER_GAME,
   MAX_PRODUCTS_PER_GAME,
+  maxQuantityLimit,
   type Product,
   type ProductKind,
+  SECTION_FIELD_TYPES,
   type UpdateInputField,
   type UpdateProduct,
 } from '@vertex-digital/contracts';
@@ -73,6 +78,8 @@ const productValues = (row: ProductRow) => ({
   gameAmount: row.gameAmount,
   officialPriceUsdUnits: row.officialPriceUsdUnits,
   maxQuantity: row.maxQuantity,
+  minQuantity: row.minQuantity,
+  amountUnitAr: row.amountUnitAr,
   regionAr: row.regionAr,
   redemptionAr: row.redemptionAr,
   status: row.status,
@@ -116,7 +123,8 @@ export class CatalogItemsService {
     input: z.output<typeof createInputFieldSchema>,
   ): Promise<InputField> {
     const game = await this.liveGame(tx, gameId);
-    await this.checkLimit(tx, catalogInputFields, game.id, MAX_INPUT_FIELDS_PER_GAME);
+    await this.checkLimit(tx, catalogInputFields, game.id, fieldsLimit(game));
+    assertSectionField(game, input);
     const [row] = await tx
       .insert(catalogInputFields)
       .values({
@@ -231,6 +239,7 @@ export class CatalogItemsService {
         maxLength: shape.data.maxLength,
         options: shape.data.options,
       };
+      assertSectionField(game, { type: before.type, required: next.required });
       const current = fieldValues(before);
       const changed = changes(current, next);
       if (!changed) return toInputField(before);
@@ -290,7 +299,8 @@ export class CatalogItemsService {
       const { game, row } = await this.lockField(tx, id);
       if (!row.archivedAt) return toInputField(row);
       if (game.archivedAt) throw refusals.parentArchived();
-      await this.checkLimit(tx, catalogInputFields, game.id, MAX_INPUT_FIELDS_PER_GAME);
+      await this.checkLimit(tx, catalogInputFields, game.id, fieldsLimit(game));
+      assertSectionField(game, row);
       const [restored] = await tx
         .update(catalogInputFields)
         .set({
@@ -336,6 +346,12 @@ export class CatalogItemsService {
             maxQuantity: input.maxQuantity,
             regionAr: input.kind === 'code' ? (input.regionAr ?? null) : null,
             redemptionAr: input.kind === 'code' ? (input.redemptionAr ?? null) : null,
+            // S25 AM1: an amount product's fewest units, unit and step.
+            ...(input.kind === 'amount' && {
+              minQuantity: input.minQuantity,
+              amountUnitAr: input.amountUnitAr,
+              amountStep: AMOUNT_STEP,
+            }),
             sortOrder: await nextSortOrder(
               tx,
               catalogProducts,
@@ -362,8 +378,18 @@ export class CatalogItemsService {
         const codeOnly = [input.regionAr, input.redemptionAr].some(
           (value) => value !== undefined && value !== null,
         );
-        if (before.kind === 'direct' && codeOnly) {
+        if (before.kind !== 'code' && codeOnly) {
           throw refusals.invalid('Region and redemption text are for code products only');
+        }
+        // S25 AM1: the fewest units and the unit belong to amount products, within the kind's limit.
+        const amountOnly = input.minQuantity !== undefined || input.amountUnitAr !== undefined;
+        if (before.kind !== 'amount' && amountOnly) {
+          throw refusals.invalid('The minimum quantity and the unit are for amount products only');
+        }
+        const max = input.maxQuantity ?? before.maxQuantity;
+        const min = input.minQuantity ?? before.minQuantity;
+        if (max > maxQuantityLimit(before.kind) || min > max) {
+          throw refusals.invalid('The quantities are outside the product kind’s bounds');
         }
         const current = productValues(before);
         const changed = changes(current, input);
@@ -376,8 +402,9 @@ export class CatalogItemsService {
             .returning();
           row = updated as ProductRow;
           await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(id), changed);
-          // RT4 (S19): the maximum quantity decides which routes can serve the pack (audit A03-2).
-          if (changed.after.maxQuantity !== undefined && row.archivedAt === null) {
+          // RT4 (S19): the quantities decide which routes can serve the pack (audit A03-2).
+          const bounds = changed.after.maxQuantity ?? changed.after.minQuantity;
+          if (bounds !== undefined && row.archivedAt === null) {
             await repriceProducts(tx, {
               productIds: [id],
               cause: 'route_change',
@@ -562,7 +589,13 @@ export class CatalogItemsService {
     tx: Transaction,
     actor: Actor,
     gameId: string,
-    rows: readonly { nameAr: string; kind: ProductKind; gameAmount?: number | null }[],
+    rows: readonly {
+      nameAr: string;
+      kind: ProductKind;
+      gameAmount?: number | null;
+      /** S25 AM3: an `amount` offer's units per order, the new product's bounds. */
+      quantityBounds?: { min: number | null; max: number | null };
+    }[],
   ): Promise<ProductRow[]> {
     const game = await this.liveGame(tx, gameId);
     if (rows.length === 0) return [];
@@ -595,7 +628,7 @@ export class CatalogItemsService {
           kind: row.kind,
           nameAr: row.nameAr,
           gameAmount: row.gameAmount ?? null,
-          maxQuantity: DEFAULT_MAX_QUANTITY[row.kind],
+          ...importedQuantities(row),
           status: 'paused' as const,
           sortOrder: sortOrder++,
         })),
@@ -694,4 +727,41 @@ function resumeBlocker(state: ProductRoutingState | undefined): ActivateSkipReas
       price - route.costUsdUnits >= state.rule.values.minMarginUsdUnits,
   );
   return profitable ? null : 'no_route';
+}
+
+/**
+ * The quantities of an imported product: its kind's default; S25 AM3: an `amount` product takes
+ * the offer's bounds within `MAX_AMOUNT_UNITS`, its unit and step.
+ */
+function importedQuantities(row: {
+  kind: ProductKind;
+  quantityBounds?: { min: number | null; max: number | null };
+}) {
+  if (row.kind !== 'amount') return { maxQuantity: DEFAULT_MAX_QUANTITY[row.kind] };
+  const max = Math.min(row.quantityBounds?.max ?? MAX_AMOUNT_UNITS, MAX_AMOUNT_UNITS);
+  return {
+    maxQuantity: max,
+    minQuantity: Math.min(row.quantityBounds?.min ?? 1, max),
+    amountStep: AMOUNT_STEP,
+    amountUnitAr: DEFAULT_AMOUNT_UNIT_AR,
+  };
+}
+
+/** Rule CT3's field limit; S25 Data: a credit or cash game has its one recipient field only. */
+function fieldsLimit(game: { serviceClass: string }): number {
+  return game.serviceClass === 'none' ? MAX_INPUT_FIELDS_PER_GAME : 1;
+}
+
+/**
+ * S25 Data, RN4: a credit or cash game's one field is required, a number of an operator or digits,
+ * so every order names its recipient and the limits count it under one key.
+ */
+function assertSectionField(
+  game: { serviceClass: string },
+  field: { type: string; required: boolean },
+): void {
+  const allowed: readonly string[] = SECTION_FIELD_TYPES;
+  if (game.serviceClass !== 'none' && (!field.required || !allowed.includes(field.type))) {
+    throw refusals.invalid('A credit or cash game takes one required number or digits field');
+  }
 }
