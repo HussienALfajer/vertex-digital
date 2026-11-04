@@ -81,6 +81,8 @@ export async function matrixScope(
         .select({
           id: catalogProducts.id,
           nameAr: catalogProducts.nameAr,
+          amountStep: catalogProducts.amountStep,
+          amountUnitAr: catalogProducts.amountUnitAr,
           gameId: catalogGames.id,
           gameNameAr: catalogGames.nameAr,
         })
@@ -211,6 +213,8 @@ export async function matrixScope(
     rows.push({
       productId: product.id,
       productNameAr: product.nameAr,
+      amountStep: product.amountStep,
+      amountUnitAr: product.amountUnitAr,
       gameId: product.gameId,
       gameNameAr: product.gameNameAr,
       costUsdUnits: cost,

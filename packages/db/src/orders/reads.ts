@@ -574,7 +574,12 @@ export async function adminOrderPage(
         .select({
           order: orders,
           customer: { id: customers.id, name: customers.name, email: customers.email },
-          product: { id: catalogProducts.id, nameAr: catalogProducts.nameAr },
+          product: {
+            id: catalogProducts.id,
+            nameAr: catalogProducts.nameAr,
+            amountStep: catalogProducts.amountStep,
+            amountUnitAr: catalogProducts.amountUnitAr,
+          },
           game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
         })
         .from(orders)

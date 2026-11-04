@@ -57,3 +57,10 @@ export function noteImage(input: { title: string; line: string; tint: string }):
     `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="900" height="600" fill="#ffffff"/><rect width="900" height="90" fill="${input.tint}"/><text x="40" y="58" font-family="Arial" font-size="34" fill="#fff">${xml(input.title)}</text><text x="40" y="220" font-family="Arial" font-size="36" fill="#222">${xml(input.line)}</text><rect x="40" y="300" width="820" height="18" rx="9" fill="#e3e7eb"/><rect x="40" y="350" width="620" height="18" rx="9" fill="#e3e7eb"/><rect x="40" y="400" width="720" height="18" rx="9" fill="#e3e7eb"/></svg>`,
   );
 }
+
+/** A square game cover: a colour field with the game's Latin name (the S25 section's games). */
+export function coverImage(input: { title: string; color: string }): Promise<Buffer> {
+  return render(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="${input.color}"/><circle cx="640" cy="160" r="220" fill="#ffffff" fill-opacity="0.1"/><text x="400" y="430" font-family="Arial" font-size="72" font-weight="bold" text-anchor="middle" fill="#fff">${xml(input.title)}</text></svg>`,
+  );
+}

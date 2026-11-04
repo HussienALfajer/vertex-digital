@@ -13,6 +13,7 @@ import {
   type SavedPlayer,
   type SellingPriceInput,
   type SellingPriceRow,
+  type StoreField,
   type StoreGame,
   type StoreProduct,
 } from '@vertex-digital/contracts';
@@ -52,6 +53,16 @@ import { FormAlert } from '@/components/form-alert';
 import { readCustomerPrices } from '@/features/catalog/customer-prices';
 import { PackButton } from '@/features/catalog/pack-button';
 import { withPrivatePrices } from '@/features/catalog/private-prices';
+import { AmountField } from '@/features/credit/amount-field';
+import { RepeatRecipient } from '@/features/credit/recipient';
+import { RecipientConfirm } from '@/features/credit/recipient-confirm';
+import {
+  amountQuantity,
+  amountText,
+  inSection,
+  recipientFieldOf,
+  sameRecipient,
+} from '@/features/credit/section';
 import { useNotificationEvents } from '@/features/notifications/live';
 import { listOrders } from '@/features/orders/requests';
 import { STAGE_TONES, stageText } from '@/features/orders/stages';
@@ -60,6 +71,7 @@ import { usePurchasesStopped } from '@/features/purchase/customer';
 import { FieldInput } from '@/features/purchase/field-input';
 import { checkFields, type FieldValues } from '@/features/purchase/fields';
 import { freesKey } from '@/features/purchase/order-key';
+import { purchaseRefusalText } from '@/features/purchase/refusals';
 import { checkPlayer, createOrder } from '@/features/purchase/requests';
 import { errorText } from '@/lib/errors';
 import { clearFormDraft, readFormDraft, saveFormDraft } from '@/lib/form-draft';
@@ -408,6 +420,11 @@ function GamePanel({
   const [chosen, setChosen] = useState<SellingPriceRow | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [needPlayer, setNeedPlayer] = useState(false);
+  // S25 RN2: a section game's recipient typed a second time, never kept in the draft.
+  const recipientField = recipientFieldOf(game.serviceClass, store.fields);
+  const [repeat, setRepeat] = useState('');
+  const recipientMatch =
+    !recipientField || sameRecipient(recipientField, values[recipientField.key] ?? '', repeat);
   const searchRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
@@ -453,7 +470,7 @@ function GamePanel({
     (row: SellingPriceRow) => {
       if (frozen || !ready || !row.available) return;
       const product = kinds.get(row.productId);
-      if (product?.kind === 'direct' && !checkFields(store.fields, values).ok) {
+      if (product?.kind !== 'code' && (!checkFields(store.fields, values).ok || !recipientMatch)) {
         setNeedPlayer(true);
         playerRef.current?.querySelector('input')?.focus();
         return;
@@ -461,7 +478,7 @@ function GamePanel({
       setNeedPlayer(false);
       setChosen(row);
     },
-    [frozen, ready, kinds, store.fields, values],
+    [frozen, ready, kinds, store.fields, values, recipientMatch],
   );
 
   // `?pack=` (a search result): that pack, once it is known; it asks for the id first if missing.
@@ -540,7 +557,9 @@ function GamePanel({
       <div className="flex flex-col gap-3 lg:order-2" ref={playerRef}>
         {direct && (
           <Card className="gap-3">
-            <h2 className="font-bold">{tm('sale.player')}</h2>
+            <h2 className="font-bold">
+              {tm(inSection(store.game.serviceClass) ? 'sale.line' : 'sale.player')}
+            </h2>
             {store.fields.map((field) => (
               <FieldInput
                 key={field.key}
@@ -553,6 +572,17 @@ function GamePanel({
                 onBlur={() => {}}
               />
             ))}
+            {recipientField && (
+              <RepeatRecipient
+                field={recipientField}
+                value={repeat}
+                mismatch={needPlayer && repeat !== '' && !recipientMatch}
+                onChange={(value) => {
+                  setRepeat(value);
+                  setNeedPlayer(false);
+                }}
+              />
+            )}
             {needPlayer && <FormAlert>{tm('sale.fillPlayer')}</FormAlert>}
             <div className="flex flex-col gap-2">
               <span className="text-xs text-muted-foreground">
@@ -655,6 +685,8 @@ function GamePanel({
             row={chosen}
             products={data.products}
             gameName={game.nameAr}
+            section={inSection(game.serviceClass)}
+            recipientField={recipientField}
             purchaseSyp={data.purchaseSyp.get(chosen.productId) ?? null}
             hideCost={hideCost}
             blocked={frozen}
@@ -663,6 +695,7 @@ function GamePanel({
               clearFormDraft(`sale-price:${chosen.productId}`);
               // The next sale is for another player: this id never comes back by itself.
               setValues({});
+              setRepeat('');
               setChosen(null);
               setNotice(placed);
               onPlaced();
@@ -698,6 +731,8 @@ function ConfirmSale({
   row,
   products,
   gameName,
+  section,
+  recipientField,
   purchaseSyp,
   hideCost,
   blocked,
@@ -708,6 +743,10 @@ function ConfirmSale({
   row: SellingPriceRow;
   products: StoreProduct[];
   gameName: string;
+  /** S25: a section game, whose recipient no player check reads. */
+  section: boolean;
+  /** S25 RN2: the recipient, shown large with the no-refund line. */
+  recipientField: StoreField | null;
   /** The pack's purchase price in SYP at `row.purchaseUsdUnits`; null when not known. */
   purchaseSyp: number | null;
   /** PS1b: the customer may see the screen, so no price paid here either. */
@@ -724,7 +763,11 @@ function ConfirmSale({
   const unitsMax = useMerchantTier().tier?.privileges.orderUnitsMax ?? MERCHANT_CODE_QUANTITY_MAX;
   const max = code ? unitsMax : (product?.maxQuantity ?? 1);
   const [quantity, setQuantity] = useState('1');
-  const [check, setCheck] = useState<Check>({ status: code ? 'idle' : 'checking' });
+  // S25 AM1: an `amount` pack's amount as typed, in place of the quantity.
+  const amountPack = product?.kind === 'amount' ? product : null;
+  const [amount, setAmount] = useState('');
+  const unchecked = code || section;
+  const [check, setCheck] = useState<Check>({ status: unchecked ? 'idle' : 'checking' });
   const [confirmed, setConfirmed] = useState(false);
   // The pack's selling price as the API computed it: what the field shows untouched, in USD first.
   const ready = { usdUnits: row.sellingUsdUnits, sypUnits: row.sellingSypUnits };
@@ -750,7 +793,7 @@ function ConfirmSale({
   }, [row.productId, draft]);
 
   useEffect(() => {
-    if (code) return;
+    if (unchecked) return;
     let live = true;
     void checkPlayer({ productId: row.productId, fields }).then((result) => {
       if (!live) return;
@@ -762,14 +805,19 @@ function ConfirmSale({
     return () => {
       live = false;
     };
-  }, [code, row.productId, fields]);
+  }, [unchecked, row.productId, fields]);
 
   const needsConfirm =
     check.status === 'done' &&
     check.check.result !== 'valid' &&
     check.check.result !== 'not_supported';
-  const units = Number(quantity);
-  const shownUnits = Number.isInteger(units) && units > 0 && units <= max ? units : 1;
+  const amountUnits = amountPack ? amountQuantity(amountPack, amount) : null;
+  const units = amountPack ? (amountUnits ?? 0) : Number(quantity);
+  const shownUnits = amountPack
+    ? (amountUnits ?? amountPack.minQuantity)
+    : Number.isInteger(units) && units > 0 && units <= max
+      ? units
+      : 1;
   const slideReady = !blocked && check.status !== 'checking' && (!needsConfirm || confirmed);
   const again = () => setSlide((count) => count + 1);
 
@@ -805,7 +853,12 @@ function ConfirmSale({
         return setSending({ status: 'idle' });
       }
       const retry = ['NETWORK', 'UNKNOWN', 'INTERNAL_ERROR'].includes(result.reason);
-      return setSending({ status: 'failed', message: errorText(result.reason), retry });
+      // S25 edge 11: the merchant's own section limits, with what remains.
+      return setSending({
+        status: 'failed',
+        message: purchaseRefusalText(result.reason, result.details),
+        retry,
+      });
     }
     // PS3: a price typed here is this sale's own (`manual`); the pack's stays as it was.
     const saleSaved = sale ? (await setOrderSale(result.data.id, sale)).ok : true;
@@ -830,7 +883,9 @@ function ConfirmSale({
 
   function confirm() {
     setTermsAccepted(false);
-    if (!/^\d{1,3}$/.test(quantity) || units < 1 || units > max) {
+    if (
+      amountPack ? amountUnits === null : !/^\d{1,3}$/.test(quantity) || units < 1 || units > max
+    ) {
       setInvalid('quantity');
       again();
       return focusInvalid();
@@ -865,7 +920,10 @@ function ConfirmSale({
         onSubmit={(event) => event.preventDefault()}
         noValidate
       >
-        {!code && (
+        {recipientField && (
+          <RecipientConfirm field={recipientField} value={fields[recipientField.key] ?? ''} />
+        )}
+        {!code && !recipientField && (
           <div className="flex flex-col gap-2 rounded-lg bg-muted p-3 text-sm">
             <bdi dir="ltr" className="font-medium">
               {Object.values(fields).join(' · ')}
@@ -903,6 +961,17 @@ function ConfirmSale({
               </label>
             )}
           </div>
+        )}
+        {amountPack && (
+          <AmountField
+            pack={amountPack}
+            value={amount}
+            invalid={invalid === 'quantity'}
+            onChange={setAmount}
+          />
+        )}
+        {amountPack && amountUnits !== null && (
+          <p className="text-sm font-medium tabular-nums">{amountText(amountPack, amountUnits)}</p>
         )}
         {code && (
           <Field invalid={invalid === 'quantity'}>

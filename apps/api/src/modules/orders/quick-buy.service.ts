@@ -67,6 +67,8 @@ export class QuickBuyService {
             nameAr: product.nameAr,
             kind: product.kind,
             gameAmount: product.gameAmount,
+            amountStep: product.amountStep,
+            amountUnitAr: product.amountUnitAr,
           },
           quantity,
           unitPriceUsdUnits: price,

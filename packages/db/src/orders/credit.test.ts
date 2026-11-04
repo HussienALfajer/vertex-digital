@@ -6,7 +6,7 @@ import {
   QUEUES,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
@@ -249,20 +249,23 @@ describe('amount products (AM1–AM4)', () => {
     const item = await sectionProduct();
     expect(item.price).toBe(usd(0.97));
     const buyer = await customer(usd(30));
-    const { order } = await buy(request(buyer, item, '+963 955-123-456', { quantity: 20 }));
+    // A new number each run: the test database keeps orders, and CL3 counts them for 24 hours.
+    const line = number();
+    const typed = `+963 ${line.slice(1, 4)}-${line.slice(4, 7)}-${line.slice(7)}`;
+    const { order } = await buy(request(buyer, item, typed, { quantity: 20 }));
     expect(order).toMatchObject({
       kind: 'amount',
       quantity: 20,
       totalUsdUnits: usd(19.4),
-      recipient: '0955123456',
-      fields: { recipient: '0955123456' },
+      recipient: line,
+      fields: { recipient: line },
       cashHold: null,
     });
     expect(await balance(buyer)).toBe(usd(30) - usd(19.4));
     expect(fulfilJobs(order.id)).toHaveLength(1);
     const view = await customerOrder(db, buyer, order.id, 'https://store.test');
     expect(view?.product).toMatchObject({ kind: 'amount', amountStep: 100, amountUnitAr: 'ل.س' });
-    expect(view?.recipient).toBe('0955123456');
+    expect(view?.recipient).toBe(line);
   });
 
   it('refuses an amount below the product, beyond every route, or a number of the other operator', async () => {
@@ -423,7 +426,11 @@ describe('section limits (CL2–CL5)', () => {
       .where(
         and(
           eq(telegramMessages.kind, 'credit_recipient_alert'),
-          sql`${telegramMessages.params}->>'recipientMasked' = ${`09X XXX XX${line.slice(-2)}`}`,
+          // By the number's digest: the masked number keeps two digits, which other numbers share.
+          like(
+            telegramMessages.dedupeKey,
+            `credit-recipient:${createHash('sha256').update(line).digest('hex').slice(0, 32)}:%`,
+          ),
         ),
       );
     expect(alerts).toHaveLength(1);

@@ -1,8 +1,10 @@
-import type { StoreGame } from '@vertex-digital/contracts';
+import { OPERATOR_PREFIXES, type StoreGame } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { Gamepad2Icon } from 'lucide-react';
+import { Gamepad2Icon, ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PageBackLink } from '@/components/page-back-link';
+import { tcr } from '@/features/credit/i18n';
+import { inSection, operatorOf, recipientFieldOf } from '@/features/credit/section';
 import { PinStarSlot } from '@/features/merchant-tools/pin-star-slot';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
@@ -41,6 +43,7 @@ export async function GamePage({
     .then((storefront) => storefront.categories)
     .catch(() => []);
   const category = categories.find((item) => item.games.some((shown) => shown.slug === slug));
+  const section = inSection(game.serviceClass);
   return (
     <div style={accentStyle(game.accentColor)} className="flex flex-col">
       <div aria-hidden="true" className="h-2 bg-(--game-accent)" />
@@ -80,7 +83,8 @@ export async function GamePage({
             <PinStarSlot gameId={game.id} gameName={game.nameAr} variant="page" />
           </div>
         </header>
-        <HowItWorks direct={data.fields.length > 0} />
+        <HowItWorks direct={data.fields.length > 0} section={section} />
+        {section && <SectionNote data={data} />}
         {game.idGuide && (
           <IdGuidePanel>
             <CatalogPicture
@@ -96,7 +100,7 @@ export async function GamePage({
           cards={Object.fromEntries(
             data.products.map((product) => [
               product.id,
-              <PackContent key={product.id} product={product} />,
+              <PackContent key={product.id} product={product} section={section} />,
             ]),
           )}
         />
@@ -108,12 +112,15 @@ export async function GamePage({
 /**
  * The three steps of a purchase under the hero (2026-10-19): a game with account fields is topped
  * up on the player's account, one without them delivers a code to "طلباتي". The numbers take the
- * game's accent, as the selected pack does. Rendered on the server, no client JavaScript.
+ * game's accent, as the selected pack does. Rendered on the server, no client JavaScript. S25: a
+ * section game asks for the line's number and delivers to it.
  */
-function HowItWorks({ direct }: { direct: boolean }) {
-  const steps = direct
-    ? [t('game.steps.choose'), t('game.steps.player'), t('game.steps.delivered')]
-    : [t('game.steps.choose'), t('game.steps.pay'), t('game.steps.code')];
+function HowItWorks({ direct, section }: { direct: boolean; section: boolean }) {
+  const steps = section
+    ? [t('game.steps.choose'), t('game.steps.line'), t('game.steps.lineDelivered')]
+    : direct
+      ? [t('game.steps.choose'), t('game.steps.player'), t('game.steps.delivered')]
+      : [t('game.steps.choose'), t('game.steps.pay'), t('game.steps.code')];
   return (
     <ol
       aria-label={t('game.steps.label')}
@@ -134,6 +141,41 @@ function HowItWorks({ direct }: { direct: boolean }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** The delivery time under which SC3 says the credit reaches the line "within seconds". */
+const FAST_MS = 60_000;
+
+/**
+ * S25 SC3: a section game says "يصل إلى الخط خلال ثوانٍ" when its packs deliver within a minute,
+ * and the operator's prefixes. Rendered on the server.
+ */
+function SectionNote({ data }: { data: StoreGame }) {
+  const fast = data.products.some(
+    (product) =>
+      product.available && product.deliveryStats && product.deliveryStats.medianMs < FAST_MS,
+  );
+  const field = recipientFieldOf(data.game.serviceClass, data.fields);
+  const operator = field && operatorOf(field);
+  if (!fast && !operator) return null;
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-border bg-surface p-3 text-sm">
+      {fast && (
+        <p className="flex items-center gap-2 font-medium">
+          <ZapIcon className="size-4 shrink-0 text-status-success-foreground" aria-hidden="true" />
+          {tcr('game.fast')}
+        </p>
+      )}
+      {operator && (
+        <p className="text-muted-foreground">
+          {tcr('game.prefixes', {
+            operator: t(`purchase.operators.${operator}`),
+            prefixes: OPERATOR_PREFIXES[operator].join('، '),
+          })}
+        </p>
+      )}
+    </div>
   );
 }
 

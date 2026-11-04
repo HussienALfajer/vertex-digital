@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
+  amountOfQuantity,
   formatUsd,
   PRICE_MATRIX_MAX_LISTS,
   PRICE_MATRIX_STATUSES,
@@ -335,6 +336,14 @@ export function MatrixPage({
                     <TableRow>
                       <TableCell className="whitespace-normal">
                         <span className="font-medium">{row.productNameAr}</span>
+                        {row.amountStep !== null && (
+                          <span className="block text-xs text-muted-foreground">
+                            {t('catalog.products.perStep', {
+                              step: amountOfQuantity(1, row.amountStep).toLocaleString('en-US'),
+                              unit: row.amountUnitAr ?? '',
+                            })}
+                          </span>
+                        )}
                         {!grouped && (
                           <span className="block text-xs text-muted-foreground">
                             {row.gameNameAr}

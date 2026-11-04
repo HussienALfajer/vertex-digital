@@ -601,6 +601,8 @@ describe('the matrix selection', () => {
   const row = (productId: string, gameId: string, over: Partial<Row> = {}): Row => ({
     productId,
     productNameAr: productId,
+    amountStep: null,
+    amountUnitAr: null,
     gameId,
     gameNameAr: gameId,
     costUsdUnits: usd(0.9),

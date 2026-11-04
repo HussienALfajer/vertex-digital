@@ -245,3 +245,25 @@ describe('the header count and sign-out (rule CT1)', () => {
     expect(listeners.size).toBe(0);
   });
 });
+
+describe('amount lines (S25 AM5)', () => {
+  it('keeps two amounts to one number as two lines', () => {
+    const bill = line({
+      quantity: 73,
+      maxQuantity: 1_000,
+      fields: { recipient: '0944123456' },
+      display: {
+        gameNameAr: 'فاتورة MTN',
+        productNameAr: 'دفع فاتورة',
+        cover: null,
+        fields: [],
+        amount: { step: 100, unitAr: 'ل.س' },
+        section: true,
+      },
+    });
+    addToCart([bill]);
+    const lines = added(addToCart([{ ...bill, quantity: 20 }]));
+    expect(lines.map((item) => item.quantity)).toEqual([73, 20]);
+    expect(readCart()?.[0]?.display.amount).toEqual({ step: 100, unitAr: 'ل.س' });
+  });
+});

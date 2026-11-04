@@ -1,7 +1,11 @@
 import {
+  AMOUNT_STEP,
+  amountOfQuantity,
   CURRENCY_SCALE,
   createProductSchema,
+  DEFAULT_AMOUNT_UNIT_AR,
   DEFAULT_MAX_QUANTITY,
+  MAX_AMOUNT_UNITS,
   PRODUCT_KINDS,
   type Product,
   type ProductKind,
@@ -38,6 +42,8 @@ const PRODUCT_FIELDS = [
   'gameAmount',
   'officialPriceUsdUnits',
   'maxQuantity',
+  'minQuantity',
+  'amountUnitAr',
   'regionAr',
   'redemptionAr',
 ] as const;
@@ -48,12 +54,23 @@ type ProductField = (typeof PRODUCT_FIELDS)[number];
 const integer = (text: string) =>
   text === '' ? null : /^\d+$/.test(text) ? Number(text) : Number.NaN;
 
+/**
+ * S25 AM1: a face amount typed in the unit (`7,300`), as units of `AMOUNT_STEP`; NaN when it is
+ * not a whole number of steps (the schema refuses it).
+ */
+const amountUnits = (text: string) => {
+  const amount = integer(text.replace(/[,\s]/g, ''));
+  return amount === null || amount % AMOUNT_STEP !== 0 ? Number.NaN : amount / AMOUNT_STEP;
+};
+
 /** A price as the form shows it: `0.99`. */
 const dollars = (units: number) => (units / CURRENCY_SCALE.USD).toFixed(2);
 
 /**
  * Add or edit a product (rule CT8): the kind is fixed at creation; region and redemption
  * instructions for codes only; the max quantity starts at 1 for direct top-ups and 10 for codes.
+ * S25 AM1: an `amount` product takes its unit and its smallest and largest amount, typed in the
+ * unit in steps of 100 and sent as units.
  */
 export function ProductDialog({
   gameId,
@@ -71,6 +88,12 @@ export function ProductDialog({
   const [kind, setKind] = useState<ProductKind>(product?.kind ?? 'direct');
   const [maxQuantity, setMaxQuantity] = useState(
     String(product?.maxQuantity ?? DEFAULT_MAX_QUANTITY.direct),
+  );
+  const [minAmount, setMinAmount] = useState(
+    String(amountOfQuantity(product?.kind === 'amount' ? product.minQuantity : 10)),
+  );
+  const [maxAmount, setMaxAmount] = useState(
+    String(amountOfQuantity(product?.kind === 'amount' ? product.maxQuantity : MAX_AMOUNT_UNITS)),
   );
   const { ref, focusInvalid } = useFocusInvalid();
   const [errors, setErrors] = useState<Partial<Record<ProductField, string>>>({});
@@ -95,7 +118,13 @@ export function ProductDialog({
       nameAr: text('nameAr'),
       gameAmount: integer(text('gameAmount')),
       officialPriceUsdUnits: official === '' ? null : (parseUsd(official) ?? Number.NaN),
-      maxQuantity: integer(maxQuantity.trim()) ?? Number.NaN,
+      ...(kind === 'amount'
+        ? {
+            minQuantity: amountUnits(minAmount.trim()),
+            maxQuantity: amountUnits(maxAmount.trim()),
+            amountUnitAr: text('amountUnitAr'),
+          }
+        : { maxQuantity: integer(maxQuantity.trim()) ?? Number.NaN }),
       ...(kind === 'code'
         ? { regionAr: text('regionAr') || null, redemptionAr: text('redemptionAr') || null }
         : {}),
@@ -107,7 +136,11 @@ export function ProductDialog({
     for (const issue of parsed.error?.issues ?? []) {
       const field = String(issue.path[0]);
       if ((PRODUCT_FIELDS as readonly string[]).includes(field)) {
-        found[field as ProductField] = t(`catalog.products.errors.${field as ProductField}`);
+        const key =
+          kind === 'amount' && (field === 'maxQuantity' || field === 'minQuantity')
+            ? 'amountBounds'
+            : (field as ProductField);
+        found[field as ProductField] = t(`catalog.products.errors.${key}`);
       }
     }
     setErrors(found);
@@ -192,20 +225,65 @@ export function ProductDialog({
               {errors.officialPriceUsdUnits}
             </FieldError>
           </Field>
-          <Field invalid={!!errors.maxQuantity}>
-            <FieldLabel>{t('catalog.products.maxQuantity')}</FieldLabel>
-            <Input
-              name="maxQuantity"
-              dir="ltr"
-              inputMode="numeric"
-              value={maxQuantity}
-              onChange={(event) => setMaxQuantity(event.target.value)}
-              autoComplete="off"
-            />
-            <FieldDescription>{t('catalog.products.maxQuantityHint')}</FieldDescription>
-            <FieldError match={!!errors.maxQuantity}>{errors.maxQuantity}</FieldError>
-          </Field>
+          {kind !== 'amount' && (
+            <Field invalid={!!errors.maxQuantity}>
+              <FieldLabel>{t('catalog.products.maxQuantity')}</FieldLabel>
+              <Input
+                name="maxQuantity"
+                dir="ltr"
+                inputMode="numeric"
+                value={maxQuantity}
+                onChange={(event) => setMaxQuantity(event.target.value)}
+                autoComplete="off"
+              />
+              <FieldDescription>{t('catalog.products.maxQuantityHint')}</FieldDescription>
+              <FieldError match={!!errors.maxQuantity}>{errors.maxQuantity}</FieldError>
+            </Field>
+          )}
         </div>
+        {kind === 'amount' && (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field invalid={!!errors.amountUnitAr}>
+              <FieldLabel>{t('catalog.products.amountUnit')}</FieldLabel>
+              <Input
+                name="amountUnitAr"
+                defaultValue={product?.amountUnitAr ?? DEFAULT_AMOUNT_UNIT_AR}
+                maxLength={16}
+                autoComplete="off"
+              />
+              <FieldError match={!!errors.amountUnitAr}>{errors.amountUnitAr}</FieldError>
+            </Field>
+            <Field invalid={!!errors.minQuantity}>
+              <FieldLabel>{t('catalog.products.minAmount')}</FieldLabel>
+              <Input
+                name="minAmount"
+                dir="ltr"
+                inputMode="numeric"
+                value={minAmount}
+                onChange={(event) => setMinAmount(event.target.value)}
+                autoComplete="off"
+              />
+              <FieldError match={!!errors.minQuantity}>{errors.minQuantity}</FieldError>
+            </Field>
+            <Field invalid={!!errors.maxQuantity}>
+              <FieldLabel>{t('catalog.products.maxAmount')}</FieldLabel>
+              <Input
+                name="maxAmount"
+                dir="ltr"
+                inputMode="numeric"
+                value={maxAmount}
+                onChange={(event) => setMaxAmount(event.target.value)}
+                autoComplete="off"
+              />
+              <FieldError match={!!errors.maxQuantity}>{errors.maxQuantity}</FieldError>
+            </Field>
+            <p className="text-sm text-muted-foreground sm:col-span-3">
+              {t('catalog.products.amountBoundsHint', {
+                max: amountOfQuantity(MAX_AMOUNT_UNITS).toLocaleString('en-US'),
+              })}
+            </p>
+          </div>
+        )}
         {kind === 'code' && (
           <>
             <Field invalid={!!errors.regionAr}>

@@ -106,6 +106,7 @@ interface NavChild {
     | 'nav.rates'
     | 'nav.switches'
     | 'nav.telegram'
+    | 'nav.creditPolicy'
     | 'nav.merchantApplications'
     | 'nav.merchantsList'
     | 'nav.merchantTiers'
@@ -193,6 +194,7 @@ const navItems: NavItem[] = [
     children: [
       { to: '/settings/switches', label: 'nav.switches' },
       { to: '/settings/telegram', label: 'nav.telegram' },
+      { to: '/settings/credit', label: 'nav.creditPolicy' },
     ],
   },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
@@ -371,20 +373,21 @@ function TransfersBadge() {
 
 /**
  * S08: the orders held for review and the manual orders waiting, read every minute in the
- * background; red while any order is held.
+ * background; red while any order is held. S25 CS3: cash orders waiting for approval count too.
  */
 function OrdersBadge() {
   const { t } = useTranslation();
   const counts = useQuery(orderCountsQuery);
   const needsReview = counts.data?.needsReview ?? 0;
   const manualWaiting = counts.data?.manualWaiting ?? 0;
-  const total = needsReview + manualWaiting;
+  const cashHeld = counts.data?.cashHeld ?? 0;
+  const total = needsReview + manualWaiting + cashHeld;
   if (total === 0) return null;
   return (
     <Badge
-      tone={needsReview > 0 ? 'danger' : 'gold'}
+      tone={needsReview > 0 || cashHeld > 0 ? 'danger' : 'gold'}
       className="ms-auto tabular-nums"
-      aria-label={t('nav.ordersBadge', { needsReview, manualWaiting })}
+      aria-label={t('nav.ordersBadge', { needsReview, manualWaiting, cashHeld })}
     >
       {total}
     </Badge>

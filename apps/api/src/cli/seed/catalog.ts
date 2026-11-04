@@ -205,6 +205,13 @@ export async function loadCatalog(
     await upsert(tx, 'supplier_offers', mirrorOffers);
     await upsert(tx, 'product_routes', mirrorRoutes);
     result.mirrored = mirrorRoutes.length;
+    // The copied products carry the codes production's sequence drew from its start: move this
+    // database's sequence well past them, or the next product created here draws a taken code.
+    // Drawn rather than set: the app role may use the sequence but not `setval` it.
+    await tx.execute(
+      sql`SELECT count(nextval('catalog_quick_code_seq'))
+        FROM generate_series(1, (SELECT count(*) FROM catalog_products) + 10000)`,
+    );
   });
   return result;
 }

@@ -836,6 +836,8 @@ function card(player: SavedPlayer, product: StoreProduct, changes: Partial<Quick
       nameAr: product.nameAr,
       kind: 'direct',
       gameAmount: product.gameAmount,
+      amountStep: null,
+      amountUnitAr: null,
     },
     quantity: 1,
     unitPriceUsdUnits: product.priceUsdUnits,

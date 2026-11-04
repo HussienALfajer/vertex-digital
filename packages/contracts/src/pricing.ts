@@ -864,6 +864,9 @@ export const priceMatrixSchema = z
       z.object({
         productId: z.uuid(),
         productNameAr: z.string(),
+        /** S25 AM2: an `amount` product's prices are per step of its unit ("لكل 100 ل.س"). */
+        amountStep: z.int().positive().nullable(),
+        amountUnitAr: z.string().nullable(),
         gameId: z.uuid(),
         gameNameAr: z.string(),
         /** The basis route's cost (S07 P1); null with no usable route. */

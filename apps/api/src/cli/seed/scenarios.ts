@@ -1,12 +1,24 @@
 import { spawnSync } from 'node:child_process';
 import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
-import { ROOT_PRICE_LIST_IDS, USD_CENT } from '@vertex-digital/contracts';
-import type { Database } from '@vertex-digital/db';
+import {
+  type CreateProduct,
+  createCategorySchema,
+  createGameSchema,
+  createInputFieldSchema,
+  createProductSchema,
+  createRouteSchema,
+  ROOT_PRICE_LIST_IDS,
+  type ServiceClass,
+  USD_CENT,
+} from '@vertex-digital/contracts';
+import { type Database, newId } from '@vertex-digital/db';
+import { FakeSupplierAdapter } from '@vertex-digital/suppliers';
 import { sql } from 'drizzle-orm';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../../modules/admin/index.js';
 import { createDevCustomer, createDevSession } from '../../modules/auth/index.js';
+import { CatalogItemsService, CatalogService } from '../../modules/catalog/index.js';
 import {
   ContentFaqService,
   ContentHomeService,
@@ -34,7 +46,8 @@ import { RoutesService } from '../../modules/suppliers/index.js';
 import { SupportAdminService, SupportService } from '../../modules/support/index.js';
 import { TreasuryService } from '../../modules/treasury/index.js';
 import { WalletAdjustmentsService, WalletService } from '../../modules/wallet/index.js';
-import { bannerImage, noteImage, qrImage, receiptImage } from './images.js';
+import { FAKE_SUPPLIER_ID } from './catalog.js';
+import { bannerImage, coverImage, noteImage, qrImage, receiptImage } from './images.js';
 
 /*
  * The scenarios of `db:seed-local`: one realistic store day for the local panel and store. Every
@@ -218,6 +231,8 @@ export class Scenarios {
     await this.orders();
     log('Admin decisions on orders');
     await this.orderDecisions();
+    log('Credit, bills and cash section (S25)');
+    await this.creditSection();
     log('Customers: states, notes, limits, push devices');
     await this.customerAdmin();
     log('Support tickets');
@@ -1280,6 +1295,222 @@ export class Scenarios {
   }
 
   // Customers in the panel --------------------------------------------------------------------
+
+  // Credit, bills and cash (S25 SC1) -----------------------------------------------------------
+
+  /**
+   * The section's category and six games, as the catalog build will make them once jneedcontur is
+   * connected, served here by the fake supplier's S25 offers: MTN credit packs, the MTN bill by
+   * free amount and Syriatel Cash by free amount. Syriatel credit and bill (Q38, Q39) and MTN Cash
+   * (unavailable) have no fake offer and stay paused. Bills and cash take `digits` 6–16 until Q39
+   * (RN4). Then one credit pack for Ahmad, so the section has an order to show.
+   */
+  private async creditSection(): Promise<void> {
+    const offers = new FakeSupplierAdapter({ webhookSecret: 'seed' });
+    const syrian = (await offers.listOffers()).filter((offer) => offer.categoryId === 'fake-syria');
+    const now = new Date().toISOString();
+    await this.step('fake supplier S25 offers', () =>
+      this.db.transaction(async (tx) => {
+        for (const offer of syrian) {
+          await tx.execute(sql`
+            INSERT INTO supplier_offers (id, supplier_id, offer_id, name, group_name, kind,
+              required_fields, cost_usd_units, listed_cost_usd_units, in_stock, cost_confirmed_at,
+              last_seen_at, category_id, field_specs, min_quantity, max_quantity, created_at, updated_at)
+            VALUES (${newId()}, ${FAKE_SUPPLIER_ID}, ${offer.offerId}, ${offer.name},
+              ${offer.group ?? null}, ${offer.kind ?? null},
+              ${offer.requiredFields ? `{${offer.requiredFields.join(',')}}` : null}::text[],
+              ${offer.cost?.amountUnits ?? null}, ${offer.cost?.amountUnits ?? null}, ${offer.inStock},
+              ${now}, ${now}, ${offer.categoryId ?? null}, ${JSON.stringify(offer.fieldSpecs ?? [])}::jsonb,
+              ${offer.minQuantity ?? null}, ${offer.maxQuantity ?? null}, ${now}, ${now})
+            ON CONFLICT (supplier_id, offer_id) DO NOTHING`);
+        }
+      }),
+    );
+    const offerIds = new Map(
+      (
+        await this.db.execute<{ id: string; offer_id: string }>(
+          sql`SELECT id, offer_id FROM supplier_offers WHERE supplier_id = ${FAKE_SUPPLIER_ID}
+            AND category_id = 'fake-syria'`,
+        )
+      ).rows.map((row) => [row.offer_id, row.id]),
+    );
+
+    const catalog = this.get(CatalogService);
+    const items = this.get(CatalogItemsService);
+    const routes = this.get(RoutesService);
+    const category = await this.step('category الرصيد والفواتير', () =>
+      catalog.createCategory(
+        this.admin,
+        createCategorySchema.parse({ slug: 'credit-bills', nameAr: 'الرصيد والفواتير' }),
+      ),
+    );
+    if (!category) return;
+
+    const recipient = {
+      syriatel: {
+        type: 'syriatel_number',
+        labelAr: 'رقم سيريتل',
+        minLength: null,
+        maxLength: null,
+      },
+      mtn: { type: 'mtn_number', labelAr: 'رقم MTN', minLength: null, maxLength: null },
+      // RN4: bills and cash wait for Q39's field type.
+      account: { type: 'digits', labelAr: 'رقم الخط أو الحساب', minLength: 6, maxLength: 16 },
+    } as const;
+    const games: {
+      slug: string;
+      nameAr: string;
+      nameEn: string;
+      serviceClass: ServiceClass;
+      color: string;
+      field: (typeof recipient)[keyof typeof recipient];
+      products: (CreateProduct & { offer?: string })[];
+    }[] = [
+      {
+        slug: 'mtn-credit',
+        nameAr: 'رصيد MTN',
+        nameEn: 'MTN credit',
+        color: '#c79a00',
+        serviceClass: 'credit',
+        field: recipient.mtn,
+        products: [
+          { kind: 'direct', nameAr: '1,000 ل.س رصيد', offer: 'fake-mtn:1000' },
+          { kind: 'direct', nameAr: '5,000 ل.س رصيد', offer: 'fake-mtn:5000' },
+        ],
+      },
+      {
+        slug: 'syriatel-credit',
+        nameAr: 'رصيد سيريتل',
+        nameEn: 'Syriatel credit',
+        color: '#b3122e',
+        serviceClass: 'credit',
+        field: recipient.syriatel,
+        products: [{ kind: 'direct', nameAr: '1,000 ل.س رصيد' }],
+      },
+      {
+        slug: 'mtn-bill',
+        nameAr: 'فاتورة MTN',
+        nameEn: 'MTN bill',
+        color: '#a07a00',
+        serviceClass: 'credit',
+        field: recipient.account,
+        products: [
+          {
+            kind: 'amount',
+            nameAr: 'دفع فاتورة',
+            minQuantity: 10,
+            maxQuantity: 1_000,
+            offer: 'fake-mtn-bill@100',
+          },
+        ],
+      },
+      {
+        slug: 'syriatel-bill',
+        nameAr: 'فاتورة سيريتل',
+        nameEn: 'Syriatel bill',
+        color: '#8f1026',
+        serviceClass: 'credit',
+        field: recipient.account,
+        products: [{ kind: 'amount', nameAr: 'دفع فاتورة', minQuantity: 10, maxQuantity: 1_000 }],
+      },
+      {
+        slug: 'syriatel-cash',
+        nameAr: 'سيريتل كاش',
+        nameEn: 'Syriatel Cash',
+        color: '#6d0c1d',
+        serviceClass: 'cash',
+        field: recipient.account,
+        products: [
+          {
+            kind: 'amount',
+            nameAr: 'تحويل كاش',
+            minQuantity: 10,
+            maxQuantity: 100,
+            offer: 'fake-syriatel-cash@100',
+          },
+        ],
+      },
+      {
+        slug: 'mtn-cash',
+        nameAr: 'MTN كاش',
+        nameEn: 'MTN Cash',
+        color: '#7a5d00',
+        serviceClass: 'cash',
+        field: recipient.account,
+        products: [{ kind: 'amount', nameAr: 'تحويل كاش', minQuantity: 10, maxQuantity: 100 }],
+      },
+    ];
+
+    let mtnPack: { productId: string; gameId: string } | undefined;
+    for (const spec of games) {
+      await this.step(`section game ${spec.nameEn}`, async () => {
+        // An active game needs a cover (rule CT3).
+        const cover = await catalog.uploadImage(
+          await coverImage({ title: spec.nameEn, color: spec.color }),
+        );
+        const game = await catalog.createGame(
+          this.admin,
+          createGameSchema.parse({
+            slug: spec.slug,
+            categoryId: category.id,
+            nameAr: spec.nameAr,
+            nameEn: spec.nameEn,
+            coverFileId: cover.id,
+          }),
+        );
+        await items.createField(
+          this.admin,
+          game.id,
+          createInputFieldSchema.parse({ key: 'number', required: true, ...spec.field }),
+        );
+        await catalog.setGameServiceClass(this.admin, game.id, spec.serviceClass);
+        let routed = false;
+        for (const { offer, ...input } of spec.products) {
+          const product = await items.createProduct(
+            this.admin,
+            game.id,
+            createProductSchema.parse(input),
+          );
+          const offerId = offer ? offerIds.get(offer) : undefined;
+          if (!offerId) continue;
+          await routes.create(
+            this.admin,
+            product.id,
+            createRouteSchema.parse({ offerId, fieldMap: { playerId: 'number' } }),
+          );
+          routed = true;
+          if (offer === 'fake-mtn:1000') mtnPack = { productId: product.id, gameId: game.id };
+        }
+        // A game with a route opens with its usable packs; the others stay paused (SC1).
+        if (routed) await items.activateAll(this.admin, game.id);
+      });
+    }
+
+    if (!mtnPack) return;
+    const pack = mtnPack;
+    await this.step('MTN credit pack for ahmad', async () => {
+      const [price] = (
+        await this.db.execute<{ price: string }>(sql`
+          SELECT price_usd_units::text AS price FROM product_prices
+          WHERE product_id = ${pack.productId} AND price_list_id = ${ROOT_PRICE_LIST_IDS.retail}
+          ORDER BY created_at DESC, id DESC LIMIT 1`)
+      ).rows;
+      await this.get(OrdersService).purchase(
+        this.person('ahmad'),
+        randomUUID(),
+        {
+          productId: pack.productId,
+          quantity: 1,
+          fields: { number: '0944 123 456' },
+          expectedUnitPriceUsdUnits: Number(price?.price),
+          whenBalanceShort: 'refuse',
+          confirmPlayer: true,
+        },
+        this.meta('ahmad'),
+        'cli',
+      );
+    });
+  }
 
   private async customerAdmin(): Promise<void> {
     const service = this.get(CustomersService);

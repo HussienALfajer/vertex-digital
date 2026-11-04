@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
+import { tcr } from '@/features/credit/i18n';
+import { amountText } from '@/features/credit/section';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
 import { GapBlock } from '@/features/purchase/gap-block';
@@ -124,6 +126,11 @@ export function QuickBuySheet({
       case 'PRODUCT_UNAVAILABLE':
         return setSending({ status: 'failed', message: t('purchase.packGone'), retry: false });
       case 'PURCHASE_LIMIT_EXCEEDED':
+      // S25: the section's limits with what remains.
+      case 'CREDIT_DAILY_LIMIT':
+      case 'CASH_DAILY_LIMIT':
+      case 'RECIPIENT_DAILY_LIMIT':
+      case 'CASH_BALANCE_TOO_RECENT':
         return setSending({
           status: 'failed',
           message: purchaseRefusalText(result.reason, result.details),
@@ -178,9 +185,18 @@ export function QuickBuySheet({
                 <bdi className="text-lg font-bold">{item.savedPlayer.playerName}</bdi>
               </Line>
             )}
-            <Line label={t('purchase.quantity')}>
-              <span className="tabular-nums">{item.quantity}</span>
-            </Line>
+            {/* S25 AM5: "top up again" with the same amount, shown as the amount. */}
+            {item.product.kind === 'amount' ? (
+              <Line label={tcr('order.amount')}>
+                <bdi className="text-lg font-bold tabular-nums">
+                  {amountText(item.product, item.quantity)}
+                </bdi>
+              </Line>
+            ) : (
+              <Line label={t('purchase.quantity')}>
+                <span className="tabular-nums">{item.quantity}</span>
+              </Line>
+            )}
             <Line label={t('purchase.total')}>
               <span className="flex flex-col items-end">
                 <bdi dir="ltr" className="text-2xl font-bold tabular-nums">

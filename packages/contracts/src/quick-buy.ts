@@ -317,6 +317,9 @@ export const quickBuySchema = z
           nameAr: z.string(),
           kind: productKindSchema,
           gameAmount: z.int().nullable(),
+          /** S25 AM6: an `amount` product's step and unit ("7,300 ل.س"); null otherwise. */
+          amountStep: z.int().positive().nullable(),
+          amountUnitAr: z.string().nullable(),
         }),
         quantity: z.int().positive(),
         /** Today's unit price on the customer's effective list; null while unavailable. */

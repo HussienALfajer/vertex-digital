@@ -10,6 +10,7 @@ import {
   formatUsd,
   orderTotal,
   type SearchIndexProduct,
+  type StoreField,
 } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import { Button } from '@vertex-digital/ui/components/button';
@@ -37,6 +38,9 @@ import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { readCustomerPrices } from '@/features/catalog/customer-prices';
+import { tcr } from '@/features/credit/i18n';
+import { RecipientConfirm } from '@/features/credit/recipient-confirm';
+import { amountText } from '@/features/credit/section';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { type Balance, useBalance, usePurchasesStopped } from '@/features/purchase/customer';
 import { GapBlock } from '@/features/purchase/gap-block';
@@ -307,8 +311,13 @@ function Cart() {
       case 'INTERNAL_ERROR':
         return setSending({ status: 'failed', message: errorText(reason), retry: true });
       default:
+        // S25: the section's limits count the whole checkout and say what remains (CL2–CS2).
         again();
-        return setSending({ status: 'failed', message: errorText(reason), retry: false });
+        return setSending({
+          status: 'failed',
+          message: purchaseRefusalText(reason, details),
+          retry: false,
+        });
     }
   }
 
@@ -322,6 +331,11 @@ function Cart() {
             <LineCard
               line={line}
               price={gone(line) ? null : priceNow(prices, line)}
+              sypUnits={
+                prices.status === 'ready'
+                  ? (prices.products.get(line.productId)?.priceSypUnits ?? null)
+                  : null
+              }
               movedFrom={movedFrom.get(line.id) ?? null}
               refusal={refusals.get(line.id) ?? null}
               locked={sending.status === 'sending'}
@@ -560,6 +574,7 @@ function Pay({
 function LineCard({
   line,
   price,
+  sypUnits,
   movedFrom,
   refusal,
   locked,
@@ -570,6 +585,8 @@ function LineCard({
   line: CartLine;
   /** Today's unit price; null when unavailable; undefined while checking. */
   price: number | null | undefined;
+  /** S25 SC2: today's SYP display price of one unit; null without one. */
+  sypUnits: number | null;
   movedFrom: number | null;
   refusal: CheckoutLineRefusal | null;
   /** While the checkout is in flight the lines stay as sent (audit A04-1). */
@@ -615,19 +632,27 @@ function LineCard({
           <Trash2Icon />
         </Button>
       </div>
-      {line.display.fields.length > 0 && (
-        <dl className="flex flex-col gap-1 text-sm">
-          {line.display.fields.map((field) => (
-            <div key={field.key} className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">{field.labelAr}</dt>
-              <dd>
-                <bdi dir="ltr" className="font-medium break-all">
-                  {field.value}
-                </bdi>
-              </dd>
-            </div>
-          ))}
-        </dl>
+      {line.display.recipient ? (
+        // S25 RN2, D8: the number large with the no-refund line before the cart's slide.
+        <RecipientConfirm
+          field={{ type: line.display.recipient.type as StoreField['type'] }}
+          value={line.fields[line.display.recipient.key] ?? ''}
+        />
+      ) : (
+        line.display.fields.length > 0 && (
+          <dl className="flex flex-col gap-1 text-sm">
+            {line.display.fields.map((field) => (
+              <div key={field.key} className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">{field.labelAr}</dt>
+                <dd>
+                  <bdi dir="ltr" className="font-medium break-all">
+                    {field.value}
+                  </bdi>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )
       )}
       {name ? (
         <p className="flex items-center gap-2 text-sm">
@@ -648,7 +673,18 @@ function LineCard({
         )
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {line.maxQuantity > 1 ? (
+        {line.display.amount ? (
+          // S25 AM6: the amount, never a quantity; "عدّل البيانات" changes it in the buy box.
+          <span className="flex flex-col">
+            <span className="text-sm text-muted-foreground">{tcr('order.amount')}</span>
+            <bdi className="text-lg font-bold tabular-nums">
+              {amountText(
+                { amountStep: line.display.amount.step, amountUnitAr: line.display.amount.unitAr },
+                line.quantity,
+              )}
+            </bdi>
+          </span>
+        ) : line.maxQuantity > 1 ? (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -685,6 +721,14 @@ function LineCard({
           <Badge tone="warning">{t('cart.unavailable')}</Badge>
         ) : (
           <div className="flex flex-col items-end">
+            {/* S25 SC2: a section line's pounds first, from today's display price. */}
+            {line.display.section && sypUnits !== null && (
+              <span className="text-lg font-bold tabular-nums">
+                {tcr('price.pay', {
+                  amount: formatSyp(displaySypTotal([{ sypUnits, count: line.quantity }])),
+                })}
+              </span>
+            )}
             <span className="flex items-baseline gap-2">
               {movedFrom !== null && movedFrom !== line.expectedUnitPriceUsdUnits && (
                 <del className="text-sm text-muted-foreground tabular-nums">
@@ -695,7 +739,14 @@ function LineCard({
                 {t('cart.unit', { price: ltr(formatUsd(line.expectedUnitPriceUsdUnits)) })}
               </span>
             </span>
-            <bdi dir="ltr" className="text-lg font-bold tabular-nums">
+            <bdi
+              dir="ltr"
+              className={
+                line.display.section && sypUnits !== null
+                  ? 'text-sm text-muted-foreground tabular-nums'
+                  : 'text-lg font-bold tabular-nums'
+              }
+            >
               {formatUsd(orderTotal(line.expectedUnitPriceUsdUnits, line.quantity))}
             </bdi>
           </div>

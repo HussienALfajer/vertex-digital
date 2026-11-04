@@ -46,6 +46,7 @@ import {
   isSlow,
   waitingIds,
 } from './live-time';
+import { OrderAmount } from './order-amount';
 import { PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import type { OrderSearch } from './order-search';
 import { liveBoardQuery } from './orders.queries';
@@ -418,7 +419,13 @@ function OrderCard({
       </span>
       <span className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span>
-          {t('orders.live.quantityTotal', { quantity: card.quantity })}{' '}
+          {card.product.amountStep === null ? (
+            t('orders.live.quantityTotal', { quantity: card.quantity })
+          ) : (
+            <>
+              <OrderAmount product={card.product} quantity={card.quantity} /> ·
+            </>
+          )}{' '}
           <bdi dir="ltr" className="font-medium text-foreground tabular-nums">
             {formatUsd(card.totalUsdUnits)}
           </bdi>

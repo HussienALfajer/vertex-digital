@@ -1094,7 +1094,7 @@ export class AdminApi {
       const answer = this.orders.playerCheck();
       if ('json' in answer) return json(answer.status, answer.json);
     }
-    if (path.startsWith('/api/admin/orders')) {
+    if (path.startsWith('/api/admin/orders') || path === '/api/admin/credit-policy') {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;
       const answer = this.orders.answer(request.method(), url, body);
       if (answer && 'image' in answer) {

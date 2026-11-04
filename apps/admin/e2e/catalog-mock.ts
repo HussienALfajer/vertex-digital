@@ -23,6 +23,7 @@ import {
   ROOT_PRICE_LIST_IDS,
   resolveListEntry,
   resolveMarginRule,
+  SECTION_FIELD_TYPES,
   savings,
   searchTermsSchema,
   sypDisplayPrice,
@@ -669,6 +670,12 @@ export class CatalogMock {
         maxQuantity: (body?.maxQuantity as number | undefined) ?? DEFAULT_MAX_QUANTITY[kind],
         regionAr: (body?.regionAr as string | null | undefined) ?? null,
         redemptionAr: (body?.redemptionAr as string | null | undefined) ?? null,
+        // S25 AM1: an amount product's unit, its fewest units and one unit's face amount.
+        ...(kind === 'amount' && {
+          minQuantity: (body?.minQuantity as number | undefined) ?? 1,
+          amountUnitAr: (body?.amountUnitAr as string | undefined) ?? 'ل.س',
+          amountStep: 100,
+        }),
       });
       const game = this.games.find((item) => item.id === newProduct) as StoredGame;
       const missing = this.missing(newProduct);
@@ -691,6 +698,24 @@ export class CatalogMock {
       return early[1] === 'games'
         ? { status: 200, json: this.detail(row as StoredGame) }
         : { status: 200, json: this.product(row as Row<Product>) };
+    }
+    // S25 CL1: a credit or cash game needs exactly one required number or digits field.
+    const serviceClass = /^\/api\/admin\/catalog\/games\/([^/]+)\/service-class$/.exec(path);
+    if (serviceClass && method === 'PUT') {
+      if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
+      const row = this.games.find((item) => item.id === serviceClass[1]);
+      if (!row) return notFound();
+      const next = body?.serviceClass as StoredGame['serviceClass'];
+      const fields = this.fields.filter((item) => item.gameId === row.id && !item.archivedAt);
+      const allowed: readonly string[] = SECTION_FIELD_TYPES;
+      if (
+        next !== 'none' &&
+        (fields.length !== 1 || !fields[0]?.required || !allowed.includes(fields[0].type))
+      ) {
+        return error(400, 'VALIDATION_FAILED');
+      }
+      row.serviceClass = next;
+      return { status: 200, json: this.detail(row) };
     }
     const gameId = match(/^\/api\/admin\/catalog\/games\/([^/]+)(?:\/(?:archive|restore))?$/);
     if (gameId) {

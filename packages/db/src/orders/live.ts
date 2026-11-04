@@ -157,7 +157,12 @@ export async function liveBoard(
             reviewSince: orders.reviewSince,
             purpose: orders.adminPurpose,
             customerEmail: customers.email,
-            product: { id: catalogProducts.id, nameAr: catalogProducts.nameAr },
+            product: {
+              id: catalogProducts.id,
+              nameAr: catalogProducts.nameAr,
+              amountStep: catalogProducts.amountStep,
+              amountUnitAr: catalogProducts.amountUnitAr,
+            },
             game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
           })
           .from(orders)

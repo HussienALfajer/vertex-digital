@@ -25,6 +25,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
+import { tcr } from '@/features/credit/i18n';
+import { amountText } from '@/features/credit/section';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
@@ -256,14 +258,22 @@ function OrderCard({ order }: { order: OrderSummary }) {
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="font-medium break-words">
             <bdi>{order.productNameAr}</bdi>
-            {order.quantity > 1 && (
+            {/* S25 AM6: an amount order shows its amount, never a quantity. */}
+            {order.productKind === 'amount' ? (
               <span className="text-muted-foreground">
-                {' '}
-                {/* F11-10: "× 3" never splits at a phone's width. */}
-                <span className="whitespace-nowrap">
-                  {t('orders.times', { count: order.quantity })}
-                </span>
+                {' · '}
+                <bdi className="whitespace-nowrap">{amountText(order, order.quantity)}</bdi>
               </span>
+            ) : (
+              order.quantity > 1 && (
+                <span className="text-muted-foreground">
+                  {' '}
+                  {/* F11-10: "× 3" never splits at a phone's width. */}
+                  <span className="whitespace-nowrap">
+                    {t('orders.times', { count: order.quantity })}
+                  </span>
+                </span>
+              )
             )}
           </p>
           <p className="text-sm text-muted-foreground">{order.game.nameAr}</p>
@@ -289,6 +299,8 @@ function OrderCard({ order }: { order: OrderSummary }) {
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1 text-end">
           <Badge tone={STAGE_TONES[order.stage]}>{stageText(order.stage)}</Badge>
+          {/* S25 CS5: a held cash order waits for the store's review. */}
+          {order.cashHold === 'held' && <Badge tone="warning">{tcr('hold.badge')}</Badge>}
           {order.stage === 'awaiting_balance' && order.expiresAt && (
             <ReservedLeft expiresAt={order.expiresAt} />
           )}

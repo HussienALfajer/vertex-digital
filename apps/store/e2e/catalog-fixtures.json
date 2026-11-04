@@ -372,6 +372,193 @@
         }
       ],
       "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "mtn-bill": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000002550",
+        "slug": "mtn-bill",
+        "nameAr": "فاتورة MTN",
+        "nameEn": "MTN Bill",
+        "cover": null,
+        "accentColor": "#FFCC00",
+        "status": "normal",
+        "idGuide": null,
+        "regionNotesAr": null,
+        "serviceClass": "credit"
+      },
+      "fields": [
+        {
+          "key": "recipient",
+          "labelAr": "رقم MTN",
+          "helpAr": null,
+          "type": "mtn_number",
+          "required": true,
+          "minLength": null,
+          "maxLength": null,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-000000002551",
+          "kind": "amount",
+          "nameAr": "دفع فاتورة MTN",
+          "gameAmount": null,
+          "maxQuantity": 1000,
+          "minQuantity": 10,
+          "amountUnitAr": "ل.س",
+          "amountStep": 100,
+          "available": true,
+          "priceUsdUnits": 10000,
+          "priceSypUnits": 11000,
+          "savings": null,
+          "deliveryStats": {
+            "medianMs": 12000,
+            "p90Ms": 30000,
+            "count": 40
+          },
+          "perHundredUsdUnits": null,
+          "bestValue": false,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null,
+          "earlyAccess": false
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "mtn-credit": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000002560",
+        "slug": "mtn-credit",
+        "nameAr": "رصيد MTN",
+        "nameEn": "MTN Credit",
+        "cover": null,
+        "accentColor": "#FFCC00",
+        "status": "normal",
+        "idGuide": null,
+        "regionNotesAr": null,
+        "serviceClass": "credit"
+      },
+      "fields": [
+        {
+          "key": "recipient",
+          "labelAr": "رقم MTN",
+          "helpAr": null,
+          "type": "mtn_number",
+          "required": true,
+          "minLength": null,
+          "maxLength": null,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-000000002561",
+          "kind": "direct",
+          "nameAr": "1,000 ل.س رصيد",
+          "gameAmount": null,
+          "maxQuantity": 1,
+          "minQuantity": 1,
+          "amountUnitAr": null,
+          "amountStep": null,
+          "available": true,
+          "priceUsdUnits": 90000,
+          "priceSypUnits": 110000,
+          "savings": null,
+          "deliveryStats": {
+            "medianMs": 12000,
+            "p90Ms": 30000,
+            "count": 40
+          },
+          "perHundredUsdUnits": null,
+          "bestValue": false,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null,
+          "earlyAccess": false
+        },
+        {
+          "id": "0199d000-0000-7000-8000-000000002562",
+          "kind": "direct",
+          "nameAr": "5,000 ل.س رصيد",
+          "gameAmount": null,
+          "maxQuantity": 1,
+          "minQuantity": 1,
+          "amountUnitAr": null,
+          "amountStep": null,
+          "available": true,
+          "priceUsdUnits": 450000,
+          "priceSypUnits": 550000,
+          "savings": null,
+          "deliveryStats": {
+            "medianMs": 12000,
+            "p90Ms": 30000,
+            "count": 40
+          },
+          "perHundredUsdUnits": null,
+          "bestValue": false,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null,
+          "earlyAccess": false
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "syriatel-cash": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000002570",
+        "slug": "syriatel-cash",
+        "nameAr": "سيريتل كاش",
+        "nameEn": "Syriatel Cash",
+        "cover": null,
+        "accentColor": "#FFCC00",
+        "status": "normal",
+        "idGuide": null,
+        "regionNotesAr": null,
+        "serviceClass": "cash"
+      },
+      "fields": [
+        {
+          "key": "recipient",
+          "labelAr": "رقم سيريتل",
+          "helpAr": null,
+          "type": "syriatel_number",
+          "required": true,
+          "minLength": null,
+          "maxLength": null,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-000000002571",
+          "kind": "amount",
+          "nameAr": "تحويل سيريتل كاش",
+          "gameAmount": null,
+          "maxQuantity": 100,
+          "minQuantity": 10,
+          "amountUnitAr": "ل.س",
+          "amountStep": 100,
+          "available": true,
+          "priceUsdUnits": 10000,
+          "priceSypUnits": 11000,
+          "savings": null,
+          "deliveryStats": {
+            "medianMs": 12000,
+            "p90Ms": 30000,
+            "count": 40
+          },
+          "perHundredUsdUnits": null,
+          "bestValue": false,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null,
+          "earlyAccess": false
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
     }
   }
 }
