@@ -194,7 +194,7 @@ export const supplierOffers = pgTable(
     ),
     check(
       'supplier_offers_unsupported_reason_check',
-      sql`${table.unsupportedReason} in ('fields_unsupported', 'manual_delivery')`,
+      sql`${table.unsupportedReason} in ('fields_unsupported', 'manual_delivery', 'cost_precision')`,
     ),
     check(
       'supplier_offers_ignored_check',

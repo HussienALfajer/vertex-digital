@@ -93,6 +93,8 @@ export const QUEUES = {
   catalogEarlyAccessEnd: 'catalog.early-access-end',
   /** Tells the admin of tickets waiting past their tier's reply promise, every 15 minutes (S23 OP6). */
   supportOverdueTickets: 'support.overdue-tickets',
+  /** Refunds held cash orders past the policy's hold, every 5 minutes (S25 CS5). */
+  ordersCashHoldExpiry: 'orders.cash-hold-expiry',
 } as const;
 
 /**

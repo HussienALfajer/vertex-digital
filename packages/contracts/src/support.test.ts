@@ -170,6 +170,12 @@ describe('order problems (S22 OP2-OP4)', () => {
       'wrong_region',
       'other',
     ]);
+    // S25 D8: no wrong-number problem on a delivered credit order.
+    expect(problems(orderProblemsFor(order('delivered', 'amount', now), now, 600))).toEqual([
+      'not_arrived',
+      'wrong_amount',
+      'other',
+    ]);
     expect(problems(orderProblemsFor(order('partially_refunded', 'code', now), now, 600))).toEqual([
       'code_not_working',
       'code_used',

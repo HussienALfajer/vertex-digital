@@ -60,6 +60,7 @@ async function boardRows(db: Executor, query: LiveBoardQuery, now: Date) {
     .select({
       id: orders.id,
       status: orders.status,
+      cashHold: orders.cashHold,
       paidAt: orders.paidAt,
       finishedAt: orders.finishedAt,
       attemptStatus: sql<AttemptStatus | null>`last.status`,

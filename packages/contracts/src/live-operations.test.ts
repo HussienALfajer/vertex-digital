@@ -56,6 +56,15 @@ describe('live columns (S11 rule LR1)', () => {
     expect(liveColumn({ status: 'needs_review', finishedAt: null }, manual, now)).toBe('review');
   });
 
+  it('puts a held cash order in its own column (S25 CS3)', () => {
+    expect(liveColumn({ status: 'paid', finishedAt: null, cashHold: 'held' }, null, now)).toBe(
+      'cash_hold',
+    );
+    expect(liveColumn({ status: 'paid', finishedAt: null, cashHold: 'approved' }, null, now)).toBe(
+      'at_supplier',
+    );
+  });
+
   it('keeps finished orders for an hour', () => {
     const at = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
     expect(

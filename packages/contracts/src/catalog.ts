@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  DEFAULT_AMOUNT_UNIT_AR,
+  MAX_AMOUNT_UNITS,
+  RECIPIENT_FIELD_TYPES,
+  serviceClassSchema,
+} from './credit.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
 
@@ -14,8 +20,11 @@ export const catalogStatusSchema = z.enum(CATALOG_STATUSES).meta({ id: 'CatalogS
 
 export type CatalogStatus = z.infer<typeof catalogStatusSchema>;
 
-/** `direct`: topped up to a player id; `code`: a code the customer redeems (rule CT8). */
-export const PRODUCT_KINDS = ['direct', 'code'] as const;
+/**
+ * `direct`: topped up to a player id; `code`: a code the customer redeems (rule CT8); `amount`
+ * (S25 AM1): a free amount the customer types, sold as units of `AMOUNT_STEP` of its unit.
+ */
+export const PRODUCT_KINDS = ['direct', 'code', 'amount'] as const;
 
 export const productKindSchema = z.enum(PRODUCT_KINDS).meta({ id: 'ProductKind' });
 
@@ -24,7 +33,8 @@ export type ProductKind = z.infer<typeof productKindSchema>;
 /**
  * Fixed field types with fixed value rules (rule CT7): no admin-defined patterns. S19 ID1–ID3:
  * `hoyoverse_uid` (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero) and `supercell_tag`
- * (Clash of Clans, Clash Royale, Brawl Stars) are built-in formats.
+ * (Clash of Clans, Clash Royale, Brawl Stars) are built-in formats. S25 RN1: `syriatel_number` and
+ * `mtn_number` are a recipient line of that operator.
  */
 export const INPUT_FIELD_TYPES = [
   'digits',
@@ -33,6 +43,7 @@ export const INPUT_FIELD_TYPES = [
   'phone',
   'hoyoverse_uid',
   'supercell_tag',
+  ...RECIPIENT_FIELD_TYPES,
 ] as const;
 
 export const inputFieldTypeSchema = z.enum(INPUT_FIELD_TYPES).meta({ id: 'InputFieldType' });
@@ -76,9 +87,21 @@ export const CATALOG_IMAGE_MAX_DIMENSION = 1600;
 /** Above this saving the panel warns that the official price should be checked (edge case 7). */
 export const SAVINGS_WARNING_PERCENT = 50;
 
-/** The most a product can be ordered at once (rule CT8), and its default per kind. */
+/**
+ * The most a product can be ordered at once (rule CT8), and its default per kind. S25 Data: an
+ * `amount` product goes up to `MAX_AMOUNT_UNITS` units instead.
+ */
 export const MAX_QUANTITY_LIMIT = 50;
-export const DEFAULT_MAX_QUANTITY: Record<ProductKind, number> = { direct: 1, code: 10 };
+export const DEFAULT_MAX_QUANTITY: Record<ProductKind, number> = {
+  direct: 1,
+  code: 10,
+  amount: MAX_AMOUNT_UNITS,
+};
+
+/** The highest `maxQuantity` (and `minQuantity`) a product of the kind may set. */
+export function maxQuantityLimit(kind: ProductKind): number {
+  return kind === 'amount' ? MAX_AMOUNT_UNITS : MAX_QUANTITY_LIMIT;
+}
 
 /** An official price is at most $10,000 (whole cents). */
 const OFFICIAL_PRICE_MAX_USD_UNITS = 10_000 * CURRENCY_SCALE.USD;
@@ -306,6 +329,8 @@ const inputFieldShape = (option: typeof selectOptionSchema | typeof selectOption
       z.object({ type: z.literal('phone'), ...fixedFormat }),
       z.object({ type: z.literal('hoyoverse_uid'), ...fixedFormat }),
       z.object({ type: z.literal('supercell_tag'), ...fixedFormat }),
+      z.object({ type: z.literal('syriatel_number'), ...fixedFormat }),
+      z.object({ type: z.literal('mtn_number'), ...fixedFormat }),
     ])
     .refine(
       (shape) =>
@@ -419,6 +444,11 @@ export const productSchema = z
     /** S22 PA8: customers waiting for this pack ("بانتظار التوفر": active `available` alerts). */
     waitingAlerts: z.int().nonnegative(),
     maxQuantity: z.int(),
+    /** S25 AM1: the fewest units per order (above 1 for `amount` products only). */
+    minQuantity: z.int(),
+    /** S25 AM1: an `amount` product's unit and the face amount of one unit; null otherwise. */
+    amountUnitAr: z.string().nullable(),
+    amountStep: z.int().positive().nullable(),
     regionAr: z.string().nullable(),
     redemptionAr: z.string().nullable(),
     status: catalogStatusSchema,
@@ -460,7 +490,22 @@ const productValues = {
 const maxQuantity = (kind: ProductKind) =>
   z.int().min(1).max(MAX_QUANTITY_LIMIT).default(DEFAULT_MAX_QUANTITY[kind]);
 
-/** The kind is fixed at creation; region and redemption text exist for codes only (rule CT8). */
+const amountUnitSchema = line(16);
+
+const quantityBounds = (shape: { minQuantity?: number; maxQuantity?: number }) =>
+  shape.minQuantity === undefined ||
+  shape.maxQuantity === undefined ||
+  shape.minQuantity <= shape.maxQuantity;
+
+const quantityBoundsIssue = {
+  message: 'Expected minQuantity ≤ maxQuantity',
+  path: ['minQuantity'],
+};
+
+/**
+ * The kind is fixed at creation; region and redemption text exist for codes only (rule CT8). S25
+ * AM1: an `amount` product sets its fewest units and its unit (one unit is `AMOUNT_STEP` of it).
+ */
 export const createProductSchema = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('direct'), ...productValues, maxQuantity: maxQuantity('direct') }),
@@ -471,21 +516,36 @@ export const createProductSchema = z
       regionAr: line(64).nullable().optional(),
       redemptionAr: paragraph(2000).nullable().optional(),
     }),
+    z.object({
+      kind: z.literal('amount'),
+      ...productValues,
+      minQuantity: z.int().min(1).max(MAX_AMOUNT_UNITS).default(1),
+      maxQuantity: z.int().min(1).max(MAX_AMOUNT_UNITS).default(MAX_AMOUNT_UNITS),
+      amountUnitAr: amountUnitSchema.default(DEFAULT_AMOUNT_UNIT_AR),
+    }),
   ])
+  .refine(quantityBounds, quantityBoundsIssue)
   .meta({ id: 'CreateProduct' });
 
 export type CreateProduct = z.input<typeof createProductSchema>;
 
-/** Everything but the kind; region and redemption text are refused on a `direct` product. */
+/**
+ * Everything but the kind; region and redemption text are refused on a `direct` product, the
+ * fewest units and the unit on any but an `amount` one, and the bounds are checked against the
+ * kind's limit (`maxQuantityLimit`) by the service.
+ */
 export const updateProductSchema = z
   .object({
     ...productValues,
-    maxQuantity: z.int().min(1).max(MAX_QUANTITY_LIMIT),
+    maxQuantity: z.int().min(1).max(MAX_AMOUNT_UNITS),
+    minQuantity: z.int().min(1).max(MAX_AMOUNT_UNITS),
+    amountUnitAr: amountUnitSchema,
     regionAr: line(64).nullable(),
     redemptionAr: paragraph(2000).nullable(),
     status: catalogStatusSchema,
   })
   .partial()
+  .refine(quantityBounds, quantityBoundsIssue)
   .meta({ id: 'UpdateProduct' });
 
 export type UpdateProduct = z.input<typeof updateProductSchema>;
@@ -606,6 +666,8 @@ export const gameSchema = z
     regionNotesAr: z.string().nullable(),
     /** S22 BV1: the best-value badge and the per-100 prices are shown. */
     bestValueEnabled: z.boolean(),
+    /** S25 CL1: `credit` or `cash` puts the game in the "الرصيد والفواتير" section. */
+    serviceClass: serviceClassSchema,
     /** Unarchived products. */
     productCount: z.int().nonnegative(),
   })
@@ -777,6 +839,10 @@ export const storeProductSchema = z
     nameAr: z.string(),
     gameAmount: z.int().nullable(),
     maxQuantity: z.int().positive(),
+    /** S25 AM1: an `amount` pack's fewest units, its unit and the face amount of one unit. */
+    minQuantity: z.int().positive(),
+    amountUnitAr: z.string().nullable(),
+    amountStep: z.int().positive().nullable(),
     available: z.boolean(),
     priceUsdUnits: z.int().positive().nullable(),
     priceSypUnits: z.int().nullable(),
@@ -852,6 +918,8 @@ export const storeGameSchema = z
     game: storeGameCard.extend({
       idGuide: catalogImageSchema.nullable(),
       regionNotesAr: z.string().nullable(),
+      /** S25 SC2: a section game shows SYP first. */
+      serviceClass: serviceClassSchema,
     }),
     fields: z.array(storeFieldSchema),
     products: z.array(storeProductSchema),

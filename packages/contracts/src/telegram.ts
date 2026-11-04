@@ -117,6 +117,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'merchant_tier_grant_ending',
   /** S23 OP6: a ticket waits past its tier's reply promise (once per waiting period). */
   'ticket_overdue',
+  /** S25 CS3: a cash order held for approval, with its buttons up to the Telegram ceiling. */
+  'cash_hold',
+  /** S25 CL4: a number topped up from more accounts than the policy allows (once a day). */
+  'credit_recipient_alert',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -564,6 +568,32 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     totalUsdUnits: z.int().positive(),
     owner: z.object({ usedUsdUnits: z.int(), capUsdUnits: z.int().nonnegative() }).nullable(),
   }),
+  /**
+   * S25 CS3: the customer, the account's age, the amount, the number masked and the 30-day deposit
+   * and cash history; buttons only when Telegram may decide (CS4).
+   */
+  cash_hold: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    customerEmail: z.string(),
+    merchant: z.boolean(),
+    accountAgeDays: z.int().nonnegative(),
+    gameNameAr: z.string(),
+    totalUsdUnits: z.int().positive(),
+    recipientMasked: z.string(),
+    deposits30dUsdUnits: z.int().nonnegative(),
+    cash30dUsdUnits: z.int().nonnegative(),
+    telegramDecides: z.boolean(),
+  }),
+  /** S25 CL4: the number masked, the accounts and their totals within the days. */
+  credit_recipient_alert: z.object({
+    recipientMasked: z.string(),
+    days: z.int().positive(),
+    accounts: z
+      .array(z.object({ customerEmail: z.string(), totalUsdUnits: z.int().nonnegative() }))
+      .min(1)
+      .max(20),
+  }),
   /** S16 SF2: up to 10 offers named, then a count; never field values. */
   supplier_stock_low: z.object({
     supplier: supplierCodeSchema,
@@ -660,12 +690,16 @@ export const TELEGRAM_CALLBACKS = {
   approve: 'ap',
   reject: 'rj',
   reason: 'rr',
+  /** S25 CS4: a held cash order's decision. */
+  cashApprove: 'ca',
+  cashReject: 'cr',
 } as const;
 
 export type TelegramCallback =
   | { action: 'stop'; scope: StopScope }
   | { action: 'confirm' | 'cancel'; promptId: string }
   | { action: 'approve' | 'reject'; depositId: string }
+  | { action: 'cashApprove' | 'cashReject'; orderId: string }
   | { action: 'reason'; promptId: string; reason: DepositRejectReason };
 
 /** A `Map`, so an inherited key (`constructor`) is never a prefix. */
@@ -680,6 +714,9 @@ function callbackValue(callback: TelegramCallback): string {
     case 'approve':
     case 'reject':
       return callback.depositId;
+    case 'cashApprove':
+    case 'cashReject':
+      return callback.orderId;
     case 'reason':
       return `${callback.promptId}:${callback.reason}`;
     default:
@@ -706,6 +743,9 @@ export function parseTelegramCallback(data: string): TelegramCallback | null {
     case 'approve':
     case 'reject':
       return isUuid(value) ? { action, depositId: value } : null;
+    case 'cashApprove':
+    case 'cashReject':
+      return isUuid(value) ? { action, orderId: value } : null;
     case 'reason': {
       const [promptId = '', reason, ...rest] = value.split(':');
       const parsed = depositRejectReasonSchema.exclude(['other']).safeParse(reason);

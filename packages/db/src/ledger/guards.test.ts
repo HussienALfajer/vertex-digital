@@ -207,6 +207,7 @@ describe('append-only trigger', () => {
     expect(rows.map((row) => row.name)).toEqual([
       'audit_entries',
       'content_page_versions',
+      'credit_policy',
       // Its TRUNCATE trigger: rows are guarded by `customer_notes_guard` (customers/customers.test.ts).
       'customer_notes',
       // Its TRUNCATE trigger: rows are guarded by `customer_notifications_guard`.

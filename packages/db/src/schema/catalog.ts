@@ -1,7 +1,11 @@
 import {
+  AMOUNT_STEP,
   CATALOG_STATUSES,
   INPUT_FIELD_TYPES,
+  MAX_AMOUNT_UNITS,
+  MAX_QUANTITY_LIMIT,
   PRODUCT_KINDS,
+  SERVICE_CLASSES,
   type SelectOption,
 } from '@vertex-digital/contracts';
 import { isNull, sql } from 'drizzle-orm';
@@ -32,6 +36,8 @@ export const catalogStatusEnum = pgEnum('catalog_status', CATALOG_STATUSES);
 export const productKindEnum = pgEnum('product_kind', PRODUCT_KINDS);
 
 export const inputFieldTypeEnum = pgEnum('input_field_type', INPUT_FIELD_TYPES);
+
+export const serviceClassEnum = pgEnum('service_class', SERVICE_CLASSES);
 
 const SLUG = `'^[a-z0-9]+(-[a-z0-9]+)*$'`;
 
@@ -78,6 +84,8 @@ export const catalogGames = pgTable(
     regionNotesAr: text('region_notes_ar'),
     /** S22 BV1: the best-value badge and the per-100 prices. */
     bestValueEnabled: boolean('best_value_enabled').notNull().default(true),
+    /** S25 CL1: `credit` or `cash` puts the game in the section and under its limits. */
+    serviceClass: serviceClassEnum('service_class').notNull().default('none'),
     /** S09 rule AD1: normalized (rule SR1), unique, at most 20. */
     searchTerms: text('search_terms').array().notNull().default(sql`'{}'::text[]`),
     sortOrder: integer('sort_order').notNull(),
@@ -179,6 +187,11 @@ export const catalogProducts = pgTable(
     /** Q13: entered by the admin, a reference for savings only (rule PR7). */
     officialPriceUsdUnits: amountUnits('official_price_usd_units'),
     maxQuantity: integer('max_quantity').notNull(),
+    /** S25 AM1: the fewest units per order; above 1 for `amount` products only. */
+    minQuantity: integer('min_quantity').notNull().default(1),
+    /** S25 AM1: an `amount` product's unit and the face amount of one unit (100 in V1). */
+    amountUnitAr: text('amount_unit_ar'),
+    amountStep: integer('amount_step'),
     regionAr: text('region_ar'),
     redemptionAr: text('redemption_ar'),
     status: catalogStatusEnum('status').notNull().default('active'),
@@ -208,7 +221,19 @@ export const catalogProducts = pgTable(
       'catalog_products_official_price_check',
       sql`${table.officialPriceUsdUnits} > 0 and ${table.officialPriceUsdUnits} % 10000 = 0`,
     ),
-    check('catalog_products_max_quantity_check', sql`${table.maxQuantity} between 1 and 50`),
+    check(
+      'catalog_products_max_quantity_check',
+      sql`${table.maxQuantity} between 1 and case ${table.kind}::text when 'amount' then ${sql.raw(String(MAX_AMOUNT_UNITS))} else ${sql.raw(String(MAX_QUANTITY_LIMIT))} end
+        and ${table.minQuantity} between 1 and ${table.maxQuantity}`,
+    ),
+    check(
+      'catalog_products_amount_check',
+      sql`case ${table.kind}::text
+        when 'amount' then ${table.amountStep} = ${sql.raw(String(AMOUNT_STEP))}
+          and char_length(${table.amountUnitAr}) between 1 and 16
+        else ${table.amountStep} is null and ${table.amountUnitAr} is null and ${table.minQuantity} = 1
+      end`,
+    ),
     check('catalog_products_region_ar_check', sql`char_length(${table.regionAr}) between 1 and 64`),
     check(
       'catalog_products_redemption_ar_check',

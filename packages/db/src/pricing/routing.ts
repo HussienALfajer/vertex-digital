@@ -540,6 +540,8 @@ export async function productRoutingStates(
           offerMinQuantity: offer.minQuantity,
           offerMaxQuantity: offer.maxQuantity,
           productMaxQuantity: product.maxQuantity,
+          // S25 AM3: an amount product's route serves the amounts both bounds share.
+          ...(product.kind === 'amount' && { amountMinQuantity: product.minQuantity }),
           inStock: offer.inStock,
           costUsdUnits: offer.costUsdUnits,
           costConfirmedAt: offer.costConfirmedAt,

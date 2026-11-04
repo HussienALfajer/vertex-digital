@@ -21,7 +21,8 @@ import {
 } from '../ledger/index.js';
 import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
 import { notifyCustomer } from '../notifications/index.js';
-import { catalogProducts, orders, storeSwitchChanges } from '../schema/index.js';
+import { catalogGames, catalogProducts, orders, storeSwitchChanges } from '../schema/index.js';
+import { checkCreditLimits, currentCreditPolicy, lockRecipients } from './credit.js';
 import {
   availabilityNow,
   checkOrderFields,
@@ -172,7 +173,9 @@ export type PayOutcome =
   | 'cancelled_price_rose'
   | 'cancelled_product_changed'
   /** S20 PO3: the customer's list is no longer the order's. */
-  | 'cancelled_price_list_changed';
+  | 'cancelled_price_list_changed'
+  /** S25 CL6: paying it now would break a section limit. */
+  | 'cancelled_limit_reached';
 
 /** Thrown inside one order's transaction to roll it back and go on with the next (RS4 step 6). */
 class ShortBalance extends Error {}
@@ -239,6 +242,46 @@ export async function payWaitingOrders(
   return { stopped: false, outcomes };
 }
 
+/**
+ * S25 CL6: a section reservation is checked again when paid, its own count left out (it counted
+ * at creation); one that would now break a limit is cancelled.
+ */
+async function breaksCreditLimit(
+  tx: Transaction,
+  order: OrderRow,
+  customer: PurchasingCustomer,
+  walletId: string,
+  total: number,
+): Promise<boolean> {
+  if (order.recipient === null) return false;
+  const [game] = await tx
+    .select({ serviceClass: catalogGames.serviceClass })
+    .from(catalogGames)
+    .where(eq(catalogGames.id, order.gameId));
+  if (!game || game.serviceClass === 'none') return false;
+  try {
+    await checkCreditLimits(tx, {
+      policy: await currentCreditPolicy(tx),
+      customerId: orderCustomerId(order),
+      merchant: customer.accountType === 'merchant',
+      walletId,
+      lines: [{ serviceClass: game.serviceClass, recipient: order.recipient, totalUsdUnits: total }],
+      excludeOrderId: order.id,
+    });
+    return false;
+  } catch (error) {
+    if (error instanceof OrderError && LIMIT_CODES.includes(error.code)) return true;
+    throw error;
+  }
+}
+
+const LIMIT_CODES: readonly string[] = [
+  'CREDIT_DAILY_LIMIT',
+  'RECIPIENT_DAILY_LIMIT',
+  'CASH_DAILY_LIMIT',
+  'CASH_BALANCE_TOO_RECENT',
+];
+
 async function payOne(
   tx: Transaction,
   context: Pick<OrderContext, 'jobs'> & { now: () => Date; fakeEnabled: boolean },
@@ -297,9 +340,15 @@ async function payOne(
   }
   const total = orderTotal(charge.unitPriceUsdUnits, order.quantity);
   const display = await displayTotal(tx, total);
+  // S25 CL5: the recipient's lock before the wallet's.
+  if (order.recipient !== null) await lockRecipients(tx, [order.recipient]);
   const wallet = await lockCustomerWallet(tx, orderCustomerId(order));
   // S12 LM4: skipped while it would pass the cap; it stays reserved until it fits or expires.
   if (await purchaseCapCheck(tx, customer, total)) return 'skipped_cap';
+  if (await breaksCreditLimit(tx, order, customer, wallet, total)) {
+    await cancelReservation(tx, context, order, 'limit_reached', { kind: 'system' });
+    return 'cancelled_limit_reached';
+  }
   const revenue = await ensureSystemAccount(tx, {
     code: 'sales_revenue:USD',
     kind: 'sales_revenue',

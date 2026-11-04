@@ -19,6 +19,7 @@ import {
   gameServiceStatus,
   inEarlyAccess,
   inputFieldShapeSchema,
+  maxQuantityLimit,
   MAX_REORDER_IDS,
   missingForActivation,
   normalizeSearchText,
@@ -246,6 +247,9 @@ describe('products (rule CT8)', () => {
     expect(
       createProductSchema.safeParse({ kind: 'code', nameAr: 'x', maxQuantity: 51 }).success,
     ).toBe(false);
+    // S25 Data: an amount product goes up to 1,000 units.
+    expect(maxQuantityLimit('direct')).toBe(50);
+    expect(maxQuantityLimit('amount')).toBe(1_000);
   });
 
   it('take region and redemption text for codes only', () => {

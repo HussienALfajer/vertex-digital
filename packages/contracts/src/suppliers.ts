@@ -21,8 +21,11 @@ import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './mone
  * `pricing.ts`. Supplier text (offer names, groups) is shown as received, as text only.
  */
 
-/** ADR 0031, 0034: WDGZone, then FazerCards (S19), the automatic suppliers. */
-export const SUPPLIER_CODES = ['wdgzone', 'fazercards', 'manual', 'fake'] as const;
+/**
+ * ADR 0031, 0034: WDGZone, then FazerCards (S19), then jneedcontur through the zddk adapter (S25),
+ * the automatic suppliers.
+ */
+export const SUPPLIER_CODES = ['wdgzone', 'fazercards', 'jneedcontur', 'manual', 'fake'] as const;
 
 export const supplierCodeSchema = z.enum(SUPPLIER_CODES).meta({ id: 'SupplierCode' });
 
@@ -108,18 +111,21 @@ export type SupplierCallResult = (typeof SUPPLIER_CALL_RESULTS)[number];
 /**
  * The secret fields the panel asks for, per supplier (rule SP2). WDGZone signs its webhooks with a
  * secret derived from the API key, so the key is its only field (docs/suppliers/wdgzone.md).
- * FazerCards signs them with its own secret, entered beside the key (S19 FC7, FC8).
+ * FazerCards signs them with its own secret, entered beside the key (S19 FC7, FC8). jneedcontur
+ * takes one token and sends no signed webhook (S25 ZD1).
  */
 export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]> = {
   wdgzone: ['apiKey'],
   fazercards: ['apiKey', 'webhookSecret'],
+  jneedcontur: ['apiToken'],
   manual: [],
   fake: ['webhookSecret'],
 };
 
 /**
  * Suppliers whose adapter this build has (rule SP1). `manual` needs none; `fake` counts only where
- * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here (S19 FC2: `fazercards`).
+ * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here (S19 FC2: `fazercards`;
+ * S25 ZD2: `jneedcontur` arrives with the zddk adapter, PR 2).
  */
 const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'fazercards', 'manual', 'fake'];
 
@@ -512,6 +518,11 @@ export interface RouteFacts {
   offerMinQuantity?: number | null;
   offerMaxQuantity?: number | null;
   productMaxQuantity?: number;
+  /**
+   * S25 AM3: an `amount` product's fewest units. Set only for `amount` products, whose route serves
+   * the amounts its bounds share with the product's; each order is then checked on its own.
+   */
+  amountMinQuantity?: number;
   inStock: boolean;
   costUsdUnits: number | null;
   costConfirmedAt: Date | null;
@@ -579,9 +590,17 @@ export function isCostStale(
 }
 
 /** Rule RT4: why the route is unusable now, or null when it may serve its product. */
-/** S19: some quantity from 1 to the product's most is outside the offer's order bounds. */
+/**
+ * S19: some quantity from 1 to the product's most is outside the offer's order bounds. S25 AM3: for
+ * an `amount` product, no quantity of the product's bounds is within the offer's.
+ */
 function quantityUnsupported(route: RouteFacts): boolean {
   const most = route.productMaxQuantity ?? 1;
+  if (route.amountMinQuantity !== undefined)
+    return (
+      (route.offerMinQuantity != null && route.offerMinQuantity > most) ||
+      (route.offerMaxQuantity != null && route.offerMaxQuantity < route.amountMinQuantity)
+    );
   return (
     (route.offerMinQuantity != null && route.offerMinQuantity > 1) ||
     (route.offerMaxQuantity != null && route.offerMaxQuantity < most)
@@ -638,10 +657,11 @@ export interface OrderedRoute {
   deliveryMedianMs?: number | null;
 }
 
-/** S19 RT11: the last tie-break between suppliers, replacing the alphabetical one. */
+/** S19 RT11, S25 RT14: the last tie-break between suppliers, replacing the alphabetical one. */
 export const SUPPLIER_PRECEDENCE: readonly SupplierCode[] = [
   'wdgzone',
   'fazercards',
+  'jneedcontur',
   'fake',
   'manual',
 ];
@@ -738,6 +758,8 @@ export const OFFER_UNSUPPORTED_REASONS = [
   'fields_unsupported',
   /** S19 FC4: delivered by hand at the supplier (FazerCards' `… (Manual)` categories). */
   'manual_delivery',
+  /** S25 ZD4: a cost that is not a whole number of micro-dollars after the offer's multiplier. */
+  'cost_precision',
 ] as const;
 
 export const offerUnsupportedReasonSchema = z

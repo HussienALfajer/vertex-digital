@@ -88,7 +88,7 @@ async function routedProduct(client: pg.PoolClient) {
 }
 
 describe('seeds', () => {
-  it('hold the four suppliers and the default policy', async () => {
+  it('hold the five suppliers and the default policy', async () => {
     const { rows } = await connection.pool.query(
       `select code, name_ar, low_balance_usd_units from suppliers order by code::text`,
     );
@@ -96,6 +96,8 @@ describe('seeds', () => {
       { code: 'fake', name_ar: 'مورد تجريبي', low_balance_usd_units: '50000000' },
       // S19 (0069): FazerCards, its low-balance alert at $5 (D8).
       { code: 'fazercards', name_ar: 'FazerCards', low_balance_usd_units: '5000000' },
+      // S25 (0110): jneedcontur, its low-balance alert at $10.
+      { code: 'jneedcontur', name_ar: 'jneedcontur', low_balance_usd_units: '10000000' },
       { code: 'manual', name_ar: 'يدوي', low_balance_usd_units: '50000000' },
       { code: 'wdgzone', name_ar: 'WDGZone', low_balance_usd_units: '50000000' },
     ]);
@@ -105,6 +107,13 @@ describe('seeds', () => {
     );
     expect(fazercards.rows).toEqual([
       { id: '01a11d3c-890d-7c1e-9f2a-6a3b5c7d9e10', validation_daily_quota: 1000 },
+    ]);
+    // S25: jneedcontur's fixed id; it checks no players (ZD1).
+    const jneedcontur = await connection.pool.query(
+      `select id, validation_daily_quota from suppliers where code = 'jneedcontur'`,
+    );
+    expect(jneedcontur.rows).toEqual([
+      { id: '019a4f20-0000-7000-8000-000000002501', validation_daily_quota: 0 },
     ]);
     const policy = await connection.pool.query(
       `select price_review_threshold_bp, cost_stale_minutes, health_window_minutes,

@@ -15,6 +15,13 @@ import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
 import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { catalogProducts, checkouts, orders } from '../schema/index.js';
 import {
+  afterSectionOrder,
+  cashHoldFor,
+  checkCreditLimits,
+  currentCreditPolicy,
+  lockRecipients,
+} from './credit.js';
+import {
   displayTotal,
   insertOrder,
   type LineInput,
@@ -25,6 +32,7 @@ import {
   prepareLine,
   purchaseAudit,
   salesRevenue,
+  sectionLines,
 } from './purchase.js';
 import { touchSavedPlayer } from './saved-players.js';
 import { createShareLink } from './share-links.js';
@@ -165,9 +173,26 @@ export async function checkoutOrders(
       quantity: line.quantity,
     })),
   );
+  // S25 CL5: every recipient's lock before the wallet's; the lines count together.
+  const section = sectionLines(prepared);
+  const policy = section.length > 0 ? await currentCreditPolicy(tx) : null;
+  await lockRecipients(
+    tx,
+    section.map((entry) => entry.recipient),
+  );
   const wallet = await lockCustomerWallet(tx, input.customerId);
   // S12 LM4: the whole total against the cap, all or nothing (edge case 5).
   await checkPurchaseCap(tx, customer, total);
+  const merchant = customer.accountType === 'merchant';
+  if (policy) {
+    await checkCreditLimits(tx, {
+      policy,
+      customerId: input.customerId,
+      merchant,
+      walletId: wallet,
+      lines: section,
+    });
+  }
   let journalId: string;
   try {
     const journal = await postJournal(tx, {
@@ -208,6 +233,9 @@ export async function checkoutOrders(
 
   const written: OrderRow[] = [];
   for (const [index, line] of prepared.entries()) {
+    const cashHold = policy
+      ? cashHoldFor(policy, { ...line, totalUsdUnits: line.total }, merchant)
+      : null;
     const order = await insertOrder(tx, {
       id: newId(),
       customerId: input.customerId,
@@ -222,6 +250,7 @@ export async function checkoutOrders(
       paidAt: sql`now()`,
       checkoutId,
       checkoutLine: index + 1,
+      cashHold,
     });
     await addOrderEvent(
       tx,
@@ -241,12 +270,15 @@ export async function checkoutOrders(
         journalId,
         checkoutId,
         ...(order.isGift && { gift: true }),
+        ...(cashHold && { cashHeld: true }),
       },
     });
     await touchSavedPlayer(tx, order, line.savePlayer, customer.accountType);
     if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
     if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
-    await queueFulfil(tx, context.jobs, order.id);
+    // S25 CS3: a held cash order waits for the admin's decision.
+    if (!cashHold) await queueFulfil(tx, context.jobs, order.id);
+    if (policy) await afterSectionOrder(tx, context, policy, order);
     written.push(order);
   }
   // S21 LV4, AL5 after the checkout's one debit.

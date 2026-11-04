@@ -195,6 +195,8 @@ const IN_PROGRESS: readonly OrderStatus[] = ['paid', 'sent_to_supplier', 'failed
 const DELIVERED_PROBLEMS: Readonly<Record<ProductKind, readonly OrderProblem[]>> = {
   direct: ['not_arrived', 'wrong_amount', 'wrong_player_id', 'other'],
   code: ['code_not_working', 'code_used', 'wrong_region', 'other'],
+  /** S25 D8: credit to a wrong number is not refunded, so no "wrong number" problem is offered. */
+  amount: ['not_arrived', 'wrong_amount', 'other'],
 };
 
 /** OP2: the problems an order's state and kind offer, before the window. */

@@ -6,6 +6,7 @@ import {
   selectOptionSchema,
 } from './catalog.js';
 import { announcementToneSchema, contentPageSchema } from './content.js';
+import { creditPolicySchema, serviceClassSchema } from './credit.js';
 import {
   depositDeciderSchema,
   depositFlagCodeSchema,
@@ -102,6 +103,7 @@ export const AUDIT_ENTITY_TYPES = [
   'price_review',
   'order',
   'order_policy',
+  'credit_policy',
   'customer_note',
   'support_ticket',
   'support_settings',
@@ -212,6 +214,9 @@ const productValues = {
   gameAmount: z.int().nullable(),
   officialPriceUsdUnits: z.int().nullable(),
   maxQuantity: z.int(),
+  /** S25 AM1: an `amount` product's fewest units and unit. */
+  minQuantity: z.int().optional(),
+  amountUnitAr: z.string().nullable().optional(),
   regionAr: z.string().nullable(),
   redemptionAr: z.string().nullable(),
   status: catalogStatusSchema,
@@ -587,6 +592,11 @@ export const AUDIT_DETAILS = {
     before: playerCheckValues.nullable(),
     after: playerCheckValues,
   }),
+  /** S25 CL1: the game's service class. */
+  'catalog_game.service_class_set': named({
+    before: serviceClassSchema,
+    after: serviceClassSchema,
+  }),
   'catalog_input_field.created': z.strictObject({ gameId: z.uuid(), ...inputFieldValues }),
   'catalog_input_field.updated': changed(inputFieldValues),
   'catalog_input_field.archived': z.strictObject({ gameId: z.uuid(), identifier: z.string() }),
@@ -775,6 +785,19 @@ export const AUDIT_DETAILS = {
     purpose: adminOrderPurposeSchema.optional(),
     payer: orderPayerSchema.optional(),
     customerId: z.uuid().nullable().optional(),
+    /** S25 CS3: a cash order held for the admin's approval. */
+    cashHeld: z.boolean().optional(),
+  }),
+  /** S25 CS4: the admin approved a held cash order (panel or Telegram, in the channel). */
+  'order.cash_approved': z.strictObject({ totalUsdUnits: z.int().positive() }),
+  /**
+   * S25 CS4, CS5: a held cash order rejected by the admin or expired (by the system), refunded
+   * whole by its journal, with the order's `order.refunded`.
+   */
+  'order.cash_rejected': z.strictObject({
+    totalUsdUnits: z.int().positive(),
+    expired: z.boolean(),
+    journalId: z.uuid(),
   }),
   /** S09 rule RS1: the customer reserved an order; no money moved. */
   'order.reserved': z.strictObject({
@@ -947,6 +970,11 @@ export const AUDIT_DETAILS = {
   'order_policy.set': z.strictObject({
     before: orderPolicySchema.strict(),
     after: orderPolicySchema.strict(),
+  }),
+  /** S25: the credit policy; `before` is the row in force. */
+  'credit_policy.set': z.strictObject({
+    before: creditPolicySchema.strict(),
+    after: creditPolicySchema.strict(),
   }),
 } as const satisfies Record<string, z.ZodType>;
 

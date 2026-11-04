@@ -4,6 +4,7 @@ import {
   ATTEMPT_RESOLVERS,
   ATTEMPT_STATUSES,
   CANCEL_REASONS,
+  CASH_HOLD_STATES,
   CHECKOUT_SOURCES,
   CODE_RELEASE_PURPOSES,
   CODE_REVEAL_ACTORS,
@@ -75,6 +76,8 @@ export const checkoutSourceEnum = pgEnum('checkout_source', CHECKOUT_SOURCES);
 export const orderCancelReasonEnum = pgEnum('order_cancel_reason', CANCEL_REASONS);
 
 export const orderPlayerCheckEnum = pgEnum('order_player_check', PLAYER_CHECK_STATES);
+
+export const cashHoldStateEnum = pgEnum('cash_hold_state', CASH_HOLD_STATES);
 
 export const playerCheckResultEnum = pgEnum('player_check_result', PLAYER_CHECK_RESULTS);
 
@@ -187,6 +190,18 @@ export const orders = pgTable(
     adminId: uuid('admin_id'),
     adminReason: text('admin_reason'),
     customerNote: text('customer_note'),
+    /**
+     * S25 RN3: the recipient line of a credit or cash game's order, normalised (`09XXXXXXXX`); null
+     * for every other order. CL3 counts orders per number across accounts.
+     */
+    recipient: text('recipient'),
+    /**
+     * S25 CS3–CS5: a cash order above the approval threshold, held until the admin decides or it
+     * expires; who decided (no foreign key, as `admin_id`; null on expiry) and when.
+     */
+    cashHold: cashHoldStateEnum('cash_hold'),
+    cashHoldDecidedAt: timestamp('cash_hold_decided_at', { withTimezone: true }),
+    cashHoldAdminId: uuid('cash_hold_admin_id'),
     ...timestamps(),
   },
   (table) => [
@@ -255,7 +270,25 @@ export const orders = pgTable(
         and char_length(${table.customerNote}) between 1 and 300`,
     ),
     check('orders_number_check', sql`${table.number} ~ '^VO-[2-9A-HJKMNP-Z]{6}$'`),
-    check('orders_quantity_check', sql`${table.quantity} between 1 and 100`),
+    /** S25 CL3: one number's orders of the last day, across accounts. */
+    index('orders_recipient_created_at_idx')
+      .on(table.recipient, table.createdAt)
+      .where(sql`${table.recipient} is not null`),
+    /** S25 CS3, CS5: the held cash orders, oldest first. */
+    index('orders_cash_held_paid_at_idx')
+      .on(table.paidAt)
+      .where(sql`${table.cashHold} = 'held'`),
+    check(
+      'orders_cash_hold_check',
+      sql`char_length(${table.recipient}) between 1 and 32
+        and (${table.cashHold} is null or ${table.recipient} is not null)
+        and (${table.cashHoldDecidedAt} is null) = coalesce(${table.cashHold} = 'held', true)
+        and (${table.cashHoldAdminId} is null or ${table.cashHold} in ('approved', 'rejected'))`,
+    ),
+    check(
+      'orders_quantity_check',
+      sql`${table.quantity} between 1 and case ${table.kind}::text when 'amount' then 1000 else 100 end`,
+    ),
     check(
       'orders_unit_price_check',
       sql`${table.unitPriceUsdUnits} > 0 and ${table.unitPriceUsdUnits} % 10000 = 0`,
@@ -624,7 +657,8 @@ export const fulfilmentAttempts = pgTable(
     index('fulfilment_attempts_resolved_at_idx').on(table.resolvedAt),
     /** S13 R2 by supplier: attempts sent in the period (audit A09-16). */
     index('fulfilment_attempts_sent_at_idx').on(table.sentAt),
-    check('fulfilment_attempts_quantity_check', sql`${table.quantity} between 1 and 100`),
+    /** S25 AM3: an amount order is one attempt of up to 1,000 units. */
+    check('fulfilment_attempts_quantity_check', sql`${table.quantity} between 1 and 1000`),
     check(
       'fulfilment_attempts_delivered_check',
       sql`${table.deliveredQuantity} between 0 and ${table.quantity}
@@ -764,6 +798,54 @@ export const orderPolicy = pgTable(
         and ${table.manualReminderMinutes} between 5 and 240
         and ${table.ownerDailyCapUsdUnits} between 0 and 10000000000
         and ${table.ownerDailyCapUsdUnits} % 10000 = 0`,
+    ),
+  ],
+);
+
+/**
+ * S25: the credit policy, append-only as `order_policy`: the newest row is in force, seeded by
+ * migration 0110. Amounts are USD units in whole cents (ADR 0003).
+ */
+export const creditPolicy = pgTable(
+  'credit_policy',
+  {
+    id: id(),
+    retailDailyUsdUnits: amountUnits('retail_daily_usd_units').notNull(),
+    merchantDailyUsdUnits: amountUnits('merchant_daily_usd_units').notNull(),
+    recipientDailyOrdersRetail: integer('recipient_daily_orders_retail').notNull(),
+    recipientDailyOrdersMerchant: integer('recipient_daily_orders_merchant').notNull(),
+    recipientAccountsAlert: integer('recipient_accounts_alert').notNull(),
+    recipientAlertDays: integer('recipient_alert_days').notNull(),
+    cashRetailDailyUsdUnits: amountUnits('cash_retail_daily_usd_units').notNull(),
+    cashMerchantDailyUsdUnits: amountUnits('cash_merchant_daily_usd_units').notNull(),
+    cashRetailApprovalAboveUsdUnits: amountUnits('cash_retail_approval_above_usd_units').notNull(),
+    cashMerchantApprovalAboveUsdUnits: amountUnits(
+      'cash_merchant_approval_above_usd_units',
+    ).notNull(),
+    cashBalanceAgeHours: integer('cash_balance_age_hours').notNull(),
+    cashHoldHours: integer('cash_hold_hours').notNull(),
+    cashTelegramCeilingUsdUnits: amountUnits('cash_telegram_ceiling_usd_units').notNull(),
+    /** Null for the seed. */
+    adminId: uuid('admin_id'),
+    createdAt: insertedAt(),
+  },
+  (table) => [
+    index('credit_policy_created_at_idx').on(table.createdAt.desc()),
+    check(
+      'credit_policy_bounds_check',
+      sql`${table.retailDailyUsdUnits} between 0 and 100000000000 and ${table.retailDailyUsdUnits} % 10000 = 0
+        and ${table.merchantDailyUsdUnits} between 0 and 100000000000 and ${table.merchantDailyUsdUnits} % 10000 = 0
+        and ${table.cashRetailDailyUsdUnits} between 0 and 100000000000 and ${table.cashRetailDailyUsdUnits} % 10000 = 0
+        and ${table.cashMerchantDailyUsdUnits} between 0 and 100000000000 and ${table.cashMerchantDailyUsdUnits} % 10000 = 0
+        and ${table.cashRetailApprovalAboveUsdUnits} between 0 and 100000000000 and ${table.cashRetailApprovalAboveUsdUnits} % 10000 = 0
+        and ${table.cashMerchantApprovalAboveUsdUnits} between 0 and 100000000000 and ${table.cashMerchantApprovalAboveUsdUnits} % 10000 = 0
+        and ${table.cashTelegramCeilingUsdUnits} between 0 and 100000000000 and ${table.cashTelegramCeilingUsdUnits} % 10000 = 0
+        and ${table.recipientDailyOrdersRetail} between 0 and 1000
+        and ${table.recipientDailyOrdersMerchant} between 0 and 1000
+        and ${table.recipientAccountsAlert} between 0 and 1000
+        and ${table.recipientAlertDays} between 1 and 90
+        and ${table.cashBalanceAgeHours} between 0 and 720
+        and ${table.cashHoldHours} between 0 and 720`,
     ),
   ],
 );

@@ -80,6 +80,12 @@ describe('a route of an offer with order bounds (S19, spec Data)', () => {
     expect(reason({ offerMaxQuantity: 1 })).toBeNull();
     expect(reason({ offerMaxQuantity: 1, productMaxQuantity: 2 })).toBe('quantity_unsupported');
     expect(reason({ offerMinQuantity: 2, productMaxQuantity: 10 })).toBe('quantity_unsupported');
+    // S25 AM3: an amount product's route serves the amounts both bounds share.
+    const amount = { amountMinQuantity: 10, productMaxQuantity: 1_000 };
+    expect(reason({ ...amount, offerMinQuantity: 10, offerMaxQuantity: 100 })).toBeNull();
+    expect(reason({ ...amount, offerMinQuantity: null, offerMaxQuantity: null })).toBeNull();
+    expect(reason({ ...amount, offerMinQuantity: 1_001 })).toBe('quantity_unsupported');
+    expect(reason({ ...amount, offerMaxQuantity: 9 })).toBe('quantity_unsupported');
   });
 });
 
@@ -93,6 +99,8 @@ describe('suppliers (rule SP1)', () => {
 
   it('make FazerCards available with its adapter, never checking players by route (S19 FC2)', () => {
     expect(supplierAvailable('fazercards', { fakeEnabled: false })).toBe(true);
+    // S25 ZD2: the zddk adapter arrives in PR 2.
+    expect(supplierAvailable('jneedcontur', { fakeEnabled: true })).toBe(false);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true })).toBe(false);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true, by: 'provider' })).toBe(true);
     expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true, by: 'provider' })).toBe(false);
@@ -129,7 +137,12 @@ describe('suppliers (rule SP1)', () => {
   });
 
   it('list offers except the manual supplier', () => {
-    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual(['wdgzone', 'fazercards', 'fake']);
+    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual([
+      'wdgzone',
+      'fazercards',
+      'jneedcontur',
+      'fake',
+    ]);
   });
 
   it('ask for credentials except the manual supplier', () => {
@@ -137,6 +150,7 @@ describe('suppliers (rule SP1)', () => {
     expect(SUPPLIER_CREDENTIAL_FIELDS.fake).toEqual(['webhookSecret']);
     expect(SUPPLIER_CREDENTIAL_FIELDS.wdgzone).toEqual(['apiKey']);
     expect(SUPPLIER_CREDENTIAL_FIELDS.fazercards).toEqual(['apiKey', 'webhookSecret']);
+    expect(SUPPLIER_CREDENTIAL_FIELDS.jneedcontur).toEqual(['apiToken']);
   });
 
   it('take a low-balance threshold of whole cents up to $100,000', () => {
