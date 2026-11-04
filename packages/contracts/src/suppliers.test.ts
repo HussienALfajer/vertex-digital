@@ -99,8 +99,9 @@ describe('suppliers (rule SP1)', () => {
 
   it('make FazerCards available with its adapter, never checking players by route (S19 FC2)', () => {
     expect(supplierAvailable('fazercards', { fakeEnabled: false })).toBe(true);
-    // S25 ZD2: the zddk adapter arrives in PR 2.
-    expect(supplierAvailable('jneedcontur', { fakeEnabled: true })).toBe(false);
+    // S25 ZD2: through the zddk adapter, which checks no player.
+    expect(supplierAvailable('jneedcontur', { fakeEnabled: false })).toBe(true);
+    expect(supplierChecksPlayers('jneedcontur', { fakeEnabled: false })).toBe(false);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true })).toBe(false);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true, by: 'provider' })).toBe(true);
     expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true, by: 'provider' })).toBe(false);

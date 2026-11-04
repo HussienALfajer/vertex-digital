@@ -56,6 +56,8 @@ export type AttemptOutcome =
       supplierOrderId?: string | null;
       /** S18 CH1: what the supplier says it charged, kept on the attempt once. */
       chargedUsdUnits?: number | null;
+      /** S25 ZD8: the supplier's delivery text (an operation number), kept in `result`. */
+      reference?: string | null;
     }
   | { status: 'pending'; supplierOrderId?: string | null; chargedUsdUnits?: number | null }
   | {
@@ -88,6 +90,16 @@ export interface AppliedOutcome {
 
 const clip = (text: string | null | undefined, max: number): string | null =>
   text ? text.slice(0, max) : null;
+
+/** S25 ZD8: a supplier's delivery text as the admin sees it: printable, at most 200 characters. */
+function deliveryText(text: string | null | undefined): string | null {
+  const clean = text
+    ?.replace(/\p{Cc}+/gu, ' ')
+    .trim()
+    .slice(0, 200)
+    .trim();
+  return clean || null;
+}
 
 const eventActor = (resolution: Resolution): OrderEventActor =>
   resolution.by === 'admin' ? 'admin' : 'supplier';
@@ -177,6 +189,7 @@ export async function applyOutcome(
   switch (outcome.status) {
     case 'delivered': {
       const units = outcome.quantity;
+      const reference = deliveryText(outcome.reference);
       await storeCodes(tx, context, order.id, attemptId, outcome.codes ?? []);
       const journalId = await postCostOfGoods(tx, order.id, attemptId, {
         supplierCode,
@@ -194,7 +207,12 @@ export async function applyOutcome(
           nextPollAt: null,
           costJournalId: journalId,
           chargedUsdUnits,
-          result: { status: 'delivered', quantity: units, codeCount: outcome.codes?.length ?? 0 },
+          result: {
+            status: 'delivered',
+            quantity: units,
+            codeCount: outcome.codes?.length ?? 0,
+            ...(reference && { reference }),
+          },
         })
         .where(eq(fulfilmentAttempts.id, attemptId))
         .returning();

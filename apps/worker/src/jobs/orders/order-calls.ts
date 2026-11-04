@@ -179,6 +179,8 @@ export function attemptOutcome(
         ...(outcome.codes && { codes: outcome.codes }),
         supplierOrderId: outcome.supplierOrderId,
         ...(outcome.chargedUsdUnits !== undefined && { chargedUsdUnits: outcome.chargedUsdUnits }),
+        // S25 ZD8: the supplier's delivery text, masked like any supplier text.
+        ...(outcome.reference && { reference: clean(outcome.reference) }),
       };
     case 'pending':
       return {

@@ -43,3 +43,10 @@ export {
   WdgzoneAdapter,
   type WdgzoneAdapterOptions,
 } from './wdgzone/adapter.js';
+export {
+  ZDDK_STORES,
+  ZddkAdapter,
+  type ZddkAdapterOptions,
+  type ZddkStore,
+  zddkOrderUuid,
+} from './zddk/adapter.js';

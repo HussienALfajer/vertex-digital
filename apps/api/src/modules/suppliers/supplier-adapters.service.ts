@@ -25,6 +25,7 @@ import {
   type SupplierAdapter,
   SupplierError,
   WdgzoneAdapter,
+  ZddkAdapter,
 } from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -85,6 +86,11 @@ export class SupplierAdaptersService {
             apiKey: credentials.apiKey,
             webhookSecret: credentials.webhookSecret,
           })
+        : null;
+    }
+    if (supplier.code === 'jneedcontur') {
+      return credentials.apiToken
+        ? new ZddkAdapter({ store: supplier.code, apiToken: credentials.apiToken })
         : null;
     }
     if (supplier.code !== 'fake') return null;

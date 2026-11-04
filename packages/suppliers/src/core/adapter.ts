@@ -239,6 +239,11 @@ export type SupplierOutcome =
       codes?: string[];
       /** S18 CH1: what the supplier says it charged for the order, in USD units. */
       chargedUsdUnits?: number;
+      /**
+       * S25 ZD8: the supplier's delivery text for a top-up (an operator's operation number), at
+       * most 200 characters, kept on the attempt for the admin; never a code.
+       */
+      reference?: string;
     }
   | { status: 'pending'; supplierOrderId: string; chargedUsdUnits?: number }
   | {

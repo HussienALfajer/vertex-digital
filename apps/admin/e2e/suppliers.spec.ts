@@ -203,6 +203,27 @@ test.describe('suppliers', () => {
     await expect(page.getByText(s.subscription.inactiveMeaning)).toBeVisible();
   });
 
+  test('jneedcontur takes its one token, without a webhook card (S25 ZD1, ZD2)', async ({
+    page,
+    admin,
+  }) => {
+    admin.signedIn = true;
+    await page.goto('/suppliers');
+    await expect(card(page, 'jneedcontur')).toContainText(s.chips.available);
+    await card(page, 'jneedcontur').getByRole('link', { name: s.open }).click();
+    await expect(page).toHaveURL(/\/suppliers\/jneedcontur$/);
+    await expect(page.getByText(s.descriptions.jneedcontur)).toBeVisible();
+    admin.reauthenticationRequired = true;
+    await page.getByRole('button', { name: s.credentials.set }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByLabel(s.credentials.fields.webhookSecret)).toHaveCount(0);
+    await dialog.getByLabel(s.credentials.fields.apiToken).fill('jneedcontur-token-e5f6');
+    await dialog.getByRole('button', { name: s.credentials.save }).click();
+    await reauthenticate(page);
+    await expect(page.getByText('…e5f6')).toBeVisible();
+    await expect(page.getByText(s.webhook.title)).toHaveCount(0);
+  });
+
   test('imports three PUBG offers into paused products, refusing a taken name in place (step 2)', async ({
     page,
     admin,

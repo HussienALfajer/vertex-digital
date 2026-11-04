@@ -92,6 +92,10 @@ type Executor = Database | Transaction;
 
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 
+/** S25 ZD8: the delivery text a supplier gave, kept in a delivered attempt's `result`. */
+const supplierReference = (result: Record<string, unknown> | null): string | null =>
+  typeof result?.reference === 'string' && result.reference !== '' ? result.reference : null;
+
 async function covers(
   db: Executor,
   fileIds: (string | null)[],
@@ -844,7 +848,8 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
         unitCostUsdUnits: attempt.unitCostUsdUnits,
         chosenByAdmin: attempt.chosenByAdmin,
         proofFileId: attempt.proofFileId,
-        deliveryReference: attempt.deliveryReference,
+        // S11 MF2: the admin's reference of a manual delivery; S25 ZD8: the supplier's text.
+        deliveryReference: attempt.deliveryReference ?? supplierReference(attempt.result),
         status: attempt.status,
         supplierOrderId: attempt.supplierOrderId,
         failureReason: attempt.failureReason,
