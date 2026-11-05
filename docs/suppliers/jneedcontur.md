@@ -52,14 +52,14 @@ Not used: `products?base=1` (ids and names only), `check?orders=[ID_…]` (by th
 | A list | `<id>:<value>` per distinct valid value (the value as written), kind `direct`, `minQuantity = maxQuantity = 1` | the value | 1 only | `price × value` |
 | A range | `<id>@100`, kind `amount`, `minQuantity = ceil(min / 100)`, `maxQuantity = min(floor(max / 100), 1,000,000)`; left out when no whole unit fits | `quantity × 100` | 1 unit = 100 SYP | `price × 100` |
 
-- A cost that is not a whole number of micro-dollars after its multiplier is kept with `unsupportedReason: 'cost_precision'` and never routed or quoted; the panel shows it rounded up (`usdUnitsOf` in `zddk/decimal.ts`). Example: Syriatel's `price × 96.15` (S25 edge case 3, Q38).
+- A cost with a fraction of a micro-dollar after its multiplier is rounded up to the next micro-dollar (`usdUnitsOf(..., { roundUp: true })` in `zddk/decimal.ts`), for the sync and the quote alike, so it is never below what the supplier takes. The live catalog needs it: MTN credit is priced $0.0074375278 per pound, so every value has such a fraction, as has Syriatel's `price × 96.15` (S25 ZD4, amended 2026-11-05). A charge with such a fraction is not read.
 - A JSON number is read from its shortest text (`String(n)`, exact for the store's figures, which have far fewer than 15 significant digits), never through floating-point arithmetic.
 - An offer is kept `fields_unsupported` when its product has several `params` (Q31: the key of the second field is not known) or none: a product without a field may deliver codes, and the documentation gives no way to tell a code product before buying (Q31). Every sold offer is `direct` or `amount`; no `code` offer exists until Q31 is answered.
 - A product whose row does not parse (an id that is not a number, a price that is not a decimal, a range whose bounds are not whole numbers in order) is left out.
 
 ### Categories (ZD3)
 
-`listCategories` reads `GET products` and lists the distinct `parent_id`s above 0 as flat categories `category.<parent_id>`, named by `category_name`, with `productCount`, `inStockCount` and the first product's `category_img` (on `api.jneedcontur.net` only, rule IM1). The categories' own parents are not read: `content/<id>`'s reply is undocumented. Once a live reply of `content/0` is shared, the tree's parents can be added.
+`listCategories` reads `GET products` and lists the distinct `parent_id`s above 0 as flat categories `category.<parent_id>`, named by `category_name`, with `productCount`, `inStockCount` and the first product's `category_img` (on `api.jneedcontur.net` only, rule IM1; the store writes its bare origin `https://api.jneedcontur.net/` for a category without an image, which is read as none). The categories' own parents are not read: `content/<id>`'s reply is undocumented. Once a live reply of `content/0` is shared, the tree's parents can be added.
 
 ## Orders
 

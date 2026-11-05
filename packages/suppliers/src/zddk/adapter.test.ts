@@ -86,7 +86,7 @@ describe('ZddkAdapter shape (S25 ZD1, ZD2)', () => {
 });
 
 describe('ZddkAdapter catalog (ZD3, ZD4)', () => {
-  it('lists packages, one offer per listed value and one @100 offer per range, costs exact', async () => {
+  it('lists packages, one offer per listed value and one @100 offer per range, costs rounded up', async () => {
     const before = server.requests.length;
     server.reply({ body: fixture('products') });
     const offers = await adapter().listOffers();
@@ -123,12 +123,12 @@ describe('ZddkAdapter catalog (ZD3, ZD4)', () => {
     });
     // A value written as a number reads the same as a string.
     expect(offers[2]?.cost.amountUnits).toBe(53_550_000);
-    // ×96.15 leaves a fraction of a micro-dollar: kept, never sold, the cost shown rounded up.
+    // ×96.15 leaves a fraction of a micro-dollar: the cost is rounded up, never below the supplier's.
     expect(offers[3]).toMatchObject({
-      unsupportedReason: 'cost_precision',
       cost: { currency: 'USD', amountUnits: 725_510 },
       originalCost: { currency: 'USD', amountUnits: 692_280 },
     });
+    expect(offers[3]).not.toHaveProperty('unsupportedReason');
     expect(offers[4]).toMatchObject({ cost: { amountUnits: 7_545_600 } });
     expect(offers[4]).not.toHaveProperty('unsupportedReason');
     // A range: one unit is 100 SYP, the bounds in units of 100.
@@ -151,9 +151,9 @@ describe('ZddkAdapter catalog (ZD3, ZD4)', () => {
       kind: 'amount',
       minQuantity: 100,
       maxQuantity: 10_000,
-      unsupportedReason: 'cost_precision',
       cost: { amountUnits: 9_041 },
     });
+    expect(offers[6]).not.toHaveProperty('unsupportedReason');
     expect(offers[7]).toMatchObject({
       name: 'UC 60',
       cost: { currency: 'USD', amountUnits: 1_094_000 },
@@ -208,6 +208,8 @@ describe('ZddkAdapter catalog (ZD3, ZD4)', () => {
         product('../secrets/x.webp'),
         product('images/../x.webp'),
         product('https://api.jneedcontur.net:8443/x.webp'),
+        // The store's bare origin stands for no image.
+        product('https://api.jneedcontur.net/'),
       ],
     });
     const [category] = await adapter().listCategories();
@@ -268,8 +270,11 @@ describe('ZddkAdapter balance and quote (ZD9, S18 PQ1)', () => {
       inStock: true,
     });
     expect(sentSince(before)[0]?.path).toBe('/client/api/products?products_id=1520');
-    // A cost that is not exact is never quoted: the send waits for the next sync.
-    await expect(adapter().getOfferQuote('1995@100')).rejects.toMatchObject({ kind: 'retryable' });
+    // A cost with a fraction of a micro-dollar is quoted rounded up, as the sync lists it.
+    expect(await adapter().getOfferQuote('1995@100')).toEqual({
+      cost: { currency: 'USD', amountUnits: 9_041 },
+      inStock: false,
+    });
   });
 
   it('refuses a quote for an offer the supplier no longer lists, or not of its shape', async () => {
