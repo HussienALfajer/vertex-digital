@@ -5,7 +5,8 @@ import { CURRENCY_SCALE } from '@vertex-digital/contracts';
  * or decimal strings (`"1.2604800000000000"`); a number is read from its shortest text (exact for
  * the supplier's figures, which have far fewer than 15 digits), never computed in floating point.
  * The price times the offer's multiplier (a value list's value, 100 for an amount offer) must be a
- * whole number of micro-dollars, or the offer is not sold (`cost_precision`): never rounded.
+ * whole number of micro-dollars; an offer's cost with a fraction of one is rounded up (never below
+ * what the supplier takes), and a charge with one is not read.
  */
 
 /** A non-negative decimal: `digits / 10^scale`. */
@@ -31,7 +32,7 @@ export function decimalOf(value: number | string): Decimal | null {
 /**
  * `price × multiplier` in USD units (micro-dollars), exactly; null when it is not a whole number
  * of units, not a decimal, or beyond the safe integers. With `roundUp`, a fraction of a unit is
- * rounded up instead: only to show the cost of an offer that is never sold (`cost_precision`).
+ * rounded up instead (an offer's cost).
  */
 export function usdUnitsOf(
   price: number | string,

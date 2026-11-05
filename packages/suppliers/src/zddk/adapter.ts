@@ -215,11 +215,6 @@ export class ZddkAdapter implements SupplierAdapter {
         supplierCode: 'PRODUCT_NOT_FOUND',
       });
     }
-    if (offer.unsupportedReason === 'cost_precision') {
-      throw new SupplierError('retryable', `${this.code} cost is not an exact amount`, {
-        failure: 'unreadable',
-      });
-    }
     return { cost: offer.cost, inStock: offer.inStock };
   }
 
@@ -368,8 +363,8 @@ export class ZddkAdapter implements SupplierAdapter {
   /**
    * ZD4: a product's offers: one package (no value list), one offer per value of a value list, or
    * one `@100` offer for a range. Kept unsupported: several fields, or none (Q31: a product without
-   * a field may deliver codes, which this build cannot tell before buying), and a cost that is not
-   * a whole number of micro-dollars after its multiplier.
+   * a field may deliver codes, which this build cannot tell before buying). A cost with a fraction
+   * of a micro-dollar after its multiplier is rounded up (ZD4): never below what the supplier takes.
    */
   private offersOf(product: ZddkProduct): SupplierOffer[] {
     const productId = String(product.id);
@@ -395,18 +390,18 @@ export class ZddkAdapter implements SupplierAdapter {
       multiplier: number | string,
       extra: Partial<SupplierOffer>,
     ): SupplierOffer[] => {
-      const exact = usdUnitsOf(product.price, multiplier);
-      const shown = exact ?? usdUnitsOf(product.price, multiplier, { roundUp: true });
-      if (shown === null) return [];
+      const cost = usdUnitsOf(product.price, multiplier, { roundUp: true });
+      if (cost === null) return [];
       const original =
-        product.base_price == null ? null : usdUnitsOf(product.base_price, multiplier);
-      const unsupportedReason =
-        exact === null ? 'cost_precision' : label ? undefined : 'fields_unsupported';
+        product.base_price == null
+          ? null
+          : usdUnitsOf(product.base_price, multiplier, { roundUp: true });
+      const unsupportedReason = label ? undefined : 'fields_unsupported';
       return [
         {
           offerId,
           name: offerName.slice(0, 200),
-          cost: { currency: 'USD', amountUnits: shown },
+          cost: { currency: 'USD', amountUnits: cost },
           ...common,
           ...extra,
           ...(original !== null && { originalCost: { currency: 'USD', amountUnits: original } }),
@@ -502,7 +497,12 @@ export class ZddkAdapter implements SupplierAdapter {
     const text = image?.trim();
     if (!text) return undefined;
     if (/^https:\/\//i.test(text)) {
-      return text.length <= 500 && imageUrlAllowed(text, this.imageHosts) ? text : undefined;
+      // The store writes its bare origin for a category without an image.
+      return text.length <= 500 &&
+        imageUrlAllowed(text, this.imageHosts) &&
+        new URL(text).pathname !== '/'
+        ? text
+        : undefined;
     }
     if (!IMAGE_PATH.test(text) || text.split('/').includes('..')) return undefined;
     return new URL(text.replace(/^\//, ''), `https://${this.imageHosts[0]}/`).href;
