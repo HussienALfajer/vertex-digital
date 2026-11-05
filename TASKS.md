@@ -11,5 +11,5 @@ Q31, Q32 and Q34 are still open in `docs/open-questions.md`: the owner chose (20
 - [x] tests: adapter against the fake server, decimals, db reference, registry, API supplier list, admin E2E
 - [x] docs: `docs/suppliers/jneedcontur.md`, ROADMAP, architecture, `packages/suppliers/CLAUDE.md`
 - [x] checks, reviewer (2 blocking findings fixed: amount ranges with no whole unit, one-unit bounds on packages and value lists), PR and merge
-- [ ] deploy `main` (S25 PR 1 + PR 2), health checks, the deploy log
-- [ ] live pilot steps for the owner (token, IP allowlist, 2FA, test, sync, funding, one MTN 1,000 SYP order, one Jawaker pack)
+- [x] deploy `main` (S25 PR 1 + PR 2, `cca5b14`, 2026-11-05), health checks, the deploy log
+- [ ] (owner) live pilot steps (token, IP allowlist, 2FA, test, sync, funding, one MTN 1,000 SYP order, one Jawaker pack)
