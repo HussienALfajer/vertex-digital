@@ -1258,6 +1258,7 @@ export class AdminApi {
         return json(200, {
           owedToCustomersUnits: this.owedToCustomersUnits,
           owedToTestCustomersUnits: owed,
+          owedToShopCustomersUnits: 0,
           walletsWithBalance: owed > 0 ? 1 : 0,
           systemAccounts: [...new Set(this.adjustments.map((item) => item.category))]
             .map((category) => ({

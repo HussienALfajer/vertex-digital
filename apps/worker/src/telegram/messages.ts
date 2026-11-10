@@ -944,6 +944,28 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         ].join('\n'),
       };
     }
+    case 'shop_requested': {
+      // S26: no personal data, the panel link and how many wait.
+      const request = params as TelegramMessageParams<'shop_requested'>;
+      return {
+        text: [
+          `🛍️ طلب متجر جديد بانتظار المراجعة: /s/${request.slug}`,
+          `بانتظار المراجعة: ${request.waiting}`,
+          `${links.admin}/shops/${request.shopId}`,
+        ].join('\n'),
+      };
+    }
+    case 'shop_closed_with_balance': {
+      // S26 SH7: settlement is the admin's (WL9).
+      const shop = params as TelegramMessageParams<'shop_closed_with_balance'>;
+      return {
+        text: [
+          `🛍️ أُغلق متجر ${shop.tradeName} بسحب صفة التاجر، ولدى ${shop.customers} زبائن رصيد مجموعه ${formatUsd(shop.totalUsdUnits)}`,
+          'يتابع الزبائن الشراء برصيدهم حتى تسويته من صفحة المتجر.',
+          `${links.admin}/shops/${shop.shopId}`,
+        ].join('\n'),
+      };
+    }
     case 'reconciliation_alert':
       return {
         text: reconciliationAlertText(

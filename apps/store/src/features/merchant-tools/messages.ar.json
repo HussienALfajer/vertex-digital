@@ -357,7 +357,9 @@
       "refund": "استرداد",
       "cost_of_goods": "تكلفة",
       "adjustment": "تعديل",
-      "treasury": "خزينة"
+      "treasury": "خزينة",
+      "shop_transfer": "رصيد زبون متجر",
+      "shop_margin": "ربح متجر"
     },
     "methods": {
       "sham_cash": "شام كاش",

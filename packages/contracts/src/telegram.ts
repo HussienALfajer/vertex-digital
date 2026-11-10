@@ -121,6 +121,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'cash_hold',
   /** S25 CL4: a number topped up from more accounts than the policy allows (once a day). */
   'credit_recipient_alert',
+  /** S26: a merchant asked for a shop, waiting for review. */
+  'shop_requested',
+  /** S26 SH7: a shop closed by the merchant's revocation while its customers hold a balance. */
+  'shop_closed_with_balance',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -584,6 +588,15 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     deposits30dUsdUnits: z.int().nonnegative(),
     cash30dUsdUnits: z.int().nonnegative(),
     telegramDecides: z.boolean(),
+  }),
+  /** S26: no personal data, the shop for the panel link, its slug and how many wait. */
+  shop_requested: z.object({ shopId: z.uuid(), slug: z.string(), waiting: z.int().positive() }),
+  /** S26 SH7: the trade name, how many customers hold a balance and its total. */
+  shop_closed_with_balance: z.object({
+    shopId: z.uuid(),
+    tradeName: z.string(),
+    customers: z.int().positive(),
+    totalUsdUnits: z.int().positive(),
   }),
   /** S25 CL4: the number masked, the accounts and their totals within the days. */
   credit_recipient_alert: z.object({

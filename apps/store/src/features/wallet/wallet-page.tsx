@@ -21,6 +21,7 @@ import { IconTile } from '@vertex-digital/ui/components/icon-tile';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import {
   ArrowDownToLineIcon,
+  ArrowLeftRightIcon,
   CircleAlertIcon,
   HistoryIcon,
   type LucideIcon,
@@ -28,6 +29,7 @@ import {
   RotateCcwIcon,
   ShoppingBagIcon,
   SlidersHorizontalIcon,
+  StoreIcon,
   Undo2Icon,
   WalletIcon,
 } from 'lucide-react';
@@ -86,6 +88,8 @@ const KIND_ICONS: Record<JournalKind, LucideIcon> = {
   cost_of_goods: ReceiptTextIcon,
   adjustment: SlidersHorizontalIcon,
   treasury: SlidersHorizontalIcon,
+  shop_transfer: ArrowLeftRightIcon,
+  shop_margin: StoreIcon,
 };
 
 /**

@@ -1,9 +1,19 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { Inject, Injectable } from '@nestjs/common';
-import type { CursorQuery, WalletCustomer } from '@vertex-digital/contracts';
-import { customers, type Database, type Transaction } from '@vertex-digital/db';
+import {
+  type CursorQuery,
+  SHOP_TRANSFER_CHECK_SECONDS,
+  type WalletCustomer,
+} from '@vertex-digital/contracts';
+import {
+  customerSessions,
+  customers,
+  customerVerifications,
+  type Database,
+  type Transaction,
+} from '@vertex-digital/db';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
-import { and, desc, eq, ilike, inArray, isNull, like, ne, or } from 'drizzle-orm';
+import { and, desc, eq, gt, ilike, inArray, isNull, like, ne, or } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { AltchaService } from '../../core/altcha/altcha.service.js';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -55,11 +65,62 @@ export class AuthService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) env: Env,
-    accounts: AuthAccountService,
+    private readonly accounts: AuthAccountService,
     passkeys: AuthPasskeysService,
     altcha: AltchaService,
   ) {
     this.auth = createCustomerAuth(db, env, accounts, passkeys, (header) => altcha.verify(header));
+  }
+
+  /**
+   * S26 WL4: the merchant's current password (counted with C11's checks) opens this session's
+   * transfers to shop customers for 15 minutes; a second check replaces the first.
+   */
+  async confirmForTransfers(
+    holder: { id: string; sessionId: string },
+    password: string,
+  ): Promise<Date> {
+    await this.accounts.checkCurrentPassword(holder.id, password);
+    const identifier = `shop-transfer-check:${holder.sessionId}`;
+    const expiresAt = new Date(Date.now() + SHOP_TRANSFER_CHECK_SECONDS * 1000);
+    await this.db
+      .insert(customerVerifications)
+      .values({ identifier, value: holder.id, expiresAt })
+      .onConflictDoUpdate({
+        target: customerVerifications.identifier,
+        set: { value: holder.id, expiresAt, createdAt: new Date() },
+      });
+    return expiresAt;
+  }
+
+  /**
+   * S26 WL4: a password or passkey check within the last 15 minutes: this session's transfer
+   * check, or the session itself signed in that recently (a password or passkey sign-in).
+   */
+  async recentlyConfirmed(holder: { id: string; sessionId: string }): Promise<boolean> {
+    const since = new Date(Date.now() - SHOP_TRANSFER_CHECK_SECONDS * 1000);
+    const [grant] = await this.db
+      .select({ id: customerVerifications.id })
+      .from(customerVerifications)
+      .where(
+        and(
+          eq(customerVerifications.identifier, `shop-transfer-check:${holder.sessionId}`),
+          eq(customerVerifications.value, holder.id),
+          gt(customerVerifications.expiresAt, new Date()),
+        ),
+      );
+    if (grant) return true;
+    const [session] = await this.db
+      .select({ id: customerSessions.id })
+      .from(customerSessions)
+      .where(
+        and(
+          eq(customerSessions.id, holder.sessionId),
+          eq(customerSessions.userId, holder.id),
+          gt(customerSessions.createdAt, since),
+        ),
+      );
+    return session !== undefined;
   }
 
   /** The Node handler mounted at `/api/auth` (`app.setup.ts`). */

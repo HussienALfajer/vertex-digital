@@ -76,12 +76,50 @@ export async function lockCustomerWallet(tx: Transaction, customerId: string): P
   return wallet;
 }
 
+/** S26: the code of a shop customer's wallet account (ADR 0040), the id lower-cased. */
+export const shopCustomerWalletCode = (shopCustomerId: string) =>
+  `shop_customer_wallet:${shopCustomerId.toLowerCase()}`;
+
+/** The id of a shop customer's wallet account, or null before its first posting. */
+export async function findShopCustomerWallet(
+  db: Executor,
+  shopCustomerId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(eq(ledgerAccounts.code, shopCustomerWalletCode(shopCustomerId)));
+  return row?.id ?? null;
+}
+
+/**
+ * S26 WL3: a shop customer's wallet, created if needed and locked (`FOR UPDATE`). Every shop write
+ * that moves money locks the merchant's wallet first, then this one (spec "Abuse and fraud").
+ */
+export async function lockShopCustomerWallet(
+  tx: Transaction,
+  shopCustomerId: string,
+): Promise<string> {
+  const wallet = await ensureAccount(tx, {
+    code: shopCustomerWalletCode(shopCustomerId),
+    kind: 'shop_customer_wallet',
+    currency: 'USD',
+    shopCustomerId,
+  });
+  await tx
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(eq(ledgerAccounts.id, wallet))
+    .for('update');
+  return wallet;
+}
+
 /** A system account by its code (`adjustments:<category>`), created on first use (rule J2). */
 export async function ensureSystemAccount(
   tx: Transaction,
   account: {
     code: string;
-    kind: Exclude<LedgerAccountKind, 'customer_wallet'>;
+    kind: Exclude<LedgerAccountKind, 'customer_wallet' | 'shop_customer_wallet'>;
     currency: Currency;
   },
 ): Promise<string> {
@@ -90,7 +128,13 @@ export async function ensureSystemAccount(
 
 async function ensureAccount(
   tx: Transaction,
-  account: { code: string; kind: LedgerAccountKind; currency: Currency; customerId?: string },
+  account: {
+    code: string;
+    kind: LedgerAccountKind;
+    currency: Currency;
+    customerId?: string;
+    shopCustomerId?: string;
+  },
 ): Promise<string> {
   // Any unique index, not only `code`: two first writes can both pass the conflict pre-check, and
   // the second may then meet the wallet's `customer_id` index first. Both name the same account
@@ -367,6 +411,8 @@ export async function timelineDeposits(
 export interface LedgerSummaryRows {
   owedToCustomersUnits: number;
   owedToTestCustomersUnits: number;
+  /** S26: what the shop customers' wallets hold (ADR 0040), apart from the store's customers. */
+  owedToShopCustomersUnits: number;
   walletsWithBalance: number;
   systemAccounts: {
     kind: LedgerAccountKind;
@@ -398,7 +444,7 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
     .as('balances');
   const systemCode = sql<
     string | null
-  >`case when ${balances.kind} = 'customer_wallet' then null else ${balances.code} end`;
+  >`case when ${balances.kind} in ('customer_wallet', 'shop_customer_wallet') then null else ${balances.code} end`;
   const rows = await db
     .select({
       kind: balances.kind,
@@ -415,12 +461,14 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
   const wallets = rows.filter((row) => row.kind === 'customer_wallet');
   const owed = (isTest: boolean) =>
     toUnits(wallets.find((row) => row.isTest === isTest)?.balance ?? '0');
+  const shopWallets = rows.filter((row) => row.kind === 'shop_customer_wallet');
   const systemAccounts = rows.flatMap(({ kind, code, currency, balance }) =>
-    kind === 'customer_wallet' || code === null ? [] : [{ kind, code, currency, balance }],
+    code === null ? [] : [{ kind, code, currency, balance }],
   );
   return {
     owedToCustomersUnits: owed(false),
     owedToTestCustomersUnits: owed(true),
+    owedToShopCustomersUnits: toUnits(shopWallets[0]?.balance ?? '0'),
     walletsWithBalance: wallets.reduce((count, row) => count + row.withBalance, 0),
     systemAccounts: systemAccounts.map(({ balance, ...account }) => ({
       ...account,

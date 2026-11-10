@@ -225,6 +225,8 @@ describe('append-only trigger', () => {
       'merchant_application_events',
       'merchant_settings',
       'merchant_shop_photos',
+      'merchant_shop_rates',
+      'merchant_shop_slugs',
       'merchant_tier_changes',
       'merchant_tier_months',
       'merchant_tier_settings',
@@ -240,6 +242,8 @@ describe('append-only trigger', () => {
       'reconciliation_explanations',
       'reconciliation_results',
       'reconciliation_settings',
+      'shop_settlements',
+      'shop_transfers',
       'store_switch_changes',
       // Their TRUNCATE triggers: rows are guarded by `stored_files_guard` and
       // `supplier_logs_guard` (stored-files.test.ts, suppliers.test.ts; audit A10-45, A10-54).

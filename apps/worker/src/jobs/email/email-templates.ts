@@ -10,6 +10,7 @@ import {
   monthRange,
   type PriceKind,
   type RefundReason,
+  type ShopSettlementTarget,
   type StorePlacedPurpose,
   TIER_NAMES_AR,
   type TierPrivileges,
@@ -27,6 +28,8 @@ export interface RenderedEmail {
   text: string;
   /** Images the HTML shows by `cid:`, sent inside the email so no client fetches them. */
   attachments: { cid: string; path: string; filename: string }[];
+  /** S26: «<shop> عبر VERTEX DIGITAL» for a shop's email. */
+  fromName?: string;
 }
 
 interface Content {
@@ -167,6 +170,12 @@ const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = 
 
 /** A browser or system the user agent did not name reads as "unknown", in Arabic (feature 2 audit). */
 const deviceName = (name: string) => (name === 'Unknown' ? 'غير معروف' : name);
+
+/** S26 WL9: where a closed shop's balance went, in the customer's words. */
+const SETTLEMENT_LINES: Record<ShopSettlementTarget, string> = {
+  merchant: 'أُعيد المبلغ إلى صاحب المتجر، وهو يدفعه لك نقداً.',
+  cash_refund: 'يدفع لك فريق Vertex Digital المبلغ نقداً، ويتواصل معك لذلك.',
+};
 
 const orderPage = (orderId: string) => ({ label: 'عرض الطلب', path: `/orders/${orderId}` });
 
@@ -504,6 +513,76 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: { label: 'التنبيهات', path: '/merchant/alerts' },
   }),
+  // S26 WL1, abuse: every transfer to a shop customer, so a stolen session shows at once.
+  customer_merchant_shop_transfer: ({ customerName, amountUsdUnits, at }) => ({
+    subject: `شحنت ${usd(amountUsdUnits)} لزبون في متجرك`,
+    lines: [
+      `نُقل ${usd(amountUsdUnits)} من رصيدك إلى رصيد ${named(customerName)} في متجرك بتاريخ ${formatTime(at)}.`,
+      NOT_YOU,
+    ],
+    link: { label: 'زبائن المتجر', path: '/merchant/shop/customers' },
+  }),
+  // S26 CA1: the one email with a token in its link (single use, 72 hours, a password only).
+  shop_customer_invitation: ({ shopName, slug, token, expiresAt }) => ({
+    subject: `دعوة إلى متجر ${named(shopName)}`,
+    lines: [
+      `أنشأ لك ${named(shopName)} حساباً في متجره لشحن الألعاب والتطبيقات من رصيدك.`,
+      `اختر كلمة مرور لحسابك من الزر أدناه قبل ${formatTime(expiresAt)}. الرابط يعمل مرة واحدة.`,
+      IGNORE,
+    ],
+    link: { label: 'إنشاء كلمة المرور', path: `/s/${slug}/invite/${token}` },
+  }),
+  shop_customer_verify_email: ({ shopName, code }) => ({
+    subject: `${code} رمز تأكيد بريدك في متجر ${shopName}`,
+    heading: 'أكّد بريدك الإلكتروني',
+    lines: [
+      `أهلًا بك في متجر ${named(shopName)}. أدخل هذا الرمز لتأكيد بريدك الإلكتروني:`,
+      CODE_LIFETIME,
+      IGNORE,
+    ],
+    code,
+  }),
+  shop_customer_reset_password: ({ shopName, code }) => ({
+    subject: `${code} رمز استعادة كلمة المرور في متجر ${shopName}`,
+    heading: 'استعادة كلمة المرور',
+    lines: [
+      `طلبتَ تعيين كلمة مرور جديدة لحسابك في متجر ${named(shopName)}. أدخل هذا الرمز للمتابعة:`,
+      CODE_LIFETIME,
+      IGNORE,
+    ],
+    code,
+  }),
+  shop_customer_transfer_received: ({ shopName, slug, amountUsdUnits, at }) => ({
+    subject: `أُضيف ${usd(amountUsdUnits)} إلى رصيدك`,
+    lines: [
+      `أضاف متجر ${named(shopName)} ${usd(amountUsdUnits)} إلى رصيدك بتاريخ ${formatTime(at)}.`,
+    ],
+    link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
+  }),
+  shop_customer_return_requested: ({ shopName, slug, amountUsdUnits, expiresAt }) => ({
+    subject: `طلب إرجاع ${usd(amountUsdUnits)} من رصيدك`,
+    lines: [
+      `يطلب متجر ${named(shopName)} إرجاع ${usd(amountUsdUnits)} من رصيدك إليه، ويدفعه لك نقداً.`,
+      `أكّد الطلب أو ارفضه من صفحة رصيدك قبل ${formatTime(expiresAt)}. لا يُخصم شيء دون تأكيدك.`,
+    ],
+    link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
+  }),
+  shop_customer_return_done: ({ shopName, slug, amountUsdUnits, at }) => ({
+    subject: `أُرجع ${usd(amountUsdUnits)} من رصيدك`,
+    lines: [
+      `أكّدت إرجاع ${usd(amountUsdUnits)} من رصيدك إلى متجر ${named(shopName)} بتاريخ ${formatTime(at)}.`,
+      NOT_YOU,
+    ],
+    link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
+  }),
+  shop_customer_settled: ({ shopName, slug, amountUsdUnits, to, at }) => ({
+    subject: `سُوّي رصيدك في متجر ${shopName}`,
+    lines: [
+      `أُغلق متجر ${named(shopName)}، وسُوّي رصيدك البالغ ${usd(amountUsdUnits)} بتاريخ ${formatTime(at)}.`,
+      SETTLEMENT_LINES[to],
+    ],
+    link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
+  }),
 };
 
 const escapeHtml = (value: string) =>
@@ -607,5 +686,12 @@ export function renderEmail<Template extends EmailTemplate>(
     ...(link ? [`${link.label}: ${link.url}`] : []),
     `— Vertex Digital · ${store.host}`,
   ].join('\n\n');
-  return { subject: content.subject, html, text, attachments: [LOGO] };
+  const shopName = (params as { shopName?: unknown }).shopName;
+  return {
+    subject: content.subject,
+    html,
+    text,
+    attachments: [LOGO],
+    ...(typeof shopName === 'string' && { fromName: `${shopName} عبر VERTEX DIGITAL` }),
+  };
 }

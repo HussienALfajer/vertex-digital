@@ -216,7 +216,9 @@
         "merchant_tier_reminder": "تذكير الفئة قبل نهاية الشهر",
         "product_available": "عند توفر باقة طلبت التنبيه عنها",
         "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها",
-        "merchant_early_access": "عند فتح لعبة أو باقة لك مبكراً"
+        "merchant_early_access": "عند فتح لعبة أو باقة لك مبكراً",
+        "merchant_shop_changed": "عند تغيّر حالة متجرك",
+        "merchant_shop_return_ended": "عند رد زبون على طلب إرجاع رصيد"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -248,7 +250,9 @@
       "refund": "أُعيد المبلغ إلى المحفظة",
       "cost_of_goods": "تكلفة",
       "treasury": "حركة خزينة",
-      "adjustment": "تعديل الرصيد"
+      "adjustment": "تعديل الرصيد",
+      "shop_transfer": "رصيد زبون متجرك",
+      "shop_margin": "ربح من متجرك"
     },
     "categories": {
       "compensation": "تعويض",
@@ -564,7 +568,17 @@
       "product_available": "عادت باقة {product} في {game} إلى التوفر.",
       "product_price_dropped": "انخفض سعر {product} في {game} من {old} إلى {new}.",
       "merchant_early_access_game": "وصول مبكر: {game} متاحة لك قبل الجميع لمدة 24 ساعة.",
-      "merchant_early_access_pack": "وصول مبكر: {product} في {game} متاحة لك قبل الجميع لمدة 24 ساعة."
+      "merchant_early_access_pack": "وصول مبكر: {product} في {game} متاحة لك قبل الجميع لمدة 24 ساعة.",
+      "merchant_shop_requested": "وصل طلب متجرك وهو قيد المراجعة.",
+      "merchant_shop_active": "تمت الموافقة على متجرك، وأصبح رابطه يعمل الآن.",
+      "merchant_shop_resumed": "عاد متجرك إلى العمل.",
+      "merchant_shop_rejected_reason": "لم تتم الموافقة على طلب متجرك: {reason}",
+      "merchant_shop_rejected": "لم تتم الموافقة على طلب متجرك.",
+      "merchant_shop_suspended": "أُوقف متجرك مؤقتاً. يرى زبائنك المتجر دون شراء أو تحويل.",
+      "merchant_shop_closed": "أُغلق متجرك. يتابع زبائنك الشراء برصيدهم حتى تسويته.",
+      "merchant_shop_return_confirmed": "أكّد {name} إرجاع {amount}، وأُضيف المبلغ إلى رصيدك.",
+      "merchant_shop_return_declined": "رفض {name} طلب إرجاع {amount}.",
+      "merchant_shop_return_expired": "انتهى طلب إرجاع {amount} من {name} دون رد."
     }
   },
   "errors": {
@@ -646,7 +660,15 @@
     "CREDIT_DAILY_LIMIT": "وصلت إلى الحد اليومي لقسم الرصيد والفواتير.",
     "RECIPIENT_DAILY_LIMIT": "وصل هذا الرقم إلى عدد طلباته اليوم. جرّب غداً.",
     "CASH_BALANCE_TOO_RECENT": "الرصيد المضاف خلال آخر 72 ساعة لا يُستعمل لطلبات الكاش.",
-    "CASH_DAILY_LIMIT": "وصلت إلى الحد اليومي لطلبات الكاش."
+    "CASH_DAILY_LIMIT": "وصلت إلى الحد اليومي لطلبات الكاش.",
+    "SHOP_STATE_INVALID": "حالة المتجر لا تسمح بهذا الإجراء.",
+    "SHOP_UNAVAILABLE": "المتجر لا يستقبل هذا الطلب الآن.",
+    "SHOP_RATE_CONFIRMATION_REQUIRED": "سعر الصرف بعيد عن سعر المتجر بأكثر من 10%. أكّد السعر للمتابعة.",
+    "SHOP_BALANCE_CAP_EXCEEDED": "هذا المبلغ يتجاوز الحد الأعلى لرصيد الزبون.",
+    "SHOP_DAILY_TRANSFER_CAP_EXCEEDED": "هذا المبلغ يتجاوز حد التحويلات اليومي.",
+    "SHOP_CUSTOMER_LIMIT_REACHED": "المتجر لا يستقبل زبائن جدداً الآن.",
+    "RETURN_REQUEST_PENDING": "لدى الزبون طلب إرجاع قيد الانتظار.",
+    "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",

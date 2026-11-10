@@ -7,13 +7,20 @@ import {
   priceKindOf,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
 import { cancelAccountReservations, usableList } from '../customers/price-lists.js';
 import { type AdminActor, CustomerError, type CustomerRow } from '../customers/state.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
-import { customers, merchantLevels, merchantProfiles, merchantSettings } from '../schema/index.js';
+import {
+  customers,
+  merchantLevels,
+  merchantProfiles,
+  merchantSettings,
+  merchantShops,
+} from '../schema/index.js';
+import { closeShop } from '../shops/close.js';
 import { endTierGrant } from './grants.js';
 import { queueMerchantLevel } from './levels.js';
 import { levelTier, merchantPrivileges, recordTierChange } from './tiers.js';
@@ -175,6 +182,30 @@ export async function revokeMerchant(
 ): Promise<{ cancelledOrderIds: string[] }> {
   if (customer.accountType !== 'merchant') {
     throw new CustomerError('NOT_MERCHANT', 'The customer is not a merchant');
+  }
+  // S26 SH7: the shop closes first, keeping the list the merchant bought at until now.
+  const [shop] = await tx
+    .select({ id: merchantShops.id })
+    .from(merchantShops)
+    .where(
+      and(
+        eq(merchantShops.merchantId, customer.id),
+        inArray(merchantShops.status, ['active', 'suspended']),
+      ),
+    );
+  if (shop) {
+    await closeShop(tx, context.jobs, {
+      shopId: shop.id,
+      cause: 'revocation',
+      reason: input.reason,
+      actor: {
+        kind: 'admin',
+        id: input.actor.adminId,
+        channel: 'admin',
+        ipAddress: input.actor.ipAddress,
+        userAgent: input.actor.userAgent,
+      },
+    });
   }
   await tx
     .update(customers)

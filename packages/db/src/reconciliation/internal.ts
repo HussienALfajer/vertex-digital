@@ -112,12 +112,17 @@ const journalBalance = sql`
   select 'journal', journal_id from ledger_postings
   group by journal_id, currency having sum(amount_units) <> 0`;
 
-/** C3: no customer wallet below zero. */
+/** C3: no customer wallet, and (S26, ADR 0040) no shop customer wallet, below zero. */
 const walletNonNegative = sql`
   select 'customer', a.customer_id from ledger_accounts a
   join ledger_postings p on p.account_id = a.id
   where a.kind = 'customer_wallet'
-  group by a.customer_id having sum(p.amount_units) < 0`;
+  group by a.customer_id having sum(p.amount_units) < 0
+  union
+  select 'shop_customer', a.shop_customer_id from ledger_accounts a
+  join ledger_postings p on p.account_id = a.id
+  where a.kind = 'shop_customer_wallet'
+  group by a.shop_customer_id having sum(p.amount_units) < 0`;
 
 /** C4: every posting's account kind is allowed for its journal kind. */
 function accountJournalKinds(): SQL {
@@ -258,6 +263,8 @@ const depositCredit = sql`
 /**
  * C9: every adjustment (S02 M1–M3) and treasury movement (S13 M1–M4) has its journal with the
  * accounts, amounts and signs its row says; no `adjustment` or `treasury` journal without its row.
+ * S26: so does every shop transfer, return and settlement (WL1, WL5, WL9), named by its journal;
+ * no `shop_transfer` journal without its row, and a settlement's cash `adjustment` counts as one.
  */
 const manualJournals = sql`
   with adjustment as (
@@ -273,6 +280,21 @@ const manualJournals = sql`
     from treasury_movements m
     join ledger_accounts f on f.id = m.from_account_id
     join ledger_accounts t on t.id = m.to_account_id
+  ),
+  shop_money as (
+    select t.journal_id, 'customer_wallet:' || s.merchant_id as merchant_code,
+      'shop_customer_wallet:' || t.shop_customer_id as shop_code,
+      case when t.direction = 'to_customer' then t.amount_usd_units else -t.amount_usd_units end
+        as to_customer
+    from shop_transfers t
+    join merchant_shops s on s.id = t.shop_id
+    union all
+    select x.journal_id,
+      case when x.target = 'merchant' then 'customer_wallet:' || s.merchant_id
+        else 'adjustments:cash_refund' end,
+      'shop_customer_wallet:' || x.shop_customer_id, -x.amount_usd_units
+    from shop_settlements x
+    join merchant_shops s on s.id = x.shop_id
   ),
   expected as (
     select 'adjustment' as kind, id, journal_id, 'customer_wallet:' || customer_id as code,
@@ -292,6 +314,10 @@ const manualJournals = sql`
     union all
     select 'movement', id, journal_id, 'currency_exchange:' || received_currency, sign * received
     from movement where sent_currency <> received_currency
+    union all
+    select 'journal', journal_id, journal_id, merchant_code, -to_customer from shop_money
+    union all
+    select 'journal', journal_id, journal_id, shop_code, to_customer from shop_money
   ),
   owners as (select distinct kind, id, journal_id from expected),
   actual as (
@@ -307,9 +333,13 @@ const manualJournals = sql`
   union
   select 'journal', j.id from ledger_journals j
   where (j.kind = 'adjustment'
-      and not exists (select 1 from wallet_adjustments w where w.journal_id = j.id))
+      and not exists (select 1 from wallet_adjustments w where w.journal_id = j.id)
+      and not exists (select 1 from shop_settlements x where x.journal_id = j.id))
     or (j.kind = 'treasury'
-      and not exists (select 1 from treasury_movements m where m.journal_id = j.id))`;
+      and not exists (select 1 from treasury_movements m where m.journal_id = j.id))
+    or (j.kind = 'shop_transfer'
+      and not exists (select 1 from shop_transfers t where t.journal_id = j.id)
+      and not exists (select 1 from shop_settlements x where x.journal_id = j.id))`;
 
 export interface InternalChecks {
   /** The highest posting position the snapshot held; null on an empty ledger. */

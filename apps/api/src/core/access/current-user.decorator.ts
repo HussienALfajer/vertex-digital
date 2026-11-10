@@ -1,6 +1,7 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { AdminIdentity } from '../../modules/admin/index.js';
 import type { CustomerIdentity } from '../../modules/auth/index.js';
+import type { ShopCustomerIdentity } from '../../modules/shops/index.js';
 
 /** What `AccessGuard` attaches to the request once it lets it through. */
 export interface AuthenticatedRequest {
@@ -10,6 +11,8 @@ export interface AuthenticatedRequest {
   admin?: AdminIdentity;
   /** On admin routes: whether the request's session is still open and not idle (S11 LR4). */
   adminSessionValid?: () => Promise<boolean>;
+  /** S26: on shop customer routes, the customer of the path's shop. */
+  shopCustomer?: ShopCustomerIdentity;
 }
 
 function attached<T>(key: keyof AuthenticatedRequest, context: ExecutionContext): T {
@@ -22,6 +25,12 @@ function attached<T>(key: keyof AuthenticatedRequest, context: ExecutionContext)
 /** The signed-in customer of a `@CustomerRoute()`. */
 export const CurrentCustomer = createParamDecorator(
   (_: unknown, context: ExecutionContext): CustomerIdentity => attached('customer', context),
+);
+
+/** The signed-in shop customer of a `@ShopCustomerRoute()`; `shopId` is the path's shop. */
+export const CurrentShopCustomer = createParamDecorator(
+  (_: unknown, context: ExecutionContext): ShopCustomerIdentity =>
+    attached('shopCustomer', context),
 );
 
 /** The signed-in admin of an `@AdminRoute()`. */

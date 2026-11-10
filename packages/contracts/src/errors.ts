@@ -325,6 +325,22 @@ export const ERROR_CODES = [
   'CASH_BALANCE_TOO_RECENT',
   /** S25 CS2: the cash 24-hour cap would be passed; `details.remainingUsdUnits`. */
   'CASH_DAILY_LIMIT',
+  /** S26: the shop's state does not allow this; `details.status`. */
+  'SHOP_STATE_INVALID',
+  /** S26 SH5, PR7: the shop is not taking this action now (suspended, closed or gone). */
+  'SHOP_UNAVAILABLE',
+  /** S26 ST3: the rate is more than 10% from the store's rate; send `confirmFar`. */
+  'SHOP_RATE_CONFIRMATION_REQUIRED',
+  /** S26 WL3: the customer's balance would pass the shop's cap; `details.largestUsdUnits`. */
+  'SHOP_BALANCE_CAP_EXCEEDED',
+  /** S26 WL3: the merchant's transfers today would pass the cap; `details.remainingUsdUnits`. */
+  'SHOP_DAILY_TRANSFER_CAP_EXCEEDED',
+  /** S26 CA6: the shop has its maximum number of customers. */
+  'SHOP_CUSTOMER_LIMIT_REACHED',
+  /** S26 WL5: the customer has a pending return request already. */
+  'RETURN_REQUEST_PENDING',
+  /** S26 WL5: the return request is no longer pending; `details.status`. */
+  'RETURN_REQUEST_STATE_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

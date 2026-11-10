@@ -13,6 +13,8 @@ export interface OutgoingEmail {
   text: string;
   /** Inline images the HTML names by `cid:`. */
   attachments: { cid: string; path: string; filename: string }[];
+  /** S26: the sender's name of a shop's email; Vertex Digital otherwise. */
+  fromName?: string;
 }
 
 /**
@@ -57,7 +59,7 @@ export class Mailer {
 
   async send(email: OutgoingEmail): Promise<void> {
     const info = await this.transport.sendMail({
-      from: { name: 'Vertex Digital', address: this.env.EMAIL_FROM },
+      from: { name: email.fromName ?? 'Vertex Digital', address: this.env.EMAIL_FROM },
       to: email.to,
       subject: email.subject,
       html: email.html,

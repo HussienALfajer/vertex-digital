@@ -32,6 +32,7 @@ import { RatesModule } from './modules/rates/index.js';
 import { ReconciliationModule } from './modules/reconciliation/index.js';
 import { ReportsModule } from './modules/reports/index.js';
 import { SettingsModule } from './modules/settings/index.js';
+import { ShopsModule } from './modules/shops/index.js';
 import { SuppliersModule } from './modules/suppliers/index.js';
 import { SupportModule } from './modules/support/index.js';
 import { TelegramModule } from './modules/telegram/index.js';
@@ -69,6 +70,7 @@ import { WalletModule } from './modules/wallet/index.js';
     CustomersModule,
     MerchantsModule,
     MerchantToolsModule,
+    ShopsModule,
     SupportModule,
     TreasuryModule,
     ReconciliationModule,

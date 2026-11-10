@@ -34,6 +34,7 @@ import { SendPushJob } from './jobs/push/send.job.js';
 import { ReconciliationRecheckJob } from './jobs/reconciliation/recheck.job.js';
 import { ReconciliationRunner } from './jobs/reconciliation/reconciliation-runner.js';
 import { ReconciliationRunJob } from './jobs/reconciliation/run.job.js';
+import { ReturnRequestsExpireJob } from './jobs/shops/return-requests-expire.job.js';
 import { StoreRevalidateJob } from './jobs/store/revalidate.job.js';
 import { SupplierBalancesJob } from './jobs/suppliers/balances.job.js';
 import { SupplierHealthJob } from './jobs/suppliers/health.job.js';
@@ -124,6 +125,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     DailySummaryJob,
     FallbackNoticesJob,
     ExpireApplicationsJob,
+    ReturnRequestsExpireJob,
     MerchantLevelJob,
     MerchantStatementEmailsJob,
     MerchantTierGrantsJob,

@@ -27,6 +27,7 @@ export * from './rates.js';
 export * from './reconciliation.js';
 export * from './reports.js';
 export * from './settings.js';
+export * from './shops.js';
 export * from './suppliers.js';
 export * from './support.js';
 export * from './system.js';

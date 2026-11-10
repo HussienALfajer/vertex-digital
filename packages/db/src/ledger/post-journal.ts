@@ -32,6 +32,12 @@ export interface PostedJournal {
 /** Longest idempotency key; the database checks the same limit. */
 const MAX_KEY_LENGTH = 200;
 
+/** Wallets (ADR 0003, 0040): whole cents, locked in id order, never below zero. */
+const WALLET_KINDS: ReadonlySet<LedgerAccountKind> = new Set<LedgerAccountKind>([
+  'customer_wallet',
+  'shop_customer_wallet',
+]);
+
 interface Line extends PostingInput {
   currency: Currency;
   kind: LedgerAccountKind;
@@ -43,8 +49,8 @@ interface Line extends PostingInput {
  * belongs to, and it is atomic on its own (a savepoint): a refusal leaves nothing behind and the
  * caller's transaction can go on. The transaction must be READ COMMITTED (PostgreSQL's default).
  *
- * - Two or more postings of non-zero integer units, summing to zero per currency; customer wallet
- *   postings in whole cents. A malformed journal is a programming error (`Error`).
+ * - Two or more postings of non-zero integer units, summing to zero per currency; wallet postings
+ *   (a customer's or, S26, a shop customer's) in whole cents. A malformed journal is a programming error (`Error`).
  * - The idempotency key is claimed first. A key already posted with the same kind and postings
  *   returns that journal with `created: false`; with other content it is refused
  *   (`IDEMPOTENCY_KEY_REUSED`).
@@ -105,7 +111,7 @@ async function resolveAccounts(tx: Transaction, postings: readonly PostingInput[
   return postings.map((posting): Line => {
     const account = accounts.get(posting.accountId.toLowerCase());
     if (!account) throw new Error(`Unknown ledger account ${posting.accountId}`);
-    if (account.kind === 'customer_wallet' && !isWholeCents(posting.amountUnits)) {
+    if (WALLET_KINDS.has(account.kind) && !isWholeCents(posting.amountUnits)) {
       throw new Error(`A customer wallet posting is whole cents, got ${posting.amountUnits}`);
     }
     return { ...posting, accountId: account.id, currency: account.currency, kind: account.kind };
@@ -125,7 +131,7 @@ function checkBalanced(lines: readonly Line[]): void {
 async function checkWallets(tx: Transaction, lines: readonly Line[]): Promise<void> {
   const changes = new Map<string, bigint>();
   for (const line of lines) {
-    if (line.kind !== 'customer_wallet') continue;
+    if (!WALLET_KINDS.has(line.kind)) continue;
     changes.set(line.accountId, (changes.get(line.accountId) ?? 0n) + BigInt(line.amountUnits));
   }
   if (changes.size === 0) return;

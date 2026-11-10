@@ -15,6 +15,7 @@ import {
   CUSTOMER_AUTH_BASE_PATH,
   CUSTOMER_AUTH_NEST_PATHS,
 } from './modules/auth/index.js';
+import { ShopAuthService } from './modules/shops/index.js';
 import { SUPPLIER_WEBHOOK_ROUTE, supplierWebhookBody } from './modules/suppliers/index.js';
 import { TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit } from './modules/telegram/index.js';
 
@@ -45,6 +46,8 @@ export function configureApp(app: NestExpressApplication): void {
       app.get(AdminAuthService).handler(),
     ),
   );
+  // S26 (ADR 0040): each shop's auth, scoped to the slug's shop; its Nest paths go on to Nest.
+  server.all('/api/shops/:slug/auth/*splat', app.get(ShopAuthService).handler());
   server.all(
     `${CUSTOMER_AUTH_BASE_PATH}/*splat`,
     betterAuthExcept(

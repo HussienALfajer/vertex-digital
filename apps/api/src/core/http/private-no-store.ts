@@ -8,6 +8,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  */
 const PRIVATE_PREFIXES = ['/api/admin', '/api/auth', '/api/account'];
 
+/** S26: a shop customer's own routes and the shop's auth; the shop's public pages stay cacheable. */
+const PRIVATE_SHOP_PATH = /^\/api\/shops\/[^/]+\/(?!games(\/|$))[^/]/;
+
 /**
  * By default no browser or proxy keeps a copy of a private answer, so a shared computer's cache
  * never shows it later. A route that sets its own `Cache-Control` (a thumbnail, a served image)
@@ -20,7 +23,10 @@ export function privateNoStore(
 ) {
   // Express matches routes case-insensitively, so `/API/Admin/...` reaches an admin route too.
   const path = (request.url ?? '/').split('?')[0]?.toLowerCase() ?? '/';
-  if (PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+  if (
+    PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||
+    PRIVATE_SHOP_PATH.test(path)
+  ) {
     response.setHeader('cache-control', 'no-store');
   }
   next();

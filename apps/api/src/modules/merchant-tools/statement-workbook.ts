@@ -45,6 +45,9 @@ const KIND_LABELS: Record<JournalKind, string> = {
   cost_of_goods: 'تكلفة',
   adjustment: 'تعديل',
   treasury: 'خزينة',
+  // S26 WL10: transfers to shop customers, returns from them, and shop margins.
+  shop_transfer: 'رصيد زبون متجر',
+  shop_margin: 'ربح متجر',
 };
 
 const METHODS: Record<string, string> = {

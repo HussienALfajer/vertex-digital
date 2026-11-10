@@ -8,7 +8,12 @@ import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Database, type Transaction } from '../client.js';
 import { newId } from '../id.js';
-import { ensureCustomerWallet, ensureSystemAccount, postJournal } from '../ledger/index.js';
+import {
+  ensureCustomerWallet,
+  ensureSystemAccount,
+  lockShopCustomerWallet,
+  postJournal,
+} from '../ledger/index.js';
 import {
   customers,
   reconciliationExplanations,
@@ -307,6 +312,22 @@ describe('internal checks (C1–C9)', () => {
         { accountId: wallet, currency: 'USD', amountUnits: -10_000 },
         { accountId: revenue, currency: 'USD', amountUnits: 10_000 },
       ]);
+      // S26: a shop customer's wallet below zero is C3's too.
+      const shopId = newId();
+      await tx.execute(sql`insert into merchant_shops (id, merchant_id, slug, display_name, brand_color)
+        values (${shopId}, ${buyer}, ${`r${shopId.slice(-12)}`}, 'متجر', '#1f7a6c')`);
+      const shopCustomer = newId();
+      await tx.execute(sql`insert into shop_customers (id, shop_id, name, email, phone, created_by)
+        values (${shopCustomer}, ${shopId}, 'سامي', ${`${shopCustomer}@test.vertex-digital.local`},
+          '+963900000001', 'merchant')`);
+      await rawJournal(tx, 'shop_transfer', [
+        {
+          accountId: await lockShopCustomerWallet(tx, shopCustomer),
+          currency: 'USD',
+          amountUnits: -10_000,
+        },
+        { accountId: wallet, currency: 'USD', amountUnits: 10_000 },
+      ]);
 
       const { results, snapshotPosition } = await internalChecks(tx);
       expect(snapshotPosition).toBeGreaterThan(0);
@@ -315,6 +336,10 @@ describe('internal checks (C1–C9)', () => {
       expect(offendingIds(balance)).toEqual(expect.arrayContaining([unbalanced, short]));
       expect(resultOf(results, 'ledger_total', 'ledger:USD')).toMatchObject({ status: 'mismatch' });
       expect(offendingIds(resultOf(results, 'wallet_non_negative'))).toContain(buyer);
+      expect(resultOf(results, 'wallet_non_negative').details.offending).toContainEqual({
+        kind: 'shop_customer',
+        id: shopCustomer,
+      });
       expect(offendingIds(resultOf(results, 'account_journal_kinds'))).toContain(wrongKind);
       expect(offendingIds(resultOf(results, 'order_purchase', 'orders'))).toContain(orphanPurchase);
       expect(resultOf(results, 'order_purchase', 'sales_revenue:USD').status).toBe('mismatch');

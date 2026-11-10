@@ -6,6 +6,8 @@ import {
   customerSessions,
   customerVerifications,
   type Database,
+  shopCustomerSessions,
+  shopCustomerVerifications,
 } from '@vertex-digital/db';
 import { and, inArray, lt } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -128,6 +130,45 @@ export class PurgeExpiredJob implements OnApplicationBootstrap {
             ),
           )
           .returning({ id: adminVerifications.id });
+      }),
+      // S26: the shop realm's ended sessions, expired codes and invitations.
+      await batched(() => {
+        const ended = lt(shopCustomerSessions.expiresAt, now);
+        return db
+          .delete(shopCustomerSessions)
+          .where(
+            and(
+              ended,
+              inArray(
+                shopCustomerSessions.id,
+                db
+                  .select({ id: shopCustomerSessions.id })
+                  .from(shopCustomerSessions)
+                  .where(ended)
+                  .limit(PURGE_EXPIRED_BATCH_SIZE),
+              ),
+            ),
+          )
+          .returning({ id: shopCustomerSessions.id });
+      }),
+      await batched(() => {
+        const ended = lt(shopCustomerVerifications.expiresAt, now);
+        return db
+          .delete(shopCustomerVerifications)
+          .where(
+            and(
+              ended,
+              inArray(
+                shopCustomerVerifications.id,
+                db
+                  .select({ id: shopCustomerVerifications.id })
+                  .from(shopCustomerVerifications)
+                  .where(ended)
+                  .limit(PURGE_EXPIRED_BATCH_SIZE),
+              ),
+            ),
+          )
+          .returning({ id: shopCustomerVerifications.id });
       }),
     ];
     return counts.reduce((sum, count) => sum + count, 0);

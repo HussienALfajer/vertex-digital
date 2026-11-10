@@ -203,6 +203,24 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # S26: a shop's sign-in, sign-up, codes, reset and invitation (each shop's own Better Auth
+    # instance), and the merchant's transfer check (a password), as the customer's routes below.
+    location ~* ^/api/(?:shops/[a-z0-9-]+/auth/(?:sign-in/email|sign-up|send-verification-otp|request-password-reset|reset-password|email-otp/verify-email|invitation)|merchant/shop/transfer-check)/?$ {
+        limit_req zone=vdsignin burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # S26 WL1, WL5: the merchant's transfers to shop customers and return requests, POST only (the
+    # zone's key is empty otherwise), on top of the shop's caps and the API's checks.
+    location ~* "^/api/merchant/shop/customers/[0-9a-f-]{36}/(?:transfers|return-requests)/?$" {
+        limit_req zone=vdpurchase burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
     # The same for the routes that send or check an email code or a password (S01): sign-up,

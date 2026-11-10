@@ -37,6 +37,8 @@ export type LedgerRowKey =
   | 'usdt_receipts'
   | 'supplier_prepaid'
   | 'customer_wallets'
+  | 'shop_customer_wallets'
+  | 'shop_margin_held'
   | 'test_customer_wallets'
   | 'sales_revenue'
   | 'refunds'
@@ -117,7 +119,7 @@ const isSupplier = (value: string): value is SupplierCode =>
  * the owner's money, not the result. The other adjustments are the result's.
  */
 const PLACEMENT: Record<
-  Exclude<LedgerAccountKind, 'customer_wallet'>,
+  Exclude<LedgerAccountKind, 'customer_wallet' | 'shop_customer_wallet'>,
   (account: SystemAccount) => Placement
 > = {
   sham_cash_receipts: ({ currency }) => ({
@@ -156,6 +158,8 @@ const PLACEMENT: Record<
   supplier_corrections: () => ({ group: 'result', key: 'supplier_corrections' }),
   outside_funds: () => ({ group: 'capital', key: 'outside_funds' }),
   owner_drawings: () => ({ group: 'capital', key: 'owner_drawings' }),
+  // S26 PR6: margins of open shop orders, owed to the merchant or back to the shop customer.
+  shop_margin_held: () => ({ group: 'liabilities', key: 'shop_margin_held' }),
   currency_exchange: ({ currency }) => ({
     group: 'exchange',
     key: currency === 'SYP' ? 'currency_exchange_SYP' : 'currency_exchange_USD',
@@ -169,6 +173,8 @@ const ROW_ORDER: readonly LedgerRowKey[] = [
   'usdt_receipts',
   'supplier_prepaid',
   'customer_wallets',
+  'shop_customer_wallets',
+  'shop_margin_held',
   'test_customer_wallets',
   'sales_revenue',
   'refunds',
@@ -204,7 +210,7 @@ export const GROSS_PROFIT_KEYS: readonly LedgerRowKey[] = [
  * the size of their balance, with whether it adds (credit) or takes (debit).
  */
 export function systemAccountRow(account: SystemAccount): LedgerRow & { group: LedgerGroup } {
-  if (account.kind === 'customer_wallet') {
+  if (account.kind === 'customer_wallet' || account.kind === 'shop_customer_wallet') {
     throw new Error('A customer wallet is not a system account');
   }
   const { group, key, params = {} } = PLACEMENT[account.kind](account);
@@ -216,6 +222,9 @@ export function systemAccountRow(account: SystemAccount): LedgerRow & { group: L
       return { ...base, units: Math.abs(raw), effect: raw < 0 ? 'subtract' : 'add' };
     case 'exchange':
       return { ...base, units: (account.currency === 'SYP' ? raw : -raw) || 0, effect: null };
+    // Owed money is posted positive (a credit), as the customer wallets are.
+    case 'liabilities':
+      return { ...base, units: raw, effect: null };
     default:
       return { ...base, units: -raw || 0, effect: null };
   }
@@ -277,6 +286,10 @@ export function ledgerOverview(summary: LedgerSummary): LedgerOverview {
     wallets('liabilities', 'customer_wallets', summary.owedToCustomersUnits),
     wallets('test', 'test_customer_wallets', summary.owedToTestCustomersUnits),
   );
+  // S26: shown once a shop wallet holds money.
+  if (summary.owedToShopCustomersUnits !== 0) {
+    placed.push(wallets('liabilities', 'shop_customer_wallets', summary.owedToShopCustomersUnits));
+  }
   // What test customers spent of their play money sits in the sales like real money, while its
   // cost was real: taken back out of the result. Test funds given less what test wallets still
   // hold; nothing when the test wallets got other money too and hold more than they were given.
@@ -318,6 +331,7 @@ export function ledgerOverview(summary: LedgerSummary): LedgerOverview {
       units: balanceUnits,
     })),
     { currency: 'USD' as const, units: summary.owedToCustomersUnits },
+    { currency: 'USD' as const, units: summary.owedToShopCustomersUnits },
     { currency: 'USD' as const, units: summary.owedToTestCustomersUnits },
   ];
   return {
