@@ -19,7 +19,7 @@
     "params": ["رقم الخط"],
     "category_name": "الرصيد والفواتير",
     "available": true,
-    "qty_values": ["96.15", "1000", "1000", "-5", "abc"],
+    "qty_values": ["96.15", "1000", "1000", "-5", "abc", null],
     "product_type": "package",
     "parent_id": 229,
     "base_price": 0.0072,
