@@ -1473,7 +1473,9 @@
       "merchant_tier_grant_ending": "قرب انتهاء فئة ممنوحة",
       "ticket_overdue": "تذكرة تجاوزت وعد الرد",
       "cash_hold": "طلب كاش بانتظار الموافقة",
-      "credit_recipient_alert": "رقم شُحن من عدة حسابات"
+      "credit_recipient_alert": "رقم شُحن من عدة حسابات",
+      "shop_requested": "طلب متجر تاجر",
+      "shop_closed_with_balance": "إغلاق متجر وفيه أرصدة"
     }
   },
   "rates": {

@@ -8,13 +8,14 @@ No production deploy before PR 4 merges (the shop has no screens until then); th
 - [x] contracts: `shops.ts` (shop states and transitions, slug rules and reserved words, the contrast check and the 12 colors, rate rules with the 10% band, transfer and return math, caps), schemas with `.meta({ id })`, error codes (`SHOP_*`, `RETURN_REQUEST_*`) with their texts, audit actions, actor `shop_customer` and entity types with labels, the job `shop.return-requests-expire`, ledger and journal kinds (statement, wallet and ledger-summary labels), merchant events and shop emails (push texts, templates, sender name); unit tests at 100% coverage
 - [x] db through `/db-migration` (migrations 0112–0113): `merchant_shops`, `merchant_shop_slugs`, `merchant_shop_rates`, `merchant_shop_hidden_games`, the shop auth tables (sessions carry `shop_id`, keyed to their user's shop), `shop_transfers`, `shop_return_requests`, `shop_settlements` (WL9: a cash settlement is an `adjustment` journal, which C9 needs a row for); ledger kinds and `ledger_accounts.shop_customer_id`; guards (states table, return requests end once, shop customers never deleted), append-only triggers and revokes; `TABLE_OWNERS`. `shop_order_sales`, `shop_daily_stats`, `orders.shop_customer_id` and the ticket columns move to PR 2 with their code
 - [x] db write paths (`packages/db/src/shops`): transfer (WL1–WL4, merchant wallet then shop wallet), return request and its ends (WL5, WL6; the shop's lock before the request's), expiry batch, settlement (WL9), close (SH7) called by `revokeMerchant`; wallets in `postJournal`; ledger summary `owedToShopCustomersUnits`; reconciliation C9 for shop transfers and settlements; tests with races and replays
-- [ ] api `shops` module: merchant request and settings (SH1–SH3, ST1–ST6), hidden games, customers (CA1, CA3, CA6–CA9), invitations, transfers with the 15-minute password or passkey check, return requests; admin review, states, limits, settlement, customer freeze; shop customer auth (CA2, CA4), me and wallet, return confirm and decline; realm separation tests (shop A, shop B, Vertex, admin)
+- [x] api `shops` module: merchant request and settings (SH1–SH3, ST1–ST6), hidden games, customers (CA1, CA3, CA6–CA9), invitations, transfers with the 15-minute password or passkey check, return requests; admin review, states, limits, settlement, customer freeze; shop customer auth (CA2, CA4), me and wallet, return confirm and decline; realm separation tests (shop A, shop B, Vertex, admin)
 - [x] `revokeMerchant` closes the shop in its transaction (SH7)
-- [ ] worker: `shop.return-requests-expire`; tests
-- [ ] notifications and emails for transfers, returns, invitations, OTP, reset, shop decisions; Telegram for a request and a closed shop with balances
+- [x] worker: `shop.return-requests-expire`, the shop realm in `auth.purge-expired`; tests
+- [x] notifications and emails for transfers, returns, invitations, OTP, reset, shop decisions; Telegram for a request and a closed shop with balances (the shop customers' notification center and push move to PR 2 with the orders)
 - [x] reconciliation: C9 checks every shop transfer and settlement against its journal; no `shop_transfer` journal without its row
-- [ ] rate limits (API and nginx zones in `deploy/`), ALTCHA on sign-up
-- [ ] bridge: OpenAPI export and admin client
+- [x] rate limits (API, and nginx: the shop auth paths and the transfer check on `vdsignin`, transfers and return requests on `vdpurchase`; the deploy re-runs `provision.sh`), ALTCHA on sign-up and code requests
+- [x] bridge: OpenAPI export and admin client
+- [x] docs: architecture (module, jobs, auth), API, db and contracts folder rules, spec details settled, ADR 0040 (sessions scoped), ROADMAP
 - [ ] checks, reviewer, endpoint check at `/api/docs`, PR and merge
 
 ## PR 2 — `feat/s26-shop-selling`: catalog, purchase, margin and support (server)

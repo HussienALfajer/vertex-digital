@@ -70,16 +70,16 @@ A shop customer's session never reaches a Vertex customer route, and a Vertex se
 All tables follow ADR 0011: UUIDv7 ids, `timestamptz`, `bigint` money units, indexed foreign keys.
 
 **`merchant_shops`** (one per merchant, archived, never deleted)
-- `id`, `merchant_id` → `customers.id` unique, `slug` text unique (3–30, `^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`, not reserved), `status` enum `shop_status` (`requested`, `active`, `suspended`, `closed`, `rejected`), `display_name` (the merchant's approved trade name, copied on approval), `brand_color` text (`^#[0-9a-f]{6}$`), `announcement` text null (1–200), `rate_mode` enum (`store`, `own`), `customer_balance_cap_usd_units` (default 200 USD), `daily_transfer_cap_usd_units` (default 1,000 USD), `customer_limit` integer (default 2,000), `price_list_id_at_close` uuid null (SH7), `reject_reason`, `suspend_reason`, `requested_at`, `decided_at`, `closed_at`, timestamps.
+- `id`, `merchant_id` → `customers.id` unique, `slug` text unique (3–30, `^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`, not reserved), `status` enum `shop_status` (`requested`, `active`, `suspended`, `closed`, `rejected`), `display_name` (the merchant's approved trade name, copied on approval), `brand_color` text (`^#[0-9a-f]{6}$`), `announcement` text null (1–200), `rate_mode` enum (`store`, `own`), `customer_balance_cap_usd_units` (default 200 USD), `daily_transfer_cap_usd_units` (default 1,000 USD), `customer_limit` integer (default 2,000), `price_list_id_at_close` uuid null (SH7), `reject_reason`, `suspend_reason` (the category the shop shows: `review`, `complaints`, `payments`, `other`), `suspend_note` (the admin's text, never shown to customers; settled in PR 1), `requested_at`, `decided_at`, `closed_at`, timestamps.
 - Checks: caps whole cents, positive; a reason with `rejected` and `suspended`.
 
-**`merchant_shop_slugs`** (append-only): `slug` primary key, `shop_id`, `created_at`. Every slug a shop ever held, so an old slug redirects and is never reused.
+**`merchant_shop_slugs`** (append-only): `slug` primary key, `shop_id`, `merchant_id`, `created_at`. Every slug a shop ever held (written on approval and on the admin's slug change), so an old slug redirects and is never taken by another merchant; the same merchant's new request may take it again (SH7).
 
 **`merchant_shop_rates`** (append-only): `id`, `shop_id`, `rate_syp_per_usd` numeric (>0), `store_rate_id` → `exchange_rates.id` (the store rate when set), `confirmed_far` boolean, `created_at`. The newest row is in force while `rate_mode = own`.
 
 **`merchant_shop_hidden_games`**: `(shop_id, game_id)` primary key, `created_at`. Deleted when unhidden (a preference, not a business record; `NOT_BUSINESS_RECORDS`).
 
-**Shop auth tables** (a separate Better Auth instance, ADR 0040): `shop_customers` (`id`, `shop_id`, `name`, `email` lowercased, `email_verified`, `phone` E.164, `created_by` enum (`merchant`, `self`), `frozen_at`, `terms_version_id`, `privacy_version_id`, timestamps, `archived_at`; unique `(shop_id, email)`), `shop_customer_sessions`, `shop_customer_accounts`, `shop_customer_verifications`. Rate limits reuse `customer_rate_limits` with a `shop:` key prefix.
+**Shop auth tables** (a separate Better Auth instance, ADR 0040): `shop_customers` (`id`, `shop_id`, `name`, `email` lowercased, `email_verified`, `phone` E.164, `created_by` enum (`merchant`, `self`), `frozen_at`, `terms_version_id`, `privacy_version_id`, timestamps, `archived_at`; unique `(shop_id, email)`), `shop_customer_sessions` (with `shop_id`, keyed to its user's shop: Better Auth reads a session with its user in one query, so the adapter scopes sessions as well as users; settled by the PR 1 proof), `shop_customer_accounts`, `shop_customer_verifications`. Rate limits reuse `customer_rate_limits` with a `shop:` key prefix. The instance's secret is derived from `CUSTOMER_AUTH_SECRET`, so no new value is provisioned.
 
 **Ledger** (ADR 0003, amended by 0040)
 - New account kinds: `shop_customer_wallet` (USD, one per shop customer, `shop_customer_id` set on, and only on, it; same rules as `customer_wallet`: whole cents, never below zero) and `shop_margin_held` (system, USD, one account `shop_margin_held:USD`).
@@ -87,7 +87,9 @@ All tables follow ADR 0011: UUIDv7 ids, `timestamptz`, `bigint` money units, ind
 - `ledger_accounts` gets `shop_customer_id` → `shop_customers.id` null, with the check that it is set exactly on `shop_customer_wallet`.
 
 **`shop_transfers`** (append-only)
-- `id`, `shop_id`, `shop_customer_id`, `direction` (`to_customer`, `to_merchant`), `amount_usd_units` (whole cents), `entered_currency` (`usd`, `syp`), `entered_amount_units`, `rate_syp_per_usd` numeric null (with SYP), `journal_id` unique, `return_request_id` null, `idempotency_key` uuid unique, `created_at`.
+- `id`, `shop_id`, `shop_customer_id`, `cause` (`transfer`, `return`), `direction` (`to_customer`, `to_merchant`), `amount_usd_units` (whole cents), `entered_currency` (`usd`, `syp`), `entered_amount_units`, `rate_syp_per_usd` numeric null (with SYP), `journal_id` unique, `return_request_id` null, `idempotency_key` uuid unique, `created_at`.
+
+**`shop_settlements`** (append-only, settled in PR 1): `id`, `shop_id`, `shop_customer_id`, `target` (`merchant`, `cash_refund`), `amount_usd_units`, `journal_id` unique, `idempotency_key` uuid unique, `admin_id`, `created_at`. One row per settlement (WL9), whichever journal it posts: reconciliation C9 needs a row for every `adjustment` journal, and a cash settlement is one. The journal key is `shop-settle:<customer>:<idempotency key>`.
 
 **`shop_return_requests`**: `id`, `shop_id`, `shop_customer_id`, `amount_usd_units`, `status` (`pending`, `confirmed`, `declined`, `expired`, `cancelled`), `expires_at`, `decided_at`, `idempotency_key` unique, timestamps. A guard allows only `pending` → another state, once. At most one `pending` per customer (partial unique index).
 
@@ -198,7 +200,9 @@ S = sell × quantity, B = buy × quantity (the order's price), both whole cents.
 ## API
 | Method and path | Access | Request | Response | Error codes |
 |---|---|---|---|---|
-| `GET /api/merchant/shop` | Merchant | — | `merchantShopSchema` (state, settings, limits, today's transfer total) or `null` | |
+| `GET /api/merchant/shop` | Merchant | — | `merchantShopStateSchema`: `{ shop }`, the `merchantShopSchema` (state, settings, limits, today's transfer total) or `null` | |
+| `GET /api/merchant/shop/slug-available` · `GET·PUT /api/merchant/shop/hidden-games` · `PATCH /api/merchant/shop/customers/:id` | Merchant | slug / `{ gameIds }` / name and phone | availability / ids / row | |
+| `POST /api/merchant/shop/transfer-check` | Merchant | `{ password }` | `{ checkedUntil }` (15 minutes for this session; a session signed in within 15 minutes counts too) | `INVALID_PASSWORD`, `RATE_LIMITED` |
 | `POST /api/merchant/shop` | Merchant, `Idempotency-Key` | `requestShopSchema` (slug, color, rate mode and rate) | `merchantShopSchema` | `SLUG_TAKEN`, `SHOP_STATE_INVALID`, `VALIDATION_FAILED` |
 | `PATCH /api/merchant/shop` | Merchant | `shopSettingsSchema` (color, announcement, rate with `confirmFar`) | `merchantShopSchema` | `SHOP_RATE_CONFIRMATION_REQUIRED`, `VALIDATION_FAILED` |
 | `PUT /api/merchant/shop/hidden-games` | Merchant | `{ gameIds }` | `{ gameIds }` | `NOT_FOUND`, `VALIDATION_FAILED` |
@@ -212,7 +216,7 @@ S = sell × quantity, B = buy × quantity (the order's price), both whole cents.
 | `GET /api/merchant/shop/sticker.png` | Merchant | `size` | PNG | `RATE_LIMITED` |
 | `GET /api/shops/:slug` | Public, cached (tag `shop:<id>`, `catalog`) | — | `shopStorefrontSchema` (name, logo, color, announcement, state, categories and games) | `NOT_FOUND` (or `301` for an old slug) |
 | `GET /api/shops/:slug/games/:game` | Public, cached | — | `shopGameSchema` (packs with selling USD, SYP, availability) | `NOT_FOUND` |
-| `POST /api/shops/:slug/auth/*` | Shop public (Better Auth shop instance) | sign-up (ALTCHA), sign-in, OTP, reset, invitation | session | S01's codes |
+| `POST /api/shops/:slug/auth/*` | Shop public (Better Auth shop instance) | `sign-up`, `send-verification-otp`, `request-password-reset` (ALTCHA), `reset-password` (Nest routes); `sign-in/email`, `sign-out`, `email-otp/verify-email`, `invitation` (Better Auth) | session | S01's codes |
 | `GET /api/shops/:slug/me` · `/wallet` · `/orders` · `/orders/:number` · `/notifications` | Shop customer | — / list query | profile, balance and timeline, orders | |
 | `POST /api/shops/:slug/orders` | Shop customer, `Idempotency-Key` | `shopPurchaseSchema` (product, quantity, fields, expected unit USD, confirmations) | `orderSchema` | `INSUFFICIENT_BALANCE`, `PRICE_CHANGED`, `PRODUCT_UNAVAILABLE`, `PURCHASES_STOPPED`, `SHOP_UNAVAILABLE`, `ACCOUNT_FROZEN`, the player-check codes |
 | `POST /api/shops/:slug/return-requests/:id/confirm` · `/decline` | Shop customer, `Idempotency-Key` | — | `returnRequestSchema` | `INSUFFICIENT_BALANCE`, `RETURN_REQUEST_STATE_INVALID` |
