@@ -775,3 +775,69 @@ describe('returns and settlement (WL5, WL6, WL9)', () => {
     expect(row?.status).toBe('closed');
   });
 });
+
+describe('review fixes (CA3, CA6, SH7)', () => {
+  it('refuses every sign-up alike once the shop is full, a known email or not', async () => {
+    const context = await shopFor({ customerLimit: 1 });
+    const known = await invited(context);
+    const signUp = async (email: string) =>
+      client.post(`/api/shops/${context.slug}/auth/sign-up`, {
+        body: {
+          name: 'سامي علي',
+          email,
+          password: 'a-long-passphrase',
+          phone: '0944123456',
+          acceptTerms: true,
+        },
+        headers: await client.altcha(),
+      });
+    const answers = [await signUp(known.email), await signUp(uniqueEmail('shop'))];
+    for (const answer of answers) {
+      expect(await json(answer, 403)).toMatchObject({ code: 'SHOP_CUSTOMER_LIMIT_REACHED' });
+    }
+  });
+
+  it("keeps a closed shop's slug from the merchant's new shop while its customers hold a balance", async () => {
+    const context = await shopFor();
+    const customer = await invited(context);
+    await json(
+      await send(
+        'POST',
+        `/api/merchant/shop/customers/${customer.id}/transfers`,
+        context.owner.cookie,
+        {
+          currency: 'usd',
+          amountUnits: usd(3),
+          expectedUsdUnits: usd(3),
+        },
+        key(),
+      ),
+      201,
+    );
+    await json(
+      await send('POST', `/api/admin/shops/${context.shopId}/close`, admin.cookie, {
+        reason: 'إغلاق',
+      }),
+      200,
+    );
+    const again = { slug: context.slug, brandColor: '#1f7a6c', rateMode: 'store' };
+    expect(
+      await json(await send('POST', '/api/merchant/shop', context.owner.cookie, again, key()), 409),
+    ).toMatchObject({ code: 'SLUG_TAKEN' });
+    // Once settled, the slug is the merchant's again.
+    await json(
+      await send(
+        'POST',
+        `/api/admin/shops/${context.shopId}/customers/${customer.id}/settle`,
+        admin.cookie,
+        {
+          to: 'merchant',
+          reason: 'تسوية',
+        },
+        key(),
+      ),
+      201,
+    );
+    await json(await send('POST', '/api/merchant/shop', context.owner.cookie, again, key()), 201);
+  });
+});

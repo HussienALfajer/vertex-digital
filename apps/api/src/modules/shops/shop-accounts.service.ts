@@ -102,6 +102,8 @@ export class ShopAccountsService {
     const id = newId();
     try {
       await this.db.transaction(async (tx) => {
+        // CA3, CA6: a full shop refuses every sign-up alike, known email or not.
+        await this.assertRoom(tx, shop);
         const [existing] = await tx
           .select({ id: shopCustomers.id })
           .from(shopCustomers)
@@ -110,7 +112,6 @@ export class ShopAccountsService {
           await issueShopDecoyCode(tx, 'email-verification', shop.id, email);
           return;
         }
-        await this.assertRoom(tx, shop);
         await tx.insert(shopCustomers).values({
           id,
           shopId: shop.id,

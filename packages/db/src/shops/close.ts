@@ -231,3 +231,29 @@ export async function settleShopCustomer(
   });
   return { settlement, replayed: false };
 }
+
+/**
+ * SH2, SH7: whether a closed shop of this merchant holds the slug while its customers still hold
+ * a balance. Such a slug is not the merchant's to take again until the shop is settled (WL9):
+ * a new shop on it would hide the closed shop from the customers who can still spend there.
+ */
+export async function slugHeldByUnsettledShop(
+  db: Executor,
+  merchantId: string,
+  slug: string,
+): Promise<boolean> {
+  const closed = await db
+    .select({ id: merchantShops.id })
+    .from(merchantShops)
+    .where(
+      and(
+        eq(merchantShops.merchantId, merchantId),
+        eq(merchantShops.slug, slug),
+        eq(merchantShops.status, 'closed'),
+      ),
+    );
+  for (const shop of closed) {
+    if ((await shopBalances(db, shop.id)).totalUsdUnits > 0) return true;
+  }
+  return false;
+}

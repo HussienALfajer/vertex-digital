@@ -35,6 +35,7 @@ import {
   shopCustomers,
   shopRateNow,
   shopReturnRequests,
+  slugHeldByUnsettledShop,
   storeRateNow,
   type Transaction,
   transferredToday,
@@ -613,6 +614,7 @@ export class ShopsMerchantService {
       .from(merchantShopSlugs)
       .where(eq(merchantShopSlugs.slug, slug));
     if (held && held.merchantId !== merchantId) return false;
+    if (await slugHeldByUnsettledShop(db, merchantId, slug)) return false;
     const [live] = await db
       .select({ id: merchantShops.id })
       .from(merchantShops)

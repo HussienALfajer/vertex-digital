@@ -25,6 +25,7 @@ import {
   shopCustomers,
   shopRateNow,
   shopTotalBalances,
+  slugHeldByUnsettledShop,
   type Transaction,
   transferredToday,
 } from '@vertex-digital/db';
@@ -421,6 +422,7 @@ export class ShopsAdminService {
       .from(merchantShopSlugs)
       .where(eq(merchantShopSlugs.slug, slug));
     if (held && held.merchantId !== merchantId) throw slugTaken();
+    if (await slugHeldByUnsettledShop(tx, merchantId, slug)) throw slugTaken();
   }
 
   private async tell(

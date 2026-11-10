@@ -109,6 +109,7 @@ export function offendingTarget(kind: OffendingKind, id: string): OffendingTarge
     case 'customer':
       return { to: '/customers/$id', params: { id } };
     case 'adjustment':
+    case 'shop_customer':
       return { to: '/audit', search: { entityId: id } };
     case 'transfer':
       return { to: '/deposits/transfers' };

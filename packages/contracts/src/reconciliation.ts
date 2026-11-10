@@ -620,6 +620,8 @@ export const OFFENDING_KINDS = [
   'movement',
   'transfer',
   'customer',
+  /** S26: a shop customer (C3). */
+  'shop_customer',
 ] as const;
 
 export const offendingKindSchema = z.enum(OFFENDING_KINDS).meta({ id: 'OffendingKind' });

@@ -70,6 +70,20 @@ describe('ledgerOverview', () => {
       ['customer_wallets', 0],
     ]);
     expect(overview.imbalances).toEqual([]);
+    // S26: shop wallets and held margins as owed money, the books still balanced.
+    const shops = ledgerOverview({
+      ...summary([
+        account('shop_margin_held:USD', units(2)),
+        account('adjustments:correction', -units(9)),
+      ]),
+      owedToShopCustomersUnits: units(7),
+    });
+    expect(group(shops, 'liabilities')?.rows.map((row) => [row.key, row.units])).toEqual([
+      ['customer_wallets', 0],
+      ['shop_customer_wallets', units(7)],
+      ['shop_margin_held', units(2)],
+    ]);
+    expect(shops.imbalances).toEqual([]);
   });
 
   it('balances when what the store holds equals what it owes, its result and the owner money', () => {
@@ -215,7 +229,7 @@ describe('systemAccountRow', () => {
   it('places every system account kind, each with a name and a hint', () => {
     const groups = new Set<string>();
     for (const kind of LEDGER_ACCOUNT_KINDS) {
-      if (kind === 'customer_wallet') continue;
+      if (kind === 'customer_wallet' || kind === 'shop_customer_wallet') continue;
       const row = systemAccountRow({
         kind,
         code: `${kind}:USD`,
@@ -226,7 +240,7 @@ describe('systemAccountRow', () => {
       expect(ar.wallets.ledger.accounts[row.key], kind).toBeTruthy();
       expect(ar.wallets.ledger.hints[row.key], kind).toBeTruthy();
     }
-    expect([...groups].sort()).toEqual(['assets', 'capital', 'exchange', 'result']);
+    expect([...groups].sort()).toEqual(['assets', 'capital', 'exchange', 'liabilities', 'result']);
   });
 
   it('splits the adjustments by category, the owner money ones into capital', () => {

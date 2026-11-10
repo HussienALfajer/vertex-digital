@@ -284,9 +284,12 @@ export function ledgerOverview(summary: LedgerSummary): LedgerOverview {
   });
   placed.push(
     wallets('liabilities', 'customer_wallets', summary.owedToCustomersUnits),
-    wallets('liabilities', 'shop_customer_wallets', summary.owedToShopCustomersUnits),
     wallets('test', 'test_customer_wallets', summary.owedToTestCustomersUnits),
   );
+  // S26: shown once a shop wallet holds money.
+  if (summary.owedToShopCustomersUnits !== 0) {
+    placed.push(wallets('liabilities', 'shop_customer_wallets', summary.owedToShopCustomersUnits));
+  }
   // What test customers spent of their play money sits in the sales like real money, while its
   // cost was real: taken back out of the result. Test funds given less what test wallets still
   // hold; nothing when the test wallets got other money too and hold more than they were given.

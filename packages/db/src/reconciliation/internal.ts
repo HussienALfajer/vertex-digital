@@ -112,12 +112,17 @@ const journalBalance = sql`
   select 'journal', journal_id from ledger_postings
   group by journal_id, currency having sum(amount_units) <> 0`;
 
-/** C3: no customer wallet below zero. */
+/** C3: no customer wallet, and (S26, ADR 0040) no shop customer wallet, below zero. */
 const walletNonNegative = sql`
   select 'customer', a.customer_id from ledger_accounts a
   join ledger_postings p on p.account_id = a.id
   where a.kind = 'customer_wallet'
-  group by a.customer_id having sum(p.amount_units) < 0`;
+  group by a.customer_id having sum(p.amount_units) < 0
+  union
+  select 'shop_customer', a.shop_customer_id from ledger_accounts a
+  join ledger_postings p on p.account_id = a.id
+  where a.kind = 'shop_customer_wallet'
+  group by a.shop_customer_id having sum(p.amount_units) < 0`;
 
 /** C4: every posting's account kind is allowed for its journal kind. */
 function accountJournalKinds(): SQL {
