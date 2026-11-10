@@ -378,7 +378,15 @@
       "CREDIT_DAILY_LIMIT": "تجاوز الحد اليومي لقسم الرصيد والفواتير.",
       "RECIPIENT_DAILY_LIMIT": "وصل هذا الرقم إلى عدد طلباته اليومي.",
       "CASH_BALANCE_TOO_RECENT": "الرصيد المضاف حديثاً لا يُستعمل للكاش قبل مرور المدة المحددة.",
-      "CASH_DAILY_LIMIT": "تجاوز الحد اليومي للكاش."
+      "CASH_DAILY_LIMIT": "تجاوز الحد اليومي للكاش.",
+      "SHOP_STATE_INVALID": "حالة المتجر لا تسمح بهذا الإجراء.",
+      "SHOP_UNAVAILABLE": "المتجر غير متاح لهذا الإجراء.",
+      "SHOP_RATE_CONFIRMATION_REQUIRED": "سعر الصرف بعيد عن سعر المتجر بأكثر من 10%.",
+      "SHOP_BALANCE_CAP_EXCEEDED": "تجاوز الحد الأعلى لرصيد زبون المتجر.",
+      "SHOP_DAILY_TRANSFER_CAP_EXCEEDED": "تجاوز حد تحويلات التاجر اليومي.",
+      "SHOP_CUSTOMER_LIMIT_REACHED": "وصل المتجر إلى الحد الأعلى لعدد الزبائن.",
+      "RETURN_REQUEST_PENDING": "يوجد طلب إرجاع قيد الانتظار.",
+      "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار."
     }
   },
   "changePassword": {
@@ -493,7 +501,8 @@
       "admin": "المدير",
       "customer": "عميل",
       "system": "النظام",
-      "cli": "سطر الأوامر"
+      "cli": "سطر الأوامر",
+      "shop_customer": "زبون متجر"
     },
     "actorCustomer": "عميل: {{name}}",
     "channels": {
@@ -545,7 +554,9 @@
       "merchant_application": "طلب تاجر",
       "merchant_settings": "إعدادات التجّار",
       "merchant_tier_settings": "امتيازات فئة التجّار",
-      "merchant_level": "مستوى تاجر"
+      "merchant_level": "مستوى تاجر",
+      "merchant_shop": "متجر تاجر",
+      "shop_customer": "زبون متجر"
     },
     "fields": {
       "name": "الاسم",
@@ -835,6 +846,32 @@
       "merchant.tier_grant_ended": "انتهاء فئة ممنوحة لتاجر",
       "merchant.certificate_reissued": "إعادة إصدار رمز شهادة التاجر",
       "merchant.welcome_text_removed": "حذف سطر ترحيب تاجر",
+      "shop.requested": "طلب متجر",
+      "shop.approved": "الموافقة على متجر",
+      "shop.rejected": "رفض طلب متجر",
+      "shop.suspended": "إيقاف متجر مؤقتاً",
+      "shop.resumed": "استئناف متجر",
+      "shop.closed": "إغلاق متجر",
+      "shop.slug_changed": "تغيير رابط متجر",
+      "shop.limits_changed": "تغيير حدود متجر",
+      "shop.rate_changed": "تغيير سعر صرف متجر",
+      "shop.color_changed": "تغيير لون متجر",
+      "shop.announcement_changed": "تغيير إعلان متجر",
+      "shop.hidden_games_changed": "تغيير الألعاب المخفية في متجر",
+      "shop.transfer": "شحن رصيد زبون متجر",
+      "shop.return_requested": "طلب إرجاع رصيد من زبون متجر",
+      "shop.return_confirmed": "تأكيد إرجاع رصيد",
+      "shop.return_declined": "رفض إرجاع رصيد",
+      "shop.return_cancelled": "إلغاء طلب إرجاع رصيد",
+      "shop.return_expired": "انتهاء طلب إرجاع رصيد",
+      "shop.settled": "تسوية رصيد زبون متجر",
+      "shop_customer.created": "إنشاء حساب زبون متجر",
+      "shop_customer.invited": "إرسال دعوة لزبون متجر",
+      "shop_customer.email_verified": "تأكيد بريد زبون متجر",
+      "shop_customer.profile_updated": "تعديل بيانات زبون متجر",
+      "shop_customer.password_changed": "تغيير كلمة مرور زبون متجر",
+      "shop_customer.frozen": "تجميد زبون متجر",
+      "shop_customer.unfrozen": "إلغاء تجميد زبون متجر",
       "merchant_application.submitted": "تقديم طلب تاجر",
       "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
       "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
@@ -928,7 +965,9 @@
       "refund": "استرداد إلى المحفظة",
       "cost_of_goods": "تكلفة البضاعة",
       "adjustment": "تعديل الرصيد",
-      "treasury": "حركة خزينة"
+      "treasury": "حركة خزينة",
+      "shop_transfer": "رصيد زبون متجر",
+      "shop_margin": "ربح متجر"
     },
     "summary": {
       "title": "ملخص الدفاتر",
@@ -973,6 +1012,8 @@
         "usdt_receipts": "محفظة USDT ({{network}})",
         "supplier_prepaid": "الرصيد عند {{supplier}}",
         "customer_wallets": "محافظ العملاء",
+        "shop_customer_wallets": "محافظ زبائن متاجر التجّار",
+        "shop_margin_held": "أرباح متاجر محجوزة",
         "test_customer_wallets": "محافظ عملاء الاختبار",
         "sales_revenue": "المبيعات",
         "refunds": "المبالغ المعادة للعملاء",
@@ -999,6 +1040,8 @@
         "usdt_receipts": "الـ USDT المستلم على هذه الشبكة؛ يزيد مع كل إيداع وينقص عند نقله من الخزينة.",
         "supplier_prepaid": "الرصيد المدفوع مسبقًا عند المورد؛ يزيد عند شحنه من الخزينة وينقص بتكلفة كل طلب يسلّمه.",
         "customer_wallets": "مجموع أرصدة العملاء الحقيقيين؛ يزيد مع الإيداعات والتعويضات وينقص مع المشتريات.",
+        "shop_customer_wallets": "أرصدة زبائن متاجر التجّار؛ يزيد مع تحويلات التجّار وينقص مع المشتريات والإرجاع.",
+        "shop_margin_held": "ربح التاجر على طلبات المتجر المفتوحة؛ يذهب إلى التاجر عند التسليم أو يعود إلى الزبون عند الفشل.",
         "test_customer_wallets": "أرصدة حسابات الاختبار؛ ليست مالًا حقيقيًا ولا تدخل في التقارير.",
         "sales_revenue": "ثمن الطلبات المدفوعة بأسعار البيع؛ يزيد مع كل شراء.",
         "refunds": "ما أُعيد من طلبات لم تُسلَّم، إلى محافظ العملاء أو إلى مال المالك؛ يُطرح من المبيعات.",

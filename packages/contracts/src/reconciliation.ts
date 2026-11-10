@@ -593,7 +593,12 @@ export const JOURNAL_ACCOUNT_KINDS = {
     'usdt_receipts',
     'deposit_rounding',
   ],
-  adjustment: ['customer_wallet', 'adjustments'],
+  // S26 WL9: a closed shop's balance refunded in cash posts against `adjustments`.
+  adjustment: ['customer_wallet', 'shop_customer_wallet', 'adjustments'],
+  // S26 WL1, WL5, WL9: between a merchant's wallet and a shop customer's.
+  shop_transfer: ['customer_wallet', 'shop_customer_wallet'],
+  // S26 PR8, PR10: the held margin to the merchant, or the margin back to the shop customer.
+  shop_margin: ['shop_margin_held', 'customer_wallet', 'shop_customer_wallet'],
   treasury: [
     'sham_cash_receipts',
     'usdt_receipts',

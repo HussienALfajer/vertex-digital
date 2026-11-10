@@ -2,6 +2,7 @@ import {
   NOTIFICATION_PARAMS,
   type NotificationParams,
   type PushNotificationEvent,
+  type ShopStatus,
   TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
 
@@ -29,6 +30,21 @@ type Renderers = {
   [Event in PushNotificationEvent]: (
     params: NotificationParams<Event>,
   ) => Omit<PushPayload, 'title'>;
+};
+
+/** S26: the merchant's shop states as a push says them. */
+const SHOP_STATE_PUSH: Record<ShopStatus, string> = {
+  requested: 'وصل طلب متجرك وهو قيد المراجعة',
+  active: 'تمت الموافقة على متجرك',
+  rejected: 'لم تتم الموافقة على طلب متجرك',
+  suspended: 'أُوقف متجرك مؤقتاً',
+  closed: 'أُغلق متجرك',
+};
+
+const SHOP_RETURN_PUSH: Record<'confirmed' | 'declined' | 'expired', string> = {
+  confirmed: 'أكّد زبون إرجاع رصيد إلى محفظتك',
+  declined: 'رفض زبون طلب إرجاع رصيد',
+  expired: 'انتهى طلب إرجاع رصيد دون رد',
 };
 
 const order = (params: { orderId: string }) => ({
@@ -180,6 +196,18 @@ const RENDERERS: Renderers = {
   product_price_dropped: (params) => ({
     body: `انخفض سعر ${params.productNameAr} في ${params.gameNameAr}`,
     ...productAlert(params),
+  }),
+  // S26: the shop's new state, never the rejection's reason (PT2).
+  merchant_shop_changed: (params) => ({
+    body: params.resumed ? 'عاد متجرك إلى العمل' : SHOP_STATE_PUSH[params.status],
+    url: '/merchant/shop',
+    tag: 'merchant-shop',
+  }),
+  // S26 WL5: never the customer's name or the amount (PT2).
+  merchant_shop_return_ended: (params) => ({
+    body: SHOP_RETURN_PUSH[params.status],
+    url: '/merchant/shop/customers',
+    tag: `shop-return-${params.shopCustomerId}`,
   }),
 };
 

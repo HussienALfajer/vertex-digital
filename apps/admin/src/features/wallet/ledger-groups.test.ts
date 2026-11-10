@@ -19,6 +19,7 @@ const account = (code: string, balanceUnits: number, currency: Account['currency
 const summary = (systemAccounts: Account[], owed = 0, owedTest = 0): LedgerSummary => ({
   owedToCustomersUnits: owed,
   owedToTestCustomersUnits: owedTest,
+  owedToShopCustomersUnits: 0,
   walletsWithBalance: 0,
   systemAccounts,
 });

@@ -367,6 +367,8 @@ export async function timelineDeposits(
 export interface LedgerSummaryRows {
   owedToCustomersUnits: number;
   owedToTestCustomersUnits: number;
+  /** S26: what the shop customers' wallets hold (ADR 0040), apart from the store's customers. */
+  owedToShopCustomersUnits: number;
   walletsWithBalance: number;
   systemAccounts: {
     kind: LedgerAccountKind;
@@ -398,7 +400,7 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
     .as('balances');
   const systemCode = sql<
     string | null
-  >`case when ${balances.kind} = 'customer_wallet' then null else ${balances.code} end`;
+  >`case when ${balances.kind} in ('customer_wallet', 'shop_customer_wallet') then null else ${balances.code} end`;
   const rows = await db
     .select({
       kind: balances.kind,
@@ -415,12 +417,14 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
   const wallets = rows.filter((row) => row.kind === 'customer_wallet');
   const owed = (isTest: boolean) =>
     toUnits(wallets.find((row) => row.isTest === isTest)?.balance ?? '0');
+  const shopWallets = rows.filter((row) => row.kind === 'shop_customer_wallet');
   const systemAccounts = rows.flatMap(({ kind, code, currency, balance }) =>
-    kind === 'customer_wallet' || code === null ? [] : [{ kind, code, currency, balance }],
+    code === null ? [] : [{ kind, code, currency, balance }],
   );
   return {
     owedToCustomersUnits: owed(false),
     owedToTestCustomersUnits: owed(true),
+    owedToShopCustomersUnits: toUnits(shopWallets[0]?.balance ?? '0'),
     walletsWithBalance: wallets.reduce((count, row) => count + row.withBalance, 0),
     systemAccounts: systemAccounts.map(({ balance, ...account }) => ({
       ...account,

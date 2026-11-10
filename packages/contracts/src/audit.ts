@@ -50,6 +50,14 @@ import {
 } from './reconciliation.js';
 import { reportBreakdownSchema, reportKindSchema } from './reports.js';
 import { storeSwitchSchema } from './settings.js';
+import {
+  shopCustomerOriginSchema,
+  shopLimitsSchema,
+  shopRateModeSchema,
+  shopSettlementTargetSchema,
+  shopSuspendReasonSchema,
+  shopTransferCurrencySchema,
+} from './shops.js';
 import { failureKindSchema, supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
 import { orderProblemSchema, ticketCategorySchema, ticketStatusSchema } from './support.js';
 import {
@@ -64,7 +72,8 @@ import {
  * transaction as the change. Each spec adds its actions here with the shape of their details.
  */
 
-export const AUDIT_ACTOR_KINDS = ['admin', 'customer', 'system', 'cli'] as const;
+/** `shop_customer`: S26, a customer of a merchant's shop (ADR 0040). */
+export const AUDIT_ACTOR_KINDS = ['admin', 'customer', 'system', 'cli', 'shop_customer'] as const;
 
 export const auditActorKindSchema = z.enum(AUDIT_ACTOR_KINDS).meta({ id: 'AuditActorKind' });
 
@@ -119,6 +128,9 @@ export const AUDIT_ENTITY_TYPES = [
   'banner',
   'announcement',
   'content_settings',
+  /** S26. */
+  'merchant_shop',
+  'shop_customer',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -318,6 +330,13 @@ const announcementChange = changed({
   tone: announcementToneSchema,
   revision: z.int().positive(),
   ...schedule,
+});
+
+/** S26 WL5: a return request in audit details. */
+const shopReturn = z.strictObject({
+  requestId: z.uuid(),
+  shopCustomerId: z.uuid(),
+  amountUsdUnits: z.int().positive(),
 });
 
 /**
@@ -976,6 +995,88 @@ export const AUDIT_DETAILS = {
     before: creditPolicySchema.strict(),
     after: creditPolicySchema.strict(),
   }),
+  /** S26 SH1: the merchant's shop request. */
+  'shop.requested': z.strictObject({
+    slug: z.string(),
+    brandColor: z.string(),
+    rateMode: shopRateModeSchema,
+    rate: z.string().nullable(),
+    confirmedFar: z.boolean(),
+  }),
+  /** S26 SH3, SH8: the approved slug and limits. */
+  'shop.approved': z.strictObject({ slug: z.string(), limits: shopLimitsSchema }),
+  /** S26: the reason is the entry's `reason`. */
+  'shop.rejected': none,
+  /** S26 SH6: the category the shop shows; the admin's note is the entry's `reason`. */
+  'shop.suspended': z.strictObject({ category: shopSuspendReasonSchema }),
+  'shop.resumed': none,
+  /** S26 SH7, edge case 14: who closed it, the list it keeps selling at, the requests cancelled. */
+  'shop.closed': z.strictObject({
+    cause: z.enum(['admin', 'revocation']),
+    priceListIdAtClose: z.uuid().nullable(),
+    cancelledReturnRequestIds: z.array(z.uuid()),
+  }),
+  /** S26 SH3. */
+  'shop.slug_changed': changed({ slug: z.string() }),
+  /** S26 SH8. */
+  'shop.limits_changed': z.strictObject({ before: shopLimitsSchema, after: shopLimitsSchema }),
+  /** S26 ST3: the mode and rate before and after, and whether the far-rate warning was confirmed. */
+  'shop.rate_changed': z.strictObject({
+    before: z.strictObject({ rateMode: shopRateModeSchema, rate: z.string().nullable() }),
+    after: z.strictObject({ rateMode: shopRateModeSchema, rate: z.string().nullable() }),
+    confirmedFar: z.boolean(),
+  }),
+  /** S26 ST1. */
+  'shop.color_changed': changed({ brandColor: z.string() }),
+  /** S26 ST5: the public text before and after (the admin's clearing too). */
+  'shop.announcement_changed': changed({ announcement: z.string().nullable() }),
+  /** S26 ST6. */
+  'shop.hidden_games_changed': z.strictObject({
+    added: z.array(z.uuid()),
+    removed: z.array(z.uuid()),
+  }),
+  /** S26 WL1–WL4. */
+  'shop.transfer': z.strictObject({
+    transferId: z.uuid(),
+    shopCustomerId: z.uuid(),
+    amountUsdUnits: z.int().positive(),
+    enteredCurrency: shopTransferCurrencySchema,
+    enteredAmountUnits: z.int().positive(),
+    rate: z.string().nullable(),
+    journalId: z.uuid(),
+  }),
+  /** S26 WL5, WL6. */
+  'shop.return_requested': shopReturn,
+  'shop.return_confirmed': shopReturn.extend({ transferId: z.uuid(), journalId: z.uuid() }),
+  'shop.return_declined': shopReturn,
+  'shop.return_cancelled': shopReturn,
+  'shop.return_expired': shopReturn,
+  /** S26 WL9: the reason is the entry's `reason`. */
+  'shop.settled': z.strictObject({
+    shopCustomerId: z.uuid(),
+    to: shopSettlementTargetSchema,
+    amountUsdUnits: z.int().positive(),
+    journalId: z.uuid(),
+  }),
+  /** S26 CA1, CA2. */
+  'shop_customer.created': z.strictObject({
+    shopId: z.uuid(),
+    name: z.string(),
+    email: z.string(),
+    phone: z.string(),
+    origin: shopCustomerOriginSchema,
+  }),
+  /** S26 CA1: an invitation email sent (the first, or again). */
+  'shop_customer.invited': z.strictObject({ shopId: z.uuid() }),
+  /** S26 CA1, CA2: the invitation accepted or the sign-up code entered. */
+  'shop_customer.email_verified': z.strictObject({ shopId: z.uuid() }),
+  /** S26 CA8. */
+  'shop_customer.profile_updated': changed({ name: z.string(), phone: z.string() }),
+  /** S26 CA4: a password set from an invitation or reset; `count` is the sessions signed out. */
+  'shop_customer.password_changed': count,
+  /** S26 CA7: the reason is the entry's `reason`. */
+  'shop_customer.frozen': none,
+  'shop_customer.unfrozen': none,
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

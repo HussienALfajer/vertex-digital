@@ -95,6 +95,8 @@ export const QUEUES = {
   supportOverdueTickets: 'support.overdue-tickets',
   /** Refunds held cash orders past the policy's hold, every 5 minutes (S25 CS5). */
   ordersCashHoldExpiry: 'orders.cash-hold-expiry',
+  /** Expires shop return requests past their 24 hours, every 10 minutes (S26 WL5). */
+  shopReturnRequestsExpire: 'shop.return-requests-expire',
 } as const;
 
 /**

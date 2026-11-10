@@ -168,6 +168,13 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     oldUnitPriceUsdUnits: 9_990_000,
     newUnitPriceUsdUnits: 9_490_000,
   },
+  merchant_shop_changed: { status: 'rejected', resumed: false, reason: 'compensation' },
+  merchant_shop_return_ended: {
+    shopCustomerId: newId(),
+    customerName: 'سامي',
+    amountUsdUnits: 25_000_000,
+    status: 'expired',
+  },
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {

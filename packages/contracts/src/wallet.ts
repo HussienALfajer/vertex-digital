@@ -37,6 +37,10 @@ export const LEDGER_ACCOUNT_KINDS = [
    * of their refunds; never settled.
    */
   'owner_drawings',
+  /** S26 WL1, ADR 0040: one USD wallet per shop customer; same rules as `customer_wallet`. */
+  'shop_customer_wallet',
+  /** S26 PR6, PR8: shop margins held from purchase until the order finishes (system, USD). */
+  'shop_margin_held',
 ] as const;
 
 export const ledgerAccountKindSchema = z
@@ -54,6 +58,10 @@ export const JOURNAL_KINDS = [
   'adjustment',
   /** S13: a treasury movement or supplier correction (rules M1–M4). */
   'treasury',
+  /** S26 WL1, WL5, WL9: a merchant's transfer to a shop customer, a return, a settlement. */
+  'shop_transfer',
+  /** S26 PR8, PR10: a shop margin released to the merchant, or its part of a compensation. */
+  'shop_margin',
 ] as const;
 
 export const journalKindSchema = z.enum(JOURNAL_KINDS).meta({ id: 'JournalKind' });
@@ -432,6 +440,8 @@ export const ledgerSummarySchema = z
   .object({
     owedToCustomersUnits: amountUnitsSchema,
     owedToTestCustomersUnits: amountUnitsSchema,
+    /** S26: what shop customers' wallets hold (ADR 0040). */
+    owedToShopCustomersUnits: amountUnitsSchema,
     walletsWithBalance: z.int().nonnegative(),
     systemAccounts: z.array(systemAccountBalanceSchema),
   })

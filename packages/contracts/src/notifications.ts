@@ -11,6 +11,11 @@ import {
   STORE_PLACED_PURPOSES,
 } from './orders.js';
 import { levelTierSchema, merchantTierSchema, priceKindSchema } from './price-kinds.js';
+import {
+  returnRequestStatusSchema,
+  shopSettlementTargetSchema,
+  shopStatusSchema,
+} from './shops.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -76,6 +81,29 @@ export const EMAIL_TEMPLATES = [
   'customer_merchant_statement_ready',
   /** S23 PG3: near the next tier, or below the own tier's threshold, before the month ends. */
   'customer_merchant_tier_reminder',
+  /**
+   * S26 WL1, abuse: every transfer the merchant makes to a shop customer, so a stolen session is
+   * seen at once; the customer's name and the amount.
+   */
+  'customer_merchant_shop_transfer',
+  /**
+   * S26 CA1: the merchant's invitation to a shop customer, with the link that sets the password.
+   * The one email with a token in its link (the spec's invitation): single use, 72 hours, and it
+   * only sets the password of an account that has none.
+   */
+  'shop_customer_invitation',
+  /** S26 CA2: the code that verifies a self sign-up's email, in the shop's name. */
+  'shop_customer_verify_email',
+  /** S26 CA4: the code that resets a shop customer's password. */
+  'shop_customer_reset_password',
+  /** S26 WL1: the merchant added balance to the shop wallet. */
+  'shop_customer_transfer_received',
+  /** S26 WL5: the merchant asks to return an amount; the customer confirms it in the shop. */
+  'shop_customer_return_requested',
+  /** S26 WL5: a confirmed return left the shop wallet. */
+  'shop_customer_return_done',
+  /** S26 WL9: a closed shop's balance was settled by the store. */
+  'shop_customer_settled',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -98,6 +126,8 @@ export const OUTBOX_RETENTION_DAYS = 90;
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
 const code = z.object({ code: otpCodeSchema });
+/** S26: a shop email names the shop; its sender reads «<shop> عبر VERTEX DIGITAL». */
+const shopEmail = z.object({ shopName: z.string(), slug: z.string() });
 const at = z.object({ at: z.iso.datetime() });
 
 const productAlertParams = z.object({
@@ -149,6 +179,10 @@ export const NOTIFICATION_EVENTS = [
   /** S22 PA4: a pack the customer asked about is available, or cheaper (center and push). */
   'product_available',
   'product_price_dropped',
+  /** S26: the merchant's shop was approved, rejected, suspended, resumed or closed (center and push). */
+  'merchant_shop_changed',
+  /** S26 WL5: a shop customer confirmed, declined or let expire a return request (center and push). */
+  'merchant_shop_return_ended',
 ] as const;
 
 export const notificationEventSchema = z
@@ -301,6 +335,19 @@ export const NOTIFICATION_PARAMS = {
     oldUnitPriceUsdUnits: z.int().positive(),
     newUnitPriceUsdUnits: z.int().positive(),
   }),
+  // S26: the shop's new state; the rejection's reason is written to the merchant.
+  merchant_shop_changed: z.object({
+    status: shopStatusSchema,
+    resumed: z.boolean(),
+    reason: z.string().nullable(),
+  }),
+  // S26 WL5: the merchant's own customer, by name.
+  merchant_shop_return_ended: z.object({
+    shopCustomerId: z.uuid(),
+    customerName: z.string(),
+    amountUsdUnits: z.int().positive(),
+    status: returnRequestStatusSchema.exclude(['pending', 'cancelled']),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -352,6 +399,33 @@ export const EMAIL_PARAMS = {
   }),
   customer_merchant_statement_ready: NOTIFICATION_PARAMS.merchant_statement_ready,
   customer_merchant_tier_reminder: NOTIFICATION_PARAMS.merchant_tier_reminder,
+  customer_merchant_shop_transfer: at.extend({
+    customerName: z.string(),
+    amountUsdUnits: z.int().positive(),
+  }),
+  shop_customer_invitation: shopEmail.extend({
+    token: z.string(),
+    expiresAt: z.iso.datetime(),
+  }),
+  shop_customer_verify_email: shopEmail.extend(code.shape),
+  shop_customer_reset_password: shopEmail.extend(code.shape),
+  shop_customer_transfer_received: shopEmail.extend({
+    amountUsdUnits: z.int().positive(),
+    ...at.shape,
+  }),
+  shop_customer_return_requested: shopEmail.extend({
+    amountUsdUnits: z.int().positive(),
+    expiresAt: z.iso.datetime(),
+  }),
+  shop_customer_return_done: shopEmail.extend({
+    amountUsdUnits: z.int().positive(),
+    ...at.shape,
+  }),
+  shop_customer_settled: shopEmail.extend({
+    amountUsdUnits: z.int().positive(),
+    to: shopSettlementTargetSchema,
+    ...at.shape,
+  }),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -361,6 +435,8 @@ export const CODE_EMAIL_TEMPLATES = [
   'customer_verify_email',
   'customer_reset_password',
   'customer_change_email',
+  'shop_customer_verify_email',
+  'shop_customer_reset_password',
 ] as const satisfies readonly EmailTemplate[];
 
 export function isCodeEmail(template: EmailTemplate): boolean {
@@ -402,6 +478,8 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_early_access: null,
   product_available: null,
   product_price_dropped: null,
+  merchant_shop_changed: null,
+  merchant_shop_return_ended: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -425,7 +503,9 @@ export type PushNotificationEvent =
   | 'merchant_watch_digest'
   | 'merchant_early_access'
   | 'product_available'
-  | 'product_price_dropped';
+  | 'product_price_dropped'
+  | 'merchant_shop_changed'
+  | 'merchant_shop_return_ended';
 
 export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   ...EMAIL_NOTIFICATION_EVENTS,
@@ -433,6 +513,8 @@ export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   'merchant_early_access',
   'product_available',
   'product_price_dropped',
+  'merchant_shop_changed',
+  'merchant_shop_return_ended',
 ];
 
 export function isPushNotificationEvent(event: NotificationEvent): event is PushNotificationEvent {
@@ -478,6 +560,8 @@ export const customerNotificationSchema = z
     notification('merchant_early_access'),
     notification('product_available'),
     notification('product_price_dropped'),
+    notification('merchant_shop_changed'),
+    notification('merchant_shop_return_ended'),
   ])
   .meta({ id: 'CustomerNotification' });
 

@@ -26,7 +26,11 @@ describe('email templates', () => {
     for (const template of EMAIL_TEMPLATES) {
       const code = (CODE_EMAIL_TEMPLATES as readonly string[]).includes(template);
       expect(isCodeEmail(template), template).toBe(code);
-      if (code) expect(EMAIL_PARAMS[template].safeParse({ code: '123456' }).success).toBe(true);
+      // S26: a shop's code email names the shop too.
+      const shop = template.startsWith('shop_') ? { shopName: 'متجر النور', slug: 'al-noor' } : {};
+      if (code) {
+        expect(EMAIL_PARAMS[template].safeParse({ code: '123456', ...shop }).success).toBe(true);
+      }
     }
   });
 
@@ -56,6 +60,8 @@ describe('notifications (S05 F27)', () => {
       'merchant_early_access',
       'product_available',
       'product_price_dropped',
+      'merchant_shop_changed',
+      'merchant_shop_return_ended',
     ]);
   });
 
@@ -132,6 +138,8 @@ describe('notifications (S05 F27)', () => {
       'merchant_early_access',
       'product_available',
       'product_price_dropped',
+      'merchant_shop_changed',
+      'merchant_shop_return_ended',
     ]);
     expect(isPushNotificationEvent('merchant_watch_digest')).toBe(true);
     expect(isPushNotificationEvent('product_price_dropped')).toBe(true);

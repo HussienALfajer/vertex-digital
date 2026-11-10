@@ -204,6 +204,20 @@ export function notificationText(notification: CustomerNotification): string {
         old: ltr(formatUsd(notification.params.oldUnitPriceUsdUnits)),
         new: ltr(formatUsd(notification.params.newUnitPriceUsdUnits)),
       });
+    // S26: the merchant's shop decisions; a rejection's reason is written to the merchant.
+    case 'merchant_shop_changed': {
+      const { params } = notification;
+      const state = params.resumed ? 'resumed' : params.status;
+      return params.status === 'rejected' && params.reason
+        ? t('notifications.events.merchant_shop_rejected_reason', { reason: params.reason })
+        : t(`notifications.events.merchant_shop_${state}`);
+    }
+    // S26 WL5: the merchant's own customer, by name.
+    case 'merchant_shop_return_ended':
+      return t(`notifications.events.merchant_shop_return_${notification.params.status}`, {
+        name: notification.params.customerName,
+        amount: ltr(formatUsd(notification.params.amountUsdUnits)),
+      });
   }
 }
 
@@ -246,6 +260,10 @@ export function notificationHref(notification: CustomerNotification): string {
     case 'product_available':
     case 'product_price_dropped':
       return `/games/${notification.params.gameSlug}?pack=${notification.params.productId}`;
+    case 'merchant_shop_changed':
+      return '/merchant/shop';
+    case 'merchant_shop_return_ended':
+      return '/merchant/shop/customers';
     default:
       return `/orders/${notification.params.orderId}`;
   }
