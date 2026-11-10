@@ -30203,7 +30203,8 @@
           "adjustment",
           "movement",
           "transfer",
-          "customer"
+          "customer",
+          "shop_customer"
         ]
       },
       "ReconciliationSkipReason": {

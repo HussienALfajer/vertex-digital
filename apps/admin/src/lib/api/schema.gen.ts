@@ -9192,7 +9192,7 @@ export interface components {
             unmatchedSupplierOrders: string[];
         };
         /** @enum {string} */
-        OffendingKind: "journal" | "order" | "attempt" | "deposit" | "adjustment" | "movement" | "transfer" | "customer";
+        OffendingKind: "journal" | "order" | "attempt" | "deposit" | "adjustment" | "movement" | "transfer" | "customer" | "shop_customer";
         /** @enum {string} */
         ReconciliationSkipReason: "opening_missing" | "reader_failed" | "currency_unsupported";
         ReconciliationExplanation: {
