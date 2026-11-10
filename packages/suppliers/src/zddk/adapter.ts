@@ -415,6 +415,7 @@ export class ZddkAdapter implements SupplierAdapter {
     if (Array.isArray(values)) {
       const seen = new Set<string>();
       return values.flatMap((value) => {
+        if (value === null) return [];
         const text = String(value).trim();
         if (!LIST_VALUE.test(text) || seen.has(text) || Number(text) <= 0) return [];
         seen.add(text);

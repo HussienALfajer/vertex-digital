@@ -21,7 +21,8 @@ export const productsReplySchema = z.array(z.unknown());
 
 /**
  * `qty_values`: null (the quantity is 1), a list of the only quantities allowed, or a range; the
- * values are numbers or strings (`{ "min": 1, "max": "15000" }`).
+ * values are numbers or strings (`{ "min": 1, "max": "15000" }`). A list may hold a `null` entry
+ * (jneedcontur's Syriatel credit, 2026-11-10): the entry is skipped, the product is still read.
  */
 const quantity = z.union([z.number(), z.string().max(32)]);
 
@@ -35,7 +36,9 @@ export const productSchema = z.object({
   category_name: z.string().max(500).nullish(),
   category_img: z.string().max(2_000).nullish(),
   available: z.boolean(),
-  qty_values: z.union([z.array(quantity), z.object({ min: quantity, max: quantity })]).nullish(),
+  qty_values: z
+    .union([z.array(quantity.nullable()), z.object({ min: quantity, max: quantity })])
+    .nullish(),
   product_type: z.string().max(32).nullish(),
   /** The category the product is listed in; 0 is the store's home page. */
   parent_id: z.number().int().nonnegative().nullish(),

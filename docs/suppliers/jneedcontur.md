@@ -42,7 +42,7 @@ Not used: `products?base=1` (ids and names only), `check?orders=[ID_…]` (by th
 | `category_name`, `parent_id`, `category_img` | The category the product is listed in (`parent_id` 0 is the store's home page), its image as a path on the API host | `group`, `categoryId: category.<parent_id>`, the category's image `https://api.jneedcontur.net/<path>` |
 | `available` | Sold now | `inStock` |
 | `product_type` | `package` or `amount` | Not read: the shape of `qty_values` decides |
-| `qty_values` | `null` (quantity 1), a list of the only quantities allowed (`["110","150"]`, decimals possible: `96.15`), or a range `{ "min", "max" }` (numbers or strings) | Below |
+| `qty_values` | `null` (quantity 1), a list of the only quantities allowed (`["110","150"]`, decimals possible: `96.15`; a `null` entry, as Syriatel's list carried on 2026-11-10, is skipped and the product still read), or a range `{ "min", "max" }` (numbers or strings) | Below |
 
 ### Offers (ZD4)
 
