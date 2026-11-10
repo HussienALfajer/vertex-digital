@@ -61,7 +61,7 @@ export type TreasuryEndpoint = z.infer<typeof treasuryEndpointSchema>;
 
 export interface TreasuryAccount {
   code: string;
-  kind: Exclude<LedgerAccountKind, 'customer_wallet'>;
+  kind: Exclude<LedgerAccountKind, 'customer_wallet' | 'shop_customer_wallet'>;
   currency: Currency;
 }
 

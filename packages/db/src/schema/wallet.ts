@@ -25,6 +25,7 @@ import {
 import { customers } from './auth.js';
 import { amountUnits, archivedAt, currencyEnum, id, timestamps } from './columns.js';
 import { deposits } from './deposits.js';
+import { shopCustomers } from './shops.js';
 
 /*
  * The double-entry ledger (ADR 0003) and the admin's wallet adjustments (S02), owned by the api
@@ -54,6 +55,10 @@ export const ledgerAccounts = pgTable(
     customerId: uuid('customer_id')
       .unique()
       .references(() => customers.id),
+    /** S26 WL1: the shop customer of a `shop_customer_wallet`, set on it only (ADR 0040). */
+    shopCustomerId: uuid('shop_customer_id')
+      .unique()
+      .references(() => shopCustomers.id),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
@@ -68,6 +73,15 @@ export const ledgerAccounts = pgTable(
     check(
       'ledger_accounts_customer_check',
       sql`(${table.customerId} is not null) = (${table.kind} = 'customer_wallet')`,
+    ),
+    // Text comparisons: the kind is added in the same migration run (ALTER TYPE ... ADD VALUE).
+    check(
+      'ledger_accounts_shop_customer_check',
+      sql`(${table.shopCustomerId} is not null) = (${table.kind}::text = 'shop_customer_wallet')`,
+    ),
+    check(
+      'ledger_accounts_shop_wallet_usd_check',
+      sql`${table.kind}::text not in ('shop_customer_wallet', 'shop_margin_held') or ${table.currency} = 'USD'`,
     ),
   ],
 );

@@ -222,6 +222,7 @@ describe('module boundaries', () => {
     rates: 'rates',
     reconciliation: 'reconciliation',
     settings: 'settings',
+    shops: 'shops',
     suppliers: 'suppliers',
     support: 'support',
     system: 'health',

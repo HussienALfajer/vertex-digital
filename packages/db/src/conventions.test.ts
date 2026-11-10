@@ -129,6 +129,16 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
     'A counting log (S22 DL2, DL4): never changed, deleted after 90 days, not a business record',
   product_alerts:
     "The customer's preference data (S22 F42): sent or ended once, deleted 90 days after ending",
+  merchant_shop_slugs: 'Append-only (S26 SH3): every slug a shop ever held',
+  merchant_shop_rates: "Append-only (S26 ST3): a shop's own rates",
+  merchant_shop_hidden_games: "The merchant's preference (S26 ST6): deleted when unhidden",
+  shop_transfers: 'Append-only (S26 WL1, WL5): money between a merchant and a shop customer',
+  shop_settlements: "Append-only (S26 WL9): a closed shop's balance settled by the admin",
+  shop_return_requests: 'Never archived (S26 WL5): a request is closed by its end, its record',
+  shop_customer_sessions: 'Better Auth sessions of the shop realm: deleted on sign-out and expiry',
+  shop_customer_accounts: 'Better Auth credentials of a shop customer, the archived record',
+  shop_customer_verifications:
+    'Short-lived codes and invitation tokens: deleted once used or expired',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -154,6 +164,8 @@ const NATURAL_KEYS: Record<string, string> = {
   merchant_tier_months: 'Keyed by customer and month: one row per merchant month (S23 PG5)',
   merchant_alert_settings: 'Keyed by its customer: one row of alert settings (S21 AL4)',
   merchant_receipt_settings: 'Keyed by its customer: one row of receipt settings (S21 BR3)',
+  merchant_shop_slugs: 'Keyed by the slug: a slug is held once, forever (S26 SH2, SH3)',
+  merchant_shop_hidden_games: 'Keyed by shop and game: one row per hidden game (S26 ST6)',
 };
 
 /**
@@ -199,6 +211,10 @@ const APPEND_ONLY_TABLES = [
   'merchant_tier_settings',
   'merchant_tier_changes',
   'merchant_tier_months',
+  'merchant_shop_slugs',
+  'merchant_shop_rates',
+  'shop_transfers',
+  'shop_settlements',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

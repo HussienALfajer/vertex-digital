@@ -18,6 +18,7 @@ export * from './rate-limits.js';
 export * from './reconciliation/index.js';
 export * from './reports/index.js';
 export * from './schema/index.js';
+export * from './shops/index.js';
 export * from './store/index.js';
 export * from './suppliers/index.js';
 export * from './support/index.js';
