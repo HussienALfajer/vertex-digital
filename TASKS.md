@@ -16,7 +16,7 @@ No production deploy before PR 4 merges (the shop has no screens until then); th
 - [x] rate limits (API, and nginx: the shop auth paths and the transfer check on `vdsignin`, transfers and return requests on `vdpurchase`; the deploy re-runs `provision.sh`), ALTCHA on sign-up and code requests
 - [x] bridge: OpenAPI export and admin client
 - [x] docs: architecture (module, jobs, auth), API, db and contracts folder rules, spec details settled, ADR 0040 (sessions scoped), ROADMAP
-- [ ] checks, reviewer, endpoint check at `/api/docs`, PR and merge
+- [x] checks, reviewer (3 blocking findings fixed: a closed shop's slug kept while it holds balances, a full shop answering every sign-up alike, C3 over shop wallets), endpoint check at `/api/docs`, PR and merge
 
 ## PR 2 — `feat/s26-shop-selling`: catalog, purchase, margin and support (server)
 - [ ] contracts: storefront and game schemas with selling prices only (PR4 contract tests), purchase schema, selling price math (PR2 rounding up, PR3 guard), compensation and stats schemas, `TICKET_ESCALATION_TOO_EARLY`, `ORDER_NOT_COMPENSABLE`
