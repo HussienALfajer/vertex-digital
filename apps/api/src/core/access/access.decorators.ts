@@ -14,13 +14,22 @@ export type RouteAccess =
   | { kind: 'public' }
   | { kind: 'customer' }
   | { kind: 'admin' }
-  | { kind: 'adminSetup' };
+  | { kind: 'adminSetup' }
+  | { kind: 'shopCustomer' };
 
 /** Anyone, signed in or not. Pair state-changing public routes with `@RateLimit`. */
 export const Public = () => SetMetadata(ACCESS, { kind: 'public' } satisfies RouteAccess);
 
 /** A signed-in customer whose email is verified (ADR 0007). Never under `/api/admin/`. */
 export const CustomerRoute = () => SetMetadata(ACCESS, { kind: 'customer' } satisfies RouteAccess);
+
+/**
+ * S26 (ADR 0040): a signed-in, verified customer of the shop the path's `:slug` names. The route
+ * lives under `/api/shops/:slug/`; a session of another shop, a Vertex session or an admin one is
+ * none (`401`).
+ */
+export const ShopCustomerRoute = () =>
+  SetMetadata(ACCESS, { kind: 'shopCustomer' } satisfies RouteAccess);
 
 /**
  * The signed-in admin, TOTP enrolled and no pending password change (ADR 0007, 0016, S01 rule

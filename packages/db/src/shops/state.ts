@@ -120,3 +120,135 @@ export async function transferredToday(db: Executor, shopId: string): Promise<nu
 export async function lockKey(tx: Transaction, key: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
+
+/** Shop customers' balances by id (S26 customers lists), from the postings; 0 without a wallet. */
+export async function shopCustomerBalances(
+  db: Executor,
+  shopCustomerIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (shopCustomerIds.length === 0) return new Map();
+  const result = await db.execute<{ id: string; balance: string }>(sql`
+    select a.shop_customer_id as id, coalesce(sum(p.amount_units), 0)::text as balance
+    from ledger_accounts a
+    left join ledger_postings p on p.account_id = a.id
+    where a.shop_customer_id in (${sql.join(
+      shopCustomerIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    group by a.shop_customer_id`);
+  return new Map(result.rows.map((row) => [row.id, Number(row.balance)]));
+}
+
+/** Each shop's customers' total balance (the admin's shops list), by shop id. */
+export async function shopTotalBalances(
+  db: Executor,
+  shopIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (shopIds.length === 0) return new Map();
+  const result = await db.execute<{ id: string; total: string }>(sql`
+    select c.shop_id as id, coalesce(sum(p.amount_units), 0)::text as total
+    from shop_customers c
+    join ledger_accounts a on a.shop_customer_id = c.id
+    left join ledger_postings p on p.account_id = a.id
+    where c.shop_id in (${sql.join(
+      shopIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    group by c.shop_id`);
+  return new Map(result.rows.map((row) => [row.id, Number(row.total)]));
+}
+
+/** The store's rate in force (S07), as a shop compares an own rate with it (ST3). */
+export async function storeRateNow(
+  db: Executor,
+): Promise<{ storeRate: string | null; storeRateId: string | null }> {
+  const store = await rateInForce(db);
+  return {
+    storeRate: store ? rateFromNumeric(store.sypPerUsd) : null,
+    storeRateId: store?.id ?? null,
+  };
+}
+
+export interface ShopWalletEntryRow {
+  id: string;
+  kind:
+    | 'transfer_in'
+    | 'return_out'
+    | 'purchase'
+    | 'refund'
+    | 'compensation'
+    | 'settlement'
+    | 'adjustment';
+  amountUnits: number;
+  balanceAfterUnits: number;
+  orderId: string | null;
+  createdAt: Date;
+  position: number;
+}
+
+/**
+ * A shop wallet's timeline (S26 screens, "الرصيد"), newest first by write position, with the
+ * balance after each journal; `before` is the position to continue below.
+ */
+export async function shopWalletEntries(
+  db: Executor,
+  shopCustomerId: string,
+  limit: number,
+  before: number | null,
+): Promise<ShopWalletEntryRow[]> {
+  const result = await db.execute<{
+    id: string;
+    kind: string;
+    settled: boolean;
+    amount: string;
+    balance: string;
+    order_id: string | null;
+    created_at: Date;
+    position: string;
+  }>(sql`
+    with entries as (
+      select j.id, j.kind::text as kind, j.created_at,
+        exists (select 1 from shop_settlements x where x.journal_id = j.id) as settled,
+        (select o.id from orders o where o.purchase_journal_id = j.id or o.refund_journal_id = j.id
+          limit 1) as order_id,
+        sum(p.amount_units) as amount, max(p.position) as position
+      from ledger_accounts a
+      join ledger_postings p on p.account_id = a.id
+      join ledger_journals j on j.id = p.journal_id
+      where a.shop_customer_id = ${shopCustomerId}
+      group by j.id
+    ),
+    running as (
+      select *, sum(amount) over (order by position) as balance from entries
+    )
+    select id, kind, settled, amount::text, balance::text, order_id, created_at, position::text
+    from running
+    where ${before === null ? sql`true` : sql`position < ${before}`}
+    order by position desc
+    limit ${limit}`);
+  return result.rows.map((row) => {
+    const amount = Number(row.amount);
+    const kind: ShopWalletEntryRow['kind'] = row.settled
+      ? 'settlement'
+      : row.kind === 'shop_transfer'
+        ? amount > 0
+          ? 'transfer_in'
+          : 'return_out'
+        : row.kind === 'purchase'
+          ? 'purchase'
+          : row.kind === 'refund'
+            ? 'refund'
+            : row.kind === 'shop_margin'
+              ? 'compensation'
+              : 'adjustment';
+    return {
+      id: row.id,
+      kind,
+      amountUnits: amount,
+      balanceAfterUnits: Number(row.balance),
+      orderId: row.order_id,
+      createdAt: new Date(row.created_at),
+      position: Number(row.position),
+    };
+  });
+}

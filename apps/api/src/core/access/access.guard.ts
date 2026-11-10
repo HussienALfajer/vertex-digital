@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
 import { AdminAuthService } from '../../modules/admin/index.js';
 import { AuthService, type CustomerIdentity } from '../../modules/auth/index.js';
+import { ShopAuthService } from '../../modules/shops/index.js';
 import { CodedException } from '../errors/index.js';
 import {
   ACCESS,
@@ -14,7 +15,10 @@ import {
 } from './access.decorators.js';
 import type { AuthenticatedRequest } from './current-user.decorator.js';
 
-type GuardedRequest = AuthenticatedRequest & { headers: IncomingHttpHeaders };
+type GuardedRequest = AuthenticatedRequest & {
+  headers: IncomingHttpHeaders;
+  params?: Record<string, string | undefined>;
+};
 
 /**
  * Enforces `@Public()`, `@CustomerRoute()`, `@AdminRoute()` and `@AdminSetupRoute()` on every
@@ -30,6 +34,7 @@ export class AccessGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly customers: AuthService,
     private readonly admins: AdminAuthService,
+    private readonly shops: ShopAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -49,6 +54,20 @@ export class AccessGuard implements CanActivate {
             (again) => again.id === customer.id && again.sessionId === customer.sessionId,
             () => false,
           );
+        return true;
+      }
+      case 'shopCustomer': {
+        // S26: the path's shop first, so an unknown shop answers 404 whoever asks.
+        const shop = await this.shops.shopBySlug(request.params?.slug ?? '');
+        if (!shop) throw new CodedException(404, 'NOT_FOUND', 'No such shop');
+        const customer = await this.shops.shopCustomerOf(request.headers, shop.id);
+        if (!customer || customer.archived) {
+          throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
+        }
+        if (!customer.emailVerified) {
+          throw new CodedException(403, 'EMAIL_NOT_VERIFIED', 'Verify your email first');
+        }
+        request.shopCustomer = customer;
         return true;
       }
       case 'admin':

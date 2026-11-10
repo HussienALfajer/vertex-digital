@@ -471,6 +471,13 @@ export const merchantShopSchema = z
 
 export type MerchantShop = z.infer<typeof merchantShopSchema>;
 
+/** `GET /api/merchant/shop`: the merchant's shop, or null before a request. */
+export const merchantShopStateSchema = z
+  .object({ shop: merchantShopSchema.nullable() })
+  .meta({ id: 'MerchantShopState' });
+
+export type MerchantShopState = z.infer<typeof merchantShopStateSchema>;
+
 /** `GET /api/merchant/shop/slug-available?slug=` (the request form's live check). */
 export const slugAvailabilityQuerySchema = z.object({ slug: z.string().max(60) });
 
