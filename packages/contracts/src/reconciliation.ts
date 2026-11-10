@@ -462,6 +462,8 @@ export const INTERNAL_CHECKS = [
   'order_refund',
   'deposit_credit',
   'manual_journals',
+  /** S26 PR8: the held shop margins equal the open shop orders' margins; releases match. */
+  'shop_margin_held',
 ] as const;
 
 /** External checks against real balances (E2–E4), within a range and the tolerance (E1). */

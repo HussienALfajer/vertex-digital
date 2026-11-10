@@ -19,13 +19,16 @@ No production deploy before PR 4 merges (the shop has no screens until then); th
 - [x] checks, reviewer (3 blocking findings fixed: a closed shop's slug kept while it holds balances, a full shop answering every sign-up alike, C3 over shop wallets), endpoint check at `/api/docs`, PR and merge
 
 ## PR 2 — `feat/s26-shop-selling`: catalog, purchase, margin and support (server)
-- [ ] contracts: storefront and game schemas with selling prices only (PR4 contract tests), purchase schema, selling price math (PR2 rounding up, PR3 guard), compensation and stats schemas, `TICKET_ESCALATION_TOO_EARLY`, `ORDER_NOT_COMPENSABLE`
-- [ ] db: `shop_order_sales`, `shop_daily_stats`, `orders.shop_customer_id`, ticket columns (migration); shop purchase in `packages/db/src/orders` (PR6, `purchaseOrder`'s lock order, the shop wallet paying), finish in `orderFinished` (PR8 refund and margin release; lock the merchant's wallet before the shop customer's, as transfers do), compensation (PR10); journals balance, held margin returns to zero, races (confirm against purchase, transfer against purchase)
-- [ ] api: public storefront and game reads cached by `shop:<id>` with old-slug redirects, purchase (PR5, PR7, PR12), orders and codes for the shop customer, closed-shop sales at `price_list_id_at_close`, admin compensation, tickets (TK1–TK5) with escalation, statistics (SP3) and the visit counter, the sticker PNG (SP2), manifest data and icons (SP1)
-- [ ] notifications and push per shop for orders, compensation and tickets; Telegram for an escalated ticket and the return-ratio alert
-- [ ] reconciliation: held margin equals the open shop orders' margins
-- [ ] store revalidation on settings, hidden games, selling prices and state
+Settled while planning (2026-11-11): the undelivered units' refund posts `refunds:USD` −buy·n like every refund (the spec's `sales_revenue` is the same reversal; C7 reads it); a compensation gets its own append-only `shop_compensations` row (C9 needs a row per `adjustment` journal); shop customers get their own notification center and push devices (`shop_customer_notifications`, `shop_push_subscriptions`); shop orders write no `merchant_order_sales` row (the merchant's dashboard and statement kinds come with PR 4); the merchant's own order reads, reveals, releases, receipts and tickets leave shop orders out; a shop customer's code reveal is logged as `customer` with the shop customer's id. The admin's support queue and order page for shop tickets and compensation screens stay in PR 4 (the queue joins customers, so shop tickets stay out until then); the shop receipt (PR11) comes with PR 3's order page.
+- [ ] contracts: `shop-selling.ts` (PR2 selling price rounding up, ST4 SYP, PR3 guard, the order and refund amounts, PR10 compensation, TK2 escalation, the return-ratio alert, storefront, game, purchase, order, compensation, stats, manifest, sticker schemas with selling prices only), shop notification events and params, error codes `TICKET_ESCALATION_TOO_EARLY`, `ORDER_NOT_COMPENSABLE`, audit actions, the ticket author `merchant`; unit tests at 100%
+- [ ] db (migration): `shop_order_sales`, `shop_compensations`, `shop_daily_stats`, `shop_customer_notifications`, `shop_push_subscriptions`, `orders.shop_customer_id`, ticket columns (`shop_id`, `shop_customer_id`, `escalated_at`, `last_merchant_message_at`, nullable `customer_id`); guards (append-only, fixed sale row but its release once, orders' shop customer fixed)
+- [ ] db write paths: `purchaseShopOrder` (PR5–PR7; `purchaseOrder`'s lock order with the shop customer's wallet paying), the refund of a shop order (merchant's wallet locked first) and the margin release in `orderFinished` (PR8), shop order notifications (PR9), `compensateShopOrder` (PR10), `notifyShopCustomer` (center, email, push) with PR 1's emails moved onto it; reads for the shop customer's orders and codes; the merchant's own order reads skip shop orders; tests: every journal balances, held margin back to zero, races (transfer against purchase, confirm against purchase), replays
+- [ ] reconciliation: C4 kinds, C6/C7 for shop orders, the held-margin check (C10)
+- [ ] api: public storefront and game (cached by `shop:<id>`, old slugs answer `301`), purchase, orders, codes, player check (the shop customer's quota and the shop's), notifications and push devices, tickets (TK1–TK5) for the shop customer and the merchant with escalation and its Telegram, admin compensation, statistics (SP3) and the visit counter, sticker PNG (SP2), manifest and icons (SP1), the return-ratio alert
+- [ ] store revalidation of `shop:<id>` on settings, hidden games, selling prices and state
+- [ ] worker: push to shop devices
 - [ ] bridge: OpenAPI export and admin client
+- [ ] docs: spec details settled, architecture, folder rules, ROADMAP
 - [ ] checks, reviewer, endpoint check at `/api/docs`, PR and merge
 
 ## PR 3 — `feat/s26-shop-store`: the shop under `/s/[slug]`
@@ -38,7 +41,8 @@ No production deploy before PR 4 merges (the shop has no screens until then); th
 
 ## PR 4 — `feat/s26-shop-panels`: merchant area and admin panel, then the deploy
 - [ ] merchant area "متجري": request with live preview, settings, customers with transfer and return, shop orders, shop tickets, statistics, sticker, statement kinds (WL10)
-- [ ] admin: shops page and shop page (approve, reject, states, limits, rate history, customers, freeze, settle), the order page's shop compensation, escalated tickets with the shop tag
+- [ ] admin: shops page and shop page (approve, reject, states, limits, rate history, customers, freeze, settle), the order page's shop compensation, escalated tickets with the shop tag (the admin queue's and ticket page's API for shop tickets: the shop customer, the shop tag, admin replies telling the shop customer and the merchant)
+- [ ] the merchant dashboard's sales and profit and the statement kinds with the shop's delivered orders (WL10)
 - [ ] E2E flows and RTL screenshots (merchant phone, admin light and dark)
 - [ ] the local seed's shop
 - [ ] checks, reviewer, browser check of the spec's Acceptance, PR and merge

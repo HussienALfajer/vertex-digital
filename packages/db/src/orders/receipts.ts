@@ -174,7 +174,9 @@ export async function orderPrint(
     .from(orders)
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
-    .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+    .where(
+      and(eq(orders.id, orderId), eq(orders.customerId, customerId), isNull(orders.shopCustomerId)),
+    );
   if (!row) return null;
   const { order, product } = row;
   const branding = await merchantBranding(db, order);
@@ -275,7 +277,13 @@ export async function releaseCodes(
   const [order] = await tx
     .select()
     .from(orders)
-    .where(and(eq(orders.id, input.orderId), eq(orders.customerId, input.customerId)));
+    .where(
+      and(
+        eq(orders.id, input.orderId),
+        eq(orders.customerId, input.customerId),
+        isNull(orders.shopCustomerId),
+      ),
+    );
   if (!order) return null;
   const delivered = (
     await tx

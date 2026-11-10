@@ -66,6 +66,8 @@ export const QUEUES = {
   reconciliationRecheck: 'reconciliation.recheck',
   /** Sends one customer notification to the customer's push devices (S15 PD1–PD5). */
   pushSend: 'push.send',
+  /** S26 PR9: sends one shop customer notification to the customer's devices in that shop. */
+  pushSendShop: 'push.send-shop',
   /** Tells the admin of fixed prices that fell back to their rule, every 10 minutes (S20 RP5). */
   pricingFallbackNotices: 'pricing.fallback-notices',
   /** Expires merchant applications left without an answer, every 15 minutes (S20 MA4). */
@@ -221,6 +223,9 @@ export const pushSendPayloadSchema = z.object({
 });
 
 export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;
+
+/** S26 PR9: `push.send-shop` carries a shop customer notification, with `push.send`'s retries. */
+export const pushSendShopPayloadSchema = pushSendPayloadSchema;
 
 /** `singletonKey` is the customer id: one level recomputation queued and one active (S21 LV4). */
 export const merchantsLevelPayloadSchema = z.object({

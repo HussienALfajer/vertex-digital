@@ -20,7 +20,7 @@ import {
   type Transaction,
   ticketDepositLink,
   ticketLinkLabels,
-  ticketOrderLink,
+  ticketOrderOf,
 } from '@vertex-digital/db';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { PgInsertValue, PgUpdateSetSource } from 'drizzle-orm/pg-core';
@@ -106,8 +106,8 @@ export async function checkLink(
   const orderId = link.orderId ?? null;
   const depositId = link.depositId ?? null;
   if (orderId) {
-    const order = await ticketOrderLink(db, orderId);
-    if (order?.customerId !== customerId) throw ticketRefusals.linkInvalid();
+    const order = await ticketOrderOf(db, orderId, { customerId });
+    if (!order) throw ticketRefusals.linkInvalid();
     // S22 OP2, OP3: the problem is checked against the order as it is now (edge cases 13, 14).
     const refusal = link.orderProblem && orderProblemAllowed(order, link.orderProblem, new Date());
     if (refusal) throw ticketRefusals.problemUnavailable(refusal);

@@ -68,6 +68,8 @@ export {
   type RevealInput,
   revealCode,
   sharePath,
+  shopCustomerOrder,
+  shopCustomerOrderPage,
 } from './reads.js';
 export {
   codeReleaseLog,

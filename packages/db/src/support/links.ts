@@ -13,6 +13,8 @@ type Executor = Database | Transaction;
 export interface TicketOrderLink {
   id: string;
   customerId: string;
+  /** S26: the shop customer who bought a shop order; null for every other order. */
+  shopCustomerId: string | null;
   number: string;
   status: (typeof orders.$inferSelect)['status'];
   /** S22 OP2, OP3: what the order's problem buttons depend on. */
@@ -44,6 +46,7 @@ export async function ticketOrderLink(
     .select({
       id: orders.id,
       customerId: orders.customerId,
+      shopCustomerId: orders.shopCustomerId,
       number: orders.number,
       status: orders.status,
       productKind: catalogProducts.kind,
@@ -60,6 +63,24 @@ export async function ticketOrderLink(
   // A walk-in order (S16 AP1) has no customer to open a ticket.
   if (!row || row.customerId === null) return null;
   return { ...row, customerId: row.customerId };
+}
+
+/**
+ * The order a ticket of its buyer names: a Vertex customer's own order (never a shop order of a
+ * merchant's, S26 PR9), or a shop customer's shop order (TK1); null otherwise.
+ */
+export async function ticketOrderOf(
+  db: Executor,
+  orderId: string,
+  owner: { customerId: string } | { shopCustomerId: string },
+): Promise<TicketOrderLink | null> {
+  const order = await ticketOrderLink(db, orderId);
+  if (!order) return null;
+  const mine =
+    'shopCustomerId' in owner
+      ? order.shopCustomerId === owner.shopCustomerId
+      : order.customerId === owner.customerId && order.shopCustomerId === null;
+  return mine ? order : null;
 }
 
 /** The deposit a ticket names, or null. */

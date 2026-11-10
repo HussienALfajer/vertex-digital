@@ -25,6 +25,8 @@ import {
   orders,
   suppliers,
 } from '../schema/index.js';
+import { shopRefundPostings, shopSaleOf } from '../shops/finish.js';
+import { notifyShopCustomer } from '../shops/notify.js';
 import { encryptSecret } from './secrets.js';
 import {
   type AttemptRow,
@@ -459,12 +461,20 @@ export async function refundRemaining(
     .orderBy(desc(fulfilmentAttempts.createdAt), desc(fulfilmentAttempts.id))
     .limit(1);
   const partial = order.deliveredQuantity > 0;
+  const refunds = await ensureSystemAccount(tx, {
+    code: 'refunds:USD',
+    kind: 'refunds',
+    currency: 'USD',
+  });
+  // S26 PR8: a shop order refunds its selling price to the shop wallet.
+  const sale = order.shopCustomerId === null ? null : await shopSaleOf(tx, order.id);
+  const shopRefund = sale && (await shopRefundPostings(tx, order, sale, units, refunds));
   const journal = await postJournal(tx, {
     idempotencyKey: partial
       ? `order:${order.id}:refund:${lastAttempt?.id}`
       : `order:${order.id}:refund`,
     kind: 'refund',
-    postings: [
+    postings: shopRefund?.postings ?? [
       {
         accountId:
           order.payer === 'owner' || order.customerId === null
@@ -472,14 +482,7 @@ export async function refundRemaining(
             : await ensureCustomerWallet(tx, order.customerId),
         amountUnits: amount,
       },
-      {
-        accountId: await ensureSystemAccount(tx, {
-          code: 'refunds:USD',
-          kind: 'refunds',
-          currency: 'USD',
-        }),
-        amountUnits: -amount,
-      },
+      { accountId: refunds, amountUnits: -amount },
     ],
   });
   // S21 LV4: a refund to a merchant's wallet lowers this month's purchases.
@@ -493,6 +496,27 @@ export async function refundRemaining(
   const refundedUsdUnits = order.payer === 'owner' ? null : amount;
   if (customerId === null) {
     // S16 AP12: a walk-in order tells no one.
+  } else if (shopRefund && order.shopCustomerId !== null) {
+    // S26 PR9: the shop customer is told at the selling price; the merchant is not told.
+    const common = { orderId: order.id, orderNumber: order.number, productNameAr };
+    if (partial) {
+      await notifyShopCustomer(tx, context.jobs, {
+        shopCustomerId: order.shopCustomerId,
+        event: 'order_partially_refunded',
+        params: {
+          ...common,
+          deliveredQuantity: order.deliveredQuantity,
+          refundedQuantity: units,
+          refundedUsdUnits: shopRefund.sellUsdUnits,
+        },
+      });
+    } else {
+      await notifyShopCustomer(tx, context.jobs, {
+        shopCustomerId: order.shopCustomerId,
+        event: 'order_refunded',
+        params: { ...common, refundedUsdUnits: shopRefund.sellUsdUnits, reason },
+      });
+    }
   } else if (partial) {
     await notifyCustomer(
       tx,
@@ -578,6 +602,20 @@ async function productName(tx: Transaction, productId: string): Promise<string> 
 async function notifyDelivered(tx: Transaction, context: OrderContext, order: OrderRow) {
   // S16 AP12: a walk-in order tells no one.
   if (order.customerId === null) return;
+  // S26 PR9: a shop order tells its shop customer, never the merchant.
+  if (order.shopCustomerId !== null) {
+    await notifyShopCustomer(tx, context.jobs, {
+      shopCustomerId: order.shopCustomerId,
+      event: 'order_delivered',
+      params: {
+        orderId: order.id,
+        orderNumber: order.number,
+        productNameAr: await productName(tx, order.productId),
+        quantity: order.quantity,
+      },
+    });
+    return;
+  }
   await notifyCustomer(
     tx,
     context.jobs,

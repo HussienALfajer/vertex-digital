@@ -37,6 +37,14 @@ export const ticketAuthorSchema = z.enum(TICKET_AUTHORS).meta({ id: 'TicketAutho
 
 export type TicketAuthor = z.infer<typeof ticketAuthorSchema>;
 
+/**
+ * Who may write a message (the database enum): S26 TK2 adds the merchant, who writes only in a
+ * shop ticket; a Vertex ticket's messages stay `TICKET_AUTHORS`.
+ */
+export const SUPPORT_MESSAGE_AUTHORS = [...TICKET_AUTHORS, 'merchant'] as const;
+
+export type SupportMessageAuthor = (typeof SUPPORT_MESSAGE_AUTHORS)[number];
+
 export const TICKET_CLOSERS = ['customer', 'admin', 'system'] as const;
 
 export const ticketCloserSchema = z.enum(TICKET_CLOSERS).meta({ id: 'TicketCloser' });

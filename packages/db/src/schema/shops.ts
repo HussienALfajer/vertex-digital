@@ -1,6 +1,7 @@
 import {
   RETURN_REQUEST_STATUSES,
   SHOP_CUSTOMER_ORIGINS,
+  SHOP_NOTIFICATION_EVENTS,
   SHOP_RATE_MODES,
   SHOP_SETTLEMENT_TARGETS,
   SHOP_STATUSES,
@@ -12,9 +13,11 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -54,6 +57,10 @@ export const shopSettlementTargetEnum = pgEnum('shop_settlement_target', SHOP_SE
 export const shopReturnRequestStatusEnum = pgEnum(
   'shop_return_request_status',
   RETURN_REQUEST_STATUSES,
+);
+export const shopNotificationEventEnum = pgEnum(
+  'shop_notification_event',
+  SHOP_NOTIFICATION_EVENTS,
 );
 
 /** States in which a shop is live: one per merchant, and a slug no other live shop holds (SH1, SH2). */
@@ -435,5 +442,90 @@ export const shopSettlements = pgTable(
       'shop_settlements_amount_check',
       sql`${table.amountUsdUnits} > 0 and ${table.amountUsdUnits} % 10000 = 0`,
     ),
+  ],
+);
+
+/**
+ * SP3: the shop's counters per Damascus day: page views (bots left out) and sign-ups. Counters
+ * only: no personal data, no addresses; updated in place by `countShopVisit` / `countShopSignUp`.
+ */
+export const shopDailyStats = pgTable(
+  'shop_daily_stats',
+  {
+    shopId: uuid('shop_id')
+      .notNull()
+      .references(() => merchantShops.id),
+    damascusDate: date('damascus_date').notNull(),
+    visits: integer('visits').notNull().default(0),
+    signUps: integer('sign_ups').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.shopId, table.damascusDate] }),
+    check('shop_daily_stats_counts_check', sql`${table.visits} >= 0 and ${table.signUps} >= 0`),
+  ],
+);
+
+/**
+ * S26 PR9: the shop customer's notification center, written only by `notifyShopCustomer` in the
+ * transaction of the change. Like `customer_notifications`: only `read_at` changes, once.
+ */
+export const shopCustomerNotifications = pgTable(
+  'shop_customer_notifications',
+  {
+    id: id(),
+    shopCustomerId: uuid('shop_customer_id')
+      .notNull()
+      .references(() => shopCustomers.id),
+    shopId: uuid('shop_id')
+      .notNull()
+      .references(() => merchantShops.id),
+    event: shopNotificationEventEnum('event').notNull(),
+    /** `SHOP_NOTIFICATION_PARAMS[event]`: the customer's own amounts, never a note or a cost. */
+    params: jsonb('params').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('shop_customer_notifications_customer_idx').on(
+      table.shopCustomerId,
+      table.createdAt.desc(),
+      table.id.desc(),
+    ),
+    index('shop_customer_notifications_unread_idx')
+      .on(table.shopCustomerId)
+      .where(sql`${table.readAt} is null`),
+    index('shop_customer_notifications_shop_id_idx').on(table.shopId),
+  ],
+);
+
+/**
+ * SP1, S15: a shop customer's web push devices, registered from the shop's service worker (scope
+ * `/s/<slug>/`). A device registration, not a business record: it goes with the session that
+ * registered it, when push is turned off on the device, or when the push service says it is gone.
+ */
+export const shopPushSubscriptions = pgTable(
+  'shop_push_subscriptions',
+  {
+    id: id(),
+    shopCustomerId: uuid('shop_customer_id')
+      .notNull()
+      .references(() => shopCustomers.id),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => shopCustomerSessions.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    vapidKeyId: text('vapid_key_id').notNull(),
+    failures: integer('failures').notNull().default(0),
+    lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('shop_push_subscriptions_endpoint_idx').on(table.endpoint),
+    index('shop_push_subscriptions_customer_idx').on(table.shopCustomerId),
+    index('shop_push_subscriptions_session_id_idx').on(table.sessionId),
+    check('shop_push_subscriptions_endpoint_length', sql`char_length(${table.endpoint}) <= 1024`),
+    check('shop_push_subscriptions_failures', sql`${table.failures} >= 0`),
   ],
 );

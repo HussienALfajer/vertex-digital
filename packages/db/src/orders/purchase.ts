@@ -299,6 +299,8 @@ export async function prepareLine(
     tierQuantities: TierQuantities | null;
     /** S23 OP5: the buyer's tier sees early-access packs (false for a customer and the owner). */
     earlyAccess: boolean;
+    /** S26 PR5: a shop purchase checks its own selling price instead of the list price. */
+    skipPriceCheck?: boolean;
   },
   line: LineInput,
   product: ProductRow,
@@ -319,7 +321,7 @@ export async function prepareLine(
       availability,
     });
   }
-  if (current.priceUsdUnits !== line.expectedUnitPriceUsdUnits) {
+  if (!common.skipPriceCheck && current.priceUsdUnits !== line.expectedUnitPriceUsdUnits) {
     throw new OrderError('PRICE_CHANGED', 'The price is not the one expected', {
       unitPriceUsdUnits: current.priceUsdUnits,
     });
@@ -565,7 +567,7 @@ export async function purchaseOrder(
     }
     await checkCreditLimits(tx, {
       policy,
-      customerId: input.customerId,
+      owner: { customerId: input.customerId },
       merchant,
       walletId: wallet,
       lines: section,

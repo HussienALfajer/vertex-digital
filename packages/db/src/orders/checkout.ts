@@ -187,7 +187,7 @@ export async function checkoutOrders(
   if (policy) {
     await checkCreditLimits(tx, {
       policy,
-      customerId: input.customerId,
+      owner: { customerId: input.customerId },
       merchant,
       walletId: wallet,
       lines: section,

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."reconciliation_check" ADD VALUE 'shop_margin_held' BEFORE 'supplier_balance';

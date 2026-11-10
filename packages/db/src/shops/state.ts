@@ -200,6 +200,7 @@ export async function shopWalletEntries(
     id: string;
     kind: string;
     settled: boolean;
+    compensated: string | null;
     amount: string;
     balance: string;
     order_id: string | null;
@@ -209,8 +210,13 @@ export async function shopWalletEntries(
     with entries as (
       select j.id, j.kind::text as kind, j.created_at,
         exists (select 1 from shop_settlements x where x.journal_id = j.id) as settled,
-        (select o.id from orders o where o.purchase_journal_id = j.id or o.refund_journal_id = j.id
-          limit 1) as order_id,
+        (select c.order_id from shop_compensations c
+          where c.adjustment_journal_id = j.id or c.margin_journal_id = j.id) as compensated,
+        coalesce(
+          (select o.id from orders o where o.purchase_journal_id = j.id or o.refund_journal_id = j.id
+            limit 1),
+          (select c.order_id from shop_compensations c
+            where c.adjustment_journal_id = j.id or c.margin_journal_id = j.id)) as order_id,
         sum(p.amount_units) as amount, max(p.position) as position
       from ledger_accounts a
       join ledger_postings p on p.account_id = a.id
@@ -221,7 +227,7 @@ export async function shopWalletEntries(
     running as (
       select *, sum(amount) over (order by position) as balance from entries
     )
-    select id, kind, settled, amount::text, balance::text, order_id, created_at, position::text
+    select id, kind, settled, compensated, amount::text, balance::text, order_id, created_at, position::text
     from running
     where ${before === null ? sql`true` : sql`position < ${before}`}
     order by position desc
@@ -230,16 +236,16 @@ export async function shopWalletEntries(
     const amount = Number(row.amount);
     const kind: ShopWalletEntryRow['kind'] = row.settled
       ? 'settlement'
-      : row.kind === 'shop_transfer'
-        ? amount > 0
-          ? 'transfer_in'
-          : 'return_out'
-        : row.kind === 'purchase'
-          ? 'purchase'
-          : row.kind === 'refund'
-            ? 'refund'
-            : row.kind === 'shop_margin'
-              ? 'compensation'
+      : row.compensated !== null
+        ? 'compensation'
+        : row.kind === 'shop_transfer'
+          ? amount > 0
+            ? 'transfer_in'
+            : 'return_out'
+          : row.kind === 'purchase'
+            ? 'purchase'
+            : row.kind === 'refund'
+              ? 'refund'
               : 'adjustment';
     return {
       id: row.id,

@@ -235,7 +235,13 @@ export class ShareLinksService {
     const [row] = await this.db
       .select({ customerId: orders.customerId, createdAt: orders.createdAt })
       .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+      .where(
+        and(
+          eq(orders.id, orderId),
+          eq(orders.customerId, customerId),
+          isNull(orders.shopCustomerId),
+        ),
+      );
     return row ?? null;
   }
 

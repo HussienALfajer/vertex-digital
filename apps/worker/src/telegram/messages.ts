@@ -966,6 +966,30 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         ].join('\n'),
       };
     }
+    case 'shop_ticket_escalated': {
+      // S26 TK2: never the message or the customer's name.
+      const ticket = params as TelegramMessageParams<'shop_ticket_escalated'>;
+      const by =
+        ticket.by === 'merchant' ? 'التاجر' : ticket.by === 'customer' ? 'الزبون' : 'النظام';
+      return {
+        text: [
+          `🛍️ تذكرة متجر /s/${ticket.slug} بانتظار تدخل الإدارة: ${ticket.number}`,
+          `طلبها: ${by}`,
+          `${links.admin}/support/${ticket.ticketId}`,
+        ].join('\n'),
+      };
+    }
+    case 'shop_returns_alert': {
+      // S26 abuse: returns above half of the transfers.
+      const alert = params as TelegramMessageParams<'shop_returns_alert'>;
+      return {
+        text: [
+          `⚠️ إرجاعات متجر ${alert.tradeName} تجاوزت نصف شحناته خلال ${alert.days} أيام`,
+          `الشحن: ${formatUsd(alert.transferredUsdUnits)} · الإرجاع: ${formatUsd(alert.returnedUsdUnits)}`,
+          `${links.admin}/shops/${alert.shopId}`,
+        ].join('\n'),
+      };
+    }
     case 'reconciliation_alert':
       return {
         text: reconciliationAlertText(

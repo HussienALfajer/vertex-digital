@@ -1,5 +1,5 @@
 import { type ProductKind, QUICK_BUY_CARDS, type SavedPlayer } from '@vertex-digital/contracts';
-import { and, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { catalogProducts, orders } from '../schema/index.js';
 import { customerSavedPlayers } from './reads.js';
@@ -54,6 +54,7 @@ export async function quickBuyRows(db: Executor, customerId: string): Promise<Qu
     .where(
       and(
         eq(orders.customerId, customerId),
+        isNull(orders.shopCustomerId),
         inArray(orders.gameId, gameIds),
         isNotNull(orders.paidAt),
         notInArray(orders.status, ['awaiting_balance', 'cancelled']),

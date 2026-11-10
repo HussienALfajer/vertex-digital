@@ -1,7 +1,9 @@
 import {
   type ReturnRequestAction,
   returnRequestTransition,
+  SHOP_RETURN_ALERT_DAYS,
   SHOP_RETURN_REQUEST_HOURS,
+  shopReturnsAlarming,
 } from '@vertex-digital/contracts';
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -14,8 +16,11 @@ import {
   lockCustomerWallet,
   lockShopCustomerWallet,
 } from '../ledger/wallet.js';
-import { type JobSender, notifyCustomer, queueEmail } from '../notifications/index.js';
+import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { shopReturnRequests, shopTransfers } from '../schema/index.js';
+import { damascusDate } from '../suppliers/validations.js';
+import { queueTelegramMessage } from '../telegram/index.js';
+import { notifyShopCustomer } from './notify.js';
 import {
   auditActor,
   lockKey,
@@ -107,12 +112,10 @@ export async function requestShopReturn(
     entityId: shop.id,
     details: returnDetails(request),
   });
-  await queueEmail(tx, jobs, {
-    to: customer.email,
-    template: 'shop_customer_return_requested',
+  await notifyShopCustomer(tx, jobs, {
+    shopCustomerId: customer.id,
+    event: 'return_requested',
     params: {
-      shopName: shop.displayName,
-      slug: shop.slug,
       amountUsdUnits: request.amountUsdUnits,
       expiresAt: request.expiresAt.toISOString(),
     },
@@ -210,15 +213,11 @@ export async function endShopReturn(
       .returning({ id: shopTransfers.id, createdAt: shopTransfers.createdAt });
     if (!transfer) throw new Error('The return was not written');
     transferId = transfer.id;
-    await queueEmail(tx, jobs, {
-      to: customer.email,
-      template: 'shop_customer_return_done',
-      params: {
-        shopName: shop.displayName,
-        slug: shop.slug,
-        amountUsdUnits: request.amountUsdUnits,
-        at: transfer.createdAt.toISOString(),
-      },
+    await alertIfReturnsAlarming(tx, jobs, shop);
+    await notifyShopCustomer(tx, jobs, {
+      shopCustomerId: customer.id,
+      event: 'return_done',
+      params: { amountUsdUnits: request.amountUsdUnits },
     });
   }
   const [ended] = await tx
@@ -263,6 +262,40 @@ export async function endShopReturn(
     });
   }
   return { request: ended, transferId, replayed: false };
+}
+
+/**
+ * Abuse ("money laundering"): after a confirmed return, the shop's transfers and returns over the
+ * last 7 days; returns above half of the transfers, with $200 returned at least, tell the admin
+ * once a Damascus day per shop.
+ */
+async function alertIfReturnsAlarming(
+  tx: Transaction,
+  jobs: JobSender,
+  shop: { id: string; displayName: string },
+): Promise<void> {
+  const result = await tx.execute<{ transferred: string; returned: string }>(sql`
+    select
+      coalesce(sum(amount_usd_units) filter (where direction = 'to_customer'), 0)::text as transferred,
+      coalesce(sum(amount_usd_units) filter (where direction = 'to_merchant'), 0)::text as returned
+    from shop_transfers
+    where shop_id = ${shop.id}
+      and created_at > now() - ${`${SHOP_RETURN_ALERT_DAYS} days`}::interval`);
+  const totals = {
+    transferredUsdUnits: Number(result.rows[0]?.transferred ?? 0),
+    returnedUsdUnits: Number(result.rows[0]?.returned ?? 0),
+  };
+  if (!shopReturnsAlarming(totals)) return;
+  await queueTelegramMessage(tx, jobs, {
+    kind: 'shop_returns_alert',
+    dedupeKey: `shop-returns:${shop.id}:${damascusDate(new Date())}`,
+    params: {
+      shopId: shop.id,
+      tradeName: shop.displayName,
+      days: SHOP_RETURN_ALERT_DAYS,
+      ...totals,
+    },
+  });
 }
 
 /** The same end again (a double tap, a retried confirm): what the first one wrote. */

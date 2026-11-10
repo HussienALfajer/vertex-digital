@@ -386,7 +386,9 @@
       "SHOP_DAILY_TRANSFER_CAP_EXCEEDED": "تجاوز حد تحويلات التاجر اليومي.",
       "SHOP_CUSTOMER_LIMIT_REACHED": "وصل المتجر إلى الحد الأعلى لعدد الزبائن.",
       "RETURN_REQUEST_PENDING": "يوجد طلب إرجاع قيد الانتظار.",
-      "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار."
+      "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار.",
+      "TICKET_ESCALATION_TOO_EARLY": "يمكنك طلب تدخل الإدارة بعد مرور 24 ساعة دون ردّ من المتجر.",
+      "ORDER_NOT_COMPENSABLE": "لا يمكن تعويض هذا الطلب: ليس طلب متجر منتهياً، أو مضت 7 أيام، أو تجاوز عدد الوحدات المسلَّمة."
     }
   },
   "changePassword": {
@@ -4615,6 +4617,7 @@
       "order_refund": "قيود الاسترداد",
       "deposit_credit": "قيود الإيداع",
       "manual_journals": "قيود يدوية",
+      "shop_margin_held": "هوامش المتاجر المحجوزة",
       "supplier_balance": "رصيد المورد",
       "usdt_balance": "رصيد USDT",
       "sham_cash_count": "جرد شام كاش",

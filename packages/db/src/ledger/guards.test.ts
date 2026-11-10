@@ -242,6 +242,7 @@ describe('append-only trigger', () => {
       'reconciliation_explanations',
       'reconciliation_results',
       'reconciliation_settings',
+      'shop_compensations',
       'shop_settlements',
       'shop_transfers',
       'store_switch_changes',

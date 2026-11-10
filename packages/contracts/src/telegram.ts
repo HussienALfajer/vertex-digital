@@ -125,6 +125,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'shop_requested',
   /** S26 SH7: a shop closed by the merchant's revocation while its customers hold a balance. */
   'shop_closed_with_balance',
+  /** S26 TK2: a shop ticket sent to the admin by its merchant or its customer. */
+  'shop_ticket_escalated',
+  /** S26 abuse: a shop's returns passed half of its transfers over 7 days ($200 at least). */
+  'shop_returns_alert',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -597,6 +601,21 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     tradeName: z.string(),
     customers: z.int().positive(),
     totalUsdUnits: z.int().positive(),
+  }),
+  /** S26 TK2: the ticket for the panel link and the shop's slug; never the message or a name. */
+  shop_ticket_escalated: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    slug: z.string(),
+    by: z.enum(['merchant', 'customer', 'system']),
+  }),
+  /** S26 abuse: the shop's trade name and the window's totals. */
+  shop_returns_alert: z.object({
+    shopId: z.uuid(),
+    tradeName: z.string(),
+    days: z.int().positive(),
+    transferredUsdUnits: z.int().nonnegative(),
+    returnedUsdUnits: z.int().positive(),
   }),
   /** S25 CL4: the number masked, the accounts and their totals within the days. */
   credit_recipient_alert: z.object({

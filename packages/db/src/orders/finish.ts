@@ -3,22 +3,36 @@ import { eq, sql } from 'drizzle-orm';
 import type { Transaction } from '../client.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { checkouts, orders } from '../schema/index.js';
+import { releaseShopMargin } from '../shops/finish.js';
 import { markSavedPlayers } from './saved-players.js';
 
 type FinishedOrder = Pick<
   typeof orders.$inferSelect,
-  'customerId' | 'gameId' | 'fields' | 'status' | 'refundReason' | 'checkoutId'
+  | 'id'
+  | 'customerId'
+  | 'shopCustomerId'
+  | 'deliveredQuantity'
+  | 'gameId'
+  | 'fields'
+  | 'status'
+  | 'refundReason'
+  | 'checkoutId'
 >;
 
 /**
  * What follows an order's terminal status, in its transaction (`transitionOrder`): rule SP6 on the
- * customer's saved ids, and rule CT7 for a checkout order.
+ * customer's saved ids, rule CT7 for a checkout order, and S26 PR8's margin release for a shop
+ * order (a shop customer saves no ids).
  */
 export async function orderFinished(
   tx: Transaction,
   jobs: JobSender | undefined,
   order: FinishedOrder,
 ): Promise<void> {
+  if (order.shopCustomerId !== null) {
+    await releaseShopMargin(tx, order);
+    return;
+  }
   if (order.status === 'delivered') await markSavedPlayers(tx, order, false);
   else if (order.refundReason === 'input_rejected') await markSavedPlayers(tx, order, true);
   if (order.checkoutId === null) return;

@@ -13,6 +13,7 @@ import { postJournal } from '../ledger/post-journal.js';
 import { lockCustomerWallet, lockShopCustomerWallet } from '../ledger/wallet.js';
 import { type JobSender, queueEmail } from '../notifications/index.js';
 import { customers, shopTransfers } from '../schema/index.js';
+import { notifyShopCustomer } from './notify.js';
 import {
   auditActor,
   lockKey,
@@ -149,10 +150,10 @@ export async function transferToShopCustomer(
     },
   });
   const at = transfer.createdAt.toISOString();
-  await queueEmail(tx, jobs, {
-    to: customer.email,
-    template: 'shop_customer_transfer_received',
-    params: { shopName: shop.displayName, slug: shop.slug, amountUsdUnits, at },
+  await notifyShopCustomer(tx, jobs, {
+    shopCustomerId: customer.id,
+    event: 'transfer_received',
+    params: { amountUsdUnits },
   });
   const [owner] = await tx
     .select({ email: customers.email })
