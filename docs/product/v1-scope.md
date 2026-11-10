@@ -276,6 +276,14 @@ Added by the owner on 2026-11-04, replacing the 2026-10-29 "not planned" line (S
 - Limits: a daily section cap per customer (retail $50, merchants $500), a daily order count per number across all accounts (5, merchants 20), an alert when a number is topped up from a third account.
 - Cash products: paid only from balance credited 72 hours ago or more, never reserved, $20 a day (merchants $100), held for the admin's approval above $10 (merchants $50), refunded when rejected or left 24 hours.
 
+#### F45 — Merchant shops with customer wallets
+Added by the owner on 2026-11-10, replacing the 2026-10-20 "merchant mini-store declined" line (S26, ADR 0040).
+- An approved merchant requests a shop; the admin approves the slug and its limits. The shop lives at `/s/<slug>` with a QR sticker, the merchant's name, logo and one brand color, an announcement, and a small "يعمل بـ VERTEX DIGITAL" footer line; it is installable as an app and never indexed.
+- The merchant's own exchange rate (free, confirmed when more than 10% from the store's); prices are the merchant's selling prices (F31), SYP first; hidden games; never below the merchant's purchase price.
+- Shop customers have their own accounts in that shop (created by the merchant or self sign-up, verified email) and a USD wallet funded only by the merchant's transfers from the merchant's balance (caps: $200 per customer balance, $1,000 a day per merchant, per shop in the panel); a return to the merchant needs the customer's confirmation.
+- A purchase charges the selling price; the merchant's margin reaches the merchant at delivery, for delivered units; failures refund the full selling price.
+- Tickets go to the merchant, escalated to the admin; statistics in the merchant area; a frozen or revoked merchant's customers keep buying, and the admin settles a closed shop's balances.
+
 ## 5. Automations (fixed rules in V1)
 
 | ID | Trigger | Automatic result |
@@ -304,8 +312,8 @@ Added by the owner on 2026-11-04, replacing the 2026-10-29 "not planned" line (S
 |---|---|
 | Wallet withdrawals | Funds are for purchases; withdrawals invite fraud and money laundering. Exceptional cash refunds are done by the owner, recorded in the ledger (ADR 0003). The cash products of F44 are the one controlled exception (ADR 0039) |
 | English UI | Arabic-only at launch; i18n from day one keeps English cheap if it is ever wanted; not planned (owner, 2026-10-29) |
-| Reseller API, merchant staff (cashier) accounts and the merchant mini-store | Declined for now (owner, 2026-10-20) |
-| Merchant credit lines; merchants as cash-in points and prepaid wallet vouchers | Later, after the merchant features (owner, 2026-10-20): ledger transfers between accounts need their own anti-fraud and anti-money-laundering design |
+| Reseller API and merchant staff (cashier) accounts | Declined for now (owner, 2026-10-20); the merchant shop is F45 (owner, 2026-11-10) |
+| Merchant credit lines; merchants as cash-in points for Vertex accounts and prepaid wallet vouchers | Later, after the merchant features (owner, 2026-10-20): ledger transfers between accounts need their own anti-fraud and anti-money-laundering design; the one exception is a merchant's transfers to the merchant's own shop customers (F45, ADR 0040) |
 | Telegram purchase bot (customers) | Not planned (owner, 2026-10-29); the admin bot (F07) is in V1 |
 | Loyalty points, cashback and referrals | Declined (owner, 2026-10-20) |
 | Merchant tier rewards beyond prices (deposit bonus, monthly cashback, buying on credit, locking Diamond), merchant referral rewards and seasonal challenges | Declined (owner, 2026-10-29, S23): a tier changes only the price and the privileges |
