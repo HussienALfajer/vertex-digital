@@ -86,6 +86,8 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   product_price_dropped: TrendingDownIcon,
   merchant_shop_changed: StoreIcon,
   merchant_shop_return_ended: Undo2Icon,
+  merchant_shop_ticket: LifeBuoyIcon,
+  merchant_shop_margin_returned: Undo2Icon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

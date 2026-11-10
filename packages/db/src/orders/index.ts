@@ -62,6 +62,7 @@ export {
   customerOrder,
   customerOrderPage,
   customerSavedPlayers,
+  merchantShopOrderPage,
   openAttempt,
   productDeliveryStats,
   publicShare,

@@ -16,6 +16,7 @@ import {
   expectedWithinMinutes,
   type FulfilmentAttempt,
   isOpenAttempt,
+  type MerchantShopOrderRow,
   maskCode,
   type Order,
   type OrderStatus,
@@ -75,6 +76,7 @@ import {
   orders,
   savedPlayers,
   shopCompensations,
+  shopCustomers,
   shopOrderSales,
   storedFiles,
   supplierOffers,
@@ -633,6 +635,76 @@ export async function shopCustomerOrder(
       openTicketId: tickets[0]?.id ?? null,
     },
     createdAt: order.createdAt.toISOString(),
+  };
+}
+
+/**
+ * PR9: a shop's orders as its merchant sees them ("طلبات المتجر"), newest first: the customer,
+ * the selling total and the margin, held or released. Never the codes or the fields.
+ */
+export async function merchantShopOrderPage(
+  db: Executor,
+  shopId: string,
+  page: { after: { at: string; id: string } | null; limit: number; shopCustomerId?: string },
+): Promise<{
+  items: MerchantShopOrderRow[];
+  more: boolean;
+  last: { at: string; id: string } | null;
+}> {
+  const rows = await db
+    .select({
+      order: orders,
+      sale: shopOrderSales,
+      at: sql<string>`${orders.createdAt}::text`,
+      customerName: shopCustomers.name,
+      productNameAr: catalogProducts.nameAr,
+      gameNameAr: catalogGames.nameAr,
+    })
+    .from(shopOrderSales)
+    .innerJoin(orders, eq(orders.id, shopOrderSales.orderId))
+    .innerJoin(shopCustomers, eq(shopCustomers.id, shopOrderSales.shopCustomerId))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .where(
+      and(
+        eq(shopOrderSales.shopId, shopId),
+        page.shopCustomerId ? eq(shopOrderSales.shopCustomerId, page.shopCustomerId) : undefined,
+        page.after
+          ? or(
+              sql`${orders.createdAt} < ${page.after.at}::timestamptz`,
+              and(
+                sql`${orders.createdAt} = ${page.after.at}::timestamptz`,
+                lt(orders.id, page.after.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(page.limit + 1);
+  const shown = rows.slice(0, page.limit);
+  const lastRow = shown.at(-1);
+  return {
+    items: shown.map(({ order, sale, customerName, productNameAr, gameNameAr }) => {
+      const amounts = shopOrderAmounts(sale.unitSellUsdUnits, sale.unitBuyUsdUnits, order.quantity);
+      const released = sale.marginReleasedUsdUnits;
+      return {
+        id: order.id,
+        number: order.number,
+        stage: orderCustomerStage(order.status),
+        customer: { id: sale.shopCustomerId, name: customerName },
+        productNameAr,
+        gameNameAr,
+        quantity: order.quantity,
+        deliveredQuantity: order.deliveredQuantity,
+        totalSellUsdUnits: amounts.sellUsdUnits,
+        marginUsdUnits: released ?? amounts.marginUsdUnits,
+        marginState: released === null ? 'held' : released > 0 ? 'released' : 'none',
+        createdAt: order.createdAt.toISOString(),
+      };
+    }),
+    more: rows.length > page.limit,
+    last: lastRow ? { at: lastRow.at, id: lastRow.order.id } : null,
   };
 }
 

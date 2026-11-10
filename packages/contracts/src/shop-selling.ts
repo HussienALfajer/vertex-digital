@@ -553,3 +553,45 @@ export type MerchantShopTicket = z.infer<typeof merchantShopTicketSchema>;
 export const shopTicketEscalationSchema = z
   .object({ note: z.string().trim().min(3).max(500) })
   .meta({ id: 'ShopTicketEscalation' });
+
+// --- The merchant's shop orders ("طلبات المتجر", PR9) ---
+
+/** Where a shop order's margin stands: held until it finishes, then released (or none). */
+export const SHOP_MARGIN_STATES = ['held', 'released', 'none'] as const;
+
+/** A shop order as its merchant sees it: the customer, the selling price and the margin. */
+export const merchantShopOrderRowSchema = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    stage: orderSchema.shape.stage,
+    customer: z.object({ id: z.uuid(), name: z.string() }),
+    productNameAr: z.string(),
+    gameNameAr: z.string(),
+    quantity: z.int().positive(),
+    deliveredQuantity: z.int().nonnegative(),
+    totalSellUsdUnits: z.int().positive(),
+    /** Held: (S − B) × quantity; released: what reached the wallet. */
+    marginUsdUnits: z.int().nonnegative(),
+    marginState: z.enum(SHOP_MARGIN_STATES),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'MerchantShopOrderRow' });
+
+export type MerchantShopOrderRow = z.infer<typeof merchantShopOrderRowSchema>;
+
+export const merchantShopOrderQuerySchema = cursorQuerySchema
+  .extend({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    customerId: z.uuid().optional(),
+  })
+  .meta({ id: 'MerchantShopOrderQuery' });
+
+export type MerchantShopOrderQuery = z.infer<typeof merchantShopOrderQuerySchema>;
+
+export const merchantShopOrderPageSchema = cursorPageSchema(
+  merchantShopOrderRowSchema,
+  'MerchantShopOrderPage',
+);
+
+export type MerchantShopOrderPage = z.infer<typeof merchantShopOrderPageSchema>;

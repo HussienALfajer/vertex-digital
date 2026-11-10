@@ -31,6 +31,8 @@ export {
 export {
   type OrderSaleRefusal,
   ownSellingPrice,
+  ownSellingPrices,
+  pinnedGameIds,
   type RateRow,
   rateInForce,
   recordMerchantSale,

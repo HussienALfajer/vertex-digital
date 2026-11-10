@@ -4,7 +4,7 @@ import {
   rateFromNumeric,
   type ShopRateMode,
 } from '@vertex-digital/contracts';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
 import { rateInForce } from '../merchant-tools/sales.js';
 import { merchantShopRates, merchantShops, shopCustomers } from '../schema/index.js';
@@ -257,4 +257,22 @@ export async function shopWalletEntries(
       position: Number(row.position),
     };
   });
+}
+
+/** TK4: shop customers' contacts by id (the merchant's ticket views). */
+export async function shopCustomerContacts(
+  db: Executor,
+  ids: readonly string[],
+): Promise<Map<string, { id: string; name: string; email: string; phone: string }>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: shopCustomers.id,
+      name: shopCustomers.name,
+      email: shopCustomers.email,
+      phone: shopCustomers.phone,
+    })
+    .from(shopCustomers)
+    .where(inArray(shopCustomers.id, [...ids]));
+  return new Map(rows.map((row) => [row.id, row]));
 }

@@ -27,7 +27,20 @@ import {
   ticketDepositLink,
   ticketOrderLink,
 } from '@vertex-digital/db';
-import { and, asc, count, desc, eq, gt, inArray, min, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  min,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -89,6 +102,13 @@ function waitingPage<Row extends { ticket: { id: string }; cursorAt: string; isP
   };
 }
 
+/** A Vertex customer's ticket (S12); a shop ticket has a shop customer instead (S26 TK1). */
+type VertexTicketRow = TicketRow & { customerId: string };
+
+const isVertexTicket = (row: TicketRow): row is VertexTicketRow => row.customerId !== null;
+
+const VERTEX_TICKET = isNotNull(supportTickets.customerId);
+
 /**
  * The admin's support (S12 F23, rules TK2, TK3, TK5, TK9, TK11–TK13, SC1): the queue, the thread,
  * replies and closes, tickets opened to a customer, and the support settings. The admin has no
@@ -109,6 +129,8 @@ export class SupportAdminService {
    */
   async queue(query: AdminTicketListQuery): Promise<AdminTicketPage> {
     const filters: (SQL | undefined)[] = [
+      // S26: a shop ticket reaches this queue once escalated, with the panel's shop screens (PR 4).
+      VERTEX_TICKET,
       query.status === 'all' ? undefined : eq(supportTickets.status, query.status),
       query.category ? eq(supportTickets.category, query.category) : undefined,
       query.problem ? eq(supportTickets.orderProblem, query.problem) : undefined,
@@ -162,7 +184,11 @@ export class SupportAdminService {
     const page = waiting
       ? waitingPage(rows, query.limit)
       : pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.ticket.id }));
-    const customerIds = [...new Set(page.items.map((row) => row.ticket.customerId))];
+    const customerIds = [
+      ...new Set(
+        page.items.flatMap((row) => (row.ticket.customerId ? [row.ticket.customerId] : [])),
+      ),
+    ];
     const [people, tiers] = await Promise.all([
       this.customers.depositCustomers(customerIds),
       merchantTiers(this.db, customerIds),
@@ -173,7 +199,7 @@ export class SupportAdminService {
     );
     const items = summaries.map((summary, index) => {
       const ticket = page.items[index]?.ticket;
-      const customer = ticket && people.get(ticket.customerId);
+      const customer = ticket?.customerId ? people.get(ticket.customerId) : undefined;
       if (!customer) throw new Error(`Ticket ${summary.id} has no customer`);
       return {
         ...summary,
@@ -194,7 +220,7 @@ export class SupportAdminService {
     const [row] = await this.db
       .select({ count: count() })
       .from(supportTickets)
-      .where(eq(supportTickets.status, 'open'));
+      .where(and(eq(supportTickets.status, 'open'), VERTEX_TICKET));
     return row?.count ?? 0;
   }
 
@@ -203,7 +229,7 @@ export class SupportAdminService {
     const [row] = await this.db
       .select({ count: count(), oldestAt: min(supportTickets.lastCustomerMessageAt) })
       .from(supportTickets)
-      .where(eq(supportTickets.status, 'open'));
+      .where(and(eq(supportTickets.status, 'open'), VERTEX_TICKET));
     return { count: row?.count ?? 0, oldestAt: row?.oldestAt ?? null };
   }
 
@@ -211,7 +237,7 @@ export class SupportAdminService {
   async ticket(id: string): Promise<AdminTicket> {
     if (!isUuid(id)) throw ticketRefusals.notFound();
     const [row] = await this.db.select().from(supportTickets).where(eq(supportTickets.id, id));
-    if (!row) throw ticketRefusals.notFound();
+    if (!row || !isVertexTicket(row)) throw ticketRefusals.notFound();
     return this.view(row);
   }
 
@@ -267,7 +293,7 @@ export class SupportAdminService {
         action: 'ticket.opened_by_admin',
         details: { ...ticketChange(ticket, null), customerId: customer.id },
       });
-      await this.notifyCustomer(tx, ticket, true);
+      await this.notifyCustomer(tx, { ...ticket, customerId: customer.id }, true);
       return { id: ticket.id, created: true };
     });
     return { ticket: await this.ticket(outcome.id), created: outcome.created };
@@ -288,13 +314,14 @@ export class SupportAdminService {
       .select({ customerId: supportTickets.customerId })
       .from(supportTickets)
       .where(eq(supportTickets.id, id));
-    if (!row) throw ticketRefusals.notFound();
+    if (!row || row.customerId === null) throw ticketRefusals.notFound();
+    const customerId = row.customerId;
     if (await this.replay(this.db, idempotencyKey, body, id)) {
       return { ticket: await this.ticket(id), created: false };
     }
     // Q28 (audit A07-20): no reply reopens an archived customer's ticket or notifies them; checked
     // before the images are stored (A07-1) and again under the customer's lock (A07-19).
-    const owner = await findCustomer(this.db, row.customerId);
+    const owner = await findCustomer(this.db, customerId);
     if (owner && customerStatus(owner) === 'archived') throw ticketRefusals.customerArchived();
     const prepared = await Promise.all(
       uploads.map((upload) => this.files.prepare('ticket_attachment', upload)),
@@ -302,10 +329,10 @@ export class SupportAdminService {
     const created = await this.db.transaction(async (tx) => {
       await this.lock(tx, idempotencyKey);
       if (await this.replay(tx, idempotencyKey, body, id)) return false;
-      const customer = await lockTicketCustomer(tx, row.customerId);
+      const customer = await lockTicketCustomer(tx, customerId);
       if (customer?.archived) throw ticketRefusals.customerArchived();
       const ticket = await lockTicket(tx, id);
-      if (!ticket) throw ticketRefusals.notFound();
+      if (!ticket || !isVertexTicket(ticket)) throw ticketRefusals.notFound();
       // TK9: the email at most once per ticket per 10 minutes; the center always.
       const [recent] = await tx
         .select({ count: count() })
@@ -366,7 +393,7 @@ export class SupportAdminService {
     if (!isUuid(id)) throw ticketRefusals.notFound();
     await this.db.transaction(async (tx) => {
       const ticket = await lockTicket(tx, id);
-      if (!ticket) throw ticketRefusals.notFound();
+      if (!ticket || !isVertexTicket(ticket)) throw ticketRefusals.notFound();
       if (ticketTransition(ticket.status, 'close') === null) return;
       const closed = await updateTicket(tx, ticket, {
         status: 'closed',
@@ -436,7 +463,7 @@ export class SupportAdminService {
     return this.settings();
   }
 
-  private async view(row: TicketRow): Promise<AdminTicket> {
+  private async view(row: VertexTicketRow): Promise<AdminTicket> {
     const [summary, messages, customer, marks, tier, order, deposit] = await Promise.all([
       ticketSummary(this.db, row),
       ticketMessages(this.db, row.id),
@@ -481,7 +508,11 @@ export class SupportAdminService {
   }
 
   /** TK9: `ticket_replied` in the center always; its email when `email` and the customer's choice. */
-  private async notifyCustomer(tx: Transaction, ticket: TicketRow, email: boolean): Promise<void> {
+  private async notifyCustomer(
+    tx: Transaction,
+    ticket: VertexTicketRow,
+    email: boolean,
+  ): Promise<void> {
     await this.notifications.notifyCustomer(
       tx,
       {

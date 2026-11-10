@@ -175,6 +175,17 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     amountUsdUnits: 25_000_000,
     status: 'expired',
   },
+  merchant_shop_ticket: {
+    ticketId: newId(),
+    number: 'VT-7KQ2MX',
+    customerName: 'سامي',
+    kind: 'escalated',
+  },
+  merchant_shop_margin_returned: {
+    orderId: newId(),
+    orderNumber: 'VO-7KQ2MX',
+    amountUsdUnits: 1_000_000,
+  },
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {

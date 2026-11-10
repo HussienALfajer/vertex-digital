@@ -460,6 +460,7 @@ const RECONCILIATION_CHECKS: Record<ReconciliationCheck, string> = {
   order_refund: 'استردادات الطلبات',
   deposit_credit: 'الإيداعات المضافة',
   manual_journals: 'التعديلات وحركات الخزينة',
+  shop_margin_held: 'هوامش المتاجر المحجوزة',
   supplier_balance: 'رصيد المورد',
   usdt_balance: 'رصيد USDT',
   sham_cash_count: 'جرد شام كاش',

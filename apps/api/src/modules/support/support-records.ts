@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import {
   type OrderProblem,
   orderProblemAllowed,
+  type SupportMessageAuthor,
   TICKET_NUMBER_ALPHABET,
   TICKET_NUMBER_LENGTH,
   TICKET_NUMBER_PREFIX,
@@ -199,7 +200,7 @@ export async function insertMessage(
   tx: Transaction,
   input: {
     ticketId: string;
-    author: TicketAuthor;
+    author: SupportMessageAuthor;
     body: string;
     idempotencyKey: string;
     fileIds: readonly string[];
@@ -291,7 +292,7 @@ function summaryOf(
     subject: row.subject,
     orderProblem: row.orderProblem,
     status: row.status,
-    openedBy: row.openedBy,
+    openedBy: vertexAuthor(row.openedBy),
     lastAuthor: adminAt > customerAt ? 'admin' : 'customer',
     lastMessageAt: new Date(Math.max(customerAt, adminAt, row.createdAt.getTime())).toISOString(),
     closedAt: iso(row.closedAt),
@@ -300,8 +301,28 @@ function summaryOf(
   };
 }
 
+/**
+ * A Vertex ticket's author: the merchant writes only in a shop ticket (S26 TK2), never in one the
+ * Vertex views read.
+ */
+export function vertexAuthor(author: SupportMessageAuthor): TicketAuthor {
+  if (author === 'merchant') throw new Error('A merchant message in a Vertex ticket');
+  return author;
+}
+
 /** The thread, oldest first, with each message's images in their order (TK12). */
 export async function ticketMessages(db: Executor, ticketId: string): Promise<TicketMessage[]> {
+  return (await threadMessages(db, ticketId)).map((message) => ({
+    ...message,
+    author: vertexAuthor(message.author),
+  }));
+}
+
+/** Any ticket's thread, its authors as written (S26: a shop ticket's merchant too). */
+export async function threadMessages(
+  db: Executor,
+  ticketId: string,
+): Promise<(Omit<TicketMessage, 'author'> & { author: SupportMessageAuthor })[]> {
   const messages = await db
     .select()
     .from(supportMessages)

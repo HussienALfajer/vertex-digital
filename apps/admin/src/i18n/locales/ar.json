@@ -799,6 +799,8 @@
       "ticket.replied": "رد على تذكرة",
       "ticket.closed": "إغلاق تذكرة",
       "ticket.reopened": "إعادة فتح تذكرة",
+      "ticket.escalated": "تحويل تذكرة متجر إلى الإدارة",
+      "ticket.merchant_replied": "رد التاجر على تذكرة متجر",
       "support.settings_changed": "تعديل إعدادات الدعم",
       "treasury_movement.created": "تسجيل حركة خزينة",
       "treasury_movement.reversed": "عكس حركة خزينة",
@@ -874,6 +876,9 @@
       "shop_customer.password_changed": "تغيير كلمة مرور زبون متجر",
       "shop_customer.frozen": "تجميد زبون متجر",
       "shop_customer.unfrozen": "إلغاء تجميد زبون متجر",
+      "shop.order_paid": "شراء زبون متجر",
+      "shop.margin_released": "تحويل ربح طلب متجر إلى التاجر",
+      "shop.order_compensated": "تعويض زبون متجر",
       "merchant_application.submitted": "تقديم طلب تاجر",
       "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
       "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
@@ -1477,7 +1482,9 @@
       "cash_hold": "طلب كاش بانتظار الموافقة",
       "credit_recipient_alert": "رقم شُحن من عدة حسابات",
       "shop_requested": "طلب متجر تاجر",
-      "shop_closed_with_balance": "إغلاق متجر وفيه أرصدة"
+      "shop_closed_with_balance": "إغلاق متجر وفيه أرصدة",
+      "shop_ticket_escalated": "تذكرة متجر بانتظار الإدارة",
+      "shop_returns_alert": "إرجاعات متجر مرتفعة"
     }
   },
   "rates": {

@@ -1,4 +1,4 @@
-import { type ShopSettlementTarget, shopTransition } from '@vertex-digital/contracts';
+import { type ShopSettlementTarget, shopCacheTag, shopTransition } from '@vertex-digital/contracts';
 import { and, eq, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
@@ -12,6 +12,7 @@ import {
 } from '../ledger/wallet.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { merchantShops, shopReturnRequests, shopSettlements } from '../schema/index.js';
+import { queueStoreRevalidate } from '../store/revalidate.js';
 import { queueTelegramMessage } from '../telegram/index.js';
 import { notifyShopCustomer } from './notify.js';
 import {
@@ -122,6 +123,8 @@ export async function closeShop(
       });
     }
   }
+  // The shop's pages show the close and stop the sign-up (SH7).
+  await queueStoreRevalidate(tx, jobs, shopCacheTag(shop.id));
   return closed;
 }
 

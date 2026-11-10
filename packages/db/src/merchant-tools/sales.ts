@@ -8,11 +8,12 @@ import {
   sellingPrice,
   sellingPriceTooHigh,
 } from '@vertex-digital/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
 import {
   exchangeRates,
   merchantOrderSales,
+  merchantPinnedGames,
   merchantSellingPrices,
   merchantSellingSettings,
 } from '../schema/index.js';
@@ -89,6 +90,41 @@ export async function ownSellingPrice(
       ),
     );
   return row ?? null;
+}
+
+/** S26 PR2: the merchant's own prices of these products, by product id. */
+export async function ownSellingPrices(
+  db: Executor,
+  customerId: string,
+  productIds: readonly string[],
+): Promise<Map<string, SellingPriceInput>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      productId: merchantSellingPrices.productId,
+      currency: merchantSellingPrices.currency,
+      amountUnits: merchantSellingPrices.amountUnits,
+    })
+    .from(merchantSellingPrices)
+    .where(
+      and(
+        eq(merchantSellingPrices.customerId, customerId),
+        inArray(merchantSellingPrices.productId, [...productIds]),
+      ),
+    );
+  return new Map(
+    rows.map((row) => [row.productId, { currency: row.currency, amountUnits: row.amountUnits }]),
+  );
+}
+
+/** S26 PR1: the merchant's pinned games in their order (S21 amendment 4). */
+export async function pinnedGameIds(db: Executor, customerId: string): Promise<string[]> {
+  const rows = await db
+    .select({ gameId: merchantPinnedGames.gameId })
+    .from(merchantPinnedGames)
+    .where(eq(merchantPinnedGames.customerId, customerId))
+    .orderBy(asc(merchantPinnedGames.position));
+  return rows.map((row) => row.gameId);
 }
 
 export interface SaleValues {

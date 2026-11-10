@@ -1,6 +1,6 @@
 import { revalidateTag } from 'next/cache';
 import { authorizedRevalidation } from '@/features/catalog/revalidation';
-import { CATALOG_TAG, CONTENT_TAG } from '@/lib/cache-tags';
+import { CATALOG_TAG, CONTENT_TAG, isShopTag } from '@/lib/cache-tags';
 import { revalidateSecret } from '@/lib/server-env';
 
 /*
@@ -18,12 +18,15 @@ export async function POST(request: Request) {
   // to expire the content too, which every page's announcement bar then read again. A job with no
   // tag (the release before, during a deploy) expires both.
   const body = (await request.json().catch(() => null)) as { tag?: unknown } | null;
+  // S26: one shop's pages by `shop:<id>`; a catalog change expires every shop with it.
   const tags =
     body?.tag === 'catalog'
       ? [CATALOG_TAG]
       : body?.tag === 'content'
         ? [CONTENT_TAG]
-        : [CATALOG_TAG, CONTENT_TAG];
+        : isShopTag(body?.tag)
+          ? [body.tag]
+          : [CATALOG_TAG, CONTENT_TAG];
   // Expired at once: the next visitor reads the new prices, not the old page once more.
   for (const tag of tags) revalidateTag(tag, { expire: 0 });
   return new Response(null, { status: 204 });

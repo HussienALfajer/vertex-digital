@@ -676,6 +676,8 @@ export const customerNotificationSchema = z
     notification('product_price_dropped'),
     notification('merchant_shop_changed'),
     notification('merchant_shop_return_ended'),
+    notification('merchant_shop_ticket'),
+    notification('merchant_shop_margin_returned'),
   ])
   .meta({ id: 'CustomerNotification' });
 
@@ -710,6 +712,41 @@ export type MarkNotificationsRead = z.infer<typeof markNotificationsReadSchema>;
 export const unreadCountSchema = z.object(unreadCount).meta({ id: 'UnreadCount' });
 
 export type UnreadCount = z.infer<typeof unreadCountSchema>;
+
+const shopNotification = <Event extends ShopNotificationEvent>(event: Event) =>
+  z.object({
+    ...notificationBase,
+    event: z.literal(event),
+    params: SHOP_NOTIFICATION_PARAMS[event],
+  });
+
+/** S26 PR9: one notification of the shop customer's center; `params` by event. */
+export const shopCustomerNotificationSchema = z
+  .discriminatedUnion('event', [
+    shopNotification('transfer_received'),
+    shopNotification('return_requested'),
+    shopNotification('return_done'),
+    shopNotification('settled'),
+    shopNotification('order_delivered'),
+    shopNotification('order_partially_refunded'),
+    shopNotification('order_refunded'),
+    shopNotification('order_compensated'),
+    shopNotification('ticket_replied'),
+  ])
+  .meta({ id: 'ShopCustomerNotification' });
+
+export type ShopCustomerNotification = z.infer<typeof shopCustomerNotificationSchema>;
+
+/** `GET /api/shops/:slug/notifications`: newest first, with the unread count. */
+export const shopNotificationPageSchema = z
+  .object({
+    items: z.array(shopCustomerNotificationSchema),
+    nextCursor: z.string().nullable(),
+    ...unreadCount,
+  })
+  .meta({ id: 'ShopNotificationPage' });
+
+export type ShopNotificationPage = z.infer<typeof shopNotificationPageSchema>;
 
 /**
  * The live stream's events (rule NT6), sent as SSE `event:` names with JSON `data:`. `replaced`

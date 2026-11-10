@@ -3,6 +3,7 @@ export * from './compensation.js';
 export * from './finish.js';
 export * from './notify.js';
 export * from './returns.js';
+export * from './revalidate.js';
 export * from './selling.js';
 export * from './state.js';
 export * from './stats.js';

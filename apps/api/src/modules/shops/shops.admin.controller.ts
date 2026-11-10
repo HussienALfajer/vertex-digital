@@ -22,6 +22,8 @@ import {
   approveShopSchema,
   type ShopCustomerQuery,
   settleShopCustomerSchema,
+  shopCompensationRequestSchema,
+  shopCompensationSchema,
   shopCustomerQuerySchema,
   shopReasonSchema,
   shopSettlementSchema,
@@ -35,6 +37,7 @@ import { ApiQueryOf } from '../../core/http/api-query.js';
 import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-key.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
+import { ShopSellingService } from './shop-selling.service.js';
 import { ShopsAdminService } from './shops-admin.service.js';
 
 /**
@@ -45,7 +48,40 @@ import { ShopsAdminService } from './shops-admin.service.js';
 @ApiTags('shops')
 @Controller('admin')
 export class ShopsAdminController {
-  constructor(private readonly shops: ShopsAdminService) {}
+  constructor(
+    private readonly shops: ShopsAdminService,
+    private readonly selling: ShopSellingService,
+  ) {}
+
+  /** PR10: Vertex's part, and the margin from the merchant, the store or nobody. */
+  @Post('orders/:id/shop-compensation')
+  @AdminRoute()
+  @Sensitive()
+  @ApiIdempotencyKey()
+  @SerializeOptions({ schema: shopCompensationSchema })
+  @ApiCreatedResponse({
+    description: 'Compensated (200: a replay)',
+    standardSchema: shopCompensationSchema,
+  })
+  async compensate(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: shopCompensationRequestSchema })
+    body: z.output<typeof shopCompensationRequestSchema>,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { compensation, replayed } = await this.selling.compensate(
+      id,
+      body,
+      idempotencyKey,
+      admin.id,
+      requestMeta(request),
+    );
+    response.status(replayed ? 200 : 201);
+    return compensation;
+  }
 
   @Get('shops')
   @AdminRoute()

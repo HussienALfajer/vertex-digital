@@ -242,4 +242,19 @@ export type MerchantsLevelPayload = z.infer<typeof merchantsLevelPayloadSchema>;
  */
 export const STORE_CACHE_TAGS = ['catalog', 'content'] as const;
 
-export type StoreCacheTag = (typeof STORE_CACHE_TAGS)[number];
+/** S26: one merchant shop's cached pages (`shop:<shop id>`); `catalog` expires every shop too. */
+export type ShopCacheTag = `shop:${string}`;
+
+export type StoreCacheTag = (typeof STORE_CACHE_TAGS)[number] | ShopCacheTag;
+
+const SHOP_TAG = /^shop:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A job's tag as the worker and the store's route accept it, or undefined (expire all). */
+export function storeCacheTag(value: unknown): StoreCacheTag | undefined {
+  if (typeof value !== 'string') return undefined;
+  if ((STORE_CACHE_TAGS as readonly string[]).includes(value)) return value as StoreCacheTag;
+  return SHOP_TAG.test(value) ? (value as ShopCacheTag) : undefined;
+}
+
+/** The cache tag of a shop's public pages. */
+export const shopCacheTag = (shopId: string): ShopCacheTag => `shop:${shopId}`;

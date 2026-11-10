@@ -315,7 +315,9 @@ export class DailySummaryJob implements OnApplicationBootstrap {
         opened: sql<number>`(count(*) filter (where ${supportTickets.createdAt} >= ${dayStart}))::int`,
         waiting: sql<number>`(count(*) filter (where ${supportTickets.status} = 'open'))::int`,
       })
-      .from(supportTickets);
+      .from(supportTickets)
+      // S26 TK2: a shop ticket is the merchant's until it is escalated.
+      .where(sql`${supportTickets.shopId} is null or ${supportTickets.escalatedAt} is not null`);
     return { ticketsOpened: row?.opened ?? 0, ticketsWaiting: row?.waiting ?? 0 };
   }
 

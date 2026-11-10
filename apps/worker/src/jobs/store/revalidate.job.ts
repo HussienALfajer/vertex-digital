@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
   QUEUES,
-  STORE_CACHE_TAGS,
   STORE_REVALIDATE_RETRIES,
   type StoreCacheTag,
+  storeCacheTag,
 } from '@vertex-digital/contracts';
 import { ENV, type Env } from '../../core/config/env.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -31,7 +31,7 @@ export class StoreRevalidateJob implements OnApplicationBootstrap {
     await this.pgBoss.work(
       QUEUES.storeRevalidate,
       async (data: { tag?: unknown }, job) => {
-        const tag = STORE_CACHE_TAGS.find((known) => known === data.tag);
+        const tag = storeCacheTag(data.tag);
         await this.handle(job.retryCount, tag);
       },
       { alert: false },
