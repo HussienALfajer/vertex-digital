@@ -1,13 +1,7 @@
 import { DirectionProvider } from '@vertex-digital/ui/components/direction-provider';
 import { themeHex } from '@vertex-digital/ui/theme-hex';
 import type { Metadata, Viewport } from 'next';
-import { type ReactNode, Suspense } from 'react';
-import { BottomNav } from '@/components/bottom-nav';
-import { FrozenBanner } from '@/components/frozen-banner';
-import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
-import { StopBanner } from '@/components/stop-banner';
-import { SiteAnnouncement } from '@/features/content/announcement';
+import type { ReactNode } from 'react';
 import { REGISTRATION_SCRIPT } from '@/features/pwa/registration';
 import { APP_NAME } from '@/features/pwa/service-worker';
 import { t } from '@/lib/i18n';
@@ -51,20 +45,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: SESSION_HINT_SCRIPT }} />
       </head>
       <body className="flex min-h-dvh flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0 print:pb-0">
-        <DirectionProvider direction="rtl">
-          <SiteHeader />
-          {/* Read in the browser on every page (audit A09-22): `usePathname` needs a boundary. */}
-          <Suspense fallback={null}>
-            <StopBanner />
-            <FrozenBanner />
-          </Suspense>
-          <Suspense fallback={null}>
-            <SiteAnnouncement />
-          </Suspense>
-          <main className="flex flex-1 flex-col">{children}</main>
-          <SiteFooter />
-          <BottomNav />
-        </DirectionProvider>
+        {/* The frame (header, footer, bottom bar) belongs to the route group: `(site)` for the
+            store, `s/[slug]` for a merchant's shop (S26), which carries none of the store's. */}
+        <DirectionProvider direction="rtl">{children}</DirectionProvider>
       </body>
     </html>
   );

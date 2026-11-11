@@ -29,6 +29,8 @@ export function usePlayerCheck(
   productId: string,
   values: FieldValues | null,
   enabled: boolean,
+  /** S26: a shop customer's check goes to the shop's route. */
+  check: typeof checkPlayer = checkPlayer,
 ): { state: PlayerCheckState; run: () => Promise<PlayerCheck | null> } {
   const answers = useRef(new Map<string, Promise<PlayerCheck>>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,15 +51,15 @@ export function usePlayerCheck(
     let answer = answers.current.get(asked);
     if (!answer) {
       setState({ status: 'checking' });
-      answer = checkPlayer({ productId, fields }).then((result) =>
+      answer = check({ productId, fields }).then((result) =>
         result.ok ? result.data : UNAVAILABLE,
       );
       answers.current.set(asked, answer);
     }
-    const check = await answer;
-    if (current.current === asked) setState({ status: 'done', check });
-    return check;
-  }, [productId]);
+    const checked = await answer;
+    if (current.current === asked) setState({ status: 'done', check: checked });
+    return checked;
+  }, [productId, check]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new key is the only trigger.
   useEffect(() => {

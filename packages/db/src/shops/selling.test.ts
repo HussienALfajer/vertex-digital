@@ -511,7 +511,9 @@ describe('the finish of a shop order (PR8, PR9)', () => {
     const notes = await db
       .select()
       .from(shopCustomerNotifications)
-      .where(eq(shopCustomerNotifications.shopCustomerId, ids.shopCustomerId));
+      .where(eq(shopCustomerNotifications.shopCustomerId, ids.shopCustomerId))
+      // Oldest first by the UUIDv7 id: without an order PostgreSQL may answer either way.
+      .orderBy(shopCustomerNotifications.id);
     expect(notes.map((note) => note.event)).toEqual(['transfer_received', 'order_delivered']);
     // PR9: the merchant is not told per order.
     const merchantNotes = await db

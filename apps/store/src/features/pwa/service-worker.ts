@@ -21,14 +21,21 @@ export function serviceWorkerScript(options: {
   badge: string;
   /** SW6: shown when a payload does not parse. */
   fallbackBody: string;
+  /**
+   * S26 SP1: a merchant's shop worker, scoped to `/s/<slug>/`: the shop's name as the fallback
+   * title, links kept inside the shop, and no offline page (the store's is the store's).
+   */
+  shop?: { scope: string; name: string };
 }): string {
+  const shop = options.shop;
   const constants = {
     CACHE: `${CACHE_PREFIX}${options.version}`,
     CACHE_PREFIX,
-    OFFLINE: OFFLINE_PATH,
-    TITLE: APP_NAME,
+    OFFLINE: shop ? null : OFFLINE_PATH,
+    SCOPE: shop?.scope ?? '/',
+    TITLE: shop?.name ?? APP_NAME,
     FALLBACK_BODY: options.fallbackBody,
-    FALLBACK_URL: '/notifications',
+    FALLBACK_URL: shop ? `${shop.scope}/orders` : '/notifications',
     ICON: options.icon,
     BADGE: options.badge,
   };
@@ -39,6 +46,10 @@ export function serviceWorkerScript(options: {
 ${declarations}
 
 self.addEventListener('install', (event) => {
+  if (!OFFLINE) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   event.waitUntil(
     caches
       .open(CACHE)
@@ -48,6 +59,11 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  // A shop's worker keeps no cache, and must never drop the store's.
+  if (!OFFLINE) {
+    event.waitUntil(self.clients.claim());
+    return;
+  }
   event.waitUntil(
     caches
       .keys()
@@ -68,7 +84,7 @@ self.addEventListener('activate', (event) => {
 // one answers the kept offline page. Every other request is left to the browser untouched.
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.mode !== 'navigate' || request.method !== 'GET') return;
+  if (!OFFLINE || request.mode !== 'navigate' || request.method !== 'GET') return;
   event.respondWith(
     Promise.resolve(event.preloadResponse)
       .then((preloaded) => preloaded || fetch(request))
@@ -81,12 +97,21 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// A link opened from a notification: a same-origin path, never another site.
+// A page of this worker's scope: the store's every page, or a shop's home and the pages under it
+// (\`/s/abu\` is not \`/s/abu-omar\`).
+function inScope(pathname) {
+  return SCOPE === '/' || pathname === SCOPE || pathname.startsWith(SCOPE + '/');
+}
+
+// A link opened from a notification: a same-origin path inside the worker's scope, never another
+// site (a shop's push never opens the store or another shop).
 function safePath(url) {
   if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) return FALLBACK_URL;
   try {
     const target = new URL(url, self.location.origin);
-    return target.origin === self.location.origin ? target.pathname + target.search : FALLBACK_URL;
+    return target.origin === self.location.origin && inScope(target.pathname)
+      ? target.pathname + target.search
+      : FALLBACK_URL;
   } catch {
     return FALLBACK_URL;
   }
@@ -123,7 +148,10 @@ self.addEventListener('notificationclick', (event) => {
   const target = new URL(safePath(event.notification.data && event.notification.data.url), self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-      const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      const open = windows.find((client) => {
+        const url = new URL(client.url);
+        return url.origin === self.location.origin && inScope(url.pathname);
+      });
       if (!open) return self.clients.openWindow(target);
       return open
         .focus()

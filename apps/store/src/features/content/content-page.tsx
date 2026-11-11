@@ -15,13 +15,20 @@ import { pageDescription, updatedText } from './texts';
  * only `h1`, "آخر تحديث" and the body through `RichText` in a readable column. Not found while
  * unpublished; a failed read shows the route's error view with a retry.
  */
-export async function ContentPageView({ page }: { page: ContentPage }) {
+export async function ContentPageView({
+  page,
+  back = { href: '/', label: t('back.home') },
+}: {
+  page: ContentPage;
+  /** S26: a shop's copy of the page goes back to the shop, never to the store. */
+  back?: { href: string; label: string };
+}) {
   await connection();
   const data = await getPublishedPage(page);
   if (!data) notFound();
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 py-10 md:py-16">
-      <PageBackLink href="/">{t('back.home')}</PageBackLink>
+      <PageBackLink href={back.href}>{back.label}</PageBackLink>
       <h1 className="text-3xl font-bold">{data.title}</h1>
       <p className="text-sm text-muted-foreground">{updatedText(data.updatedAt)}</p>
       <RichText

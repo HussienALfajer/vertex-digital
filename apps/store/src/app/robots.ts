@@ -13,7 +13,8 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/wallet', '/orders', '/account', '/notifications', '/cart', '/_internal'],
+      // S26 SP4: merchants' shops are never indexed (their pages also send `noindex`).
+      disallow: ['/wallet', '/orders', '/account', '/notifications', '/cart', '/_internal', '/s/'],
     },
     sitemap: `${storeUrl()}/sitemap.xml`,
   };

@@ -58,6 +58,85 @@ function activity(game) {
   return { items: items.length >= 5 ? items : [] };
 }
 
+/** S26: the shop the E2E specs visit; `quiet-shop` is the same shop, suspended for a review. */
+const SHOP = {
+  id: '0199f000-0000-7000-8000-0000000000a1',
+  slug: 'abu-omar',
+  name: 'متجر أبو عمر',
+  logoUrl: null,
+  letter: 'م',
+  brandColor: '#2266b3',
+  announcement: 'أهلاً بكم! الشحن متوفر من 9 صباحاً حتى 11 ليلاً. للاستفسار: 0944123456',
+  status: 'active',
+  suspendReason: null,
+  rate: '14000',
+  whatsapp: '+963944123456',
+};
+
+function shopOf(slug) {
+  if (slug === SHOP.slug) return SHOP;
+  if (slug === 'quiet-shop') {
+    return {
+      ...SHOP,
+      id: '0199f000-0000-7000-8000-0000000000a2',
+      slug,
+      status: 'suspended',
+      suspendReason: 'review',
+      announcement: null,
+    };
+  }
+  return null;
+}
+
+/** PR1: PUBG pinned first, the cash section left out (F44), the rest by category. */
+function shopStorefront(shop) {
+  const all = storefront.categories.flatMap((category) => category.games);
+  return {
+    shop,
+    service: 'normal',
+    pinned: all.filter((game) => game.slug === 'pubg-mobile'),
+    categories: storefront.categories
+      .map((category) => ({
+        ...category,
+        games: category.games.filter((game) => game.slug !== 'syriatel-cash'),
+      }))
+      .filter((category) => category.games.length > 0),
+  };
+}
+
+/** PR2, ST4: the merchant's markup of 10% on the store's price, up to whole cents; SYP at 14,000. */
+function shopGameOf(shop, data) {
+  const CENT = 10_000;
+  return {
+    shop,
+    game: { ...data.game, serviceClass: data.game.serviceClass ?? 'game' },
+    fields: data.fields,
+    products: data.products.map((product) => {
+      const sell =
+        product.priceUsdUnits === null
+          ? null
+          : Math.ceil((product.priceUsdUnits * 11) / 10 / CENT) * CENT;
+      return {
+        id: product.id,
+        kind: product.kind,
+        nameAr: product.nameAr,
+        gameAmount: product.gameAmount,
+        maxQuantity: product.maxQuantity,
+        minQuantity: product.minQuantity ?? 1,
+        amountUnitAr: product.amountUnitAr ?? null,
+        amountStep: product.amountStep ?? null,
+        deliveryStats: product.deliveryStats,
+        playerCheck: product.playerCheck,
+        regionAr: product.regionAr,
+        redemptionAr: product.redemptionAr,
+        available: product.available && sell !== null,
+        unitSellUsdUnits: sell,
+        unitSellSypUnits: sell === null ? null : Math.ceil((sell * 14_000) / 1_000_000) * 100,
+      };
+    }),
+  };
+}
+
 const json = (response, status, body) => {
   response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -135,6 +214,39 @@ createServer((request, response) => {
       G2MEXX: { target: 'home' },
     };
     if (targets[quick[1]]) return json(response, 200, targets[quick[1]]);
+  }
+  // S26: a merchant's shop at its selling prices; `old-omar` is its earlier slug (SH3) and
+  // `quiet-shop` a suspended shop (SH6).
+  const shopRead = /^\/api\/shops\/([a-z0-9-]+)(\/.*)?$/.exec(path);
+  if (shopRead && !empty) {
+    const [, slug, rest = ''] = shopRead;
+    if (slug === 'old-omar') {
+      response.writeHead(301, {
+        'content-type': 'application/json',
+        location: `/api/shops/abu-omar${rest}`,
+      });
+      return response.end(JSON.stringify({ slug: 'abu-omar' }));
+    }
+    const shop = shopOf(slug);
+    if (shop) {
+      if (rest === '') return json(response, 200, shopStorefront(shop));
+      if (rest === '/manifest') {
+        return json(response, 200, {
+          name: shop.name,
+          shortName: shop.name,
+          brandColor: shop.brandColor,
+          slug: shop.slug,
+          icons: [192, 512].map((size) => ({
+            size,
+            url: `/api/shops/${shop.slug}/icon?size=${size}`,
+          })),
+        });
+      }
+      const shopGame = /^\/games\/([a-z0-9-]+)$/.exec(rest);
+      if (shopGame && games[shopGame[1]] && shopGame[1] !== 'syriatel-cash') {
+        return json(response, 200, shopGameOf(shop, games[shopGame[1]]));
+      }
+    }
   }
   if (path === '/_flaky') {
     const slug = url.searchParams.get('slug') ?? '';

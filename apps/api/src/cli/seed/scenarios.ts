@@ -48,6 +48,7 @@ import { TreasuryService } from '../../modules/treasury/index.js';
 import { WalletAdjustmentsService, WalletService } from '../../modules/wallet/index.js';
 import { FAKE_SUPPLIER_ID } from './catalog.js';
 import { bannerImage, coverImage, noteImage, qrImage, receiptImage } from './images.js';
+import { SEED_SHOP_SLUG, seedShop } from './shops.js';
 
 /*
  * The scenarios of `db:seed-local`: one realistic store day for the local panel and store. Every
@@ -241,6 +242,14 @@ export class Scenarios {
     await this.treasury();
     log('Pricing: a margin rule and a price review');
     await this.pricing();
+    log(`A merchant shop (S26): /s/${SEED_SHOP_SLUG}`);
+    await seedShop(this.app, this.db, {
+      merchantId: this.person('omar'),
+      password: this.input.customerPassword,
+      admin: this.admin,
+      step: (name, run) => this.step(name, run),
+      customers: this.report.customers,
+    });
     return this.report;
   }
 
