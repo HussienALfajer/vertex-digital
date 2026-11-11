@@ -81,7 +81,17 @@ type Answer =
 class Timeout extends Error {}
 
 /** Who asks: a customer in the store, or the admin buying from the panel (S16 rule AP8). */
-type Requester = { kind: 'customer'; id: string } | { kind: 'admin'; id: string };
+/**
+ * Who asks: a customer, the admin, or (S26 PR5) a shop customer, for whom the shop's merchant
+ * stands as the account (its test flag and tier's early access; the cache row names the merchant).
+ */
+type Requester =
+  | { kind: 'customer'; id: string }
+  | { kind: 'admin'; id: string }
+  | { kind: 'shop_customer'; id: string; shopId: string; merchantId: string; isTest: boolean };
+
+/** S26 abuse: a shop's customers together check at most this many player ids a day. */
+const SHOP_CHECKS_PER_DAY = 300;
 
 /**
  * Player checks (S09 rules PV1–PV8): the supplier's answer for a player id, cached by an HMAC of
@@ -120,6 +130,19 @@ export class PlayerChecksService {
     return this.run({ kind: 'admin', id: adminId }, request, null);
   }
 
+  /**
+   * `POST /api/shops/:slug/player-checks` (S26 PR5): the same check and cache for a shop
+   * customer, 10 supplier calls an hour per shop customer and 300 a day per shop. The shop's
+   * routes have checked the customer (frozen refused) and that the pack is the shop's.
+   */
+  checkForShopCustomer(
+    requester: { id: string; shopId: string; merchantId: string; isTest: boolean },
+    request: PlayerCheckRequest,
+    meta: RequestMeta,
+  ): Promise<PlayerCheck> {
+    return this.run({ kind: 'shop_customer', ...requester }, request, meta);
+  }
+
   private async run(
     requester: Requester,
     request: PlayerCheckRequest,
@@ -135,14 +158,19 @@ export class PlayerChecksService {
     }
     // S23 OP5: an early-access pack is checked only for a merchant whose tier sees it.
     const earlyAccess =
-      requester.kind === 'customer' ? await merchantEarlyAccess(this.db, requester.id) : true;
+      requester.kind === 'admin'
+        ? true
+        : await merchantEarlyAccess(
+            this.db,
+            requester.kind === 'customer' ? requester.id : requester.merchantId,
+          );
     const state = (
       await productRoutingStates(this.db, [request.productId], {
         ...routingContext(this.env),
         earlyAccess,
       })
     ).get(request.productId);
-    const paused = state?.availability === 'paused' && requester.kind === 'customer';
+    const paused = state?.availability === 'paused' && requester.kind !== 'admin';
     if (!state || state.availability === 'hidden' || paused) {
       throw orderRefusals.notFound();
     }
@@ -154,7 +182,9 @@ export class PlayerChecksService {
     const fields = await this.parsedFields(state.gameId, request.fields ?? {});
     if (state.kind !== 'direct') return { result: 'not_supported' };
     const isTest =
-      requester.kind === 'customer' && (await this.customers.isTestCustomer(requester.id));
+      requester.kind === 'shop_customer'
+        ? requester.isTest
+        : requester.kind === 'customer' && (await this.customers.isTestCustomer(requester.id));
     const plan = await this.plan(this.db, state, isTest);
     if (plan.kind === 'none') return { result: 'not_supported' };
     if (plan.kind === 'unavailable') return { result: 'unavailable', reason: 'supplier' };
@@ -394,27 +424,37 @@ export class PlayerChecksService {
       this.db,
       requester.kind === 'admin'
         ? [{ key: `player-check:admin:${requester.id}`, max: 30, windowMs: 10 * 60 * 1000 }]
-        : [
-            {
-              key: `player-check:customer:${requester.id}`,
-              max: quota?.perHour ?? 10,
-              windowMs: HOUR,
-            },
-            ...(quota
-              ? [
-                  {
-                    key: `player-check:customer-day:${requester.id}`,
-                    max: quota.perDay,
-                    windowMs: 24 * HOUR,
-                  },
-                ]
-              : []),
-            {
-              key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`,
-              max: quota?.perHour ?? 30,
-              windowMs: HOUR,
-            },
-          ],
+        : requester.kind === 'shop_customer'
+          ? [
+              { key: `player-check:shop-customer:${requester.id}`, max: 10, windowMs: HOUR },
+              {
+                key: `player-check:shop:${requester.shopId}`,
+                max: SHOP_CHECKS_PER_DAY,
+                windowMs: 24 * HOUR,
+              },
+              { key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
+            ]
+          : [
+              {
+                key: `player-check:customer:${requester.id}`,
+                max: quota?.perHour ?? 10,
+                windowMs: HOUR,
+              },
+              ...(quota
+                ? [
+                    {
+                      key: `player-check:customer-day:${requester.id}`,
+                      max: quota.perDay,
+                      windowMs: 24 * HOUR,
+                    },
+                  ]
+                : []),
+              {
+                key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`,
+                max: quota?.perHour ?? 30,
+                windowMs: HOUR,
+              },
+            ],
     );
     if (!allowed && quota) {
       throw new CodedException(
@@ -477,9 +517,11 @@ export class PlayerChecksService {
         playerName,
         region,
         supplierId: target.supplier.id,
-        ...(requester.kind === 'customer'
-          ? { customerId: requester.id }
-          : { adminId: requester.id }),
+        ...(requester.kind === 'admin'
+          ? { adminId: requester.id }
+          : {
+              customerId: requester.kind === 'customer' ? requester.id : requester.merchantId,
+            }),
         expiresAt: new Date(Date.now() + PLAYER_CHECK_TTL_MS[result]),
       });
       return result === 'valid' ? { result, playerName, region } : { result };

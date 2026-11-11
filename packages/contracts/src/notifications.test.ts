@@ -62,6 +62,8 @@ describe('notifications (S05 F27)', () => {
       'product_price_dropped',
       'merchant_shop_changed',
       'merchant_shop_return_ended',
+      'merchant_shop_ticket',
+      'merchant_shop_margin_returned',
     ]);
   });
 
@@ -140,6 +142,8 @@ describe('notifications (S05 F27)', () => {
       'product_price_dropped',
       'merchant_shop_changed',
       'merchant_shop_return_ended',
+      'merchant_shop_ticket',
+      'merchant_shop_margin_returned',
     ]);
     expect(isPushNotificationEvent('merchant_watch_digest')).toBe(true);
     expect(isPushNotificationEvent('product_price_dropped')).toBe(true);

@@ -101,7 +101,10 @@ export class ShareLinksService {
     await this.limit(customerId);
     await this.db.transaction(async (tx) => {
       const order = await lockOrder(tx, orderId);
-      if (order?.customerId !== customerId) throw orderRefusals.notFound();
+      // S26 PR9: a shop order is its shop customer's, never the merchant's to share.
+      if (order?.customerId !== customerId || order.shopCustomerId !== null) {
+        throw orderRefusals.notFound();
+      }
       const link = await this.lockLink(tx, orderId, linkId);
       if (link.revokedAt) return;
       await tx
@@ -193,7 +196,10 @@ export class ShareLinksService {
   /** The customer's order, locked (one link change at a time), in a status a link may show. */
   private async ownShareableOrder(tx: Transaction, customerId: string, orderId: string) {
     const order = isUuid(orderId) ? await lockOrder(tx, orderId) : null;
-    if (order?.customerId !== customerId) throw orderRefusals.notFound();
+    // S26 PR9: a shop order is its shop customer's, never the merchant's to share.
+    if (order?.customerId !== customerId || order.shopCustomerId !== null) {
+      throw orderRefusals.notFound();
+    }
     if (!SHAREABLE_ORDER_STATUSES.includes(order.status)) {
       throw orderRefusals.notShareable('status');
     }
@@ -235,7 +241,13 @@ export class ShareLinksService {
     const [row] = await this.db
       .select({ customerId: orders.customerId, createdAt: orders.createdAt })
       .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+      .where(
+        and(
+          eq(orders.id, orderId),
+          eq(orders.customerId, customerId),
+          isNull(orders.shopCustomerId),
+        ),
+      );
     return row ?? null;
   }
 

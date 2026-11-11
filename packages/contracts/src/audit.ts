@@ -50,6 +50,7 @@ import {
 } from './reconciliation.js';
 import { reportBreakdownSchema, reportKindSchema } from './reports.js';
 import { storeSwitchSchema } from './settings.js';
+import { shopCompensationMarginSourceSchema } from './shop-selling.js';
 import {
   shopCustomerOriginSchema,
   shopLimitsSchema,
@@ -1077,6 +1078,41 @@ export const AUDIT_DETAILS = {
   /** S26 CA7: the reason is the entry's `reason`. */
   'shop_customer.frozen': none,
   'shop_customer.unfrozen': none,
+  /** S26 PR6: a shop customer's purchase, at the selling price (S) over the merchant's price (B). */
+  'shop.order_paid': z.strictObject({
+    number: z.string(),
+    shopCustomerId: z.uuid(),
+    productId: z.uuid(),
+    quantity: z.int().positive(),
+    sellUsdUnits: z.int().positive(),
+    buyUsdUnits: z.int().positive(),
+    journalId: z.uuid(),
+  }),
+  /** S26 PR8: the delivered units' margin moved from the held account to the merchant's wallet. */
+  'shop.margin_released': z.strictObject({
+    orderId: z.uuid(),
+    deliveredQuantity: z.int().positive(),
+    amountUsdUnits: z.int().positive(),
+    journalId: z.uuid(),
+  }),
+  /** S26 PR10: the reason is the entry's `reason`. */
+  'shop.order_compensated': z.strictObject({
+    compensationId: z.uuid(),
+    orderId: z.uuid(),
+    units: z.int().positive(),
+    vertexUsdUnits: z.int().positive(),
+    marginUsdUnits: z.int().nonnegative(),
+    marginFrom: shopCompensationMarginSourceSchema,
+    journalIds: z.array(z.uuid()).min(1).max(2),
+  }),
+  /** S26 TK2: a shop ticket sent to the admin; the merchant's note is the entry's `reason`. */
+  'ticket.escalated': z.strictObject({
+    ticketId: z.uuid(),
+    category: ticketCategorySchema,
+    by: z.enum(['merchant', 'shop_customer', 'system']),
+  }),
+  /** S26 TK2: the merchant's reply in a shop ticket. */
+  'ticket.merchant_replied': ticketMessage,
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

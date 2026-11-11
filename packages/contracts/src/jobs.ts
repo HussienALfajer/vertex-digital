@@ -66,6 +66,8 @@ export const QUEUES = {
   reconciliationRecheck: 'reconciliation.recheck',
   /** Sends one customer notification to the customer's push devices (S15 PD1–PD5). */
   pushSend: 'push.send',
+  /** S26 PR9: sends one shop customer notification to the customer's devices in that shop. */
+  pushSendShop: 'push.send-shop',
   /** Tells the admin of fixed prices that fell back to their rule, every 10 minutes (S20 RP5). */
   pricingFallbackNotices: 'pricing.fallback-notices',
   /** Expires merchant applications left without an answer, every 15 minutes (S20 MA4). */
@@ -222,6 +224,9 @@ export const pushSendPayloadSchema = z.object({
 
 export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;
 
+/** S26 PR9: `push.send-shop` carries a shop customer notification, with `push.send`'s retries. */
+export const pushSendShopPayloadSchema = pushSendPayloadSchema;
+
 /** `singletonKey` is the customer id: one level recomputation queued and one active (S21 LV4). */
 export const merchantsLevelPayloadSchema = z.object({
   customerId: z.uuid(),
@@ -237,4 +242,19 @@ export type MerchantsLevelPayload = z.infer<typeof merchantsLevelPayloadSchema>;
  */
 export const STORE_CACHE_TAGS = ['catalog', 'content'] as const;
 
-export type StoreCacheTag = (typeof STORE_CACHE_TAGS)[number];
+/** S26: one merchant shop's cached pages (`shop:<shop id>`); `catalog` expires every shop too. */
+export type ShopCacheTag = `shop:${string}`;
+
+export type StoreCacheTag = (typeof STORE_CACHE_TAGS)[number] | ShopCacheTag;
+
+const SHOP_TAG = /^shop:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A job's tag as the worker and the store's route accept it, or undefined (expire all). */
+export function storeCacheTag(value: unknown): StoreCacheTag | undefined {
+  if (typeof value !== 'string') return undefined;
+  if ((STORE_CACHE_TAGS as readonly string[]).includes(value)) return value as StoreCacheTag;
+  return SHOP_TAG.test(value) ? (value as ShopCacheTag) : undefined;
+}
+
+/** The cache tag of a shop's public pages. */
+export const shopCacheTag = (shopId: string): ShopCacheTag => `shop:${shopId}`;

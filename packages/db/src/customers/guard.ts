@@ -7,7 +7,7 @@ import {
   purchaseCapBreach,
   type TierQuantities,
 } from '@vertex-digital/contracts';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { levelListId } from '../merchants/levels.js';
 import { merchantPrivileges, tierQuantities } from '../merchants/tiers.js';
@@ -60,9 +60,25 @@ export async function customerLimitOverrides(
  * request that waited behind an archive writes nothing). Every creation path calls it in its own
  * transaction before writing anything.
  */
-export async function lockActiveCustomer(
+export function lockActiveCustomer(
   tx: Transaction,
   customerId: string,
+): Promise<PurchasingCustomer> {
+  return lockPurchasingCustomer(tx, customerId, true);
+}
+
+/**
+ * S26 PR6, SH4: a shop's merchant `FOR SHARE` before a shop purchase writes anything; a frozen
+ * merchant's shop keeps selling, so only an archived account is refused (`SHOP_UNAVAILABLE`).
+ */
+export function lockShopMerchant(tx: Transaction, merchantId: string): Promise<PurchasingCustomer> {
+  return lockPurchasingCustomer(tx, merchantId, false);
+}
+
+async function lockPurchasingCustomer(
+  tx: Transaction,
+  customerId: string,
+  refuseFrozen: boolean,
 ): Promise<PurchasingCustomer> {
   const [customer] = await tx
     .select({
@@ -76,8 +92,10 @@ export async function lockActiveCustomer(
     .where(eq(customers.id, customerId))
     .for('share');
   if (!customer) throw new Error(`Customer ${customerId} does not exist`);
-  if (customer.frozenAt !== null || customer.archivedAt !== null) {
-    throw new OrderError('ACCOUNT_FROZEN', 'The account is frozen');
+  if (customer.archivedAt !== null || (refuseFrozen && customer.frozenAt !== null)) {
+    throw refuseFrozen
+      ? new OrderError('ACCOUNT_FROZEN', 'The account is frozen')
+      : new OrderError('SHOP_UNAVAILABLE', "The shop's merchant is archived");
   }
   const overrides = await customerLimitOverrides(tx, customerId);
   let merchantTermsRequired = false;
@@ -132,6 +150,8 @@ export async function purchasedLastDay(
     .where(
       and(
         eq(orders.customerId, customerId),
+        // S26: a shop order is paid from its shop customer's wallet, not the merchant's.
+        isNull(orders.shopCustomerId),
         eq(orders.payer, 'customer'),
         gt(orders.paidAt, sql`now() - interval '24 hours'`),
       ),

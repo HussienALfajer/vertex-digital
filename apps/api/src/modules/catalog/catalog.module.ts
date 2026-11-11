@@ -39,6 +39,6 @@ import { QuickLinksService } from './quick-links.service.js';
     QuickLinksService,
     ProductAlertsService,
   ],
-  exports: [CatalogService, CatalogItemsService],
+  exports: [CatalogService, CatalogItemsService, CatalogStoreService],
 })
 export class CatalogModule {}

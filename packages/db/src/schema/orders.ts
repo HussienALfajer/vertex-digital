@@ -43,6 +43,7 @@ import { storedFiles } from './files.js';
 import { priceLists } from './price-lists.js';
 import { productPrices } from './pricing.js';
 import { exchangeRates } from './rates.js';
+import { shopCustomers } from './shops.js';
 import { productRoutes, supplierOffers, suppliers } from './suppliers.js';
 import { ledgerJournals } from './wallet.js';
 
@@ -202,6 +203,11 @@ export const orders = pgTable(
     cashHold: cashHoldStateEnum('cash_hold'),
     cashHoldDecidedAt: timestamp('cash_hold_decided_at', { withTimezone: true }),
     cashHoldAdminId: uuid('cash_hold_admin_id'),
+    /**
+     * S26 PR6: the shop customer who bought this merchant's order in the merchant's shop and paid
+     * it from the shop wallet; fixed. `customer_id` stays the merchant (the seller of record).
+     */
+    shopCustomerId: uuid('shop_customer_id').references(() => shopCustomers.id),
     ...timestamps(),
   },
   (table) => [
@@ -211,6 +217,15 @@ export const orders = pgTable(
     index('orders_purchase_journal_id_idx').on(table.purchaseJournalId),
     uniqueIndex('orders_checkout_id_checkout_line_idx').on(table.checkoutId, table.checkoutLine),
     index('orders_customer_id_created_at_idx').on(table.customerId, table.createdAt.desc()),
+    index('orders_shop_customer_id_created_at_idx')
+      .on(table.shopCustomerId, table.createdAt.desc())
+      .where(sql`${table.shopCustomerId} is not null`),
+    check(
+      'orders_shop_customer_check',
+      sql`${table.shopCustomerId} is null or (${table.customerId} is not null
+        and ${table.checkoutId} is null and ${table.payer} = 'customer'
+        and ${table.placedBy} = 'customer' and not ${table.isGift})`,
+    ),
     index('orders_status_created_at_idx').on(table.status, table.createdAt),
     index('orders_created_at_idx').on(table.createdAt.desc()),
     index('orders_product_id_idx').on(table.productId),

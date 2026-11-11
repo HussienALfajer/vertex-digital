@@ -18,3 +18,16 @@ export const CONTENT_TAG = 'content';
  * the panel changes the link; its 60-second life (the route's own `max-age`) bounds the delay.
  */
 export const SUPPORT_TAG = 'support';
+
+/**
+ * S26: one merchant shop's pages (`shop:<shop id>`), which also carry `catalog`. The API queues
+ * it on the shop's settings, hidden games, selling prices and state.
+ */
+export const shopTag = (shopId: string) => `shop:${shopId}`;
+
+const SHOP_TAG = /^shop:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A `shop:<uuid>` tag, as the revalidate route accepts it. */
+export function isShopTag(value: unknown): value is string {
+  return typeof value === 'string' && SHOP_TAG.test(value);
+}

@@ -139,6 +139,13 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   shop_customer_accounts: 'Better Auth credentials of a shop customer, the archived record',
   shop_customer_verifications:
     'Short-lived codes and invitation tokens: deleted once used or expired',
+  shop_order_sales:
+    'Fixed with its order (S26 PR6): only the released margin is set once, never deleted',
+  shop_compensations: 'Append-only (S26 PR10): a compensation of a delivered shop order',
+  shop_daily_stats: 'Counters per shop and day (S26 SP3): no personal data, never deleted',
+  shop_customer_notifications: 'A notification log (S26 PR9): only its read time changes, once',
+  shop_push_subscriptions:
+    'Device registrations (S26 SP1): deleted with their session or when the push service drops them',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -166,6 +173,8 @@ const NATURAL_KEYS: Record<string, string> = {
   merchant_receipt_settings: 'Keyed by its customer: one row of receipt settings (S21 BR3)',
   merchant_shop_slugs: 'Keyed by the slug: a slug is held once, forever (S26 SH2, SH3)',
   merchant_shop_hidden_games: 'Keyed by shop and game: one row per hidden game (S26 ST6)',
+  shop_order_sales: 'Keyed by its order: one sale row per shop order (S26 PR6)',
+  shop_daily_stats: 'Keyed by shop and Damascus day: one row of counters (S26 SP3)',
 };
 
 /**
@@ -215,6 +224,7 @@ const APPEND_ONLY_TABLES = [
   'merchant_shop_rates',
   'shop_transfers',
   'shop_settlements',
+  'shop_compensations',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

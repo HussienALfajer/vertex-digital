@@ -187,13 +187,15 @@ All tables follow ADR 0011: UUIDv7 ids, `timestamptz`, `bigint` money units, ind
 | Transfer to a customer | `shop_transfer`, `shop-transfer:<key>` | merchant `customer_wallet` −X · `shop_customer_wallet` +X | A confirmed return (a new journal) |
 | Return confirmed | `shop_transfer`, `shop-return:<request>` | `shop_customer_wallet` −X · merchant `customer_wallet` +X | A new transfer |
 | Shop purchase | `purchase`, `order:<id>:purchase` | `shop_customer_wallet` −S · `sales_revenue` +B · `shop_margin_held` +(S−B) | Refund at finish (PR8) |
-| Undelivered units at finish | `refund`, the order's refund key | `sales_revenue` −B·n · `shop_margin_held` −(S−B)·n · `shop_customer_wallet` +S·n | None (final) |
+| Undelivered units at finish | `refund`, the order's refund key | `refunds` −B·n · `shop_margin_held` −(S−B)·n · `shop_customer_wallet` +S·n | None (final) |
 | Margin release at finish | `shop_margin`, `shop-margin:<order>` | `shop_margin_held` −(S−B)·d · merchant `customer_wallet` +(S−B)·d | Compensation's margin part |
 | Cost of goods | unchanged (ADR 0027) | | |
-| Compensation, Vertex's part | `adjustment`, the adjustment's key | `adjustments` −B·n · `shop_customer_wallet` +B·n | A reversing adjustment |
+| Compensation, Vertex's part | `adjustment`, `shop-compensation:<id>` | `adjustments:compensation` −B·n · `shop_customer_wallet` +B·n (the margin too when the store covers it) | A reversing adjustment |
 | Compensation, margin part | `shop_margin`, `shop-margin-back:<id>` | merchant `customer_wallet` −(S−B)·n · `shop_customer_wallet` +(S−B)·n | None |
 | Settlement to the merchant | `shop_transfer`, `shop-settle:<customer>:<n>` | `shop_customer_wallet` −all · merchant `customer_wallet` +all | None |
 | Settlement as a cash refund | `adjustment` | `shop_customer_wallet` −all · `adjustments` +all | None |
+
+Settled in PR 2: a refund posts `refunds` −B·n like every order's refund (the reversal of the sales revenue; C7 reads it); each compensation has its append-only `shop_compensations` row (C9 needs a row for every `adjustment` journal), and the admin's margin choice is `merchant`, `store` or `none`.
 
 S = sell × quantity, B = buy × quantity (the order's price), both whole cents. Every rate is stored on its row (`shop_transfers`, `shop_order_sales`). `shop_margin_held:USD` is zero for every finished order: the nightly reconciliation (S13) checks that the held account equals the open shop orders' margins, and that the sum of `shop_customer_wallet` balances equals the shop wallets' postings.
 
@@ -229,6 +231,8 @@ S = sell × quantity, B = buy × quantity (the order's price), both whole cents.
 | `POST /api/admin/orders/:id/shop-compensation` | Admin, re-auth, `Idempotency-Key` | units, reason, margin choice | compensation | `INSUFFICIENT_BALANCE` (margin part), `ORDER_NOT_COMPENSABLE` |
 
 New error codes: `SHOP_STATE_INVALID`, `SHOP_UNAVAILABLE`, `SHOP_RATE_CONFIRMATION_REQUIRED`, `SHOP_BALANCE_CAP_EXCEEDED`, `SHOP_DAILY_TRANSFER_CAP_EXCEEDED`, `SHOP_CUSTOMER_LIMIT_REACHED`, `RETURN_REQUEST_PENDING`, `RETURN_REQUEST_STATE_INVALID`, `TICKET_ESCALATION_TOO_EARLY`, `ORDER_NOT_COMPENSABLE` (not a shop order, not finished, past the 7-day window, or more units than delivered and not yet compensated). Existing codes are reused as named.
+
+Settled in PR 2 (server): shop customers have their own notification center and push devices (`shop_customer_notifications`, `shop_push_subscriptions`, `push.send-shop`), every shop event with its email and push; a shop order writes no `merchant_order_sales` row (the merchant's dashboard and statement kinds with shop orders come with PR 4, WL10); a shop customer's code reveal is logged as `customer` with the shop customer's id; the player-check cache row of a shop customer names the merchant; a shop's pages are cached by the store under `shop:<id>` and `catalog`. The admin's queue and ticket page for escalated shop tickets, and the order page's compensation dialog, come with PR 4 (the API refuses shop tickets on the Vertex admin routes until then); the shop order's receipt (PR11) with PR 3's order page. A shop ticket answered by the merchant is not auto-closed after 7 days (S12 TK6 reads the admin's last reply): a follow-up if wanted.
 
 ## Jobs and integrations
 - `shop.return-requests-expire` (every 10 minutes): pending past `expires_at` → `expired`, `SKIP LOCKED`, one per transaction; the merchant is told.

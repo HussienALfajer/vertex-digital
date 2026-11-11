@@ -9,7 +9,7 @@ import type { Database, Transaction } from '../client.js';
 import { type CheckResult, noDetails, type Offending, units } from './types.js';
 
 /*
- * The internal checks (S13 rules C1–C9, RN3): exact, any difference is a mismatch. They run as SQL
+ * The internal checks (S13 rules C1–C10, RN3): exact, any difference is a mismatch. They run as SQL
  * aggregates in one `REPEATABLE READ` read-only transaction, so every check sees one snapshot of
  * the ledger and the records it is compared with. Each failing check lists up to 50 offending ids
  * and the total count, newest first (UUIDv7 ids).
@@ -91,16 +91,38 @@ const drawingsLeg = (journal: SQL) => sql`coalesce((
   where p.journal_id = ${journal} and a.code = 'owner_drawings:USD'
 ), 0)`;
 
-/** What a journal of order `o` moved on its payer: the customer's wallet, or owner drawings. */
-const payerLeg = (journal: SQL) => sql`case when o.payer = 'owner'
-  then ${drawingsLeg(journal)} else ${walletLeg(journal, sql`o.customer_id`)} end`;
+/** S26: the shop wallet postings of a journal for one shop customer, summed. */
+const shopWalletLeg = (journal: SQL, shopCustomer: SQL) => sql`coalesce((
+  select sum(p.amount_units) from ledger_postings p
+  join ledger_accounts a on a.id = p.account_id
+  where p.journal_id = ${journal} and a.kind = 'shop_customer_wallet'
+    and a.shop_customer_id = ${shopCustomer}
+), 0)`;
 
-/** The other payer's leg, which must be zero (an owner order touches no wallet, and back). */
-const otherLeg = (journal: SQL) => sql`case when o.payer = 'owner'
-  then coalesce((select sum(abs(p.amount_units)) from ledger_postings p
-    join ledger_accounts a on a.id = p.account_id
-    where p.journal_id = ${journal} and a.kind = 'customer_wallet'), 0)
+/** Every customer wallet a journal touched, in absolute units. */
+const customerWallets = (journal: SQL) => sql`coalesce((select sum(abs(p.amount_units))
+  from ledger_postings p join ledger_accounts a on a.id = p.account_id
+  where p.journal_id = ${journal} and a.kind = 'customer_wallet'), 0)`;
+
+/**
+ * What a journal of order `o` moved on its payer: the customer's wallet, owner drawings, or (S26
+ * PR6) the shop customer's wallet of a shop order.
+ */
+const payerLeg = (journal: SQL) => sql`case when o.payer = 'owner' then ${drawingsLeg(journal)}
+  when o.shop_customer_id is not null then ${shopWalletLeg(journal, sql`o.shop_customer_id`)}
+  else ${walletLeg(journal, sql`o.customer_id`)} end`;
+
+/**
+ * The other payers' legs, which must be zero: an owner order touches no wallet, a customer's order
+ * no drawings, and a shop order neither the merchant's wallet nor drawings.
+ */
+const otherLeg = (journal: SQL) => sql`case when o.payer = 'owner' then ${customerWallets(journal)}
+  when o.shop_customer_id is not null
+    then ${customerWallets(journal)} + abs(${drawingsLeg(journal)})
   else ${drawingsLeg(journal)} end`;
+
+/** S26 PR6: a shop order's selling total of `units`, its sale row joined as `s` (else null). */
+const sellTotal = (units: SQL) => sql`s.unit_sell_usd_units * ${units}`;
 
 /** C1: every journal balances per currency and has exactly `posting_count` postings. */
 const journalBalance = sql`
@@ -175,8 +197,16 @@ const orderPurchase = sql`
   where (o.paid_at is not null) <> (o.purchase_journal_id is not null)
   union
   select 'order', o.id from orders o
+  where o.shop_customer_id is not null
+    and not exists (select 1 from shop_order_sales s
+      where s.order_id = o.id and s.shop_customer_id = o.shop_customer_id
+        and s.unit_buy_usd_units = o.unit_price_usd_units and s.quantity = o.quantity)
+  union
+  select 'order', o.id from orders o
+  left join shop_order_sales s on s.order_id = o.id
   where o.checkout_id is null and o.purchase_journal_id is not null
-    and (${payerLeg(sql`o.purchase_journal_id`)} <> -o.total_usd_units
+    and (${payerLeg(sql`o.purchase_journal_id`)}
+        <> -coalesce(${sellTotal(sql`o.quantity`)}, o.total_usd_units)
       or ${otherLeg(sql`o.purchase_journal_id`)} <> 0)
   union
   select 'journal', o.purchase_journal_id from orders o
@@ -195,9 +225,11 @@ const orderPurchase = sql`
  */
 const orderRefund = sql`
   select 'order', o.id from orders o
+  left join shop_order_sales s on s.order_id = o.id
   where (o.refund_journal_id is null) <> (o.refunded_usd_units = 0)
     or (o.refund_journal_id is not null
-      and (${payerLeg(sql`o.refund_journal_id`)} <> o.refunded_usd_units
+      and (${payerLeg(sql`o.refund_journal_id`)}
+          <> coalesce(${sellTotal(sql`o.refunded_quantity`)}, o.refunded_usd_units)
         or ${otherLeg(sql`o.refund_journal_id`)} <> 0))
   union
   select 'journal', j.id from ledger_journals j
@@ -295,6 +327,19 @@ const manualJournals = sql`
       'shop_customer_wallet:' || x.shop_customer_id, -x.amount_usd_units
     from shop_settlements x
     join merchant_shops s on s.id = x.shop_id
+    union all
+    -- S26 PR10: Vertex's part (and the margin when the store covers it) from the adjustments,
+    -- the margin part from the merchant's wallet.
+    select c.adjustment_journal_id, 'adjustments:compensation',
+      'shop_customer_wallet:' || c.shop_customer_id,
+      c.vertex_usd_units + case when c.margin_from = 'store' then c.margin_usd_units else 0 end
+    from shop_compensations c
+    union all
+    select c.margin_journal_id, 'customer_wallet:' || s.merchant_id,
+      'shop_customer_wallet:' || c.shop_customer_id, c.margin_usd_units
+    from shop_compensations c
+    join merchant_shops s on s.id = c.shop_id
+    where c.margin_journal_id is not null
   ),
   expected as (
     select 'adjustment' as kind, id, journal_id, 'customer_wallet:' || customer_id as code,
@@ -334,12 +379,43 @@ const manualJournals = sql`
   select 'journal', j.id from ledger_journals j
   where (j.kind = 'adjustment'
       and not exists (select 1 from wallet_adjustments w where w.journal_id = j.id)
-      and not exists (select 1 from shop_settlements x where x.journal_id = j.id))
+      and not exists (select 1 from shop_settlements x where x.journal_id = j.id)
+      and not exists (select 1 from shop_compensations c where c.adjustment_journal_id = j.id))
     or (j.kind = 'treasury'
       and not exists (select 1 from treasury_movements m where m.journal_id = j.id))
     or (j.kind = 'shop_transfer'
       and not exists (select 1 from shop_transfers t where t.journal_id = j.id)
       and not exists (select 1 from shop_settlements x where x.journal_id = j.id))`;
+
+/**
+ * S26 PR8 (C10): every terminal shop order released the margin of its delivered units, once, with
+ * its `shop-margin:<order>` journal (held −m, the merchant's wallet +m) or none at zero; an open
+ * one released nothing. Every `shop_margin` journal is such a release or a compensation's margin.
+ */
+const shopMargins = sql`
+  with sale as (
+    select o.id, o.customer_id, o.finished_at,
+      (s.unit_sell_usd_units - s.unit_buy_usd_units) * o.delivered_quantity as due,
+      s.margin_released_usd_units as released,
+      (select j.id from ledger_journals j
+        where j.idempotency_key = 'shop-margin:' || o.id) as journal_id
+    from orders o join shop_order_sales s on s.order_id = o.id
+  )
+  select 'order', sale.id from sale
+  where (sale.finished_at is null and (sale.released is not null or sale.journal_id is not null))
+    or (sale.finished_at is not null and sale.released is distinct from sale.due)
+    or ((sale.journal_id is not null) <> (coalesce(sale.released, 0) > 0))
+    or (sale.journal_id is not null and (
+      ${walletLeg(sql`sale.journal_id`, sql`sale.customer_id`)} <> sale.released
+      or coalesce((select sum(p.amount_units) from ledger_postings p
+        join ledger_accounts a on a.id = p.account_id
+        where p.journal_id = sale.journal_id and a.code = 'shop_margin_held:USD'), 0)
+        <> -sale.released))
+  union
+  select 'journal', j.id from ledger_journals j
+  where j.kind = 'shop_margin'
+    and not exists (select 1 from orders o where j.idempotency_key = 'shop-margin:' || o.id)
+    and not exists (select 1 from shop_compensations c where c.margin_journal_id = j.id)`;
 
 export interface InternalChecks {
   /** The highest posting position the snapshot held; null on an empty ledger. */
@@ -347,7 +423,7 @@ export interface InternalChecks {
   results: CheckResult[];
 }
 
-/** Rule RN3: C1–C9 in one `REPEATABLE READ` read-only snapshot. */
+/** Rule RN3: C1–C10 in one `REPEATABLE READ` read-only snapshot. */
 export function runInternalChecks(db: Database): Promise<InternalChecks> {
   return db.transaction((tx) => internalChecks(tx), {
     isolationLevel: 'repeatable read',
@@ -355,7 +431,7 @@ export function runInternalChecks(db: Database): Promise<InternalChecks> {
   });
 }
 
-/** C1–C9 in the caller's transaction, which `runInternalChecks` makes one snapshot. */
+/** C1–C10 in the caller's transaction, which `runInternalChecks` makes one snapshot. */
 export async function internalChecks(tx: Transaction): Promise<InternalChecks> {
   const { rows } = await tx.execute<{ position: string | null }>(
     sql`select max(position)::text as position from ledger_postings`,
@@ -403,5 +479,21 @@ export async function internalChecks(tx: Transaction): Promise<InternalChecks> {
   );
   results.push(await offendingResult(tx, 'deposit_credit', 'deposits', depositCredit));
   results.push(await offendingResult(tx, 'manual_journals', 'ledger', manualJournals));
+  results.push(await offendingResult(tx, 'shop_margin_held', 'orders', shopMargins));
+  // C10: what the held account holds is the open shop orders' margins, net of their refunds.
+  const held = await tx.execute<{ total: string }>(sql`
+    select coalesce(sum((s.unit_sell_usd_units - s.unit_buy_usd_units)
+      * (o.quantity - o.refunded_quantity) - coalesce(s.margin_released_usd_units, 0)), 0)::text
+      as total
+    from orders o join shop_order_sales s on s.order_id = o.id
+    where o.paid_at is not null`);
+  results.push(
+    amountResult(
+      'shop_margin_held',
+      'shop_margin_held:USD',
+      await accountTotal(tx, 'shop_margin_held:USD'),
+      units(held.rows[0]?.total),
+    ),
+  );
   return { snapshotPosition: position === null ? null : units(position), results };
 }

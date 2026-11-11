@@ -26,6 +26,7 @@ import {
   merchantShopRates,
   merchantShopSlugs,
   merchantShops,
+  queueShopRevalidate,
   queueTelegramMessage,
   recordAudit,
   requestShopReturn,
@@ -258,6 +259,8 @@ export class ShopsMerchantService {
             .where(eq(merchantShops.id, shop.id))
             .returning()
         : [shop];
+      // The shop's pages show the color, the announcement and the rate.
+      await queueShopRevalidate(tx, this.jobs, merchantId);
       return this.merchantShop(tx, updated ?? shop);
     });
   }
@@ -297,6 +300,7 @@ export class ShopsMerchantService {
             ...this.byMerchant(merchantId, shop.id, meta),
             details: { added, removed },
           });
+          await queueShopRevalidate(tx, this.jobs, merchantId);
         }
         return { gameIds: wanted };
       });
@@ -550,6 +554,17 @@ export class ShopsMerchantService {
     } catch (error) {
       throw shopErrorToHttp(error);
     }
+  }
+
+  /**
+   * S26 Access: the merchant's shop whose customers, orders, tickets and statistics the merchant
+   * reads (any state but rejected); `NOT_FOUND` without one.
+   */
+  async readableShop(merchantId: string): Promise<ShopRow> {
+    await this.requireMerchant(merchantId);
+    const shop = await this.newestShop(this.db, merchantId);
+    if (!shop || shop.status === 'rejected') throw notFound('shop');
+    return shop;
   }
 
   private async requireMerchant(merchantId: string, write = false): Promise<void> {

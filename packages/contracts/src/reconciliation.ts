@@ -462,6 +462,8 @@ export const INTERNAL_CHECKS = [
   'order_refund',
   'deposit_credit',
   'manual_journals',
+  /** S26 PR8: the held shop margins equal the open shop orders' margins; releases match. */
+  'shop_margin_held',
 ] as const;
 
 /** External checks against real balances (E2–E4), within a range and the tolerance (E1). */
@@ -583,8 +585,22 @@ export function sypTolerance(toleranceUsdUnits: number, rate: string | null): nu
 /** Rule C4: the account kinds each journal kind may post to. */
 export const JOURNAL_ACCOUNT_KINDS = {
   // S16 AP15: an owner-funded order is paid from, and refunded to, owner drawings.
-  purchase: ['customer_wallet', 'owner_drawings', 'sales_revenue'],
-  refund: ['customer_wallet', 'owner_drawings', 'refunds'],
+  // S26 PR6, PR8: a shop order is paid from, and refunded to, its shop customer's wallet, the
+  // margin held in between.
+  purchase: [
+    'customer_wallet',
+    'owner_drawings',
+    'sales_revenue',
+    'shop_customer_wallet',
+    'shop_margin_held',
+  ],
+  refund: [
+    'customer_wallet',
+    'owner_drawings',
+    'refunds',
+    'shop_customer_wallet',
+    'shop_margin_held',
+  ],
   cost_of_goods: ['cost_of_goods', 'supplier_prepaid'],
   deposit: [
     'customer_wallet',

@@ -648,11 +648,20 @@ describe('closing and settling (SH7, WL9)', () => {
 
   it('counts shop wallets apart from the customer wallets in the ledger summary', async () => {
     await rolledBack(async (tx) => {
-      const before = await ledgerSummary(tx);
       const ids = await setting(tx);
       await transfer(tx, ids, 12);
+      // One snapshot: other files commit shop wallets in parallel, so no delta between two reads.
       const after = await ledgerSummary(tx);
-      expect(after.owedToShopCustomersUnits - before.owedToShopCustomersUnits).toBe(12 * USD);
+      expect(after.owedToShopCustomersUnits).toBeGreaterThanOrEqual(12 * USD);
+      const usdSystem = after.systemAccounts
+        .filter((account) => account.currency === 'USD')
+        .reduce((sum, account) => sum + account.balanceUnits, 0);
+      expect(
+        after.owedToCustomersUnits +
+          after.owedToTestCustomersUnits +
+          after.owedToShopCustomersUnits +
+          usdSystem,
+      ).toBe(0);
       expect(after.systemAccounts.some((account) => account.kind === 'shop_customer_wallet')).toBe(
         false,
       );

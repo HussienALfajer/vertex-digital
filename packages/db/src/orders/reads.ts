@@ -16,6 +16,7 @@ import {
   expectedWithinMinutes,
   type FulfilmentAttempt,
   isOpenAttempt,
+  type MerchantShopOrderRow,
   maskCode,
   type Order,
   type OrderStatus,
@@ -30,7 +31,10 @@ import {
   type RouteCandidate,
   type SavedPlayer,
   type ShareLink,
+  type ShopOrder,
+  type ShopOrderSummary,
   shareStage,
+  shopOrderAmounts,
   storeOrderHidesPrice,
 } from '@vertex-digital/contracts';
 import {
@@ -71,6 +75,9 @@ import {
   orderShareLinks,
   orders,
   savedPlayers,
+  shopCompensations,
+  shopCustomers,
+  shopOrderSales,
   storedFiles,
   supplierOffers,
   suppliers,
@@ -250,6 +257,8 @@ export async function customerOrderPage(
     .where(
       and(
         eq(orders.customerId, customerId),
+        // S26 PR9: a merchant's shop orders are kept out of "طلباتي".
+        isNull(orders.shopCustomerId),
         page.after
           ? or(
               sql`${orders.createdAt} < ${page.after.at}::timestamptz`,
@@ -334,7 +343,9 @@ export async function customerOrder(
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
     .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
-    .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+    .where(
+      and(eq(orders.id, orderId), eq(orders.customerId, customerId), isNull(orders.shopCustomerId)),
+    );
   if (!row) return null;
   const { order, product, game } = row;
   const store = placedByStore(order);
@@ -442,6 +453,261 @@ export async function customerOrder(
   };
 }
 
+// Shop customer (S26 PR4, PR9, PR12) -----------------------------------------------------------
+
+const shopSummaryFrom = (db: Executor) =>
+  db
+    .select({ ...summaryColumns, sale: shopOrderSales })
+    .from(orders)
+    .innerJoin(shopOrderSales, eq(shopOrderSales.orderId, orders.id))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId));
+
+/** PR4: a selling total and its SYP as shown at purchase; never the merchant's price. */
+const sellTotals = (sale: typeof shopOrderSales.$inferSelect, quantity: number) => ({
+  totalSellUsdUnits: shopOrderAmounts(sale.unitSellUsdUnits, sale.unitBuyUsdUnits, quantity)
+    .sellUsdUnits,
+  totalSellSypUnits: sale.unitSellSypUnits === null ? null : sale.unitSellSypUnits * quantity,
+});
+
+/** One page of the shop customer's orders, newest first (`GET /api/shops/:slug/orders`). */
+export async function shopCustomerOrderPage(
+  db: Executor,
+  shopCustomerId: string,
+  page: { after: { at: string; id: string } | null; limit: number },
+): Promise<{
+  items: ShopOrderSummary[];
+  more: boolean;
+  last: { at: string; id: string } | null;
+}> {
+  const rows = await shopSummaryFrom(db)
+    .where(
+      and(
+        eq(orders.shopCustomerId, shopCustomerId),
+        page.after
+          ? or(
+              sql`${orders.createdAt} < ${page.after.at}::timestamptz`,
+              and(
+                sql`${orders.createdAt} = ${page.after.at}::timestamptz`,
+                lt(orders.id, page.after.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(page.limit + 1);
+  const shown = rows.slice(0, page.limit);
+  const images = await covers(
+    db,
+    shown.map((row) => row.game.coverFileId),
+  );
+  const lastRow = shown.at(-1);
+  return {
+    items: shown.map(({ order, productNameAr, amount, game, sale }) => ({
+      id: order.id,
+      number: order.number,
+      stage: orderCustomerStage(order.status),
+      productNameAr,
+      productKind: order.kind,
+      amountStep: amount.step,
+      amountUnitAr: amount.unitAr,
+      game: {
+        id: game.id,
+        slug: game.slug,
+        nameAr: game.nameAr,
+        cover: (game.coverFileId && images.get(game.coverFileId)) || null,
+      },
+      quantity: order.quantity,
+      ...sellTotals(sale, order.quantity),
+      createdAt: order.createdAt.toISOString(),
+    })),
+    more: rows.length > page.limit,
+    last: lastRow ? { at: lastRow.at, id: lastRow.order.id } : null,
+  };
+}
+
+/**
+ * The shop customer's order by its number (`GET /api/shops/:slug/orders/:number`), at the
+ * selling price, or null when it is not theirs. Codes stay masked: `revealCode` with the shop
+ * customer reveals them (PR12).
+ */
+export async function shopCustomerOrder(
+  db: Executor,
+  shopCustomerId: string,
+  number: string,
+): Promise<ShopOrder | null> {
+  const [row] = await db
+    .select({ order: orders, product: catalogProducts, game: catalogGames, sale: shopOrderSales })
+    .from(orders)
+    .innerJoin(shopOrderSales, eq(shopOrderSales.orderId, orders.id))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .where(and(eq(orders.number, number), eq(orders.shopCustomerId, shopCustomerId)));
+  if (!row) return null;
+  const { order, product, game, sale } = row;
+  const [fields, statusEvents, codes, images, stats, open, tickets, compensated] = await readAll(
+    db,
+    [
+      () => fieldsWithLabels(db, order),
+      () =>
+        db
+          .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
+          .from(orderEvents)
+          .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
+          .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
+      () => orderCodeList(db, order.id),
+      () => covers(db, [game.coverFileId]),
+      () => productDeliveryStats(db, [product.id]),
+      () => openAttempt(db, order.id),
+      () =>
+        db
+          .select({ id: supportTickets.id })
+          .from(supportTickets)
+          .where(and(eq(supportTickets.orderId, order.id), ne(supportTickets.status, 'closed'))),
+      () =>
+        db
+          .select({
+            total: sql<string>`coalesce(sum(${shopCompensations.vertexUsdUnits}
+              + case when ${shopCompensations.marginFrom} = 'none' then 0
+                else ${shopCompensations.marginUsdUnits} end), 0)::text`,
+          })
+          .from(shopCompensations)
+          .where(eq(shopCompensations.orderId, order.id)),
+    ],
+  );
+  const stage = orderCustomerStage(order.status);
+  const totals = sellTotals(sale, order.quantity);
+  return {
+    id: order.id,
+    number: order.number,
+    stage,
+    product: {
+      id: product.id,
+      nameAr: product.nameAr,
+      kind: product.kind,
+      regionAr: product.regionAr,
+      redemptionAr: product.redemptionAr,
+      amountStep: product.amountStep,
+      amountUnitAr: product.amountUnitAr,
+    },
+    game: {
+      id: game.id,
+      slug: game.slug,
+      nameAr: game.nameAr,
+      cover: (game.coverFileId && images.get(game.coverFileId)) || null,
+    },
+    fields,
+    quantity: order.quantity,
+    deliveredQuantity: order.deliveredQuantity,
+    refundedQuantity: order.refundedQuantity,
+    unitSellUsdUnits: sale.unitSellUsdUnits,
+    ...totals,
+    refundedUsdUnits: shopOrderAmounts(
+      sale.unitSellUsdUnits,
+      sale.unitBuyUsdUnits,
+      order.refundedQuantity,
+    ).sellUsdUnits,
+    compensatedUsdUnits: Number(compensated[0]?.total ?? 0),
+    refundReason: order.refundReason,
+    recipient: order.recipient,
+    timeline: orderTimeline(
+      statusEvents.flatMap((event) =>
+        event.status ? [{ status: event.status, at: event.at }] : [],
+      ),
+    ).map((entry) => ({ step: entry.step, at: entry.at.toISOString() })),
+    codes: codes.map((code) => ({
+      id: code.id,
+      position: code.index,
+      masked: maskCode(code.hint),
+      firstRevealedAt: iso(code.firstCustomerReveal),
+    })),
+    playerName: order.playerName,
+    playerRegion: order.playerRegion,
+    deliveryStats: stats.get(product.id) ?? null,
+    expectedWithinMinutes: expectedWithinMinutes(stage, open?.attempt ?? null),
+    verificationCode: order.verificationCode,
+    help: {
+      status: order.status,
+      paidAt: iso(order.paidAt),
+      finishedAt: iso(order.finishedAt),
+      openTicketId: tickets[0]?.id ?? null,
+    },
+    createdAt: order.createdAt.toISOString(),
+  };
+}
+
+/**
+ * PR9: a shop's orders as its merchant sees them ("طلبات المتجر"), newest first: the customer,
+ * the selling total and the margin, held or released. Never the codes or the fields.
+ */
+export async function merchantShopOrderPage(
+  db: Executor,
+  shopId: string,
+  page: { after: { at: string; id: string } | null; limit: number; shopCustomerId?: string },
+): Promise<{
+  items: MerchantShopOrderRow[];
+  more: boolean;
+  last: { at: string; id: string } | null;
+}> {
+  const rows = await db
+    .select({
+      order: orders,
+      sale: shopOrderSales,
+      at: sql<string>`${orders.createdAt}::text`,
+      customerName: shopCustomers.name,
+      productNameAr: catalogProducts.nameAr,
+      gameNameAr: catalogGames.nameAr,
+    })
+    .from(shopOrderSales)
+    .innerJoin(orders, eq(orders.id, shopOrderSales.orderId))
+    .innerJoin(shopCustomers, eq(shopCustomers.id, shopOrderSales.shopCustomerId))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .where(
+      and(
+        eq(shopOrderSales.shopId, shopId),
+        page.shopCustomerId ? eq(shopOrderSales.shopCustomerId, page.shopCustomerId) : undefined,
+        page.after
+          ? or(
+              sql`${orders.createdAt} < ${page.after.at}::timestamptz`,
+              and(
+                sql`${orders.createdAt} = ${page.after.at}::timestamptz`,
+                lt(orders.id, page.after.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(page.limit + 1);
+  const shown = rows.slice(0, page.limit);
+  const lastRow = shown.at(-1);
+  return {
+    items: shown.map(({ order, sale, customerName, productNameAr, gameNameAr }) => {
+      const amounts = shopOrderAmounts(sale.unitSellUsdUnits, sale.unitBuyUsdUnits, order.quantity);
+      const released = sale.marginReleasedUsdUnits;
+      return {
+        id: order.id,
+        number: order.number,
+        stage: orderCustomerStage(order.status),
+        customer: { id: sale.shopCustomerId, name: customerName },
+        productNameAr,
+        gameNameAr,
+        quantity: order.quantity,
+        deliveredQuantity: order.deliveredQuantity,
+        totalSellUsdUnits: amounts.sellUsdUnits,
+        marginUsdUnits: released ?? amounts.marginUsdUnits,
+        marginState: released === null ? 'held' : released > 0 ? 'released' : 'none',
+        createdAt: order.createdAt.toISOString(),
+      };
+    }),
+    more: rows.length > page.limit,
+    last: lastRow ? { at: lastRow.at, id: lastRow.order.id } : null,
+  };
+}
+
 /** The order's codes in delivery order, numbered from 1, with the customer's first reveal. */
 async function orderCodeList(db: Executor, orderId: string) {
   const rows = await db
@@ -465,8 +731,10 @@ async function orderCodeList(db: Executor, orderId: string) {
 export interface RevealInput {
   orderId: string;
   codeId: string;
-  /** Set for a customer: the order must be theirs. */
+  /** Set for a customer: the order must be theirs (never a shop order of theirs, S26 PR9). */
   customerId: string | null;
+  /** S26 PR12: set for a shop customer: the shop order must be theirs. */
+  shopCustomerId?: string;
   actor: 'customer' | 'admin';
   actorId: string;
   ipAddress: string | null;
@@ -484,11 +752,23 @@ export async function revealCode(
   input: RevealInput,
 ): Promise<{ code: string; position: number; firstRevealedAt: Date } | null> {
   const [row] = await tx
-    .select({ code: orderCodes, customerId: orders.customerId })
+    .select({
+      code: orderCodes,
+      customerId: orders.customerId,
+      shopCustomerId: orders.shopCustomerId,
+    })
     .from(orderCodes)
     .innerJoin(orders, eq(orders.id, orderCodes.orderId))
     .where(and(eq(orderCodes.id, input.codeId), eq(orderCodes.orderId, input.orderId)));
-  if (!row || (input.customerId !== null && row.customerId !== input.customerId)) return null;
+  if (!row) return null;
+  if (
+    input.shopCustomerId !== undefined
+      ? row.shopCustomerId !== input.shopCustomerId
+      : input.customerId !== null &&
+        (row.customerId !== input.customerId || row.shopCustomerId !== null)
+  ) {
+    return null;
+  }
   const code = decryptSecret(codesKey, row.code.id, row.code.ciphertext);
   const [reveal] = await tx
     .insert(orderCodeReveals)

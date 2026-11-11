@@ -42,6 +42,7 @@ import {
   merchantWatches,
   merchantWatchRows,
   netPurchases,
+  queueShopRevalidate,
   recentGameUnits,
   sellingSettingsOf,
   shownGames,
@@ -53,6 +54,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
 import { RatesService } from '../rates/index.js';
 import { refusals, requireMerchant } from './merchant-access.js';
@@ -71,6 +73,7 @@ export class MerchantToolsService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
     private readonly rates: RatesService,
+    private readonly jobs: JobsService,
   ) {}
 
   /** MA1: a merchant's account; `write` refuses a frozen one. */
@@ -134,10 +137,14 @@ export class MerchantToolsService {
   /** `PUT /api/merchant/selling-settings` (SP1). */
   async saveSellingSettings(customerId: string, input: SellingSettings): Promise<SellingSettings> {
     await this.merchant(customerId, true);
-    await this.db
-      .insert(merchantSellingSettings)
-      .values({ customerId, ...input })
-      .onConflictDoUpdate({ target: merchantSellingSettings.customerId, set: input });
+    await this.db.transaction(async (tx) => {
+      await tx
+        .insert(merchantSellingSettings)
+        .values({ customerId, ...input })
+        .onConflictDoUpdate({ target: merchantSellingSettings.customerId, set: input });
+      // S26: the shop's pages show the merchant's selling prices.
+      await queueShopRevalidate(tx, this.jobs, customerId);
+    });
     return sellingSettingsOf(this.db, customerId);
   }
 
@@ -248,13 +255,16 @@ export class MerchantToolsService {
       }
     }
     const values = { currency: input.currency, amountUnits: input.amountUnits };
-    await this.db
-      .insert(merchantSellingPrices)
-      .values({ customerId, productId, ...values })
-      .onConflictDoUpdate({
-        target: [merchantSellingPrices.customerId, merchantSellingPrices.productId],
-        set: values,
-      });
+    await this.db.transaction(async (tx) => {
+      await tx
+        .insert(merchantSellingPrices)
+        .values({ customerId, productId, ...values })
+        .onConflictDoUpdate({
+          target: [merchantSellingPrices.customerId, merchantSellingPrices.productId],
+          set: values,
+        });
+      await queueShopRevalidate(tx, this.jobs, customerId);
+    });
     return this.row(customerId, product);
   }
 
@@ -262,14 +272,17 @@ export class MerchantToolsService {
   async clearSellingPrice(customerId: string, productId: string): Promise<SellingPriceRow> {
     await this.merchant(customerId, true);
     const product = await this.product(productId);
-    await this.db
-      .delete(merchantSellingPrices)
-      .where(
-        and(
-          eq(merchantSellingPrices.customerId, customerId),
-          eq(merchantSellingPrices.productId, productId),
-        ),
-      );
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(merchantSellingPrices)
+        .where(
+          and(
+            eq(merchantSellingPrices.customerId, customerId),
+            eq(merchantSellingPrices.productId, productId),
+          ),
+        );
+      await queueShopRevalidate(tx, this.jobs, customerId);
+    });
     return this.row(customerId, product);
   }
 

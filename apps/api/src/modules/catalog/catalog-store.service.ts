@@ -63,7 +63,42 @@ export class CatalogStoreService {
 
   /** `GET /api/catalog/storefront` (rules SF1, SS2). */
   async storefront(): Promise<Storefront> {
-    const shown = await this.shownGames();
+    return this.storefrontOf(await this.shownGames());
+  }
+
+  /**
+   * S26 PR1: a merchant's shop's home: the store's shown games (early access with the merchant's
+   * tier), without the merchant's hidden games and F44 cash games. Statuses as the store's.
+   */
+  async shopStorefront(options: {
+    hiddenGameIds: ReadonlySet<string>;
+    earlyAccess: boolean;
+  }): Promise<Storefront> {
+    const shown = await this.shownGames(undefined, options.earlyAccess);
+    return this.storefrontOf(
+      shown.filter(
+        ({ game }) => !options.hiddenGameIds.has(game.id) && game.serviceClass !== 'cash',
+      ),
+    );
+  }
+
+  /**
+   * S26 PR1, PR2: a game of a merchant's shop with its packs at the merchant's prices (the list's
+   * price as `priceUsdUnits`, which the shop turns into its selling price and never shows); a
+   * hidden, cash or not shown game is not found.
+   */
+  async shopGame(
+    slug: string,
+    options: { hiddenGameIds: ReadonlySet<string>; earlyAccess: boolean; priceListId: string },
+  ): Promise<StoreGame> {
+    const [found] = await this.shownGames(slug, options.earlyAccess);
+    if (!found || options.hiddenGameIds.has(found.game.id) || found.game.serviceClass === 'cash') {
+      throw refusals.notFound('game');
+    }
+    return this.gameData(found.game, options.earlyAccess, options.priceListId);
+  }
+
+  private async storefrontOf(shown: Awaited<ReturnType<CatalogStoreService['shownGames']>>) {
     const [products, images] = await Promise.all([
       this.storefrontProducts(shown.map(({ game }) => game.id)),
       this.images(
@@ -116,7 +151,11 @@ export class CatalogStoreService {
     return this.gameData(found.game, true);
   }
 
-  private async gameData(game: GameRow, earlyAccess: boolean): Promise<StoreGame> {
+  private async gameData(
+    game: GameRow,
+    earlyAccess: boolean,
+    priceListId?: string,
+  ): Promise<StoreGame> {
     const [fields, products, rate, images] = await Promise.all([
       this.db
         .select()
@@ -127,7 +166,7 @@ export class CatalogStoreService {
       this.rates.current(),
       this.images([game]),
     ]);
-    const states = await this.states(products, earlyAccess);
+    const states = await this.states(products, earlyAccess, priceListId);
     const storeProducts = await this.storeProducts(game, products, states, rate);
     return {
       game: {
@@ -397,11 +436,16 @@ export class CatalogStoreService {
     return this.states(products.filter((product) => product.status === 'active'));
   }
 
-  private states(products: readonly Pick<ProductRow, 'id'>[], earlyAccess = false) {
+  private states(
+    products: readonly Pick<ProductRow, 'id'>[],
+    earlyAccess = false,
+    priceListId?: string,
+  ) {
     return productRoutingStates(
       this.db,
       products.map((product) => product.id),
       { ...routingContext(this.env), earlyAccess },
+      priceListId,
     );
   }
 

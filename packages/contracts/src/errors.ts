@@ -341,6 +341,13 @@ export const ERROR_CODES = [
   'RETURN_REQUEST_PENDING',
   /** S26 WL5: the return request is no longer pending; `details.status`. */
   'RETURN_REQUEST_STATE_INVALID',
+  /** S26 TK2: the merchant has had less than 24 hours to answer; `details.availableAt`. */
+  'TICKET_ESCALATION_TOO_EARLY',
+  /**
+   * S26 PR10: not a finished shop order, past its 7 days, or more units than delivered and not yet
+   * compensated; `details.reason`.
+   */
+  'ORDER_NOT_COMPENSABLE',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

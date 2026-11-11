@@ -583,6 +583,58 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
   }),
+  // S26 PR9: a shop order's emails, at the selling price, in the shop's name; never codes.
+  shop_customer_order_delivered: ({ slug, orderNumber, productNameAr, quantity, at }) => ({
+    subject: `تم تسليم طلبك ${latin(orderNumber)}`,
+    lines: [
+      `سُلّم طلبك ${latin(orderNumber)} (${named(productNameAr)} × ${latin(String(quantity))}) بتاريخ ${formatTime(at)}.`,
+    ],
+    link: { label: 'عرض الطلب', path: `/s/${slug}/orders/${orderNumber}` },
+  }),
+  shop_customer_order_partially_refunded: ({
+    slug,
+    orderNumber,
+    productNameAr,
+    deliveredQuantity,
+    refundedQuantity,
+    refundedUsdUnits,
+    at,
+  }) => ({
+    subject: `سُلّم جزء من طلبك ${latin(orderNumber)} واسترد الباقي`,
+    lines: [
+      `سُلّم ${latin(String(deliveredQuantity))} من طلبك ${latin(orderNumber)} (${named(productNameAr)})، وأُعيد ${usd(refundedUsdUnits)} عن ${latin(String(refundedQuantity))} إلى رصيدك بتاريخ ${formatTime(at)}.`,
+    ],
+    link: { label: 'عرض الطلب', path: `/s/${slug}/orders/${orderNumber}` },
+  }),
+  shop_customer_order_refunded: ({
+    slug,
+    orderNumber,
+    productNameAr,
+    refundedUsdUnits,
+    reason,
+    at,
+  }) => ({
+    subject: `أُعيد ${usd(refundedUsdUnits)} إلى رصيدك عن الطلب ${latin(orderNumber)}`,
+    lines: [
+      `لم نتمكن من تنفيذ طلبك ${latin(orderNumber)} (${named(productNameAr)})، فأُعيد ${usd(refundedUsdUnits)} كاملاً إلى رصيدك بتاريخ ${formatTime(at)}.`,
+      `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+    ],
+    link: { label: 'عرض الطلب', path: `/s/${slug}/orders/${orderNumber}` },
+  }),
+  shop_customer_order_compensated: ({ slug, orderNumber, amountUsdUnits, at }) => ({
+    subject: `تعويض ${usd(amountUsdUnits)} عن الطلب ${latin(orderNumber)}`,
+    lines: [
+      `أُضيف ${usd(amountUsdUnits)} إلى رصيدك تعويضاً عن الطلب ${latin(orderNumber)} بتاريخ ${formatTime(at)}.`,
+    ],
+    link: { label: 'رصيدي', path: `/s/${slug}/wallet` },
+  }),
+  shop_customer_ticket_replied: ({ slug, ticketId, number, from }) => ({
+    subject: `رد جديد على التذكرة ${latin(number)}`,
+    lines: [
+      `${from === 'shop' ? 'ردّ المتجر' : 'ردّ فريق الدعم'} على تذكرتك ${latin(number)}. افتحها لقراءة الرد.`,
+    ],
+    link: { label: 'عرض التذكرة', path: `/s/${slug}/support/${ticketId}` },
+  }),
 };
 
 const escapeHtml = (value: string) =>

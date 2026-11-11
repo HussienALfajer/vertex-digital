@@ -218,6 +218,18 @@ export function notificationText(notification: CustomerNotification): string {
         name: notification.params.customerName,
         amount: ltr(formatUsd(notification.params.amountUsdUnits)),
       });
+    // S26 TK1, TK2: the shop's ticket and its customer's name.
+    case 'merchant_shop_ticket':
+      return t(`notifications.events.merchant_shop_ticket_${notification.params.kind}`, {
+        name: notification.params.customerName,
+        number: ltr(notification.params.number),
+      });
+    // S26 PR10: the margin a compensation took back.
+    case 'merchant_shop_margin_returned':
+      return t('notifications.events.merchant_shop_margin_returned', {
+        number: ltr(notification.params.orderNumber),
+        amount: ltr(formatUsd(notification.params.amountUsdUnits)),
+      });
   }
 }
 
@@ -264,6 +276,10 @@ export function notificationHref(notification: CustomerNotification): string {
       return '/merchant/shop';
     case 'merchant_shop_return_ended':
       return '/merchant/shop/customers';
+    case 'merchant_shop_ticket':
+      return `/merchant/shop/tickets/${notification.params.ticketId}`;
+    case 'merchant_shop_margin_returned':
+      return '/merchant/shop/orders';
     default:
       return `/orders/${notification.params.orderId}`;
   }

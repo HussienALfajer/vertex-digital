@@ -104,6 +104,16 @@ export const EMAIL_TEMPLATES = [
   'shop_customer_return_done',
   /** S26 WL9: a closed shop's balance was settled by the store. */
   'shop_customer_settled',
+  /** S26 PR9: a shop order was delivered (never its codes or account fields). */
+  'shop_customer_order_delivered',
+  /** S26 PR8: part of a shop order was delivered and the rest refunded at the selling price. */
+  'shop_customer_order_partially_refunded',
+  /** S26 PR8: a shop order was refunded in full at the selling price. */
+  'shop_customer_order_refunded',
+  /** S26 PR10: the store compensated a delivered shop order. */
+  'shop_customer_order_compensated',
+  /** S26 TK3: the shop or the store answered a ticket (never the reply). */
+  'shop_customer_ticket_replied',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -183,6 +193,10 @@ export const NOTIFICATION_EVENTS = [
   'merchant_shop_changed',
   /** S26 WL5: a shop customer confirmed, declined or let expire a return request (center and push). */
   'merchant_shop_return_ended',
+  /** S26 TK1, TK2: a shop ticket was opened, answered or escalated by its customer (center and push). */
+  'merchant_shop_ticket',
+  /** S26 PR10: a compensation took the margin of a shop order back from the wallet (center and push). */
+  'merchant_shop_margin_returned',
 ] as const;
 
 export const notificationEventSchema = z
@@ -348,10 +362,78 @@ export const NOTIFICATION_PARAMS = {
     amountUsdUnits: z.int().positive(),
     status: returnRequestStatusSchema.exclude(['pending', 'cancelled']),
   }),
+  // S26 TK1, TK2: the ticket and the shop customer's name, never the message.
+  merchant_shop_ticket: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    customerName: z.string(),
+    kind: z.enum(['opened', 'replied', 'escalated']),
+  }),
+  // S26 PR10: the order and the margin taken back.
+  merchant_shop_margin_returned: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    amountUsdUnits: z.int().positive(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
   (typeof NOTIFICATION_PARAMS)[Event]
+>;
+
+/*
+ * The shop customer's notification center (S26 PR9, ADR 0040): one `shop_customer_notifications`
+ * row per event, written with `notifyShopCustomer` in the transaction of the change, with its
+ * email in the shop's name and a push to the customer's devices in that shop. Never the merchant's
+ * prices, notes or another customer's data.
+ */
+
+export const SHOP_NOTIFICATION_EVENTS = [
+  'transfer_received',
+  'return_requested',
+  'return_done',
+  'settled',
+  'order_delivered',
+  'order_partially_refunded',
+  'order_refunded',
+  'order_compensated',
+  'ticket_replied',
+] as const;
+
+export const shopNotificationEventSchema = z
+  .enum(SHOP_NOTIFICATION_EVENTS)
+  .meta({ id: 'ShopNotificationEvent' });
+
+export type ShopNotificationEvent = z.infer<typeof shopNotificationEventSchema>;
+
+/** What each shop event carries; amounts are the shop customer's own (selling prices). */
+export const SHOP_NOTIFICATION_PARAMS = {
+  transfer_received: z.object({ amountUsdUnits: z.int().positive() }),
+  return_requested: z.object({ amountUsdUnits: z.int().positive(), expiresAt: z.iso.datetime() }),
+  return_done: z.object({ amountUsdUnits: z.int().positive() }),
+  settled: z.object({ amountUsdUnits: z.int().positive(), to: shopSettlementTargetSchema }),
+  order_delivered: NOTIFICATION_PARAMS.order_delivered,
+  order_partially_refunded: NOTIFICATION_PARAMS.order_partially_refunded.extend({
+    refundedUsdUnits: z.int().positive(),
+  }),
+  order_refunded: NOTIFICATION_PARAMS.order_refunded.extend({
+    refundedUsdUnits: z.int().positive(),
+  }),
+  order_compensated: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    amountUsdUnits: z.int().positive(),
+  }),
+  ticket_replied: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    from: z.enum(['shop', 'support']),
+  }),
+} as const satisfies Record<ShopNotificationEvent, z.ZodObject>;
+
+export type ShopNotificationParams<Event extends ShopNotificationEvent> = z.infer<
+  (typeof SHOP_NOTIFICATION_PARAMS)[Event]
 >;
 
 /** S21 AL4: the daily email lists at most this many events, then "و n غيرها". */
@@ -410,23 +492,49 @@ export const EMAIL_PARAMS = {
   shop_customer_verify_email: shopEmail.extend(code.shape),
   shop_customer_reset_password: shopEmail.extend(code.shape),
   shop_customer_transfer_received: shopEmail.extend({
-    amountUsdUnits: z.int().positive(),
+    ...SHOP_NOTIFICATION_PARAMS.transfer_received.shape,
     ...at.shape,
   }),
-  shop_customer_return_requested: shopEmail.extend({
-    amountUsdUnits: z.int().positive(),
-    expiresAt: z.iso.datetime(),
-  }),
+  shop_customer_return_requested: shopEmail.extend(SHOP_NOTIFICATION_PARAMS.return_requested.shape),
   shop_customer_return_done: shopEmail.extend({
-    amountUsdUnits: z.int().positive(),
+    ...SHOP_NOTIFICATION_PARAMS.return_done.shape,
     ...at.shape,
   }),
   shop_customer_settled: shopEmail.extend({
-    amountUsdUnits: z.int().positive(),
-    to: shopSettlementTargetSchema,
+    ...SHOP_NOTIFICATION_PARAMS.settled.shape,
     ...at.shape,
   }),
+  shop_customer_order_delivered: shopEmail.extend({
+    ...SHOP_NOTIFICATION_PARAMS.order_delivered.shape,
+    ...at.shape,
+  }),
+  shop_customer_order_partially_refunded: shopEmail.extend({
+    ...SHOP_NOTIFICATION_PARAMS.order_partially_refunded.shape,
+    ...at.shape,
+  }),
+  shop_customer_order_refunded: shopEmail.extend({
+    ...SHOP_NOTIFICATION_PARAMS.order_refunded.shape,
+    ...at.shape,
+  }),
+  shop_customer_order_compensated: shopEmail.extend({
+    ...SHOP_NOTIFICATION_PARAMS.order_compensated.shape,
+    ...at.shape,
+  }),
+  shop_customer_ticket_replied: shopEmail.extend(SHOP_NOTIFICATION_PARAMS.ticket_replied.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
+
+/** S26 PR9: the email of each shop event (every one has one, and a push). */
+export const SHOP_NOTIFICATION_EMAIL_TEMPLATE = {
+  transfer_received: 'shop_customer_transfer_received',
+  return_requested: 'shop_customer_return_requested',
+  return_done: 'shop_customer_return_done',
+  settled: 'shop_customer_settled',
+  order_delivered: 'shop_customer_order_delivered',
+  order_partially_refunded: 'shop_customer_order_partially_refunded',
+  order_refunded: 'shop_customer_order_refunded',
+  order_compensated: 'shop_customer_order_compensated',
+  ticket_replied: 'shop_customer_ticket_replied',
+} as const satisfies Record<ShopNotificationEvent, EmailTemplate>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
 
@@ -480,6 +588,8 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   product_price_dropped: null,
   merchant_shop_changed: null,
   merchant_shop_return_ended: null,
+  merchant_shop_ticket: null,
+  merchant_shop_margin_returned: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -505,7 +615,9 @@ export type PushNotificationEvent =
   | 'product_available'
   | 'product_price_dropped'
   | 'merchant_shop_changed'
-  | 'merchant_shop_return_ended';
+  | 'merchant_shop_return_ended'
+  | 'merchant_shop_ticket'
+  | 'merchant_shop_margin_returned';
 
 export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   ...EMAIL_NOTIFICATION_EVENTS,
@@ -515,6 +627,8 @@ export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   'product_price_dropped',
   'merchant_shop_changed',
   'merchant_shop_return_ended',
+  'merchant_shop_ticket',
+  'merchant_shop_margin_returned',
 ];
 
 export function isPushNotificationEvent(event: NotificationEvent): event is PushNotificationEvent {
@@ -562,6 +676,8 @@ export const customerNotificationSchema = z
     notification('product_price_dropped'),
     notification('merchant_shop_changed'),
     notification('merchant_shop_return_ended'),
+    notification('merchant_shop_ticket'),
+    notification('merchant_shop_margin_returned'),
   ])
   .meta({ id: 'CustomerNotification' });
 
@@ -596,6 +712,41 @@ export type MarkNotificationsRead = z.infer<typeof markNotificationsReadSchema>;
 export const unreadCountSchema = z.object(unreadCount).meta({ id: 'UnreadCount' });
 
 export type UnreadCount = z.infer<typeof unreadCountSchema>;
+
+const shopNotification = <Event extends ShopNotificationEvent>(event: Event) =>
+  z.object({
+    ...notificationBase,
+    event: z.literal(event),
+    params: SHOP_NOTIFICATION_PARAMS[event],
+  });
+
+/** S26 PR9: one notification of the shop customer's center; `params` by event. */
+export const shopCustomerNotificationSchema = z
+  .discriminatedUnion('event', [
+    shopNotification('transfer_received'),
+    shopNotification('return_requested'),
+    shopNotification('return_done'),
+    shopNotification('settled'),
+    shopNotification('order_delivered'),
+    shopNotification('order_partially_refunded'),
+    shopNotification('order_refunded'),
+    shopNotification('order_compensated'),
+    shopNotification('ticket_replied'),
+  ])
+  .meta({ id: 'ShopCustomerNotification' });
+
+export type ShopCustomerNotification = z.infer<typeof shopCustomerNotificationSchema>;
+
+/** `GET /api/shops/:slug/notifications`: newest first, with the unread count. */
+export const shopNotificationPageSchema = z
+  .object({
+    items: z.array(shopCustomerNotificationSchema),
+    nextCursor: z.string().nullable(),
+    ...unreadCount,
+  })
+  .meta({ id: 'ShopNotificationPage' });
+
+export type ShopNotificationPage = z.infer<typeof shopNotificationPageSchema>;
 
 /**
  * The live stream's events (rule NT6), sent as SSE `event:` names with JSON `data:`. `replaced`

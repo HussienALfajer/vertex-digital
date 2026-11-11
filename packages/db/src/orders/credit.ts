@@ -16,7 +16,7 @@ import {
   type SectionAmounts,
   type ServiceClass,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, gt, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, notInArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Database, Executor, Transaction } from '../client.js';
 import { accountBalance, ensureCustomerWallet, findCustomerWallet } from '../ledger/index.js';
@@ -82,12 +82,23 @@ export async function lockRecipients(tx: Transaction, recipients: readonly strin
 const since = (hours: number) => sql`now() - ${`${hours} hours`}::interval`;
 
 /**
- * CL2, CS2: the customer's section and cash orders of the last 24 hours, their kept part (a partly
+ * Whose section limits count: a Vertex account's own orders (a merchant's shop orders are its shop
+ * customers'), or a shop customer's (S26 PR7: the retail limits per shop customer).
+ */
+export type SectionOwner = { customerId: string } | { shopCustomerId: string };
+
+const ownedBy = (owner: SectionOwner) =>
+  'shopCustomerId' in owner
+    ? eq(orders.shopCustomerId, owner.shopCustomerId)
+    : and(eq(orders.customerId, owner.customerId), isNull(orders.shopCustomerId));
+
+/**
+ * CL2, CS2: the owner's section and cash orders of the last 24 hours, their kept part (a partly
  * refunded order counts what it kept); `excludeOrderId` leaves out a reservation being paid.
  */
 export async function sectionSpent(
   db: Executor,
-  customerId: string,
+  owner: SectionOwner,
   excludeOrderId?: string,
 ): Promise<SectionAmounts> {
   const kept = sql<number>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}), 0)`;
@@ -97,7 +108,7 @@ export async function sectionSpent(
     .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
     .where(
       and(
-        eq(orders.customerId, customerId),
+        ownedBy(owner),
         gt(orders.createdAt, since(CREDIT_WINDOW_HOURS)),
         sql`${orders.recipient} is not null`,
         notInArray(orders.status, [...NOT_COUNTED]),
@@ -181,7 +192,7 @@ export async function checkCreditLimits(
   tx: Transaction,
   input: {
     policy: CreditPolicy;
-    customerId: string;
+    owner: SectionOwner;
     merchant: boolean;
     walletId: string;
     lines: readonly SectionLine[];
@@ -197,7 +208,7 @@ export async function checkCreditLimits(
     if (line.serviceClass === 'cash') adding.cashUsdUnits += line.totalUsdUnits;
     perRecipient.set(line.recipient, (perRecipient.get(line.recipient) ?? 0) + 1);
   }
-  const spent = await sectionSpent(tx, input.customerId, input.excludeOrderId);
+  const spent = await sectionSpent(tx, input.owner, input.excludeOrderId);
   const counts = await recipientCounts(tx, [...perRecipient.keys()], input.excludeOrderId);
   const recipients: RecipientOrders[] = [...perRecipient].map(([recipient, count]) => ({
     recipient,
@@ -235,7 +246,7 @@ export async function creditLimitsFor(db: Database, customerId: string): Promise
         .from(customers)
         .where(eq(customers.id, customerId));
       const policy = await currentCreditPolicy(tx);
-      const spent = await sectionSpent(tx, customerId);
+      const spent = await sectionSpent(tx, { customerId });
       const remaining = creditRemaining(policy, customer?.accountType === 'merchant', spent);
       const wallet = await findCustomerWallet(tx, customerId);
       const cash = wallet

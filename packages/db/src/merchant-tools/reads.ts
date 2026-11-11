@@ -188,6 +188,8 @@ export interface DashboardFacts {
 export function paidAsMerchant() {
   return and(
     eq(orders.payer, 'customer'),
+    // S26 PR9: a shop order is the shop customer's purchase, shown in "طلبات المتجر" only.
+    isNull(orders.shopCustomerId),
     lte(merchantProfiles.grantedAt, orders.createdAt),
     or(isNull(merchantProfiles.revokedAt), gt(merchantProfiles.revokedAt, orders.createdAt)),
   );

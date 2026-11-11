@@ -1,6 +1,6 @@
 import {
   ORDER_PROBLEMS,
-  TICKET_AUTHORS,
+  SUPPORT_MESSAGE_AUTHORS,
   TICKET_CATEGORIES,
   TICKET_CLOSERS,
   TICKET_STATUSES,
@@ -24,6 +24,7 @@ import { id, timestamps } from './columns.js';
 import { deposits } from './deposits.js';
 import { storedFiles } from './files.js';
 import { orders } from './orders.js';
+import { merchantShops, shopCustomers } from './shops.js';
 
 /*
  * Support tickets (S12 F23), owned by the api `support` module. A ticket is closed, never archived
@@ -35,7 +36,8 @@ export const ticketCategoryEnum = pgEnum('ticket_category', TICKET_CATEGORIES);
 
 export const ticketStatusEnum = pgEnum('ticket_status', TICKET_STATUSES);
 
-export const ticketAuthorEnum = pgEnum('ticket_author', TICKET_AUTHORS);
+/** S26 TK2: `merchant` writes only in a shop ticket and never opens one. */
+export const ticketAuthorEnum = pgEnum('ticket_author', SUPPORT_MESSAGE_AUTHORS);
 
 export const ticketCloserEnum = pgEnum('ticket_closer', TICKET_CLOSERS);
 
@@ -47,9 +49,11 @@ export const supportTickets = pgTable(
     id: id(),
     /** `VT-` and 6 characters of the order number alphabet. */
     number: text('number').notNull().unique(),
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id),
+    /** The Vertex customer's ticket; null on a shop ticket (exactly one of the two, S26 TK1). */
+    customerId: uuid('customer_id').references(() => customers.id),
+    /** S26 TK1: a shop customer's ticket goes to the merchant of its shop first. */
+    shopId: uuid('shop_id').references(() => merchantShops.id),
+    shopCustomerId: uuid('shop_customer_id').references(() => shopCustomers.id),
     category: ticketCategoryEnum('category').notNull(),
     orderId: uuid('order_id').references(() => orders.id),
     depositId: uuid('deposit_id').references(() => deposits.id),
@@ -58,6 +62,10 @@ export const supportTickets = pgTable(
     openedBy: ticketAuthorEnum('opened_by').notNull(),
     lastCustomerMessageAt: timestamp('last_customer_message_at', { withTimezone: true }),
     lastAdminMessageAt: timestamp('last_admin_message_at', { withTimezone: true }),
+    /** S26 TK2: the merchant's last reply in a shop ticket. */
+    lastMerchantMessageAt: timestamp('last_merchant_message_at', { withTimezone: true }),
+    /** S26 TK2: set once, when the merchant or the customer sends the shop ticket to the admin. */
+    escalatedAt: timestamp('escalated_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     closedBy: ticketCloserEnum('closed_by'),
     /** S22 OP5: the problem named at opening, an order ticket's only; never changed. */
@@ -66,6 +74,19 @@ export const supportTickets = pgTable(
   },
   (table) => [
     index('support_tickets_customer_idx').on(table.customerId, table.updatedAt.desc()),
+    index('support_tickets_shop_customer_idx')
+      .on(table.shopCustomerId, table.updatedAt.desc())
+      .where(sql`${table.shopCustomerId} is not null`),
+    index('support_tickets_shop_idx')
+      .on(table.shopId, table.updatedAt.desc(), table.id.desc())
+      .where(sql`${table.shopId} is not null`),
+    check(
+      'support_tickets_owner_check',
+      sql`(${table.customerId} is null) <> (${table.shopCustomerId} is null)
+        and (${table.shopId} is null) = (${table.shopCustomerId} is null)
+        and (${table.shopId} is not null or (${table.escalatedAt} is null and ${table.lastMerchantMessageAt} is null))
+        and (${table.shopId} is null or (${table.depositId} is null and ${table.openedBy} = 'customer'))`,
+    ),
     index('support_tickets_queue_idx').on(table.status, table.lastCustomerMessageAt),
     index('support_tickets_auto_close_idx').on(table.status, table.lastAdminMessageAt),
     // The admin queue's tabs by newest activity, one status or all (audit A07-21).

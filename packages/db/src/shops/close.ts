@@ -1,4 +1,4 @@
-import { type ShopSettlementTarget, shopTransition } from '@vertex-digital/contracts';
+import { type ShopSettlementTarget, shopCacheTag, shopTransition } from '@vertex-digital/contracts';
 import { and, eq, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
@@ -10,9 +10,11 @@ import {
   lockCustomerWallet,
   lockShopCustomerWallet,
 } from '../ledger/wallet.js';
-import { type JobSender, notifyCustomer, queueEmail } from '../notifications/index.js';
+import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { merchantShops, shopReturnRequests, shopSettlements } from '../schema/index.js';
+import { queueStoreRevalidate } from '../store/revalidate.js';
 import { queueTelegramMessage } from '../telegram/index.js';
+import { notifyShopCustomer } from './notify.js';
 import {
   auditActor,
   lockKey,
@@ -121,6 +123,8 @@ export async function closeShop(
       });
     }
   }
+  // The shop's pages show the close and stop the sign-up (SH7).
+  await queueStoreRevalidate(tx, jobs, shopCacheTag(shop.id));
   return closed;
 }
 
@@ -218,15 +222,12 @@ export async function settleShopCustomer(
     reason: input.reason,
     details: { shopCustomerId: customer.id, to: input.target, amountUsdUnits, journalId },
   });
-  await queueEmail(tx, jobs, {
-    to: customer.email,
-    template: 'shop_customer_settled',
+  await notifyShopCustomer(tx, jobs, {
+    shopCustomerId: customer.id,
+    event: 'settled',
     params: {
-      shopName: shop.displayName,
-      slug: shop.slug,
       amountUsdUnits,
       to: input.target,
-      at: settlement.createdAt.toISOString(),
     },
   });
   return { settlement, replayed: false };

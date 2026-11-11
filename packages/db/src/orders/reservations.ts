@@ -262,7 +262,7 @@ async function breaksCreditLimit(
   try {
     await checkCreditLimits(tx, {
       policy: await currentCreditPolicy(tx),
-      customerId: orderCustomerId(order),
+      owner: { customerId: orderCustomerId(order) },
       merchant: customer.accountType === 'merchant',
       walletId,
       lines: [

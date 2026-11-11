@@ -31,6 +31,7 @@ import { OrdersSweepJob } from './jobs/orders/sweep.job.js';
 import { OrdersWaitingSweepJob } from './jobs/orders/waiting-sweep.job.js';
 import { FallbackNoticesJob } from './jobs/pricing/fallback-notices.job.js';
 import { SendPushJob } from './jobs/push/send.job.js';
+import { SendShopPushJob } from './jobs/push/send-shop.job.js';
 import { ReconciliationRecheckJob } from './jobs/reconciliation/recheck.job.js';
 import { ReconciliationRunner } from './jobs/reconciliation/reconciliation-runner.js';
 import { ReconciliationRunJob } from './jobs/reconciliation/run.job.js';
@@ -157,6 +158,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     SweepFilesJob,
     PurgeExpiredJob,
     SendPushJob,
+    SendShopPushJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

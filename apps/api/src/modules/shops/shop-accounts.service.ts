@@ -3,6 +3,7 @@ import {
   PASSWORD_EQUALS_EMAIL,
   passwordEqualsEmail,
   type ShopSignUp,
+  zoneDate,
 } from '@vertex-digital/contracts';
 import {
   acceptedVersionsNow,
@@ -14,6 +15,7 @@ import {
   shopCustomerAccounts,
   shopCustomerSessions,
   shopCustomers,
+  shopDailyStats,
   type Transaction,
   withinLimits,
 } from '@vertex-digital/db';
@@ -138,6 +140,14 @@ export class ShopAccountsService {
             origin: 'self',
           },
         });
+        // SP3: the day's sign-ups, a counter only.
+        await tx
+          .insert(shopDailyStats)
+          .values({ shopId: shop.id, damascusDate: zoneDate(new Date()), signUps: 1 })
+          .onConflictDoUpdate({
+            target: [shopDailyStats.shopId, shopDailyStats.damascusDate],
+            set: { signUps: sql`${shopDailyStats.signUps} + 1` },
+          });
         await this.queueCode(tx, shop, 'email-verification', email);
       });
     } catch (error) {

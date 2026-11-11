@@ -2,6 +2,9 @@ import {
   NOTIFICATION_PARAMS,
   type NotificationParams,
   type PushNotificationEvent,
+  SHOP_NOTIFICATION_PARAMS,
+  type ShopNotificationEvent,
+  type ShopNotificationParams,
   type ShopStatus,
   TIER_NAMES_AR,
 } from '@vertex-digital/contracts';
@@ -209,10 +212,100 @@ const RENDERERS: Renderers = {
     url: '/merchant/shop/customers',
     tag: `shop-return-${params.shopCustomerId}`,
   }),
+  // S26 TK1, TK2: the ticket's number, never the customer's name or the message (PT2).
+  merchant_shop_ticket: (params) => ({
+    body: `${SHOP_TICKET_PUSH[params.kind]} ${params.number}`,
+    url: `/merchant/shop/tickets/${params.ticketId}`,
+    tag: `shop-ticket-${params.ticketId}`,
+  }),
+  // S26 PR10: the order, never the amount (PT2).
+  merchant_shop_margin_returned: (params) => ({
+    body: `أُعيد ربح الطلب ${params.orderNumber} إلى زبون متجرك ضمن تعويض`,
+    url: '/merchant/shop/orders',
+    tag: `shop-margin-${params.orderId}`,
+  }),
 };
+
+const SHOP_TICKET_PUSH = {
+  opened: 'تذكرة جديدة في متجرك',
+  replied: 'رد جديد في تذكرة متجرك',
+  escalated: 'طلب زبون تدخل الإدارة في التذكرة',
+} as const;
 
 /** PT1: the payload of a push event's notification, its stored params checked again. */
 export function renderPush(event: PushNotificationEvent, params: unknown): PushPayload {
   const render = RENDERERS[event] as (params: object) => Omit<PushPayload, 'title'>;
   return { title: PUSH_TITLE, ...render(NOTIFICATION_PARAMS[event].parse(params)) };
+}
+
+type ShopRenderers = {
+  [Event in ShopNotificationEvent]: (
+    params: ShopNotificationParams<Event>,
+    slug: string,
+  ) => Omit<PushPayload, 'title'>;
+};
+
+/** S26 PR9: a shop customer's lock-screen texts, with PT2's limits; the title is the shop's name. */
+const SHOP_RENDERERS: ShopRenderers = {
+  transfer_received: (_, slug) => ({
+    body: 'أضاف المتجر رصيداً إلى محفظتك',
+    url: `/s/${slug}/wallet`,
+    tag: 'shop-wallet',
+  }),
+  return_requested: (_, slug) => ({
+    body: 'يطلب المتجر إرجاع مبلغ من رصيدك: أكّد أو ارفض',
+    url: `/s/${slug}/wallet`,
+    tag: 'shop-return',
+  }),
+  return_done: (_, slug) => ({
+    body: 'تم إرجاع المبلغ من رصيدك إلى المتجر',
+    url: `/s/${slug}/wallet`,
+    tag: 'shop-return',
+  }),
+  settled: (_, slug) => ({
+    body: 'سُوّي رصيدك في المتجر',
+    url: `/s/${slug}/wallet`,
+    tag: 'shop-wallet',
+  }),
+  order_delivered: (params, slug) => ({
+    body: `تم تسليم طلبك ${params.orderNumber}: ${params.productNameAr} × ${params.quantity}`,
+    url: `/s/${slug}/orders/${params.orderNumber}`,
+    tag: `shop-order-${params.orderId}`,
+  }),
+  order_partially_refunded: (params, slug) => ({
+    body: `سُلّم ${params.deliveredQuantity} من طلبك ${params.orderNumber} وأُعيد الباقي إلى رصيدك`,
+    url: `/s/${slug}/orders/${params.orderNumber}`,
+    tag: `shop-order-${params.orderId}`,
+  }),
+  order_refunded: (params, slug) => ({
+    body: `تعذّر تنفيذ طلبك ${params.orderNumber} وأُعيد المبلغ إلى رصيدك`,
+    url: `/s/${slug}/orders/${params.orderNumber}`,
+    tag: `shop-order-${params.orderId}`,
+  }),
+  order_compensated: (params, slug) => ({
+    body: `أُضيف تعويض إلى رصيدك عن الطلب ${params.orderNumber}`,
+    url: `/s/${slug}/wallet`,
+    tag: `shop-order-${params.orderId}`,
+  }),
+  ticket_replied: (params, slug) => ({
+    body: `${params.from === 'shop' ? 'ردّ المتجر' : 'ردّ فريق الدعم'} على تذكرتك ${params.number}`,
+    url: `/s/${slug}/support/${params.ticketId}`,
+    tag: `shop-ticket-${params.ticketId}`,
+  }),
+};
+
+/** S26 PR9: a shop notification's push, its stored params checked again; titled by the shop. */
+export function renderShopPush(
+  event: ShopNotificationEvent,
+  params: unknown,
+  shop: { name: string; slug: string },
+): PushPayload {
+  const render = SHOP_RENDERERS[event] as (
+    params: object,
+    slug: string,
+  ) => Omit<PushPayload, 'title'>;
+  return {
+    title: shop.name,
+    ...render(SHOP_NOTIFICATION_PARAMS[event].parse(params), shop.slug),
+  };
 }

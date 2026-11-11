@@ -62,12 +62,15 @@ export {
   customerOrder,
   customerOrderPage,
   customerSavedPlayers,
+  merchantShopOrderPage,
   openAttempt,
   productDeliveryStats,
   publicShare,
   type RevealInput,
   revealCode,
   sharePath,
+  shopCustomerOrder,
+  shopCustomerOrderPage,
 } from './reads.js';
 export {
   codeReleaseLog,

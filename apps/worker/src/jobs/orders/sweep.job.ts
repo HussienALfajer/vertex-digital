@@ -275,8 +275,8 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
           },
           dedupeKey: `review:${order.id}:${changed.reviewSince?.toISOString()}`,
         });
-        // S16 AP12: a walk-in order tells no one.
-        if (order.customerId !== null) {
+        // S16 AP12: a walk-in order tells no one; S26 PR9: nor a shop order its merchant.
+        if (order.customerId !== null && order.shopCustomerId === null) {
           await notifyCustomer(tx, jobs, {
             customerId: order.customerId,
             event: 'order_delayed',

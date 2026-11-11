@@ -218,7 +218,9 @@
         "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها",
         "merchant_early_access": "عند فتح لعبة أو باقة لك مبكراً",
         "merchant_shop_changed": "عند تغيّر حالة متجرك",
-        "merchant_shop_return_ended": "عند رد زبون على طلب إرجاع رصيد"
+        "merchant_shop_return_ended": "عند رد زبون على طلب إرجاع رصيد",
+        "merchant_shop_ticket": "تذاكر زبائن متجرك",
+        "merchant_shop_margin_returned": "عند استرداد ربح طلب ضمن تعويض"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -578,7 +580,11 @@
       "merchant_shop_closed": "أُغلق متجرك. يتابع زبائنك الشراء برصيدهم حتى تسويته.",
       "merchant_shop_return_confirmed": "أكّد {name} إرجاع {amount}، وأُضيف المبلغ إلى رصيدك.",
       "merchant_shop_return_declined": "رفض {name} طلب إرجاع {amount}.",
-      "merchant_shop_return_expired": "انتهى طلب إرجاع {amount} من {name} دون رد."
+      "merchant_shop_return_expired": "انتهى طلب إرجاع {amount} من {name} دون رد.",
+      "merchant_shop_ticket_opened": "فتح {name} تذكرة جديدة في متجرك ({number}).",
+      "merchant_shop_ticket_replied": "ردّ {name} على التذكرة {number}.",
+      "merchant_shop_ticket_escalated": "طلب {name} تدخل الإدارة في التذكرة {number}.",
+      "merchant_shop_margin_returned": "أُعيد ربح الطلب {number} ({amount}) إلى زبون متجرك ضمن تعويض."
     }
   },
   "errors": {
@@ -668,7 +674,9 @@
     "SHOP_DAILY_TRANSFER_CAP_EXCEEDED": "هذا المبلغ يتجاوز حد التحويلات اليومي.",
     "SHOP_CUSTOMER_LIMIT_REACHED": "المتجر لا يستقبل زبائن جدداً الآن.",
     "RETURN_REQUEST_PENDING": "لدى الزبون طلب إرجاع قيد الانتظار.",
-    "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار."
+    "RETURN_REQUEST_STATE_INVALID": "طلب الإرجاع لم يعد قيد الانتظار.",
+    "TICKET_ESCALATION_TOO_EARLY": "يمكنك طلب تدخل الإدارة بعد مرور 24 ساعة دون ردّ من المتجر.",
+    "ORDER_NOT_COMPENSABLE": "لا يمكن تعويض هذا الطلب: ليس طلب متجر منتهياً، أو مضت 7 أيام، أو تجاوز عدد الوحدات المسلَّمة."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",

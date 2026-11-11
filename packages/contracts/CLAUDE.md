@@ -23,7 +23,7 @@ The single source of shapes and pure rules shared by api, worker, store and admi
 - `suppliers.ts` imports `catalog.ts`, and `pricing.ts` imports `suppliers.ts`: keep that order.
 - `customer-status.ts` imports no other module, so deposits, orders and support can all use it.
 - `merchants.ts` imports only `auth`, `lists`, `money`, `price-kinds`, `merchant-tiers` (which imports only `money` and `price-kinds`), and `product-alerts.ts` only `catalog`, `money`, so the store's forms stay light. `credit.ts` (S25) imports only `money`: `catalog` and `orders` import it.
-- `shops.ts` (S26) imports only `auth`, `catalog`, `lists`, `money`; `audit.ts` and `notifications.ts` import it.
+- `shops.ts` (S26) imports only `auth`, `catalog`, `lists`, `money`; `audit.ts` and `notifications.ts` import it. `shop-selling.ts` (S26 PR 2: selling prices, the shop's public, order, ticket and statistics shapes) imports `catalog`, `credit`, `lists`, `merchant-tools`, `money`, `orders`, `shops`, `support`; `audit.ts` imports it.
 - `notifications.ts` imports `merchant-tools.ts`, never `merchant-documents.ts` (price list and statement schemas), so pages that ship notifications do not ship those or the wallet's.
 
 ## Money (ADR 0003)

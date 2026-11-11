@@ -19,6 +19,7 @@ import {
   merchantShopRates,
   merchantShopSlugs,
   merchantShops,
+  queueShopRevalidate,
   recordAudit,
   type ShopRow,
   settleShopCustomer,
@@ -315,6 +316,10 @@ export class ShopsAdminService {
               .where(eq(merchantShops.id, shop.id))
               .returning()
           : [shop];
+        // A new slug or a cleared announcement shows on the shop's pages (SH3, ST5).
+        if (changes.slug !== undefined || changes.announcement !== undefined) {
+          await queueShopRevalidate(tx, this.jobs, shop.merchantId);
+        }
         return updated ?? shop;
       });
     } catch (error) {
@@ -434,7 +439,8 @@ export class ShopsAdminService {
       customerId: shop.merchantId,
       event: 'merchant_shop_changed',
       params,
-    });
+    }); // The shop's pages show its state (a suspension's banner, the close).
+    await queueShopRevalidate(tx, this.jobs, shop.merchantId);
   }
 
   private async adminShop(db: Database | Transaction, shop: ShopRow): Promise<AdminShop> {
