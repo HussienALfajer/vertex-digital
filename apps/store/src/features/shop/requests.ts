@@ -141,6 +141,37 @@ export function shopSignOut(slug: string, fetcher: Fetcher = fetch) {
   return apiRequest(shopApi(slug, '/auth/sign-out'), { method: 'POST', body: {}, fetcher });
 }
 
+/** CA8: a code to the new address (the same answer when the shop holds it, CA3). */
+export function shopRequestEmailChange(
+  slug: string,
+  input: { newEmail: string; password: string },
+  fetcher: Fetcher = fetch,
+) {
+  return withAltcha(
+    (headers) =>
+      apiRequest(shopApi(slug, '/account/request-email-change'), {
+        method: 'POST',
+        body: input,
+        headers,
+        fetcher,
+      }),
+    fetcher,
+  );
+}
+
+/** CA8: the code from the new address changes the email; other sessions are signed out. */
+export function shopConfirmEmailChange(
+  slug: string,
+  input: { newEmail: string; otp: string },
+  fetcher: Fetcher = fetch,
+) {
+  return apiRequest(shopApi(slug, '/account/change-email'), {
+    method: 'POST',
+    body: input,
+    fetcher,
+  });
+}
+
 export function getShopProfile(slug: string, fetcher: Fetcher = fetch) {
   return apiRequest<ShopCustomerProfile>(shopApi(slug, '/me'), { fetcher });
 }

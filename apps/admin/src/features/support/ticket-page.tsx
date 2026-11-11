@@ -1,11 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import {
-  type AdminTicket,
-  formatUsd,
-  type TicketMessage,
-  ticketMessageSchema,
-} from '@vertex-digital/contracts';
+import { type AdminTicket, formatUsd, ticketMessageSchema } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -33,6 +28,7 @@ import {
   RotateCcwIcon,
   SearchXIcon,
   SendIcon,
+  StoreIcon,
 } from 'lucide-react';
 import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -156,6 +152,7 @@ export function TicketPage({ id }: { id: string }) {
         </Badge>
         <Badge tone="neutral">{t(`support.categories.${data.category}`)}</Badge>
         {data.openedBy === 'admin' && <Badge tone="neutral">{t('support.openedByAdmin')}</Badge>}
+        {data.shop && <ShopTag shop={data.shop} />}
       </div>
       <div className="grid items-start gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
@@ -206,10 +203,33 @@ function Thread({ ticket }: { ticket: AdminTicket }) {
   );
 }
 
-function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: TicketMessage }) {
+/** S26 TK2: an escalated shop ticket's tag, to the shop's page. */
+export function ShopTag({ shop }: { shop: NonNullable<AdminTicket['shop']> }) {
+  const { t } = useTranslation();
+  return (
+    <Badge tone="info" render={<Link to="/shops/$id" params={{ id: shop.id }} />}>
+      <StoreIcon />
+      {t('support.shopTag', { name: shop.displayName })}
+    </Badge>
+  );
+}
+
+function MessageBubble({
+  ticket,
+  message,
+}: {
+  ticket: AdminTicket;
+  message: AdminTicket['messages'][number];
+}) {
   const { t } = useTranslation();
   const [shown, setShown] = useState<string | null>(null);
   const fromAdmin = message.author === 'admin';
+  // S26 TK3: a shop ticket's merchant writes too, on the customer's side, named as the shop.
+  const author = fromAdmin
+    ? t('support.thread.admin')
+    : message.author === 'merchant'
+      ? t('support.thread.merchant', { name: ticket.shop?.displayName ?? '' })
+      : ticket.customer.name;
   return (
     <li className={cn('flex', fromAdmin ? 'justify-end' : 'justify-start')}>
       <article
@@ -222,9 +242,7 @@ function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: Tick
         )}
       >
         <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
-          <span className="font-medium">
-            {fromAdmin ? t('support.thread.admin') : ticket.customer.name}
-          </span>
+          <span className="font-medium">{author}</span>
           <time dateTime={message.createdAt} className="opacity-80">
             {formatDateTime(message.createdAt)}
           </time>
@@ -358,15 +376,32 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
   return (
     <aside className="flex flex-col gap-4">
       <Card className="gap-3">
-        <CardTitle className="text-lg">{t('support.side.customer')}</CardTitle>
+        <CardTitle className="text-lg">
+          {ticket.shop ? t('support.side.shopCustomer') : t('support.side.customer')}
+        </CardTitle>
         <div className="flex flex-col gap-1">
-          <Link
-            to="/customers/$id"
-            params={{ id: customer.id }}
-            className="rounded-sm font-medium underline-offset-4 hover:underline"
-          >
-            {customer.name}
-          </Link>
+          {ticket.shop ? (
+            // S26 TK4: a shop customer has no Vertex profile: the shop's page lists them.
+            <>
+              <span className="font-medium">{customer.name}</span>
+              <Link
+                to="/shops/$id"
+                params={{ id: ticket.shop.id }}
+                search={{ tab: 'customers' }}
+                className="rounded-sm text-sm underline-offset-4 hover:underline"
+              >
+                {ticket.shop.displayName}
+              </Link>
+            </>
+          ) : (
+            <Link
+              to="/customers/$id"
+              params={{ id: customer.id }}
+              className="rounded-sm font-medium underline-offset-4 hover:underline"
+            >
+              {customer.name}
+            </Link>
+          )}
           {customer.tier && <TierChip tier={customer.tier} />}
           <span dir="ltr" className="text-end text-sm break-all text-muted-foreground">
             {customer.email}
@@ -375,7 +410,15 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
             {customer.phone}
           </span>
         </div>
-        <CustomerMarks customerId={customer.id} marks={customer.marks} isTest={customer.isTest} />
+        {ticket.shop ? (
+          customer.status !== 'active' && (
+            <Badge tone="warning" className="self-start">
+              {t(`shops.customerStates.${customer.status}`)}
+            </Badge>
+          )
+        ) : (
+          <CustomerMarks customerId={customer.id} marks={customer.marks} isTest={customer.isTest} />
+        )}
         {customer.isTest && (
           <Badge tone="info" className="self-start">
             {t('customers.chips.test')}

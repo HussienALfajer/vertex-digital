@@ -96,6 +96,10 @@ export const EMAIL_TEMPLATES = [
   'shop_customer_verify_email',
   /** S26 CA4: the code that resets a shop customer's password. */
   'shop_customer_reset_password',
+  /** S26 CA8: the code that confirms a shop customer's new email, sent to the new address. */
+  'shop_customer_change_email',
+  /** S26 CA8: to the old address, once the email changed. */
+  'shop_customer_email_changed',
   /** S26 WL1: the merchant added balance to the shop wallet. */
   'shop_customer_transfer_received',
   /** S26 WL5: the merchant asks to return an amount; the customer confirms it in the shop. */
@@ -367,7 +371,8 @@ export const NOTIFICATION_PARAMS = {
     ticketId: z.uuid(),
     number: z.string(),
     customerName: z.string(),
-    kind: z.enum(['opened', 'replied', 'escalated']),
+    /** `support_replied`: the store's support wrote in an escalated ticket (TK3). */
+    kind: z.enum(['opened', 'replied', 'escalated', 'support_replied']),
   }),
   // S26 PR10: the order and the margin taken back.
   merchant_shop_margin_returned: z.object({
@@ -491,6 +496,8 @@ export const EMAIL_PARAMS = {
   }),
   shop_customer_verify_email: shopEmail.extend(code.shape),
   shop_customer_reset_password: shopEmail.extend(code.shape),
+  shop_customer_change_email: shopEmail.extend(code.shape),
+  shop_customer_email_changed: shopEmail.extend(at.shape),
   shop_customer_transfer_received: shopEmail.extend({
     ...SHOP_NOTIFICATION_PARAMS.transfer_received.shape,
     ...at.shape,
@@ -545,6 +552,7 @@ export const CODE_EMAIL_TEMPLATES = [
   'customer_change_email',
   'shop_customer_verify_email',
   'shop_customer_reset_password',
+  'shop_customer_change_email',
 ] as const satisfies readonly EmailTemplate[];
 
 export function isCodeEmail(template: EmailTemplate): boolean {

@@ -34,6 +34,7 @@ import {
   merchantProfiles,
   merchantWatches,
   orders,
+  shopOrderSales,
 } from '../schema/index.js';
 
 /*
@@ -199,7 +200,9 @@ export function paidAsMerchant() {
  * DB2, DB4, DB5: the merchant's orders that finished delivering in `[from, to)` (at least one unit
  * delivered) and that `paidAsMerchant`, with their sale rows: sales and profit (SP6) of the orders
  * with a sale, the count of those without, and the products sold most. Summed in SQL (audit
- * A06-40): only the totals and the top rows are read.
+ * A06-40): only the totals and the top rows are read. S26 WL10: the shop's delivered orders count
+ * too, at their selling price (`shop_order_sales`); their profit is the margin of the units
+ * delivered.
  */
 export async function dashboardFacts(
   db: Executor,
@@ -214,11 +217,12 @@ export async function dashboardFacts(
     gte(orders.finishedAt, from),
     lt(orders.finishedAt, to),
     sql`${orders.deliveredQuantity} > 0`,
-    paidAsMerchant(),
+    or(paidAsMerchant(), isNotNull(orders.shopCustomerId)),
   );
   // SP6: refunded units count neither as a sale nor as a cost; no sale row, no sale.
-  const sales = sql`case when ${merchantOrderSales.orderId} is null then 0
-    else ${orders.deliveredQuantity}::numeric * ${merchantOrderSales.unitUsdUnits} end`;
+  const unitSale = sql`coalesce(${merchantOrderSales.unitUsdUnits}, ${shopOrderSales.unitSellUsdUnits})`;
+  const sales = sql`case when ${unitSale} is null then 0
+    else ${orders.deliveredQuantity}::numeric * ${unitSale} end`;
   const units = sql`sum(${orders.deliveredQuantity})`;
   const [totals, top] = await readAll(db, [
     () =>
@@ -226,11 +230,12 @@ export async function dashboardFacts(
         .select({
           salesUsdUnits: sql<string>`coalesce(sum(${sales}), 0)::text`,
           profitUsdUnits: sql<string>`coalesce(sum(${orders.deliveredQuantity}::numeric *
-            (${merchantOrderSales.unitUsdUnits} - ${orders.unitPriceUsdUnits})), 0)::text`,
-          ordersWithoutSale: sql<string>`count(*) filter (where ${merchantOrderSales.orderId} is null)::text`,
+            (${unitSale} - ${orders.unitPriceUsdUnits})), 0)::text`,
+          ordersWithoutSale: sql<string>`count(*) filter (where ${unitSale} is null)::text`,
         })
         .from(orders)
         .leftJoin(merchantOrderSales, eq(merchantOrderSales.orderId, orders.id))
+        .leftJoin(shopOrderSales, eq(shopOrderSales.orderId, orders.id))
         .innerJoin(merchantProfiles, eq(merchantProfiles.customerId, orders.customerId))
         .where(delivered),
     () =>
@@ -244,6 +249,7 @@ export async function dashboardFacts(
         })
         .from(orders)
         .leftJoin(merchantOrderSales, eq(merchantOrderSales.orderId, orders.id))
+        .leftJoin(shopOrderSales, eq(shopOrderSales.orderId, orders.id))
         .innerJoin(merchantProfiles, eq(merchantProfiles.customerId, orders.customerId))
         .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
         .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))

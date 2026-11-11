@@ -166,7 +166,9 @@ test.describe('the bottom bar (NH4, NH5)', () => {
         user: { name: 'سارة', email: 'sara@example.com' },
         session: { token: 'this-device' },
       })
-      .on(`GET /api/orders/${ORDER}`, 404, { code: 'NOT_FOUND' });
+      .on(`GET /api/orders/${ORDER}`, 404, { code: 'NOT_FOUND' })
+      // The print page reads its own route; whether it answers before the next page is a race.
+      .on(`GET /api/orders/${ORDER}/print`, 404, { code: 'NOT_FOUND' });
     await page.goto(`/orders/${ORDER}/print`);
     await expect(page.locator('nav.fixed')).toHaveCount(0);
 

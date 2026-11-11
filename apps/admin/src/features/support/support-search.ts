@@ -19,6 +19,8 @@ export interface SupportSearch {
   /** S22 OP6: tickets naming this order problem. */
   problem?: OrderProblem;
   customerId?: string;
+  /** S26: one shop's escalated tickets (the shop page's tab). */
+  shopId?: string;
   /** A ticket number, as typed. */
   q?: string;
 }
@@ -43,6 +45,7 @@ export function parseSupportSearch(search: Record<string, unknown>): SupportSear
     parsed.problem = search.problem as OrderProblem;
   }
   if (isUuid(search.customerId)) parsed.customerId = search.customerId;
+  if (isUuid(search.shopId)) parsed.shopId = search.shopId;
   const q = typeof search.q === 'string' ? search.q.trim() : '';
   if (q.length >= 1 && q.length <= 20) parsed.q = q;
   return parsed;

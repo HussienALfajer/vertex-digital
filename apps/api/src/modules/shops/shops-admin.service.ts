@@ -24,6 +24,7 @@ import {
   type ShopRow,
   settleShopCustomer,
   shopCustomers,
+  shopOpenOrders,
   shopRateNow,
   shopTotalBalances,
   slugHeldByUnsettledShop,
@@ -75,8 +76,10 @@ export class ShopsAdminService {
       .select({
         shop: merchantShops,
         at: cursorTime(merchantShops.requestedAt),
+        // The outer row named in full: a one-table select writes `${merchantShops.id}` as a bare
+        // "id", which inside the subquery would name `c.id`.
         customers: sql<number>`(select count(*) from shop_customers c
-          where c.shop_id = ${merchantShops.id} and c.archived_at is null)::int`,
+          where c.shop_id = "merchant_shops"."id" and c.archived_at is null)::int`,
       })
       .from(merchantShops)
       .where(
@@ -94,6 +97,7 @@ export class ShopsAdminService {
     const page = pageOf(rows, query.limit, (row) => ({ at: row.at, id: row.shop.id }));
     const shopIds = page.items.map((row) => row.shop.id);
     const totals = await shopTotalBalances(this.db, shopIds);
+    const open = await shopOpenOrders(this.db, shopIds);
     const names = await this.auth.namesOf(page.items.map((row) => row.shop.merchantId));
     const items: AdminShopRow[] = [];
     for (const { shop, customers } of page.items) {
@@ -107,6 +111,7 @@ export class ShopsAdminService {
         brandColor: shop.brandColor,
         customerCount: customers,
         totalBalanceUsdUnits: totals.get(shop.id) ?? 0,
+        heldMarginUsdUnits: open.get(shop.id)?.heldMarginUsdUnits ?? 0,
         transferredTodayUsdUnits: await transferredToday(this.db, shop.id),
         requestedAt: shop.requestedAt.toISOString(),
       });
@@ -451,6 +456,7 @@ export class ShopsAdminService {
       .from(shopCustomers)
       .where(and(eq(shopCustomers.shopId, shop.id), isNull(shopCustomers.archivedAt)));
     const totals = await shopTotalBalances(db, [shop.id]);
+    const open = (await shopOpenOrders(db, [shop.id])).get(shop.id);
     const slugs = await db
       .select({ slug: merchantShopSlugs.slug })
       .from(merchantShopSlugs)
@@ -472,7 +478,9 @@ export class ShopsAdminService {
       suspendNote: shop.suspendNote,
       closedAt: shop.closedAt?.toISOString() ?? null,
       totalBalanceUsdUnits: total,
-      settled: shop.status === 'closed' && total === 0,
+      heldMarginUsdUnits: open?.heldMarginUsdUnits ?? 0,
+      openOrders: open?.openOrders ?? 0,
+      settled: shop.status === 'closed' && total === 0 && (open?.openOrders ?? 0) === 0,
       oldSlugs: slugs.map((row) => row.slug).filter((slug) => slug !== shop.slug),
       rates: rates.map((row) => ({
         rate: rateFromNumeric(row.rateSypPerUsd),

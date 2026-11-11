@@ -55,6 +55,12 @@ describe('the statement screen (owner, 2026-10-30)', () => {
       { filter: 'all', count: 1 },
       { filter: 'other', count: 1 },
     ]);
+    expect(
+      movementChips([entry({ kind: 'shop_transfer' }), entry({ kind: 'shop_margin' })]),
+    ).toEqual([
+      { filter: 'all', count: 2 },
+      { filter: 'shop', count: 2 },
+    ]);
   });
 
   it('finds an order by its number or its player id, a checkout by its orders', () => {
@@ -104,5 +110,17 @@ describe('the statement screen (owner, 2026-10-30)', () => {
       ),
     ).toEqual({ key: 'adjustment', category: 'compensation', credit: true, reversal: false });
     expect(movementTitle(entry({ kind: 'treasury' }))).toEqual({ key: 'other' });
+    expect(movementTitle(entry({ kind: 'shop_transfer', amountUnits: -1 }))).toEqual({
+      key: 'shopTransferOut',
+    });
+    expect(movementTitle(entry({ kind: 'shop_transfer', amountUnits: 1 }))).toEqual({
+      key: 'shopReturnIn',
+    });
+    expect(movementTitle(entry({ kind: 'shop_margin', amountUnits: 1 }))).toEqual({
+      key: 'shopMargin',
+    });
+    expect(movementTitle(entry({ kind: 'shop_margin', amountUnits: -1 }))).toEqual({
+      key: 'shopMarginBack',
+    });
   });
 });

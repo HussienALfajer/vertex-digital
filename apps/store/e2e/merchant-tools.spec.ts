@@ -212,7 +212,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await open(tools.nav.dashboard).click();
         await expect(nav).toBeVisible();
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(12);
+        await expect(nav.getByRole('link')).toHaveCount(18);
         await screenshot(page, testInfo, `merchant-nav-sheet-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();
         await expect(page).toHaveURL('/merchant/alerts');
@@ -220,7 +220,7 @@ test.describe('the merchant area (S21 PR 1)', () => {
         await expect(open(tools.nav.alerts)).toBeVisible();
       } else {
         await expect(current).toHaveText(tools.nav.dashboard);
-        await expect(nav.getByRole('link')).toHaveCount(12);
+        await expect(nav.getByRole('link')).toHaveCount(18);
         await expect(page.getByRole('complementary')).toContainText('سارة الأحمد');
         await screenshot(page, testInfo, `merchant-sidebar-${scheme}`);
         await nav.getByRole('link', { name: tools.nav.alerts }).click();

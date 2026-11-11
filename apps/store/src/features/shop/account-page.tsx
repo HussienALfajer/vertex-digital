@@ -13,6 +13,7 @@ import { formatPhone } from '@/features/auth/phone';
 import { sameKey } from '@/features/push/rules';
 import { useInstall } from '@/features/pwa/install-button';
 import { errorText } from '@/lib/errors';
+import { ShopChangeEmail } from './change-email';
 import { ts } from './i18n';
 import { shopPath } from './paths';
 import {
@@ -30,7 +31,7 @@ import { SessionFailed, useSignedInShopCustomer } from './signed-in';
 
 /**
  * "حسابي" in a shop (S26 screens): the name, phone and email (the merchant edits the name and
- * phone, CA8), a new password by email code, the shop's notifications on this device (SP1), the
+ * phone; the customer changes the email by a code, CA8), a new password by email code, the shop's notifications on this device (SP1), the
  * app install, and sign-out (the shop's session only).
  */
 export function ShopAccountPage({ slug }: { slug: string }) {
@@ -68,6 +69,10 @@ export function ShopAccountPage({ slug }: { slug: string }) {
               </Item>
             </dl>
             <p className="text-sm text-muted-foreground">{ts('account.changeHint')}</p>
+            <ShopChangeEmail
+              slug={slug}
+              onChanged={async () => void (await refreshShopCustomer(slug))}
+            />
           </Card>
           <Card>
             <h2 className="flex items-center gap-2 font-bold">

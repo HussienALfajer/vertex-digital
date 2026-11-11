@@ -30,6 +30,7 @@ export const MOVEMENT_FILTERS = [
   'purchase',
   'refund',
   'adjustment',
+  'shop',
   'other',
 ] as const;
 
@@ -43,7 +44,10 @@ export function movementFilterOf(
     entry.kind === 'refund' ||
     entry.kind === 'adjustment'
     ? entry.kind
-    : 'other';
+    : // S26 WL10: the shop's transfers, returns and margins together.
+      entry.kind === 'shop_transfer' || entry.kind === 'shop_margin'
+      ? 'shop'
+      : 'other';
 }
 
 /** The chips with a count, `all` first; a kind the month lacks has no chip. */
@@ -109,6 +113,11 @@ export type MovementTitle =
       credit: boolean;
       reversal: boolean;
     }
+  /** S26 WL10: a transfer to a shop customer, a return from one, a margin credit or its return. */
+  | { key: 'shopTransferOut' }
+  | { key: 'shopReturnIn' }
+  | { key: 'shopMargin' }
+  | { key: 'shopMarginBack' }
   | { key: 'other' };
 
 export function movementTitle(entry: StatementEntry): MovementTitle {
@@ -126,6 +135,12 @@ export function movementTitle(entry: StatementEntry): MovementTitle {
       credit: entry.amountUnits > 0,
       reversal: entry.adjustment.reversal,
     };
+  }
+  if (entry.kind === 'shop_transfer') {
+    return { key: entry.amountUnits < 0 ? 'shopTransferOut' : 'shopReturnIn' };
+  }
+  if (entry.kind === 'shop_margin') {
+    return { key: entry.amountUnits < 0 ? 'shopMarginBack' : 'shopMargin' };
   }
   return { key: 'other' };
 }

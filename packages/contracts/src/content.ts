@@ -7,8 +7,19 @@ import { slugSchema } from './catalog.js';
  * and one announcement bar, each scheduled; and the feed of recent real deliveries.
  */
 
-/** S20 MT1: `merchant_terms`, accepted by merchants (shown at `/merchant-terms`). */
-export const CONTENT_PAGES = ['terms', 'privacy', 'refund', 'about', 'merchant_terms'] as const;
+/**
+ * S20 MT1: `merchant_terms`, accepted by merchants (shown at `/merchant-terms`). S26 CA5:
+ * `shop_terms`, accepted by a merchant shop's customers, shown in each shop's frame
+ * (`/s/<slug>/terms`, with the shop's name) and at `/shop-terms`; never in the sitemap.
+ */
+export const CONTENT_PAGES = [
+  'terms',
+  'privacy',
+  'refund',
+  'about',
+  'merchant_terms',
+  'shop_terms',
+] as const;
 
 export const contentPageSchema = z.enum(CONTENT_PAGES).meta({ id: 'ContentPage' });
 

@@ -1,0 +1,2 @@
+ALTER TYPE "public"."email_template" ADD VALUE 'shop_customer_change_email' BEFORE 'shop_customer_transfer_received';--> statement-breakpoint
+ALTER TYPE "public"."email_template" ADD VALUE 'shop_customer_email_changed' BEFORE 'shop_customer_transfer_received';

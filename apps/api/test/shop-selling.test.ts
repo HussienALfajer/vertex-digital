@@ -31,6 +31,7 @@ import {
   auditOf,
   cookieHeader,
   emailsTo,
+  lastCode,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -570,6 +571,15 @@ describe('the purchase and the orders (PR5–PR12)', () => {
       200,
     );
     expect(stats.totals).toMatchObject({ orders: 1, marginReleasedUsdUnits: sell() - state.price });
+    // WL10: the dashboard's sales and profit count the shop's delivered order at its selling price.
+    const dashboard = await json<{ salesUsdUnits: number; profitUsdUnits: number }>(
+      await send('GET', '/api/merchant/dashboard', context.owner.cookie),
+      200,
+    );
+    expect(dashboard).toMatchObject({
+      salesUsdUnits: sell(),
+      profitUsdUnits: sell() - state.price,
+    });
     // Another merchant without a shop, and no session.
     const outsider = await merchant();
     await json(await send('GET', '/api/merchant/shop/orders', outsider.cookie), 404);
@@ -601,6 +611,28 @@ describe('the purchase and the orders (PR5–PR12)', () => {
     ).toBe('ORDER_NOT_COMPENSABLE');
     // A customer session on an admin route is 401.
     await json(await send('POST', path, context.owner.cookie, body, key()), 401);
+    // The order page's shop line, and the shop's orders on the admin's shop page.
+    const detail = await json<{ shopSale: Record<string, unknown> | null }>(
+      await send('GET', `/api/admin/orders/${order.id}`, admin.cookie),
+      200,
+    );
+    expect(detail.shopSale).toMatchObject({
+      shop: { id: context.shopId, slug: context.slug },
+      shopCustomer: { id: customer.id },
+      unitSellUsdUnits: sell(),
+      marginReleasedUsdUnits: sell() - state.price,
+      compensatedQuantity: 1,
+    });
+    const shopOrders = await json<{ items: { id: string }[] }>(
+      await send('GET', `/api/admin/shops/${context.shopId}/orders`, admin.cookie),
+      200,
+    );
+    expect(shopOrders.items.map((row) => row.id)).toEqual([order.id]);
+    await json(await send('GET', `/api/admin/shops/${newId()}/orders`, admin.cookie), 404);
+    await json(
+      await send('GET', `/api/admin/shops/${context.shopId}/orders`, context.owner.cookie),
+      401,
+    );
   });
 
   it('downloads the sticker as a PNG, 20 an hour', async () => {
@@ -728,6 +760,55 @@ describe('shop tickets (TK1–TK5)', () => {
       .where(and(eq(supportTickets.id, ticket.id)));
     expect(row?.customerId).toBeNull();
   });
+
+  it('reaches the admin once escalated: the shop tag, the whole thread, and replies (TK3)', async () => {
+    const context = await shopFor();
+    const customer = await customerOf(context, 0);
+    const ticket = await json<{ id: string }>(await open(context, customer), 201);
+    await json(
+      await send('POST', `/api/merchant/shop/tickets/${ticket.id}/escalate`, context.owner.cookie, {
+        note: 'الشحن لم يصل',
+      }),
+      200,
+    );
+    const queue = await json<{
+      items: { id: string; shop: { id: string; slug: string } | null; customer: { id: string } }[];
+    }>(
+      await send(
+        'GET',
+        `/api/admin/support/tickets?status=all&shopId=${context.shopId}`,
+        admin.cookie,
+      ),
+      200,
+    );
+    expect(queue.items).toEqual([
+      expect.objectContaining({
+        id: ticket.id,
+        shop: expect.objectContaining({ id: context.shopId, slug: context.slug }),
+        customer: expect.objectContaining({ id: customer.id }),
+      }),
+    ]);
+    const replied = await json<{ messages: { author: string }[]; shop: { id: string } | null }>(
+      await client.request('POST', `/api/admin/support/tickets/${ticket.id}/messages`, {
+        cookie: admin.cookie,
+        form: formOf({ body: 'نتابع الطلب مع المورد' }),
+        headers: key(),
+      }),
+      201,
+    );
+    expect(replied.shop?.id).toBe(context.shopId);
+    expect(replied.messages.map((message) => message.author)).toEqual(['customer', 'admin']);
+    const seen = await json<{ messages: { from: string }[] }>(
+      await send('GET', `/api/shops/${context.slug}/tickets/${ticket.id}`, customer.cookie),
+      200,
+    );
+    expect(seen.messages.map((message) => message.from)).toEqual(['customer', 'support']);
+    const notices = await test.db.execute<{ params: { kind: string } }>(
+      sql`select params from customer_notifications where customer_id = ${context.owner.id}
+        and event = 'merchant_shop_ticket'`,
+    );
+    expect(notices.rows.map((row) => row.params.kind)).toContain('support_replied');
+  });
 });
 
 describe('a purchase as a shop order of the merchant', () => {
@@ -737,5 +818,67 @@ describe('a purchase as a shop order of the merchant', () => {
     const order = await json<{ id: string }>(await purchase(context, customer), 201);
     const [row] = await test.db.select().from(orders).where(eq(orders.id, order.id));
     expect(row).toMatchObject({ customerId: context.owner.id, shopCustomerId: customer.id });
+  });
+});
+
+describe("the shop customer's email change (CA8)", () => {
+  it('changes the email by a code to the new address, never naming a taken one', async () => {
+    const context = await shopFor();
+    const customer = await customerOf(context, 0);
+    const other = await customerOf(context, 0);
+    const request = async (newEmail: string, password = PASSWORD) =>
+      client.request('POST', `/api/shops/${context.slug}/account/request-email-change`, {
+        cookie: customer.cookie,
+        body: { newEmail, password },
+        headers: await client.altcha(),
+      });
+    await json(await request(uniqueEmail('shop-new'), 'wrong-password-1'), 400);
+    // Another account of the shop holds it: the same answer, and no email to it.
+    await json(await request(other.email), 200);
+    expect(
+      (await emailsTo(test.db, other.email)).filter(
+        (mail) => mail.template === 'shop_customer_change_email',
+      ),
+    ).toEqual([]);
+    const fresh = uniqueEmail('shop-new');
+    await json(await request(fresh), 200);
+    const code = await lastCode(test.db, fresh);
+    const confirm = (newEmail: string, otp: string) =>
+      send('POST', `/api/shops/${context.slug}/account/change-email`, customer.cookie, {
+        newEmail,
+        otp,
+      });
+    // The code is bound to the address it was sent to.
+    await json(await confirm(uniqueEmail('shop-other'), code), 400);
+    await json(await confirm(fresh, code), 200);
+    const me = await json<{ email: string }>(
+      await send('GET', `/api/shops/${context.slug}/me`, customer.cookie),
+      200,
+    );
+    expect(me.email).toBe(fresh);
+    expect((await emailsTo(test.db, customer.email)).map((mail) => mail.template)).toContain(
+      'shop_customer_email_changed',
+    );
+    expect((await auditOf(test.db, customer.id)).map((entry) => entry.action)).toContain(
+      'shop_customer.email_changed',
+    );
+    // A stolen session guessing the password with a new address each time: 10 checks in 15 minutes.
+    const guesser = await customerOf(context, 0);
+    const guess = async () =>
+      client.request('POST', `/api/shops/${context.slug}/account/request-email-change`, {
+        cookie: guesser.cookie,
+        body: { newEmail: uniqueEmail('shop-guess'), password: 'wrong-password-1' },
+        headers: await client.altcha(),
+      });
+    for (let i = 0; i < 10; i += 1) await json(await guess(), 400);
+    expect((await json<{ code: string }>(await guess(), 429)).code).toBe('RATE_LIMITED');
+    // No session, and another shop's customer.
+    await json(
+      await send('POST', `/api/shops/${context.slug}/account/change-email`, '', {
+        newEmail: fresh,
+        otp: code,
+      }),
+      401,
+    );
   });
 });

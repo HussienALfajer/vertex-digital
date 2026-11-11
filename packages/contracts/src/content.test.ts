@@ -36,6 +36,7 @@ describe('contentPagePath (audit A08-33)', () => {
       '/refund',
       '/about',
       '/merchant-terms',
+      '/shop-terms',
     ]);
   });
 });

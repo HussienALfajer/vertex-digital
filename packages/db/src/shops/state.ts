@@ -158,6 +158,33 @@ export async function shopTotalBalances(
   return new Map(result.rows.map((row) => [row.id, Number(row.total)]));
 }
 
+/**
+ * The admin's shops page (S26 Screens, WL9): per shop, its open orders (not finished) and the
+ * margin they hold in `shop_margin_held:USD`, (S − B) × quantity of each.
+ */
+export async function shopOpenOrders(
+  db: Executor,
+  shopIds: readonly string[],
+): Promise<Map<string, { openOrders: number; heldMarginUsdUnits: number }>> {
+  if (shopIds.length === 0) return new Map();
+  const result = await db.execute<{ id: string; open: string; held: string }>(sql`
+    select s.shop_id as id, count(*)::text as open,
+      coalesce(sum((s.unit_sell_usd_units - s.unit_buy_usd_units) * s.quantity), 0)::text as held
+    from shop_order_sales s
+    join orders o on o.id = s.order_id
+    where o.finished_at is null and s.shop_id in (${sql.join(
+      shopIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    group by s.shop_id`);
+  return new Map(
+    result.rows.map((row) => [
+      row.id,
+      { openOrders: Number(row.open), heldMarginUsdUnits: Number(row.held) },
+    ]),
+  );
+}
+
 /** The store's rate in force (S07), as a shop compares an own rate with it (ST3). */
 export async function storeRateNow(
   db: Executor,
@@ -275,4 +302,63 @@ export async function shopCustomerContacts(
     .from(shopCustomers)
     .where(inArray(shopCustomers.id, [...ids]));
   return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * S26 TK3, TK4: shop customers by id as the admin's support sees them: contacts, state and shop
+ * (an escalated shop ticket in the panel's queue and thread).
+ */
+export async function shopTicketPeople(
+  db: Executor,
+  ids: readonly string[],
+): Promise<
+  Map<
+    string,
+    {
+      id: string;
+      name: string;
+      email: string;
+      phone: string;
+      frozen: boolean;
+      archived: boolean;
+      shop: { id: string; slug: string; displayName: string; merchantId: string };
+    }
+  >
+> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: shopCustomers.id,
+      name: shopCustomers.name,
+      email: shopCustomers.email,
+      phone: shopCustomers.phone,
+      frozenAt: shopCustomers.frozenAt,
+      archivedAt: shopCustomers.archivedAt,
+      shopId: merchantShops.id,
+      slug: merchantShops.slug,
+      displayName: merchantShops.displayName,
+      merchantId: merchantShops.merchantId,
+    })
+    .from(shopCustomers)
+    .innerJoin(merchantShops, eq(merchantShops.id, shopCustomers.shopId))
+    .where(inArray(shopCustomers.id, [...ids]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        frozen: row.frozenAt !== null,
+        archived: row.archivedAt !== null,
+        shop: {
+          id: row.shopId,
+          slug: row.slug,
+          displayName: row.displayName,
+          merchantId: row.merchantId,
+        },
+      },
+    ]),
+  );
 }

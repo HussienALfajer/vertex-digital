@@ -1075,6 +1075,8 @@ export const AUDIT_DETAILS = {
   'shop_customer.profile_updated': changed({ name: z.string(), phone: z.string() }),
   /** S26 CA4: a password set from an invitation or reset; `count` is the sessions signed out. */
   'shop_customer.password_changed': count,
+  /** S26 CA8: by a code to the new address; the other sessions signed out. */
+  'shop_customer.email_changed': changed({ email: z.string() }),
   /** S26 CA7: the reason is the entry's `reason`. */
   'shop_customer.frozen': none,
   'shop_customer.unfrozen': none,

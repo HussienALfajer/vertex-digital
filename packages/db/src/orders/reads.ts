@@ -69,6 +69,7 @@ import {
   ledgerJournals,
   ledgerPostings,
   merchantOrderSales,
+  merchantShops,
   orderCodeReveals,
   orderCodes,
   orderEvents,
@@ -977,6 +978,36 @@ export async function openAttempt(db: Executor, orderId: string) {
 }
 
 /** `GET /api/admin/orders/:id`, or null. Codes masked; never their values. */
+/** S26 PR10: a shop order's line on the admin's order page; null for any other order. */
+async function adminShopSale(db: Executor, order: { id: string; shopCustomerId: string | null }) {
+  if (order.shopCustomerId === null) return null;
+  const [row] = await db
+    .select({
+      sale: shopOrderSales,
+      shop: {
+        id: merchantShops.id,
+        slug: merchantShops.slug,
+        displayName: merchantShops.displayName,
+      },
+      shopCustomer: { id: shopCustomers.id, name: shopCustomers.name },
+      compensated: sql<string>`(select coalesce(sum(c.units), 0) from shop_compensations c
+        where c.order_id = ${shopOrderSales.orderId})::text`,
+    })
+    .from(shopOrderSales)
+    .innerJoin(merchantShops, eq(merchantShops.id, shopOrderSales.shopId))
+    .innerJoin(shopCustomers, eq(shopCustomers.id, shopOrderSales.shopCustomerId))
+    .where(eq(shopOrderSales.orderId, order.id));
+  if (!row) return null;
+  return {
+    shop: row.shop,
+    shopCustomer: row.shopCustomer,
+    unitSellUsdUnits: row.sale.unitSellUsdUnits,
+    totalSellUsdUnits: row.sale.unitSellUsdUnits * row.sale.quantity,
+    marginReleasedUsdUnits: row.sale.marginReleasedUsdUnits,
+    compensatedQuantity: Number(row.compensated),
+  };
+}
+
 export async function adminOrder(db: Executor, orderId: string): Promise<AdminOrder | null> {
   const [row] = await db
     .select({
@@ -1074,6 +1105,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     id: order.id,
     number: order.number,
     status: order.status,
+    shopSale: await adminShopSale(db, order),
     customer:
       row.customer && order.customerId
         ? {

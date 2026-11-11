@@ -674,6 +674,8 @@ export const adminShopRowSchema = z
     brandColor: z.string(),
     customerCount: z.int().nonnegative(),
     totalBalanceUsdUnits: z.int().nonnegative(),
+    /** The open shop orders' margins held in `shop_margin_held:USD`. */
+    heldMarginUsdUnits: z.int().nonnegative(),
     transferredTodayUsdUnits: z.int().nonnegative(),
     requestedAt: z.iso.datetime(),
   })
@@ -701,7 +703,9 @@ export const adminShopSchema = merchantShopSchema
     suspendNote: z.string().nullable(),
     closedAt: z.iso.datetime().nullable(),
     totalBalanceUsdUnits: z.int().nonnegative(),
-    /** WL9: every balance zero (and, from S26 PR 2, no open order). */
+    heldMarginUsdUnits: z.int().nonnegative(),
+    openOrders: z.int().nonnegative(),
+    /** WL9: closed, every balance zero and no open order. */
     settled: z.boolean(),
     oldSlugs: z.array(z.string()),
     rates: z.array(adminShopRateSchema),

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."content_page" ADD VALUE 'shop_terms';

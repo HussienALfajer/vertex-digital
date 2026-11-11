@@ -13,8 +13,11 @@ import {
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
   type CursorQuery,
+  confirmEmailChangeSchema,
   cursorQuerySchema,
+  type RequestEmailChange,
   requestCodeSchema,
+  requestEmailChangeSchema,
   resetPasswordSchema,
   returnRequestSchema,
   shopCustomerProfileSchema,
@@ -140,6 +143,55 @@ export class ShopCustomerController {
   @ApiOkResponse({ description: 'The shop customer', standardSchema: shopCustomerProfileSchema })
   me(@CurrentShopCustomer() customer: ShopCustomerIdentity) {
     return this.customers.profile(customer);
+  }
+
+  @Post('account/request-email-change')
+  @ShopCustomerRoute()
+  @RequireAltcha()
+  @RateLimit({ limit: 10, perSeconds: 60 })
+  @HttpCode(200)
+  @SerializeOptions({ schema: successSchema })
+  @ApiOkResponse({
+    description: 'Always, whether or not a code was sent (CA8)',
+    standardSchema: successSchema,
+  })
+  async requestEmailChange(
+    @Param('slug') slug: string,
+    @CurrentShopCustomer() customer: ShopCustomerIdentity,
+    @Body({ schema: requestEmailChangeSchema }) body: RequestEmailChange,
+    @Req() request: Request,
+  ) {
+    await this.accounts.requestEmailChange(
+      await this.shop(slug),
+      customer,
+      body,
+      requestMeta(request),
+    );
+    return SUCCESS;
+  }
+
+  @Post('account/change-email')
+  @ShopCustomerRoute()
+  @RateLimit({ limit: 10, perSeconds: 60 })
+  @HttpCode(200)
+  @SerializeOptions({ schema: successSchema })
+  @ApiOkResponse({
+    description: 'Changed; the other sessions are signed out (CA8)',
+    standardSchema: successSchema,
+  })
+  async confirmEmailChange(
+    @Param('slug') slug: string,
+    @CurrentShopCustomer() customer: ShopCustomerIdentity,
+    @Body({ schema: confirmEmailChangeSchema }) body: z.output<typeof confirmEmailChangeSchema>,
+    @Req() request: Request,
+  ) {
+    await this.accounts.confirmEmailChange(
+      await this.shop(slug),
+      customer,
+      body,
+      requestMeta(request),
+    );
+    return SUCCESS;
   }
 
   @Get('wallet')

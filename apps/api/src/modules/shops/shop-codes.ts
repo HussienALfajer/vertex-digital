@@ -10,7 +10,11 @@ import { and, eq, gt } from 'drizzle-orm';
  * email. An invitation is a random token stored by its digest, valid 72 hours, used once.
  */
 
-export type ShopCodePurpose = 'email-verification' | 'forget-password';
+/**
+ * `change-email` (CA8): keyed by the shop customer's id instead of an email (one pending change
+ * per customer), its code bound to the new address it confirms.
+ */
+export type ShopCodePurpose = 'email-verification' | 'forget-password' | 'change-email';
 
 export const MAX_WRONG_SHOP_CODE_ATTEMPTS = 5;
 
@@ -19,15 +23,20 @@ const identifierOf = (purpose: ShopCodePurpose, shopId: string, email: string) =
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
+/** A code bound to a value (the new email of a change): another value never matches it. */
+const codeDigest = (code: string, binding: string | undefined) =>
+  digest(binding === undefined ? code : `${code}:${binding}`);
+
 /** A new code for the shop's email, replacing an earlier one of the same purpose. */
 export async function issueShopCode(
   tx: Transaction,
   purpose: ShopCodePurpose,
   shopId: string,
   email: string,
+  binding?: string,
 ): Promise<string> {
   const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
-  await store(tx, identifierOf(purpose, shopId, email), digest(code));
+  await store(tx, identifierOf(purpose, shopId, email), codeDigest(code, binding));
   return code;
 }
 
@@ -60,6 +69,7 @@ export async function checkShopCode(
   shopId: string,
   email: string,
   code: string,
+  binding?: string,
 ): Promise<boolean> {
   const identifier = identifierOf(purpose, shopId, email);
   const [row] = await tx
@@ -77,7 +87,7 @@ export async function checkShopCode(
     return false;
   }
   const expected = Buffer.from(stored, 'hex');
-  const given = digest(code);
+  const given = codeDigest(code, binding);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
     await tx
       .update(shopCustomerVerifications)

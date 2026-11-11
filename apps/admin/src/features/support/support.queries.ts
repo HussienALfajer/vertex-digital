@@ -54,6 +54,7 @@ export const ticketListQuery = (search: SupportSearch) =>
               category: search.category,
               problem: search.problem,
               customerId: search.customerId,
+              shopId: search.shopId,
               q: search.q,
               cursor: pageParam,
             },

@@ -584,6 +584,7 @@
       "merchant_shop_ticket_opened": "فتح {name} تذكرة جديدة في متجرك ({number}).",
       "merchant_shop_ticket_replied": "ردّ {name} على التذكرة {number}.",
       "merchant_shop_ticket_escalated": "طلب {name} تدخل الإدارة في التذكرة {number}.",
+      "merchant_shop_ticket_support_replied": "ردّ فريق الدعم على تذكرة {name} ({number}).",
       "merchant_shop_margin_returned": "أُعيد ربح الطلب {number} ({amount}) إلى زبون متجرك ضمن تعويض."
     }
   },

@@ -31,10 +31,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })),
     ),
     ...(site?.faqPublished ? [{ url: `${origin}/faq`, changeFrequency: 'weekly' as const }] : []),
-    ...(site?.pages ?? []).map((page) => ({
-      url: `${origin}${contentPagePath(page.page)}`,
-      lastModified: page.updatedAt,
-      changeFrequency: 'monthly' as const,
-    })),
+    // S26 SP4: the shops' terms belong to the shops, which no search engine indexes.
+    ...(site?.pages ?? [])
+      .filter((page) => page.page !== 'shop_terms')
+      .map((page) => ({
+        url: `${origin}${contentPagePath(page.page)}`,
+        lastModified: page.updatedAt,
+        changeFrequency: 'monthly' as const,
+      })),
   ];
 }

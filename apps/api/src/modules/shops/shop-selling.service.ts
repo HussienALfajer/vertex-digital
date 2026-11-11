@@ -270,6 +270,25 @@ export class ShopSellingService {
     };
   }
 
+  /** `GET /api/admin/shops/:id/orders`: the merchant's view of a shop's orders, for the admin. */
+  async adminOrders(shopId: string, query: MerchantShopOrderQuery): Promise<MerchantShopOrderPage> {
+    if (!isUuid(shopId)) throw notFound('shop');
+    const [shop] = await this.db
+      .select({ id: merchantShops.id })
+      .from(merchantShops)
+      .where(eq(merchantShops.id, shopId));
+    if (!shop) throw notFound('shop');
+    const page = await merchantShopOrderPage(this.db, shop.id, {
+      after: query.cursor ? decodeCursor(query.cursor) : null,
+      limit: query.limit,
+      ...(query.customerId && { shopCustomerId: query.customerId }),
+    });
+    return {
+      items: page.items,
+      nextCursor: page.more && page.last ? encodeCursor(page.last) : null,
+    };
+  }
+
   /** `GET /api/merchant/shop/stats` (SP3): today, this month or the last 30 Damascus days. */
   async stats(merchantId: string, query: ShopStatsQuery, now = new Date()): Promise<ShopStats> {
     const shop = await this.merchants.readableShop(merchantId);

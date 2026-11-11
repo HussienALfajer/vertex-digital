@@ -32,6 +32,7 @@ import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-s
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
 import { CustomerMarks } from '../customers/customer-marks';
+import { ShopOrderCard } from '../shops/shop-order';
 import { CASH_HOLD_TONES, CashHoldCard } from './cash-hold';
 import { NearbySupplierOrders, showsNearbyOrders } from './nearby-supplier-orders';
 import {
@@ -111,6 +112,7 @@ export function OrderPage({ id, decide }: { id: string; decide?: 'fulfil' }) {
       {order.isSuccess && (
         <div className="flex flex-col gap-6">
           <Header order={order.data} />
+          {order.data.shopSale && <ShopOrderCard order={order.data} sale={order.data.shopSale} />}
           {order.data.cashHold && <CashHoldCard order={order.data} hold={order.data.cashHold} />}
           <Decisions order={order.data} onAction={setAction} />
           <Fields order={order.data} />
