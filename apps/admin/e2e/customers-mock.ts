@@ -627,6 +627,7 @@ export class CustomersMock {
         status: this.status(owner),
         tier: owner.tier ?? null,
       },
+      shop: null,
     };
   }
 

@@ -15,7 +15,7 @@ export interface AcceptedVersion {
   publishedAt: Date;
 }
 
-async function newestVersionId(tx: Executor, page: 'terms' | 'privacy') {
+async function newestVersionId(tx: Executor, page: 'terms' | 'privacy' | 'shop_terms') {
   const [row] = await tx
     .select({ id: contentPageVersions.id })
     .from(contentPageVersions)
@@ -34,6 +34,21 @@ export async function acceptedVersionsNow(
     () => newestVersionId(tx, 'privacy'),
   ]);
   return { termsVersionId, privacyVersionId };
+}
+
+/**
+ * S26 CA2, CA5: what a shop customer accepts at sign-up: the newest shop terms, or the store's
+ * terms while no shop terms are published, and the store's privacy.
+ */
+export async function shopAcceptedVersionsNow(
+  tx: Transaction,
+): Promise<{ termsVersionId: string | null; privacyVersionId: string | null }> {
+  const [shopTerms, terms, privacyVersionId] = await readAll(tx, [
+    () => newestVersionId(tx, 'shop_terms'),
+    () => newestVersionId(tx, 'terms'),
+    () => newestVersionId(tx, 'privacy'),
+  ]);
+  return { termsVersionId: shopTerms ?? terms, privacyVersionId };
 }
 
 /** Rule TA3: what the admin profile shows; null for a customer who signed up before publication. */

@@ -245,6 +245,7 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     checkout: null,
     gift: null,
     shareLinks: [],
+    shopSale: null,
     ...fields,
   };
   return withDecisions(base);

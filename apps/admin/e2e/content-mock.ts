@@ -47,6 +47,7 @@ const TITLES: Record<ContentPage, string> = {
   refund: 'سياسة الاسترداد',
   about: 'من نحن',
   merchant_terms: 'شروط حساب التاجر',
+  shop_terms: 'شروط متاجر التجار',
 };
 
 interface PageRow {

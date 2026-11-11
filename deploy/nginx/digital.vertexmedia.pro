@@ -205,7 +205,7 @@ server {
 
     # S26: a shop's sign-in, sign-up, codes, reset and invitation (each shop's own Better Auth
     # instance), and the merchant's transfer check (a password), as the customer's routes below.
-    location ~* ^/api/(?:shops/[a-z0-9-]+/auth/(?:sign-in/email|sign-up|send-verification-otp|request-password-reset|reset-password|email-otp/verify-email|invitation)|merchant/shop/transfer-check)/?$ {
+    location ~* ^/api/(?:shops/[a-z0-9-]+/(?:auth/(?:sign-in/email|sign-up|send-verification-otp|request-password-reset|reset-password|email-otp/verify-email|invitation)|account/(?:request-email-change|change-email))|merchant/shop/transfer-check)/?$ {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;

@@ -323,6 +323,12 @@ export function TicketTable({
                     {ticket.customer.name}
                     {/* S23 OP2: a merchant's tier; priority tiers come first. */}
                     {ticket.customer.tier && <TierChip tier={ticket.customer.tier} />}
+                    {/* S26 TK2: an escalated shop ticket names its shop. */}
+                    {ticket.shop && (
+                      <Badge tone="info">
+                        {t('support.shopTag', { name: ticket.shop.displayName })}
+                      </Badge>
+                    )}
                     {ticket.customer.status !== 'active' && (
                       <Badge tone={CHIP_TONES[ticket.customer.status]}>
                         {t(`customers.chips.${ticket.customer.status}`)}

@@ -19,7 +19,9 @@ import {
   merchantsWith,
   merchantTier,
   merchantTiers,
+  notifyShopCustomer,
   recordAudit,
+  shopTicketPeople,
   supportMessages,
   supportSettings,
   supportTickets,
@@ -44,6 +46,7 @@ import {
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AuthService, type DepositCustomer } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
@@ -56,6 +59,7 @@ import {
   lockTicket,
   messageByKey,
   type TicketRow,
+  threadMessages,
   ticketChange,
   ticketHoldsFile,
   ticketMessages,
@@ -64,6 +68,12 @@ import {
   ticketSummary,
   updateTicket,
 } from './support-records.js';
+
+const shopTag = (shop: { id: string; slug: string; displayName: string }) => ({
+  id: shop.id,
+  slug: shop.slug,
+  displayName: shop.displayName,
+});
 
 const statusOf = (customer: DepositCustomer): CustomerStatus =>
   customer.archived ? 'archived' : customer.frozen ? 'frozen' : 'active';
@@ -107,7 +117,26 @@ type VertexTicketRow = TicketRow & { customerId: string };
 
 const isVertexTicket = (row: TicketRow): row is VertexTicketRow => row.customerId !== null;
 
-const VERTEX_TICKET = isNotNull(supportTickets.customerId);
+/** S26 TK2: an escalated shop ticket: its shop customer, no Vertex customer. */
+type ShopTicketRow = TicketRow & { shopId: string; shopCustomerId: string };
+
+const isShopTicket = (row: TicketRow): row is ShopTicketRow =>
+  row.customerId === null &&
+  row.shopId !== null &&
+  row.shopCustomerId !== null &&
+  row.escalatedAt !== null;
+
+/** The admin's tickets: every Vertex ticket, and shop tickets once escalated (S26 TK2). */
+const ADMIN_TICKET = or(
+  isNotNull(supportTickets.customerId),
+  and(isNotNull(supportTickets.shopCustomerId), isNotNull(supportTickets.escalatedAt)),
+);
+
+const isAdminTicket = (row: TicketRow): row is VertexTicketRow | ShopTicketRow =>
+  isVertexTicket(row) || isShopTicket(row);
+
+const shopStatus = (person: { frozen: boolean; archived: boolean }): CustomerStatus =>
+  person.archived ? 'archived' : person.frozen ? 'frozen' : 'active';
 
 /**
  * The admin's support (S12 F23, rules TK2, TK3, TK5, TK9, TK11–TK13, SC1): the queue, the thread,
@@ -120,6 +149,7 @@ export class SupportAdminService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly customers: AuthService,
     private readonly files: FilesService,
+    private readonly jobs: JobsService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -129,8 +159,9 @@ export class SupportAdminService {
    */
   async queue(query: AdminTicketListQuery): Promise<AdminTicketPage> {
     const filters: (SQL | undefined)[] = [
-      // S26: a shop ticket reaches this queue once escalated, with the panel's shop screens (PR 4).
-      VERTEX_TICKET,
+      // S26 TK2: a shop ticket reaches this queue once escalated.
+      ADMIN_TICKET,
+      query.shopId ? eq(supportTickets.shopId, query.shopId) : undefined,
       query.status === 'all' ? undefined : eq(supportTickets.status, query.status),
       query.category ? eq(supportTickets.category, query.category) : undefined,
       query.problem ? eq(supportTickets.orderProblem, query.problem) : undefined,
@@ -145,11 +176,12 @@ export class SupportAdminService {
     const waiting = query.status === 'open';
     const time = waiting ? supportTickets.lastCustomerMessageAt : supportTickets.updatedAt;
     const priorityIds = waiting ? await merchantsWith(this.db, 'supportPriority') : [];
-    // Never the constant `false`: PostgreSQL refuses a constant in `ORDER BY`.
+    // Never the constant `false`: PostgreSQL refuses a constant in `ORDER BY`. A shop ticket
+    // (no customer) is never a priority one: `coalesce`, or its null would sort first.
     const priority =
       priorityIds.length === 0
-        ? sql<boolean>`(${supportTickets.customerId} is null)`
-        : sql<boolean>`${inArray(supportTickets.customerId, priorityIds)}`;
+        ? sql<boolean>`(${supportTickets.id} is null)`
+        : sql<boolean>`coalesce(${inArray(supportTickets.customerId, priorityIds)}, false)`;
     if (query.cursor) {
       if (waiting) {
         const cursor = decodeWaitingCursor(query.cursor);
@@ -189,9 +221,19 @@ export class SupportAdminService {
         page.items.flatMap((row) => (row.ticket.customerId ? [row.ticket.customerId] : [])),
       ),
     ];
-    const [people, tiers] = await Promise.all([
+    const shopCustomerIds = [
+      ...new Set(
+        page.items.flatMap((row) =>
+          row.ticket.customerId === null && row.ticket.shopCustomerId
+            ? [row.ticket.shopCustomerId]
+            : [],
+        ),
+      ),
+    ];
+    const [people, tiers, shopPeople] = await Promise.all([
       this.customers.depositCustomers(customerIds),
       merchantTiers(this.db, customerIds),
+      shopTicketPeople(this.db, shopCustomerIds),
     ]);
     const summaries = await ticketSummaries(
       this.db,
@@ -199,6 +241,23 @@ export class SupportAdminService {
     );
     const items = summaries.map((summary, index) => {
       const ticket = page.items[index]?.ticket;
+      const shopPerson =
+        ticket && ticket.customerId === null && ticket.shopCustomerId
+          ? shopPeople.get(ticket.shopCustomerId)
+          : undefined;
+      if (shopPerson) {
+        return {
+          ...summary,
+          customer: {
+            id: shopPerson.id,
+            name: shopPerson.name,
+            email: shopPerson.email,
+            status: shopStatus(shopPerson),
+            tier: null,
+          },
+          shop: shopTag(shopPerson.shop),
+        };
+      }
       const customer = ticket?.customerId ? people.get(ticket.customerId) : undefined;
       if (!customer) throw new Error(`Ticket ${summary.id} has no customer`);
       return {
@@ -210,6 +269,7 @@ export class SupportAdminService {
           status: statusOf(customer),
           tier: tiers.get(customer.id) ?? null,
         },
+        shop: null,
       };
     });
     return { items, nextCursor: page.nextCursor, openCount: await this.openCount() };
@@ -220,7 +280,7 @@ export class SupportAdminService {
     const [row] = await this.db
       .select({ count: count() })
       .from(supportTickets)
-      .where(and(eq(supportTickets.status, 'open'), VERTEX_TICKET));
+      .where(and(eq(supportTickets.status, 'open'), ADMIN_TICKET));
     return row?.count ?? 0;
   }
 
@@ -229,7 +289,7 @@ export class SupportAdminService {
     const [row] = await this.db
       .select({ count: count(), oldestAt: min(supportTickets.lastCustomerMessageAt) })
       .from(supportTickets)
-      .where(and(eq(supportTickets.status, 'open'), VERTEX_TICKET));
+      .where(and(eq(supportTickets.status, 'open'), ADMIN_TICKET));
     return { count: row?.count ?? 0, oldestAt: row?.oldestAt ?? null };
   }
 
@@ -237,8 +297,8 @@ export class SupportAdminService {
   async ticket(id: string): Promise<AdminTicket> {
     if (!isUuid(id)) throw ticketRefusals.notFound();
     const [row] = await this.db.select().from(supportTickets).where(eq(supportTickets.id, id));
-    if (!row || !isVertexTicket(row)) throw ticketRefusals.notFound();
-    return this.view(row);
+    if (!row || !isAdminTicket(row)) throw ticketRefusals.notFound();
+    return isVertexTicket(row) ? this.view(row) : this.shopView(row);
   }
 
   /** `POST /api/admin/support/tickets` (TK2): starts answered; the customer is told. */
@@ -310,11 +370,11 @@ export class SupportAdminService {
   ): Promise<{ ticket: AdminTicket; created: boolean }> {
     // A light read, not the whole view with its signals: the answer builds that once (A07-21).
     if (!isUuid(id)) throw ticketRefusals.notFound();
-    const [row] = await this.db
-      .select({ customerId: supportTickets.customerId })
-      .from(supportTickets)
-      .where(eq(supportTickets.id, id));
-    if (!row || row.customerId === null) throw ticketRefusals.notFound();
+    const [row] = await this.db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    if (!row || !isAdminTicket(row)) throw ticketRefusals.notFound();
+    if (!isVertexTicket(row)) {
+      return this.shopReply(adminId, row, idempotencyKey, body, uploads, meta);
+    }
     const customerId = row.customerId;
     if (await this.replay(this.db, idempotencyKey, body, id)) {
       return { ticket: await this.ticket(id), created: false };
@@ -393,7 +453,7 @@ export class SupportAdminService {
     if (!isUuid(id)) throw ticketRefusals.notFound();
     await this.db.transaction(async (tx) => {
       const ticket = await lockTicket(tx, id);
-      if (!ticket || !isVertexTicket(ticket)) throw ticketRefusals.notFound();
+      if (!ticket || !isAdminTicket(ticket)) throw ticketRefusals.notFound();
       if (ticketTransition(ticket.status, 'close') === null) return;
       const closed = await updateTicket(tx, ticket, {
         status: 'closed',
@@ -411,8 +471,10 @@ export class SupportAdminService {
 
   /** `GET /api/admin/support/tickets/:id/attachments/:fileId` (TK11). */
   async attachment(id: string, fileId: string): Promise<ServedFile> {
+    if (!isUuid(id)) throw ticketRefusals.notFound();
+    const [row] = await this.db.select().from(supportTickets).where(eq(supportTickets.id, id));
     const file =
-      isUuid(id) && isUuid(fileId) && (await ticketHoldsFile(this.db, id, fileId))
+      row && isAdminTicket(row) && isUuid(fileId) && (await ticketHoldsFile(this.db, id, fileId))
         ? await this.files.serve(fileId, 'ticket_attachment')
         : null;
     if (!file) throw ticketRefusals.notFound();
@@ -463,6 +525,128 @@ export class SupportAdminService {
     return this.settings();
   }
 
+  /**
+   * S26 TK3: an admin reply in an escalated shop ticket: the shop customer sees «فريق الدعم», and
+   * the shop's merchant is told in the notification center. An archived shop customer's ticket
+   * takes no reply (CA9, as Q28 for a Vertex customer).
+   */
+  private async shopReply(
+    adminId: string,
+    row: ShopTicketRow,
+    idempotencyKey: string,
+    body: string,
+    uploads: readonly Buffer[],
+    meta: RequestMeta,
+  ): Promise<{ ticket: AdminTicket; created: boolean }> {
+    if (await this.replay(this.db, idempotencyKey, body, row.id)) {
+      return { ticket: await this.ticket(row.id), created: false };
+    }
+    const person = (await shopTicketPeople(this.db, [row.shopCustomerId])).get(row.shopCustomerId);
+    if (!person || person.archived) throw ticketRefusals.customerArchived();
+    const prepared = await Promise.all(
+      uploads.map((upload) => this.files.prepare('ticket_attachment', upload)),
+    );
+    const created = await this.db.transaction(async (tx) => {
+      await this.lock(tx, idempotencyKey);
+      if (await this.replay(tx, idempotencyKey, body, row.id)) return false;
+      const ticket = await lockTicket(tx, row.id);
+      if (!ticket || !isShopTicket(ticket)) throw ticketRefusals.notFound();
+      const owner = (await shopTicketPeople(tx, [ticket.shopCustomerId])).get(
+        ticket.shopCustomerId,
+      );
+      if (!owner || owner.archived) throw ticketRefusals.customerArchived();
+      const updated = await updateTicket(tx, ticket, {
+        status: ticketTransition(ticket.status, 'admin_message') ?? ticket.status,
+        lastAdminMessageAt: sql`now()`,
+        closedAt: null,
+        closedBy: null,
+      });
+      const fileIds = [];
+      for (const file of prepared) fileIds.push(await this.files.record(tx, file));
+      const messageId = await insertMessage(tx, {
+        ticketId: ticket.id,
+        author: 'admin',
+        body,
+        idempotencyKey,
+        fileIds,
+      });
+      await recordAudit(tx, {
+        ...this.entry(adminId, ticket.id, meta),
+        action: 'ticket.replied',
+        details: {
+          ticketId: ticket.id,
+          category: ticket.category,
+          messageId,
+          before: ticket.status,
+          after: updated.status,
+          images: fileIds.length,
+        },
+      });
+      if (ticket.status === 'closed') {
+        await recordAudit(tx, {
+          ...this.entry(adminId, ticket.id, meta),
+          action: 'ticket.reopened',
+          details: ticketChange(updated, ticket.status),
+        });
+      }
+      await notifyShopCustomer(tx, this.jobs, {
+        shopCustomerId: ticket.shopCustomerId,
+        event: 'ticket_replied',
+        params: { ticketId: ticket.id, number: ticket.number, from: 'support' },
+      });
+      await this.notifications.notifyCustomer(tx, {
+        customerId: owner.shop.merchantId,
+        event: 'merchant_shop_ticket',
+        params: {
+          ticketId: ticket.id,
+          number: ticket.number,
+          customerName: owner.name,
+          kind: 'support_replied',
+        },
+      });
+      return true;
+    });
+    return { ticket: await this.ticket(row.id), created };
+  }
+
+  /** S26 TK3, TK4: an escalated shop ticket: the shop customer, the shop and the whole thread. */
+  private async shopView(row: ShopTicketRow): Promise<AdminTicket> {
+    const [summary, messages, people, order] = await Promise.all([
+      ticketSummary(this.db, row),
+      threadMessages(this.db, row.id),
+      shopTicketPeople(this.db, [row.shopCustomerId]),
+      row.orderId ? ticketOrderLink(this.db, row.orderId) : null,
+    ]);
+    const person = people.get(row.shopCustomerId);
+    if (!person) throw new Error(`Ticket ${row.id} has no shop customer`);
+    const status = shopStatus(person);
+    return {
+      ...summary,
+      messages,
+      shop: shopTag(person.shop),
+      customer: {
+        id: person.id,
+        name: person.name,
+        email: person.email,
+        status,
+        phone: person.phone,
+        isTest: false,
+        marks: { status, pinnedNote: null, signalsCount: 0 },
+        tier: null,
+      },
+      orderSummary: order && {
+        id: order.id,
+        number: order.number,
+        status: order.status,
+        productNameAr: order.productNameAr,
+        quantity: order.quantity,
+        totalUsdUnits: order.totalUsdUnits,
+        createdAt: order.createdAt.toISOString(),
+      },
+      depositSummary: null,
+    };
+  }
+
   private async view(row: VertexTicketRow): Promise<AdminTicket> {
     const [summary, messages, customer, marks, tier, order, deposit] = await Promise.all([
       ticketSummary(this.db, row),
@@ -477,6 +661,7 @@ export class SupportAdminService {
     return {
       ...summary,
       messages,
+      shop: null,
       customer: {
         id: customer.id,
         name: customer.name,

@@ -874,6 +874,7 @@
       "shop_customer.email_verified": "تأكيد بريد زبون متجر",
       "shop_customer.profile_updated": "تعديل بيانات زبون متجر",
       "shop_customer.password_changed": "تغيير كلمة مرور زبون متجر",
+      "shop_customer.email_changed": "تغيير بريد زبون متجر",
       "shop_customer.frozen": "تجميد زبون متجر",
       "shop_customer.unfrozen": "إلغاء تجميد زبون متجر",
       "shop.order_paid": "شراء زبون متجر",
@@ -4469,10 +4470,12 @@
       "filtered": "لا تذاكر مطابقة. جرّب نوعًا آخر أو امسح البحث."
     },
     "openedByAdmin": "من الدعم",
+    "shopTag": "متجر {{name}}",
     "thread": {
       "back": "الدعم",
       "customer": "العميل",
       "admin": "فريق VERTEX DIGITAL",
+      "merchant": "المتجر · {{name}}",
       "openImage": "افتح الصورة {{n}} بحجمها الكامل",
       "imageAlt": "صورة مرفقة {{n}}",
       "closedBy": {
@@ -4512,6 +4515,7 @@
     "side": {
       "problem": "المشكلة التي اختارها العميل",
       "customer": "العميل",
+      "shopCustomer": "زبون المتجر",
       "order": "الطلب",
       "deposit": "الإيداع",
       "history": "سجل التذكرة",

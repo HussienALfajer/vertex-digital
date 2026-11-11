@@ -552,6 +552,23 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     code,
   }),
+  shop_customer_change_email: ({ shopName, code }) => ({
+    subject: `${code} رمز تأكيد بريدك الجديد في متجر ${shopName}`,
+    heading: 'أكّد بريدك الجديد',
+    lines: [
+      `طُلب نقل حسابك في متجر ${named(shopName)} إلى هذا البريد. أدخل هذا الرمز لتأكيده:`,
+      CODE_LIFETIME,
+      IGNORE,
+    ],
+    code,
+  }),
+  shop_customer_email_changed: ({ shopName, at }) => ({
+    subject: `تغيّر بريد حسابك في متجر ${shopName}`,
+    lines: [
+      `تغيّر البريد الإلكتروني لحسابك في متجر ${named(shopName)} بتاريخ ${formatTime(at)}، ولن تصل رسائل الحساب إلى هذا العنوان بعد الآن.`,
+      'إذا لم تكن أنت، تواصل مع المتجر فورًا.',
+    ],
+  }),
   shop_customer_transfer_received: ({ shopName, slug, amountUsdUnits, at }) => ({
     subject: `أُضيف ${usd(amountUsdUnits)} إلى رصيدك`,
     lines: [

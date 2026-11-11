@@ -2165,6 +2165,21 @@ export const adminOrderSchema = z
         revokeReason: z.string().nullable(),
       }),
     ),
+    /**
+     * S26 PR10, Screens: a shop order's line: the shop, its customer (the buyer; `customer` is the
+     * merchant), the selling price, the margin released at the finish (null while held) and the
+     * units already compensated. Null for every other order.
+     */
+    shopSale: z
+      .object({
+        shop: z.object({ id: z.uuid(), slug: z.string(), displayName: z.string() }),
+        shopCustomer: z.object({ id: z.uuid(), name: z.string() }),
+        unitSellUsdUnits: z.int().positive(),
+        totalSellUsdUnits: z.int().positive(),
+        marginReleasedUsdUnits: z.int().nonnegative().nullable(),
+        compensatedQuantity: z.int().nonnegative(),
+      })
+      .nullable(),
   })
   .meta({ id: 'AdminOrder' });
 

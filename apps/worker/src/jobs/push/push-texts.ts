@@ -230,6 +230,7 @@ const SHOP_TICKET_PUSH = {
   opened: 'تذكرة جديدة في متجرك',
   replied: 'رد جديد في تذكرة متجرك',
   escalated: 'طلب زبون تدخل الإدارة في التذكرة',
+  support_replied: 'رد فريق الدعم في تذكرة متجرك',
 } as const;
 
 /** PT1: the payload of a push event's notification, its stored params checked again. */

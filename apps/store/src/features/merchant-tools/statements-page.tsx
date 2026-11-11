@@ -366,6 +366,11 @@ function titleOf(entry: StatementEntry): string {
       return tmc('statements.screen.titles.checkout', title.count);
     case 'refund':
       return tm('statements.screen.titles.refund');
+    case 'shopTransferOut':
+    case 'shopReturnIn':
+    case 'shopMargin':
+    case 'shopMarginBack':
+      return tm(`statements.screen.titles.${title.key}`);
     case 'adjustment':
       if (title.reversal) return tm('statements.screen.titles.reversal');
       if (title.category === 'correction') {

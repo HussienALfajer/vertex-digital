@@ -1319,6 +1319,7 @@
                 "shop_customer.email_verified",
                 "shop_customer.profile_updated",
                 "shop_customer.password_changed",
+                "shop_customer.email_changed",
                 "shop_customer.frozen",
                 "shop_customer.unfrozen",
                 "shop.order_paid",
@@ -6256,6 +6257,67 @@
         ]
       }
     },
+    "/api/admin/shops/{id}/orders": {
+      "get": {
+        "operationId": "ShopsAdminController_orders",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "customerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantShopOrderPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "shops"
+        ]
+      }
+    },
     "/api/admin/shops/{id}/approve": {
       "post": {
         "operationId": "ShopsAdminController_approve",
@@ -6741,6 +6803,86 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ShopCustomerProfile"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "shops"
+        ]
+      }
+    },
+    "/api/shops/{slug}/account/request-email-change": {
+      "post": {
+        "operationId": "ShopCustomerController_requestEmailChange",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEmailChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Always, whether or not a code was sent (CA8)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "shops"
+        ]
+      }
+    },
+    "/api/shops/{slug}/account/change-email": {
+      "post": {
+        "operationId": "ShopCustomerController_confirmEmailChange",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmailChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changed; the other sessions are signed out (CA8)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
                 }
               }
             }
@@ -13541,6 +13683,16 @@
             }
           },
           {
+            "name": "shopId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
             "name": "q",
             "required": false,
             "in": "query",
@@ -18498,7 +18650,8 @@
                     "enum": [
                       "opened",
                       "replied",
-                      "escalated"
+                      "escalated",
+                      "support_replied"
                     ]
                   }
                 },
@@ -20089,6 +20242,7 @@
           "shop_customer.email_verified",
           "shop_customer.profile_updated",
           "shop_customer.password_changed",
+          "shop_customer.email_changed",
           "shop_customer.frozen",
           "shop_customer.unfrozen",
           "shop.order_paid",
@@ -29090,6 +29244,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "heldMarginUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "transferredTodayUsdUnits": {
             "type": "integer",
             "minimum": 0,
@@ -29111,6 +29270,7 @@
           "brandColor",
           "customerCount",
           "totalBalanceUsdUnits",
+          "heldMarginUsdUnits",
           "transferredTodayUsdUnits",
           "requestedAt"
         ],
@@ -29216,6 +29376,16 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "heldMarginUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "openOrders": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "settled": {
             "type": "boolean"
           },
@@ -29255,6 +29425,8 @@
           "suspendNote",
           "closedAt",
           "totalBalanceUsdUnits",
+          "heldMarginUsdUnits",
+          "openOrders",
           "settled",
           "oldSlugs",
           "rates"
@@ -29382,6 +29554,149 @@
           "frozenReason"
         ],
         "additionalProperties": false
+      },
+      "MerchantShopOrderQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "MerchantShopOrderPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantShopOrderRow"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantShopOrderRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/OrderStage"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "productNameAr": {
+            "type": "string"
+          },
+          "gameNameAr": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "deliveredQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "totalSellUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "marginUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "marginState": {
+            "type": "string",
+            "enum": [
+              "held",
+              "released",
+              "none"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "stage",
+          "customer",
+          "productNameAr",
+          "gameNameAr",
+          "quantity",
+          "deliveredQuantity",
+          "totalSellUsdUnits",
+          "marginUsdUnits",
+          "marginState",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "OrderStage": {
+        "type": "string",
+        "enum": [
+          "awaiting_balance",
+          "processing",
+          "delayed",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
       },
       "ApproveShop": {
         "type": "object",
@@ -30656,18 +30971,6 @@
         ],
         "additionalProperties": false
       },
-      "OrderStage": {
-        "type": "string",
-        "enum": [
-          "awaiting_balance",
-          "processing",
-          "delayed",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
-      },
       "OrderTimelineStep": {
         "type": "string",
         "enum": [
@@ -31612,137 +31915,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "MerchantShopOrderQuery": {
-        "type": "object",
-        "properties": {
-          "cursor": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "limit": {
-            "default": 20,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 50
-          },
-          "customerId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        }
-      },
-      "MerchantShopOrderPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MerchantShopOrderRow"
-            }
-          },
-          "nextCursor": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "MerchantShopOrderRow": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "number": {
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/OrderStage"
-          },
-          "customer": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name"
-            ],
-            "additionalProperties": false
-          },
-          "productNameAr": {
-            "type": "string"
-          },
-          "gameNameAr": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "deliveredQuantity": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "totalSellUsdUnits": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "marginUsdUnits": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "marginState": {
-            "type": "string",
-            "enum": [
-              "held",
-              "released",
-              "none"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "number",
-          "stage",
-          "customer",
-          "productNameAr",
-          "gameNameAr",
-          "quantity",
-          "deliveredQuantity",
-          "totalSellUsdUnits",
-          "marginUsdUnits",
-          "marginState",
-          "createdAt"
-        ],
-        "additionalProperties": false
       },
       "ShopStatsQuery": {
         "type": "object",
@@ -37094,6 +37266,84 @@
               ],
               "additionalProperties": false
             }
+          },
+          "shopSale": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "shop": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "slug",
+                  "displayName"
+                ],
+                "additionalProperties": false
+              },
+              "shopCustomer": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "unitSellUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "totalSellUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "marginReleasedUsdUnits": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "compensatedQuantity": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "shop",
+              "shopCustomer",
+              "unitSellUsdUnits",
+              "totalSellUsdUnits",
+              "marginReleasedUsdUnits",
+              "compensatedQuantity"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -37138,7 +37388,8 @@
           "codes",
           "checkout",
           "gift",
-          "shareLinks"
+          "shareLinks",
+          "shopSale"
         ],
         "additionalProperties": false
       },
@@ -44892,6 +45143,11 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "shopId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
           "q": {
             "type": "string",
             "minLength": 1,
@@ -45055,6 +45311,9 @@
               "tier"
             ],
             "additionalProperties": false
+          },
+          "shop": {
+            "$ref": "#/components/schemas/AdminTicketShop"
           }
         },
         "required": [
@@ -45072,7 +45331,31 @@
           "closedAt",
           "closedBy",
           "createdAt",
-          "customer"
+          "customer",
+          "shop"
+        ],
+        "additionalProperties": false
+      },
+      "AdminTicketShop": {
+        "nullable": true,
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "displayName"
         ],
         "additionalProperties": false
       },
@@ -45213,8 +45496,11 @@
           "messages": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TicketMessage"
+              "$ref": "#/components/schemas/AdminTicketMessage"
             }
+          },
+          "shop": {
+            "$ref": "#/components/schemas/AdminTicketShop"
           },
           "customer": {
             "type": "object",
@@ -45365,11 +45651,57 @@
           "closedBy",
           "createdAt",
           "messages",
+          "shop",
           "customer",
           "orderSummary",
           "depositSummary"
         ],
         "additionalProperties": false
+      },
+      "AdminTicketMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SupportMessageAuthor"
+          },
+          "body": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "body",
+          "attachments",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SupportMessageAuthor": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "admin",
+          "merchant"
+        ]
       },
       "SupportSettings": {
         "type": "object",
@@ -48369,7 +48701,8 @@
           "privacy",
           "refund",
           "about",
-          "merchant_terms"
+          "merchant_terms",
+          "shop_terms"
         ]
       },
       "PublishedPage": {

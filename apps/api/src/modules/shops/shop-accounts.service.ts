@@ -6,12 +6,12 @@ import {
   zoneDate,
 } from '@vertex-digital/contracts';
 import {
-  acceptedVersionsNow,
   type Database,
   type Limit,
   merchantShops,
   newId,
   recordAudit,
+  shopAcceptedVersionsNow,
   shopCustomerAccounts,
   shopCustomerSessions,
   shopCustomers,
@@ -20,7 +20,7 @@ import {
   withinLimits,
 } from '@vertex-digital/db';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
-import { and, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -121,7 +121,7 @@ export class ShopAccountsService {
           email,
           phone: input.phone,
           createdBy: 'self',
-          ...(await acceptedVersionsNow(tx)),
+          ...(await shopAcceptedVersionsNow(tx)),
         });
         await tx.insert(shopCustomerAccounts).values({
           userId: id,
@@ -288,6 +288,110 @@ export class ShopAccountsService {
       return true;
     });
     if (!done) throw invalidCode();
+  }
+
+  /**
+   * CA8 (S01 rule C12 per shop): a code to the new address, bound to it; when the address holds
+   * another account of the shop, the same answer and no email (CA3: nothing tells it is taken).
+   */
+  async requestEmailChange(
+    shop: ShopOfRequest,
+    customer: { id: string; email: string },
+    input: { newEmail: string; password: string },
+    meta: RequestMeta,
+  ): Promise<void> {
+    const newEmail = input.newEmail.trim().toLowerCase();
+    if (newEmail === customer.email) {
+      throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid input', [
+        { path: ['newEmail'], message: 'Same as the current email' },
+      ]);
+    }
+    if (!(await withinLimits(this.db, codeLimits(shop.id, newEmail, meta.ipAddress)))) {
+      throw rateLimited();
+    }
+    await this.db.transaction(async (tx) => {
+      const hash = await this.passwordHash(tx, customer.id);
+      if (!hash || !(await verifyPassword({ hash, password: input.password }))) {
+        throw new CodedException(400, 'INVALID_PASSWORD', 'Wrong password');
+      }
+      const [taken] = await tx
+        .select({ id: shopCustomers.id })
+        .from(shopCustomers)
+        .where(and(eq(shopCustomers.shopId, shop.id), eq(shopCustomers.email, newEmail)));
+      if (taken) {
+        // A code nobody receives replaces any earlier one, as a real request would.
+        await issueShopDecoyCode(tx, 'change-email', shop.id, customer.id);
+        return;
+      }
+      // One pending change per customer: a new request voids the code of an earlier address.
+      const code = await issueShopCode(tx, 'change-email', shop.id, customer.id, newEmail);
+      await this.notifications.queueEmail(tx, {
+        to: newEmail,
+        template: 'shop_customer_change_email',
+        params: { shopName: shop.displayName, slug: shop.slug, code },
+      });
+    });
+  }
+
+  /** CA8: the code changes the email, signs out the other sessions and tells the old address. */
+  async confirmEmailChange(
+    shop: ShopOfRequest,
+    customer: { id: string; sessionId: string },
+    input: { newEmail: string; otp: string },
+    meta: RequestMeta,
+  ): Promise<void> {
+    const newEmail = input.newEmail.trim().toLowerCase();
+    let changed: boolean;
+    try {
+      changed = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ email: shopCustomers.email })
+          .from(shopCustomers)
+          .where(
+            and(
+              eq(shopCustomers.id, customer.id),
+              eq(shopCustomers.shopId, shop.id),
+              isNull(shopCustomers.archivedAt),
+            ),
+          )
+          .for('update');
+        if (!row) return false;
+        if (!(await checkShopCode(tx, 'change-email', shop.id, customer.id, input.otp, newEmail))) {
+          return false;
+        }
+        await tx
+          .update(shopCustomers)
+          .set({ email: newEmail, emailVerified: true, updatedAt: sql`now()` })
+          .where(eq(shopCustomers.id, customer.id));
+        await tx
+          .delete(shopCustomerSessions)
+          .where(
+            and(
+              eq(shopCustomerSessions.userId, customer.id),
+              eq(shopCustomerSessions.shopId, shop.id),
+              ne(shopCustomerSessions.id, customer.sessionId),
+            ),
+          );
+        await recordAudit(tx, {
+          action: 'shop_customer.email_changed',
+          ...this.byShopCustomer(customer.id, meta),
+          details: { before: { email: row.email }, after: { email: newEmail } },
+        });
+        await this.notifications.queueEmail(tx, {
+          to: row.email,
+          template: 'shop_customer_email_changed',
+          params: { shopName: shop.displayName, slug: shop.slug, at: new Date().toISOString() },
+        });
+        return true;
+      });
+    } catch (error) {
+      // The address was taken in the shop between the request and the confirmation.
+      if (isUniqueViolation(error)) {
+        throw new CodedException(409, 'EMAIL_TAKEN', 'The email belongs to another account');
+      }
+      throw error;
+    }
+    if (!changed) throw invalidCode();
   }
 
   /** CA1: the invitation email for a customer the merchant created, in the caller's transaction. */

@@ -20,6 +20,9 @@ import {
   adminShopQuerySchema,
   adminShopSchema,
   approveShopSchema,
+  type MerchantShopOrderQuery,
+  merchantShopOrderPageSchema,
+  merchantShopOrderQuerySchema,
   type ShopCustomerQuery,
   settleShopCustomerSchema,
   shopCompensationRequestSchema,
@@ -113,6 +116,19 @@ export class ShopsAdminController {
     @Query({ schema: shopCustomerQuerySchema }) query: ShopCustomerQuery,
   ) {
     return this.shops.customers(id, query);
+  }
+
+  @Get('shops/:id/orders')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(merchantShopOrderQuerySchema)
+  @SerializeOptions({ schema: merchantShopOrderPageSchema })
+  @ApiOkResponse({ description: 'Newest first', standardSchema: merchantShopOrderPageSchema })
+  orders(
+    @Param('id') id: string,
+    @Query({ schema: merchantShopOrderQuerySchema }) query: MerchantShopOrderQuery,
+  ) {
+    return this.selling.adminOrders(id, query);
   }
 
   @Post('shops/:id/approve')

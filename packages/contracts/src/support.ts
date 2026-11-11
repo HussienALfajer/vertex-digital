@@ -45,6 +45,10 @@ export const SUPPORT_MESSAGE_AUTHORS = [...TICKET_AUTHORS, 'merchant'] as const;
 
 export type SupportMessageAuthor = (typeof SUPPORT_MESSAGE_AUTHORS)[number];
 
+export const supportMessageAuthorSchema = z
+  .enum(SUPPORT_MESSAGE_AUTHORS)
+  .meta({ id: 'SupportMessageAuthor' });
+
 export const TICKET_CLOSERS = ['customer', 'admin', 'system'] as const;
 
 export const ticketCloserSchema = z.enum(TICKET_CLOSERS).meta({ id: 'TicketCloser' });
@@ -439,6 +443,8 @@ export const adminTicketListQuerySchema = cursorQuerySchema
     /** S22 OP6: tickets naming this order problem. */
     problem: orderProblemSchema.optional(),
     customerId: z.uuid().optional(),
+    /** S26: one shop's escalated tickets (the panel's shop page). */
+    shopId: z.uuid().optional(),
     /** A ticket number, as typed. */
     q: z.string().trim().min(1).max(20).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -456,9 +462,18 @@ const adminTicketCustomer = {
   tier: merchantTierSchema.nullable(),
 };
 
+/**
+ * S26 TK2, TK3: an escalated shop ticket's shop (its tag in the queue); null for a Vertex ticket.
+ * The ticket's customer is then the shop customer, not a Vertex customer.
+ */
+const adminTicketShop = z
+  .object({ id: z.uuid(), slug: z.string(), displayName: z.string() })
+  .nullable()
+  .meta({ id: 'AdminTicketShop' });
+
 /** One row of the admin queue (TK12). */
 export const adminTicketSummarySchema = z
-  .object({ ...ticketSummary, customer: z.object(adminTicketCustomer) })
+  .object({ ...ticketSummary, customer: z.object(adminTicketCustomer), shop: adminTicketShop })
   .meta({ id: 'AdminTicketSummary' });
 
 export type AdminTicketSummary = z.infer<typeof adminTicketSummarySchema>;
@@ -478,7 +493,13 @@ export type AdminTicketPage = z.infer<typeof adminTicketPageSchema>;
 export const adminTicketSchema = z
   .object({
     ...ticketSummary,
-    messages: z.array(ticketMessage),
+    /** S26 TK3: a shop ticket's messages carry the merchant's too. */
+    messages: z.array(
+      ticketMessage
+        .extend({ author: supportMessageAuthorSchema })
+        .meta({ id: 'AdminTicketMessage' }),
+    ),
+    shop: adminTicketShop,
     customer: z.object({
       ...adminTicketCustomer,
       phone: z.string(),
