@@ -28,6 +28,7 @@ import { MerchantsMock } from './merchants-mock';
 import { OrdersMock } from './orders-mock';
 import { PriceListsMock } from './price-lists-mock';
 import { ReconciliationMock } from './reconciliation-mock';
+import { ShopsMock } from './shops-mock';
 import { SupplierCatalogMock } from './supplier-catalog-mock';
 import { SuppliersMock } from './suppliers-mock';
 
@@ -373,6 +374,11 @@ export class AdminApi {
     }),
   });
   /** S20 PR 3: applications, merchants, grants and revocations, the merchant settings. */
+  /** S26: merchant shops, their customers and orders, and a shop order's compensation. */
+  readonly shops: ShopsMock = new ShopsMock(
+    () => this.reauthenticationRequired,
+    (id) => this.orders.orders.find((order) => order.id === id),
+  );
   readonly merchants: MerchantsMock = new MerchantsMock(
     () => this.reauthenticationRequired,
     (id) => this.customers.find(id) ?? null,
@@ -1093,6 +1099,19 @@ export class AdminApi {
     if (path === '/api/admin/player-checks' && request.method() === 'POST') {
       const answer = this.orders.playerCheck();
       if ('json' in answer) return json(answer.status, answer.json);
+    }
+    if (
+      path.startsWith('/api/admin/shops') ||
+      path.startsWith('/api/admin/shop-customers/') ||
+      path.endsWith('/shop-compensation')
+    ) {
+      const answer = this.shops.answer(
+        request.method(),
+        url,
+        body,
+        request.headers()['idempotency-key'] ?? null,
+      );
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (path.startsWith('/api/admin/orders') || path === '/api/admin/credit-policy') {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;

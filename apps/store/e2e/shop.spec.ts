@@ -329,6 +329,44 @@ test('signed out, a customer page goes to the shop’s sign-in and back', async 
   await expect(page).toHaveURL(`/s/${SLUG}/sign-in?next=%2Fs%2F${SLUG}%2Forders`);
 });
 
+test('the customer changes the email with a code sent to the new address (CA8)', async ({
+  page,
+  api,
+}) => {
+  signedIn(api);
+  api.on(`POST ${API}/account/request-email-change`, 400, { code: 'INVALID_PASSWORD' });
+  await page.goto(`/s/${SLUG}/account`);
+  await page.getByRole('button', { name: shop.account.emailChange }).click();
+  const field = (label: string) =>
+    page.getByLabel(label, { exact: true }).filter({ visible: true });
+  await field(ar.fields.newEmail).fill('basel.new@example.com');
+  await field(ar.fields.currentPassword).fill('wrong-password');
+  await page.getByRole('button', { name: shop.account.emailSend }).click();
+  await expect(page.getByText(ar.errors.INVALID_PASSWORD)).toBeVisible();
+  await expect(field(ar.fields.currentPassword)).toBeFocused();
+
+  api.on(`POST ${API}/account/request-email-change`, 200, { success: true });
+  api.on(`POST ${API}/account/change-email`, 200, { success: true });
+  await field(ar.fields.currentPassword).fill('Correct-horse-9');
+  await page.getByRole('button', { name: shop.account.emailSend }).click();
+  await expect(page.getByText('basel.new@example.com')).toBeVisible();
+  const request = api.last(`POST ${API}/account/request-email-change`);
+  expect(request?.body).toEqual({ newEmail: 'basel.new@example.com', password: 'Correct-horse-9' });
+  expect(request?.headers['x-altcha']).toBeTruthy();
+  api.on(`GET ${API}/me`, 200, { ...PROFILE, email: 'basel.new@example.com' });
+  await page
+    .getByRole('textbox', { name: ar.fields.code, exact: true })
+    .filter({ visible: true })
+    .fill('123456');
+  await page.getByRole('button', { name: shop.account.emailSubmit }).click();
+  await expect(page.getByText(shop.account.emailDone)).toBeVisible();
+  expect(api.last(`POST ${API}/account/change-email`)?.body).toEqual({
+    newEmail: 'basel.new@example.com',
+    otp: '123456',
+  });
+  await expect(page.locator('dd bdi', { hasText: 'basel.new@example.com' })).toBeVisible();
+});
+
 // RTL screenshots of the shop's home, game, wallet and order pages, dark and light.
 for (const name of ['dark', 'light'] as const) {
   test(`shop screenshots, ${name} theme`, async ({ page, api }, testInfo) => {

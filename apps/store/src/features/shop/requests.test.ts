@@ -8,6 +8,7 @@ import {
   listShopWalletEntries,
   replyToShopTicket,
   shopAcceptInvitation,
+  shopConfirmEmailChange,
   shopSignIn,
 } from './requests';
 
@@ -101,6 +102,16 @@ describe('shop requests (S26)', () => {
     expect(calls[0]?.init?.method).toBe('POST');
     expect(header(calls[0], 'idempotency-key')).toBe('key-1');
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(body);
+  });
+
+  it('changes the email through the shop’s own account routes (CA8)', async () => {
+    const { fetch, calls } = fetcher([200, { success: true }]);
+    await shopConfirmEmailChange('abu-ali', { newEmail: 'n@example.com', otp: '123456' }, fetch);
+    expect(calls[0]?.url).toBe('/api/shops/abu-ali/account/change-email');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      newEmail: 'n@example.com',
+      otp: '123456',
+    });
   });
 
   it('answers a return request with its key (WL5)', async () => {

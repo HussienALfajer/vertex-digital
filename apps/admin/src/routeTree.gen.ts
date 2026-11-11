@@ -50,6 +50,8 @@ import { Route as AppSettingsMerchantsRouteImport } from './routes/_app/settings
 import { Route as AppSettingsSupportRouteImport } from './routes/_app/settings.support'
 import { Route as AppSettingsSwitchesRouteImport } from './routes/_app/settings.switches'
 import { Route as AppSettingsTelegramRouteImport } from './routes/_app/settings.telegram'
+import { Route as AppShopsIndexRouteImport } from './routes/_app/shops.index'
+import { Route as AppShopsIdRouteImport } from './routes/_app/shops.$id'
 import { Route as AppSuppliersIndexRouteImport } from './routes/_app/suppliers.index'
 import { Route as AppSuppliersCodeRouteImport } from './routes/_app/suppliers.$code'
 import { Route as AppSuppliersPolicyRouteImport } from './routes/_app/suppliers.policy'
@@ -273,6 +275,16 @@ const AppSettingsTelegramRoute = AppSettingsTelegramRouteImport.update({
   path: '/settings/telegram',
   getParentRoute: () => AppRoute,
 } as any)
+const AppShopsIndexRoute = AppShopsIndexRouteImport.update({
+  id: '/shops/',
+  path: '/shops/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppShopsIdRoute = AppShopsIdRouteImport.update({
+  id: '/shops/$id',
+  path: '/shops/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSuppliersIndexRoute = AppSuppliersIndexRouteImport.update({
   id: '/suppliers/',
   path: '/suppliers/',
@@ -400,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
+  '/shops/$id': typeof AppShopsIdRoute
   '/suppliers/$code': typeof AppSuppliersCodeRoute
   '/suppliers/policy': typeof AppSuppliersPolicyRoute
   '/support/$id': typeof AppSupportIdRoute
@@ -413,6 +426,7 @@ export interface FileRoutesByFullPath {
   '/orders/': typeof AppOrdersIndexRoute
   '/pricing/': typeof AppPricingIndexRoute
   '/reconciliation/': typeof AppReconciliationIndexRoute
+  '/shops/': typeof AppShopsIndexRoute
   '/suppliers/': typeof AppSuppliersIndexRoute
   '/support/': typeof AppSupportIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
@@ -459,6 +473,7 @@ export interface FileRoutesByTo {
   '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
+  '/shops/$id': typeof AppShopsIdRoute
   '/suppliers/$code': typeof AppSuppliersCodeRoute
   '/suppliers/policy': typeof AppSuppliersPolicyRoute
   '/support/$id': typeof AppSupportIdRoute
@@ -472,6 +487,7 @@ export interface FileRoutesByTo {
   '/orders': typeof AppOrdersIndexRoute
   '/pricing': typeof AppPricingIndexRoute
   '/reconciliation': typeof AppReconciliationIndexRoute
+  '/shops': typeof AppShopsIndexRoute
   '/suppliers': typeof AppSuppliersIndexRoute
   '/support': typeof AppSupportIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
@@ -521,6 +537,7 @@ export interface FileRoutesById {
   '/_app/settings/support': typeof AppSettingsSupportRoute
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
   '/_app/settings/telegram': typeof AppSettingsTelegramRoute
+  '/_app/shops/$id': typeof AppShopsIdRoute
   '/_app/suppliers/$code': typeof AppSuppliersCodeRoute
   '/_app/suppliers/policy': typeof AppSuppliersPolicyRoute
   '/_app/support/$id': typeof AppSupportIdRoute
@@ -534,6 +551,7 @@ export interface FileRoutesById {
   '/_app/orders/': typeof AppOrdersIndexRoute
   '/_app/pricing/': typeof AppPricingIndexRoute
   '/_app/reconciliation/': typeof AppReconciliationIndexRoute
+  '/_app/shops/': typeof AppShopsIndexRoute
   '/_app/suppliers/': typeof AppSuppliersIndexRoute
   '/_app/support/': typeof AppSupportIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
@@ -583,6 +601,7 @@ export interface FileRouteTypes {
     | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
+    | '/shops/$id'
     | '/suppliers/$code'
     | '/suppliers/policy'
     | '/support/$id'
@@ -596,6 +615,7 @@ export interface FileRouteTypes {
     | '/orders/'
     | '/pricing/'
     | '/reconciliation/'
+    | '/shops/'
     | '/suppliers/'
     | '/support/'
     | '/wallets/'
@@ -642,6 +662,7 @@ export interface FileRouteTypes {
     | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
+    | '/shops/$id'
     | '/suppliers/$code'
     | '/suppliers/policy'
     | '/support/$id'
@@ -655,6 +676,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/pricing'
     | '/reconciliation'
+    | '/shops'
     | '/suppliers'
     | '/support'
     | '/wallets'
@@ -703,6 +725,7 @@ export interface FileRouteTypes {
     | '/_app/settings/support'
     | '/_app/settings/switches'
     | '/_app/settings/telegram'
+    | '/_app/shops/$id'
     | '/_app/suppliers/$code'
     | '/_app/suppliers/policy'
     | '/_app/support/$id'
@@ -716,6 +739,7 @@ export interface FileRouteTypes {
     | '/_app/orders/'
     | '/_app/pricing/'
     | '/_app/reconciliation/'
+    | '/_app/shops/'
     | '/_app/suppliers/'
     | '/_app/support/'
     | '/_app/wallets/'
@@ -1027,6 +1051,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsTelegramRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/shops/': {
+      id: '/_app/shops/'
+      path: '/shops'
+      fullPath: '/shops/'
+      preLoaderRoute: typeof AppShopsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/shops/$id': {
+      id: '/_app/shops/$id'
+      path: '/shops/$id'
+      fullPath: '/shops/$id'
+      preLoaderRoute: typeof AppShopsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/suppliers/': {
       id: '/_app/suppliers/'
       path: '/suppliers'
@@ -1206,6 +1244,7 @@ interface AppRouteChildren {
   AppSettingsSupportRoute: typeof AppSettingsSupportRoute
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
   AppSettingsTelegramRoute: typeof AppSettingsTelegramRoute
+  AppShopsIdRoute: typeof AppShopsIdRoute
   AppSuppliersCodeRoute: typeof AppSuppliersCodeRoute
   AppSuppliersPolicyRoute: typeof AppSuppliersPolicyRoute
   AppSupportIdRoute: typeof AppSupportIdRoute
@@ -1218,6 +1257,7 @@ interface AppRouteChildren {
   AppOrdersIndexRoute: typeof AppOrdersIndexRoute
   AppPricingIndexRoute: typeof AppPricingIndexRoute
   AppReconciliationIndexRoute: typeof AppReconciliationIndexRoute
+  AppShopsIndexRoute: typeof AppShopsIndexRoute
   AppSuppliersIndexRoute: typeof AppSuppliersIndexRoute
   AppSupportIndexRoute: typeof AppSupportIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
@@ -1257,6 +1297,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsSupportRoute: AppSettingsSupportRoute,
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
   AppSettingsTelegramRoute: AppSettingsTelegramRoute,
+  AppShopsIdRoute: AppShopsIdRoute,
   AppSuppliersCodeRoute: AppSuppliersCodeRoute,
   AppSuppliersPolicyRoute: AppSuppliersPolicyRoute,
   AppSupportIdRoute: AppSupportIdRoute,
@@ -1269,6 +1310,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrdersIndexRoute: AppOrdersIndexRoute,
   AppPricingIndexRoute: AppPricingIndexRoute,
   AppReconciliationIndexRoute: AppReconciliationIndexRoute,
+  AppShopsIndexRoute: AppShopsIndexRoute,
   AppSuppliersIndexRoute: AppSuppliersIndexRoute,
   AppSupportIndexRoute: AppSupportIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,

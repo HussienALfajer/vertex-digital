@@ -417,11 +417,7 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
             </Badge>
           )
         ) : (
-          <CustomerMarks
-            customerId={customer.id}
-            marks={customer.marks}
-            isTest={customer.isTest}
-          />
+          <CustomerMarks customerId={customer.id} marks={customer.marks} isTest={customer.isTest} />
         )}
         {customer.isTest && (
           <Badge tone="info" className="self-start">

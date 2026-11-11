@@ -76,8 +76,10 @@ export class ShopsAdminService {
       .select({
         shop: merchantShops,
         at: cursorTime(merchantShops.requestedAt),
+        // The outer row named in full: a one-table select writes `${merchantShops.id}` as a bare
+        // "id", which inside the subquery would name `c.id`.
         customers: sql<number>`(select count(*) from shop_customers c
-          where c.shop_id = ${merchantShops.id} and c.archived_at is null)::int`,
+          where c.shop_id = "merchant_shops"."id" and c.archived_at is null)::int`,
       })
       .from(merchantShops)
       .where(

@@ -731,8 +731,10 @@ export async function customerPage(
     .select({
       customer: shopCustomers,
       at: cursorTime(shopCustomers.createdAt),
+      // The outer row named in full: Drizzle writes a one-table select's column without its
+      // table, which inside the subquery would name `a.id`.
       hasPassword: sql<boolean>`exists (select 1 from shop_customer_accounts a
-        where a.user_id = ${shopCustomers.id} and a.password is not null)`,
+        where a.user_id = "shop_customers"."id" and a.password is not null)`,
     })
     .from(shopCustomers)
     .where(

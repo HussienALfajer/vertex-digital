@@ -17,6 +17,7 @@ import {
   GaugeIcon,
   type LucideIcon,
   MenuIcon,
+  ShoppingBagIcon,
   StoreIcon,
   TagsIcon,
 } from 'lucide-react';
@@ -50,6 +51,17 @@ const GROUPS: readonly {
     links: [{ href: SALE_HOME, label: 'nav.saleMode' }],
   },
   {
+    label: 'nav.groups.shop',
+    icon: ShoppingBagIcon,
+    links: [
+      { href: '/merchant/shop', label: 'nav.shop' },
+      { href: '/merchant/shop/customers', label: 'nav.shopCustomers' },
+      { href: '/merchant/shop/orders', label: 'nav.shopOrders' },
+      { href: '/merchant/shop/tickets', label: 'nav.shopTickets' },
+      { href: '/merchant/shop/stats', label: 'nav.shopStats' },
+    ],
+  },
+  {
     label: 'nav.groups.pricing',
     icon: TagsIcon,
     links: [
@@ -68,11 +80,14 @@ const GROUPS: readonly {
   },
 ];
 
+/** Links whose pages have sub-pages of their own links: current on their own address only. */
+const EXACT = new Set(['/merchant', '/merchant/shop']);
+
 const isCurrent = (href: string, pathname: string | null, saleOn: boolean) =>
   href === SALE_HOME
     ? pathname === '/' && saleOn
     : pathname !== null &&
-      (pathname === href || (href !== '/merchant' && pathname.startsWith(`${href}/`)));
+      (pathname === href || (!EXACT.has(href) && pathname.startsWith(`${href}/`)));
 
 /** The merchant's name from the session; undefined while it is read, null without one. */
 function useMerchantName() {
@@ -169,6 +184,11 @@ const SECTION_TEXT: Partial<Record<MerchantMessageKey, MerchantMessageKey>> = {
   'nav.alerts': 'sections.alerts',
   'nav.receipt': 'sections.receipt',
   'nav.statements': 'sections.statements',
+  'nav.shop': 'sections.shop',
+  'nav.shopCustomers': 'sections.shopCustomers',
+  'nav.shopOrders': 'sections.shopOrders',
+  'nav.shopTickets': 'sections.shopTickets',
+  'nav.shopStats': 'sections.shopStats',
 };
 
 function SectionHeader({ pathname, back }: { pathname: string | null; back: ReactNode }) {

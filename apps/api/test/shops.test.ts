@@ -516,6 +516,20 @@ describe('transfers (WL1–WL4)', () => {
   it('moves money after a recent check, replays its key, and refuses by the caps', async () => {
     const context = await shopFor({ customerBalanceCapUsdUnits: usd(30) });
     const customer = await invited(context);
+    // The invitation set a password and verified the email: the merchant sees the customer
+    // active, and the admin's list counts them.
+    const page = await json<{ items: { id: string; state: string }[] }>(
+      await send('GET', '/api/merchant/shop/customers', context.owner.cookie),
+      200,
+    );
+    expect(page.items).toEqual([expect.objectContaining({ id: customer.id, state: 'active' })]);
+    const listed = await json<{ items: { id: string; customerCount: number }[] }>(
+      await send('GET', `/api/admin/shops?q=${context.slug}`, admin.cookie),
+      200,
+    );
+    expect(listed.items).toEqual([
+      expect.objectContaining({ id: context.shopId, customerCount: 1 }),
+    ]);
     const path = `/api/merchant/shop/customers/${customer.id}/transfers`;
     // An old session needs the password check (WL4).
     await test.db
