@@ -74,7 +74,7 @@ export function BrandFields({
           name="brandColor"
           dir="ltr"
           aria-label={tsa('request.colorHex')}
-          placeholder="#1f7a6c"
+          placeholder={SHOP_BRAND_COLORS[0]}
           className="h-11 max-w-40 text-md"
           value={typed}
           aria-invalid={showError && refused}

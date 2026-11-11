@@ -862,6 +862,16 @@ describe("the shop customer's email change (CA8)", () => {
     expect((await auditOf(test.db, customer.id)).map((entry) => entry.action)).toContain(
       'shop_customer.email_changed',
     );
+    // A stolen session guessing the password with a new address each time: 10 checks in 15 minutes.
+    const guesser = await customerOf(context, 0);
+    const guess = async () =>
+      client.request('POST', `/api/shops/${context.slug}/account/request-email-change`, {
+        cookie: guesser.cookie,
+        body: { newEmail: uniqueEmail('shop-guess'), password: 'wrong-password-1' },
+        headers: await client.altcha(),
+      });
+    for (let i = 0; i < 10; i += 1) await json(await guess(), 400);
+    expect((await json<{ code: string }>(await guess(), 429)).code).toBe('RATE_LIMITED');
     // No session, and another shop's customer.
     await json(
       await send('POST', `/api/shops/${context.slug}/account/change-email`, '', {

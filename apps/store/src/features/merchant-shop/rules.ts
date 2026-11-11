@@ -105,3 +105,26 @@ export function barShares(values: readonly number[]): number[] {
   const highest = Math.max(0, ...values);
   return values.map((value) => (highest === 0 ? 0 : value / highest));
 }
+
+/**
+ * WL1: the refusals the API answers after it looked the transfer's key up (`transferToShopCustomer`
+ * replays a written transfer first), so no transfer holds the key and the next slide may take a
+ * new one. Everything else keeps it: no answer, a server fault, a reused key, a rate limit, and
+ * `REAUTHENTICATION_REQUIRED` (checked before the lookup: the same transfer is sent again after
+ * the password, with the same key).
+ */
+const TRANSFER_REFUSED_AFTER_LOOKUP: ReadonlySet<string> = new Set([
+  'SHOP_BALANCE_CAP_EXCEEDED',
+  'SHOP_DAILY_TRANSFER_CAP_EXCEEDED',
+  'INSUFFICIENT_BALANCE',
+  'PRICE_CHANGED',
+  'ACCOUNT_FROZEN',
+  'SHOP_UNAVAILABLE',
+  'CUSTOMER_STATE_INVALID',
+]);
+
+export function freesTransferKey(reason: string, unsettled: boolean): boolean {
+  return (
+    TRANSFER_REFUSED_AFTER_LOOKUP.has(reason) || (reason === 'VALIDATION_FAILED' && !unsettled)
+  );
+}

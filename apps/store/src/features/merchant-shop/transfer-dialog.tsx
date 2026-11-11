@@ -29,18 +29,22 @@ import { apiRequest } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { useIdempotentRequest } from '@/lib/idempotency';
+import { mayHaveLanded } from '@/lib/idempotency';
+import { sendAttempt } from '../purchase/attempt';
 import { tsa } from './i18n';
 import { transfer, transferCheck } from './requests';
-import { remainingToday, transferPreview } from './rules';
+import { freesTransferKey, remainingToday, transferPreview } from './rules';
 
 type Refusal = { text: string };
 
 /**
  * "شحن رصيد" (S26 WL1–WL4): the amount in SYP (whole pounds, at the shop's rate) or USD, the USD
  * it credits rounded down, today's remaining cap, the merchant's balance; the slide sends it with
- * one `Idempotency-Key` per amount. A transfer the API answers `REAUTHENTICATION_REQUIRED` asks
- * for the password (15 minutes, WL4), then sends the same transfer again with the same key.
+ * one `Idempotency-Key` per amount, kept per customer in this tab's session storage
+ * (`sendAttempt`), so a lost answer, a closed dialog or a reload never makes a second transfer. A
+ * transfer the API answers `REAUTHENTICATION_REQUIRED` asks for the password (15 minutes, WL4),
+ * then sends the same transfer again with the same key. Closed after an answer that may have
+ * written, the page reads its customers again (`onClose(true)`).
  */
 export function TransferDialog({
   shop,
@@ -50,7 +54,7 @@ export function TransferDialog({
 }: {
   shop: MerchantShop;
   customer: ShopCustomerRow;
-  onClose: () => void;
+  onClose: (unsettled: boolean) => void;
   onDone: (result: ShopTransferResult) => void;
 }) {
   const [currency, setCurrency] = useState<ShopTransferCurrency>(shop.rate ? 'syp' : 'usd');
@@ -62,7 +66,7 @@ export function TransferDialog({
   const [done, setDone] = useState<ShopTransferResult | null>(null);
   const [slide, setSlide] = useState(0);
   const [balance, setBalance] = useState<number | null>(null);
-  const send = useIdempotentRequest();
+  const [unsettled, setUnsettled] = useState(false);
   const preview = transferPreview(currency, typed, shop.rate);
   const remaining = remainingToday(
     shop.limits.dailyTransferCapUsdUnits,
@@ -89,10 +93,14 @@ export function TransferDialog({
       expectedUsdUnits: preview.usdUnits,
     };
     setSending(true);
-    const result = await send(JSON.stringify({ customer: customer.id, ...body }), (key) =>
-      transfer(customer.id, body, key),
+    const result = await sendAttempt(
+      `shop-transfer:${customer.id}`,
+      JSON.stringify({ customer: customer.id, ...body }),
+      (key) => transfer(customer.id, body, key),
+      freesTransferKey,
     );
     setSending(false);
+    setUnsettled(!result.ok && mayHaveLanded(result.reason));
     setSlide((n) => n + 1);
     if (result.ok) {
       setDone(result.data);
@@ -121,7 +129,7 @@ export function TransferDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && !sending && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !sending && onClose(unsettled)}>
       <DialogContent closeLabel={tsa('common.close')} className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{tsa('transfer.title', { name: customer.name })}</DialogTitle>
@@ -140,7 +148,7 @@ export function TransferDialog({
               label={tsa('transfer.customerBalance')}
               value={formatUsd(done.customerBalanceUsdUnits)}
             />
-            <Button size="xl" variant="outline" onClick={onClose}>
+            <Button size="xl" variant="outline" onClick={() => onClose(unsettled)}>
               {tsa('common.close')}
             </Button>
           </div>

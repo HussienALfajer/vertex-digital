@@ -7,6 +7,7 @@ import {
   type ReceiptSettings,
   type RequestShop,
   SHOP_ANNOUNCEMENT_MAX,
+  SHOP_BRAND_COLORS,
   type ShopSettings,
   shopAnnouncementSchema,
 } from '@vertex-digital/contracts';
@@ -196,7 +197,7 @@ function RequestForm({
   onRequested: (shop: MerchantShop) => void;
 }) {
   const [slug, setSlug] = useState('');
-  const [color, setColor] = useState<string>('#1f7a6c');
+  const [color, setColor] = useState<string>(SHOP_BRAND_COLORS[0]);
   const [rate, setRate] = useState<RateDraft>({ mode: 'store', rate: '', confirm: '' });
   const [far, setFar] = useState<{ storeRate: string | null } | null>(null);
   const [showError, setShowError] = useState(false);

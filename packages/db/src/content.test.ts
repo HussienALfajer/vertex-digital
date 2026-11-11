@@ -67,7 +67,7 @@ async function file(client: pg.PoolClient) {
 describe('seeds', () => {
   // The titles are seeded by migration 0048; drafts are edited in place afterwards, so only the
   // four rows are checked here.
-  it('hold the five drafts (S20: the merchant terms) and the settings row', async () => {
+  it('hold the six drafts (S20: the merchant terms, S26: the shop terms) and the settings row', async () => {
     const drafts = await connection.pool.query(
       `select page from content_page_drafts order by page`,
     );
@@ -77,6 +77,7 @@ describe('seeds', () => {
       'refund',
       'about',
       'merchant_terms',
+      'shop_terms',
     ]);
     const settings = await connection.pool.query(
       `select id, live_activity_enabled from content_settings`,

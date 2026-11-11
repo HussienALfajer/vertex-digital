@@ -53,6 +53,17 @@ const signUpLimits = (shopId: string, ip: string | null): Limit[] => [
   { key: `shop:sign-up-shop-day:${shopId}`, max: 50, windowMs: DAY },
 ];
 
+/**
+ * CA8, as S01's current-password checks: 10 per shop customer in 15 minutes, every check counted
+ * before the compare, so a stolen shop session cannot guess the password by changing the new
+ * address on each try.
+ */
+const passwordCheckLimit = (shopCustomerId: string): Limit => ({
+  key: `shop:password-check:${shopCustomerId}`,
+  max: 10,
+  windowMs: 15 * MINUTE,
+});
+
 const rateLimited = () => new CodedException(429, 'RATE_LIMITED', 'Too many codes, try later');
 const invalidCode = () => new CodedException(400, 'INVALID_OTP', 'The code is not valid');
 
@@ -306,6 +317,7 @@ export class ShopAccountsService {
         { path: ['newEmail'], message: 'Same as the current email' },
       ]);
     }
+    if (!(await withinLimits(this.db, [passwordCheckLimit(customer.id)]))) throw rateLimited();
     if (!(await withinLimits(this.db, codeLimits(shop.id, newEmail, meta.ipAddress)))) {
       throw rateLimited();
     }

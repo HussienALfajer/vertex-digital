@@ -262,7 +262,11 @@ function CustomerList({
         <TransferDialog
           shop={shop}
           customer={dialog.customer}
-          onClose={() => setDialog(null)}
+          onClose={(unsettled) => {
+            setDialog(null);
+            // A transfer that may have been written: the balances shown are read again.
+            if (unsettled) void load(query);
+          }}
           onDone={(result) => {
             replace({ ...dialog.customer, balanceUsdUnits: result.customerBalanceUsdUnits });
             onShop({ ...shop, transferredTodayUsdUnits: result.transferredTodayUsdUnits });

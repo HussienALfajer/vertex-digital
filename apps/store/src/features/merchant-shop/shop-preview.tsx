@@ -12,7 +12,7 @@ const THEMES = {
   light: {
     label: 'request.previewLight',
     background: SHOP_LIGHT_BACKGROUND,
-    surface: '#ffffff',
+    surface: themeHex['neutral-100'],
     border: themeHex['neutral-200'],
     text: themeHex['neutral-900'],
     muted: themeHex['neutral-600'],

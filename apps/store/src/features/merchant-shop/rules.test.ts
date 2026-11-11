@@ -4,6 +4,7 @@ import {
   checkHolds,
   colorVerdict,
   confirmWordTyped,
+  freesTransferKey,
   normalizeColor,
   remainingToday,
   returnAmount,
@@ -84,5 +85,21 @@ describe("متجري's rules (S26 PR 4)", () => {
     );
     expect(barShares([0, 5, 10])).toEqual([0, 0.5, 1]);
     expect(barShares([0, 0])).toEqual([0, 0]);
+  });
+
+  it('frees a transfer key only on refusals after its lookup (WL1)', () => {
+    expect(freesTransferKey('SHOP_BALANCE_CAP_EXCEEDED', true)).toBe(true);
+    expect(freesTransferKey('INSUFFICIENT_BALANCE', false)).toBe(true);
+    expect(freesTransferKey('VALIDATION_FAILED', false)).toBe(true);
+    expect(freesTransferKey('VALIDATION_FAILED', true)).toBe(false);
+    for (const reason of [
+      'NETWORK',
+      'INTERNAL_ERROR',
+      'IDEMPOTENCY_KEY_REUSED',
+      'RATE_LIMITED',
+      'REAUTHENTICATION_REQUIRED',
+    ]) {
+      expect(freesTransferKey(reason, false)).toBe(false);
+    }
   });
 });
