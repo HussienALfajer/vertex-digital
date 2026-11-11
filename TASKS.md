@@ -29,7 +29,7 @@ Settled while planning (2026-11-11): the undelivered units' refund posts `refund
 - [x] worker: push to shop devices
 - [x] bridge: OpenAPI export and admin client
 - [x] docs: spec details settled, architecture, folder rules, ROADMAP
-- [ ] checks, reviewer, endpoint check at `/api/docs`, PR and merge
+- [x] checks, reviewer (2 blocking findings fixed: C4 allowed accounts for shop purchases and refunds, a merchant receipt link on a shop order), endpoint check at `/api/docs`, PR and merge
 
 ## PR 3 — `feat/s26-shop-store`: the shop under `/s/[slug]`
 - [ ] the shop layout (brand color, logo or letter mark, bottom bar, footer, `noindex`, robots), home, game with the buy box, wallet with return requests, orders and order page, support with escalation, account

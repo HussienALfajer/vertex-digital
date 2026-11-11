@@ -480,6 +480,13 @@ describe('the purchase and the orders (PR5–PR12)', () => {
     expect(read.unitSellUsdUnits).toBe(sell());
     // PR9: the merchant's own orders leave the shop order out.
     await json(await send('GET', `/api/orders/${order.id}`, context.owner.cookie), 404);
+    // Nor may the merchant publish a receipt link of it (the shop customer's fields).
+    await json(
+      await send('PUT', `/api/orders/${order.id}/receipt-link`, context.owner.cookie, {
+        playerDisplay: 'full',
+      }),
+      404,
+    );
     const mine = await json<{ items: { id: string }[] }>(
       await send('GET', '/api/orders', context.owner.cookie),
       200,

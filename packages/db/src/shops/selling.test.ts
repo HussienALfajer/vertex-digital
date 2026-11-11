@@ -389,7 +389,8 @@ describe('the shop purchase (PR5–PR7)', () => {
     expect(audit).toMatchObject({ actorKind: 'shop_customer', actorId: ids.shopCustomerId });
     expect(audit?.details).toMatchObject({ sellUsdUnits: sell, buyUsdUnits: item.price });
     expect(sent).toContainEqual({ queue: QUEUES.ordersFulfil, data: { orderId: order.id } });
-    expect(await offending([order.id])).toEqual([]);
+    // C4 names journals: the purchase journal's accounts are allowed for its kind.
+    expect(await offending([order.id, order.purchaseJournalId as string])).toEqual([]);
   });
 
   it('sells at the purchase price without a markup, and at an own SYP price rounded up', async () => {
@@ -584,7 +585,13 @@ describe('the finish of a shop order (PR8, PR9)', () => {
     expect(await balanceOf({ shopCustomerId: ids.shopCustomerId })).toBe(20 * USD - sell);
     expect(await balanceOf({ customerId: ids.merchantId })).toBe(50 * USD + sell - item.price);
     expect(await heldTotal()).toBe(held);
-    expect(await offending([order.id])).toEqual([]);
+    expect(
+      await offending([
+        order.id,
+        order.purchaseJournalId as string,
+        refunded.refundJournalId as string,
+      ]),
+    ).toEqual([]);
 
     // PR4, PR12: the shop customer reads it at the selling price and reveals the code.
     const read = await shopCustomerOrder(db, ids.shopCustomerId, order.number);
