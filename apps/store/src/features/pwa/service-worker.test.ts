@@ -6,7 +6,7 @@ const ORIGIN = 'https://digital.vertexmedia.pro';
 type Listener = (event: Record<string, unknown>) => void;
 
 /** Runs `/sw.js` against fakes of the worker's globals and answers its listeners. */
-function load(version = 'build-2') {
+function load(version = 'build-2', shop?: { scope: string; name: string }) {
   const listeners = new Map<string, Listener>();
   const stored = new Map<string, Map<string, string>>([['vd-offline-build-1', new Map()]]);
   const caches = {
@@ -52,6 +52,7 @@ function load(version = 'build-2') {
       icon: '/_next/static/media/icon-192.png',
       badge: '/_next/static/media/badge-96.png',
       fallbackBody: 'لديك إشعار جديد',
+      ...(shop && { shop }),
     }),
   )(
     self,
@@ -221,5 +222,59 @@ describe('/sw.js', () => {
     });
     expect(navigate).toHaveBeenCalledWith(`${ORIGIN}/orders/0193`);
     expect(worker.self.clients.openWindow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a shop’s /s/<slug>/sw.js (S26 SP1)', () => {
+  const shop = { scope: '/s/abu-ali', name: 'متجر أبو علي' };
+
+  it('keeps no cache, never drops the store’s, and leaves navigations to the browser', async () => {
+    const worker = load('build-2', shop);
+    await worker.dispatch('install');
+    expect(worker.caches.open).not.toHaveBeenCalled();
+    expect(worker.self.skipWaiting).toHaveBeenCalled();
+    await worker.dispatch('activate');
+    expect(worker.caches.delete).not.toHaveBeenCalled();
+    expect(worker.self.clients.claim).toHaveBeenCalled();
+    const request = { mode: 'navigate', method: 'GET', url: `${ORIGIN}/s/abu-ali/wallet` };
+    expect(await worker.dispatch('fetch', { request })).toBeUndefined();
+  });
+
+  it('opens only paths inside the shop, its orders otherwise, under the shop’s name', async () => {
+    const worker = load('build-2', shop);
+    for (const [url, expected] of [
+      ['/s/abu-ali/orders/0193', '/s/abu-ali/orders/0193'],
+      ['/orders/0193', '/s/abu-ali/orders'],
+      ['/s/other-shop/orders', '/s/abu-ali/orders'],
+      ['/s/abu-ali', '/s/abu-ali'],
+      ['/s/abu-alim/orders', '/s/abu-ali/orders'],
+    ]) {
+      worker.self.registration.showNotification.mockClear();
+      await worker.dispatch('push', { data: { json: () => ({ title: 'x', body: 'y', url }) } });
+      const [, options] = worker.self.registration.showNotification.mock.calls[0] as unknown as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(options.data).toEqual({ url: expected });
+    }
+    worker.self.registration.showNotification.mockClear();
+    await worker.dispatch('push', { data: null });
+    expect(worker.self.registration.showNotification).toHaveBeenCalledWith(
+      'متجر أبو علي',
+      expect.objectContaining({ data: { url: '/s/abu-ali/orders' } }),
+    );
+  });
+
+  it('focuses only a window of the shop', async () => {
+    const worker = load('build-2', shop);
+    const navigate = vi.fn();
+    const store = { url: `${ORIGIN}/wallet`, navigate: vi.fn(), focus: vi.fn() };
+    const own = { url: `${ORIGIN}/s/abu-ali`, navigate, focus: async () => own };
+    worker.windows.push(store, own);
+    await worker.dispatch('notificationclick', {
+      notification: { close: vi.fn(), data: { url: '/s/abu-ali/orders/0193' } },
+    });
+    expect(store.focus).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(`${ORIGIN}/s/abu-ali/orders/0193`);
   });
 });

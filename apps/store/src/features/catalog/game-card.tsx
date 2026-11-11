@@ -39,16 +39,19 @@ export function GameCard({
   game,
   priority = false,
   sizes = '(min-width: 64rem) 220px, (min-width: 40rem) 30vw, 45vw',
+  href,
 }: {
   game: StoreGameCard;
   priority?: boolean;
   sizes?: string;
+  /** S26: a shop's game page; a shop card has no merchant star. */
+  href?: string;
 }) {
   const unavailable = game.status === 'unavailable';
   return (
     <div className="relative h-full">
       <Link
-        href={`/games/${game.slug}`}
+        href={href ?? `/games/${game.slug}`}
         style={accentStyle(game.accentColor)}
         className={`group flex h-full flex-col gap-3 rounded-lg border border-border bg-surface p-2 transition-colors duration-150 hover:border-(--game-accent-light) focus-visible:border-(--game-accent-light) dark:hover:border-(--game-accent) dark:focus-visible:border-(--game-accent) ${unavailable ? 'opacity-60' : ''}`}
       >
@@ -76,7 +79,7 @@ export function GameCard({
         </span>
       </Link>
       {/* A merchant's star over the cover (owner, 2026-10-30), loaded in the browser. */}
-      <PinStarSlot gameId={game.id} gameName={game.nameAr} variant="card" />
+      {!href && <PinStarSlot gameId={game.id} gameName={game.nameAr} variant="card" />}
     </div>
   );
 }

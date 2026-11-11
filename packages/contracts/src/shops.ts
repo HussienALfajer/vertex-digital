@@ -4,12 +4,14 @@ import { contrastRatio } from './catalog.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import {
   CURRENCY_SCALE,
+  ceilToStep,
   exchangeRateSchema,
   floorToWholeCents,
   isWholeCents,
   rateChangePercent,
   sypToUsd,
   usdCentsSchema,
+  usdToSyp,
 } from './money.js';
 
 /*
@@ -282,6 +284,16 @@ export function shopTransferUsd(
   if (currency === 'usd') return isWholeCents(amountUnits) ? amountUnits : null;
   if (rate === null || amountUnits % CURRENCY_SCALE.SYP !== 0) return null;
   return floorToWholeCents(sypToUsd(amountUnits, rate, 'down'));
+}
+
+/**
+ * S26 screens ("top up the gap"): the whole pounds to ask the merchant for, so that the transfer
+ * of those pounds (WL2, rounded **down** to whole cents) covers `shortfallUsdUnits`: the USD × rate
+ * rounded **up** to whole pounds. Those pounds ÷ the rate are at least the shortfall, a whole-cent
+ * amount, so the transfer's rounding down never takes it below (the test checks it).
+ */
+export function shopTopUpSyp(shortfallUsdUnits: number, rate: string): number {
+  return ceilToStep(usdToSyp(shortfallUsdUnits, rate, 'up'), CURRENCY_SCALE.SYP);
 }
 
 export type ShopTransferRefusal =

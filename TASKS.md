@@ -32,18 +32,21 @@ Settled while planning (2026-11-11): the undelivered units' refund posts `refund
 - [x] checks, reviewer (2 blocking findings fixed: C4 allowed accounts for shop purchases and refunds, a merchant receipt link on a shop order), endpoint check at `/api/docs`, PR and merge
 
 ## PR 3 — `feat/s26-shop-store`: the shop under `/s/[slug]`
-- [ ] the shop layout (brand color, logo or letter mark, bottom bar, footer, `noindex`, robots), home, game with the buy box, wallet with return requests, orders and order page, support with escalation, account
-- [ ] sign-in, sign-up (ALTCHA, OTP), verify, reset, invitation in the shop's branding
-- [ ] PWA per shop (manifest, scoped service worker, install) and push
-- [ ] i18n keys, error texts, loading, empty and error states
-- [ ] E2E flow and RTL screenshots (phone, light and dark)
-- [ ] checks, reviewer, browser check, PR and merge
+Settled while building (2026-11-11): the store's pages moved into the `(site)` route group (same URLs) so `/s/[slug]` has its own frame; the shop reads its pages from the cached storefront (`shop:<id>` and `catalog`), an old slug redirects to the shop's home (or the same game); the shop's terms and privacy pages are the store's `terms` and `privacy` in the shop's frame (no shop terms content page exists: a follow-up); the account page shows name, phone and email read-only (CA8's email change by the customer has no server route yet: PR 4); the order's receipt is the verification QR (PR11's branded receipt page stays the server's verification page); live order tracking polls every 5 seconds (no shop event stream). The local seed's shop moved here from PR 4 for the browser check.
+- [x] the shop layout (brand color, logo or letter mark, header nav and phone bottom bar, footer «يعمل بـ VERTEX DIGITAL», `noindex`, robots `/s/`), home (announcement, state banner, return request, search, pinned, categories), game with the buy box (fields, player check, gap with WhatsApp, slide), wallet with return requests, orders and order page (codes, receipt QR, problem link), support with escalation, account
+- [x] sign-in, sign-up (ALTCHA, OTP), verify, reset, invitation in the shop's frame
+- [x] PWA per shop (manifest, scoped service worker `/s/<slug>/sw.js`, the registration script picks the scope, install) and push on the account page
+- [x] i18n (`features/shop/messages.ar.json`), error texts, loading, empty and error states
+- [x] the local seed's shop (`/s/abu-omar`: Omar granted, shop approved, two customers, transfers, a return request)
+- [x] the shop customer's notification center (`/s/<slug>/notifications`, bell with the unread count)
+- [x] E2E flow and RTL screenshots (phone, light and dark)
+- [x] checks, reviewer (6 blocking findings fixed: the purchase key under the shop's id, the PWA scope without a trailing slash and an old slug's worker, the shop's own 404 for any unknown path, the notification center, the gap in pounds rounded up, `next` resolved before the shop check), browser check on the local seed's shop, PR and merge
 
 ## PR 4 — `feat/s26-shop-panels`: merchant area and admin panel, then the deploy
+- [ ] the customer's email change (CA8) on the server and in "حسابي"; a merchant-shop terms content page (CA5)
 - [ ] merchant area "متجري": request with live preview, settings, customers with transfer and return, shop orders, shop tickets, statistics, sticker, statement kinds (WL10)
 - [ ] admin: shops page and shop page (approve, reject, states, limits, rate history, customers, freeze, settle), the order page's shop compensation, escalated tickets with the shop tag (the admin queue's and ticket page's API for shop tickets: the shop customer, the shop tag, admin replies telling the shop customer and the merchant)
 - [ ] the merchant dashboard's sales and profit and the statement kinds with the shop's delivered orders (WL10)
 - [ ] E2E flows and RTL screenshots (merchant phone, admin light and dark)
-- [ ] the local seed's shop
 - [ ] checks, reviewer, browser check of the spec's Acceptance, PR and merge
 - [ ] production deploy, health checks, the deploy log

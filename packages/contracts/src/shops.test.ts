@@ -26,6 +26,7 @@ import {
   shopSettingsSchema,
   shopSignUpSchema,
   shopSlugSchema,
+  shopTopUpSyp,
   shopTransferRefusal,
   shopTransferUsd,
   shopTransition,
@@ -178,6 +179,26 @@ describe('shopLimitsSchema (SH8)', () => {
     { customerLimit: 20_001 },
   ])('refuses %j', (change) => {
     expect(shopLimitsSchema.safeParse({ ...limits, ...change }).success).toBe(false);
+  });
+});
+
+describe('shopTopUpSyp (S26 screens: top up the gap)', () => {
+  it('asks for whole pounds rounded up, which a transfer turns back into at least the gap', () => {
+    // $1.07 at 14,123.5 = 15,112.145 SYP: 15,113 pounds; 15,112 would credit only $1.06.
+    expect(shopTopUpSyp(1_070_000, '14123.5')).toBe(15_113 * CURRENCY_SCALE.SYP);
+    expect(shopTransferUsd('syp', 15_112 * CURRENCY_SCALE.SYP, '14123.5')).toBe(1_060_000);
+    for (const [gap, rate] of [
+      [10_000, '14123.5'],
+      [1_070_000, '13999.99'],
+      [123_450_000, '11000'],
+      [990_000, '14000'],
+    ] as const) {
+      const syp = shopTopUpSyp(gap, rate);
+      expect(syp % CURRENCY_SCALE.SYP).toBe(0);
+      expect(shopTransferUsd('syp', syp, rate)).toBeGreaterThanOrEqual(gap);
+      // The smallest such: a pound less falls short.
+      expect(shopTransferUsd('syp', syp - CURRENCY_SCALE.SYP, rate) ?? 0).toBeLessThan(gap);
+    }
   });
 });
 
