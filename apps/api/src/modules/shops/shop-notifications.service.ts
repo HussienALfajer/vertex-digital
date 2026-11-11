@@ -18,7 +18,7 @@ import {
   shopPushSubscriptions,
   withinLimits,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -82,7 +82,7 @@ export class ShopNotificationsService {
   /** `POST /api/shops/:slug/notifications/read`: everything up to this one, included. */
   async markRead(customer: ShopCustomerIdentity, upToId: string): Promise<UnreadCount> {
     const [upTo] = await this.db
-      .select({ createdAt: shopCustomerNotifications.createdAt })
+      .select({ id: shopCustomerNotifications.id })
       .from(shopCustomerNotifications)
       .where(
         and(
@@ -98,7 +98,9 @@ export class ShopNotificationsService {
         and(
           eq(shopCustomerNotifications.shopCustomerId, customer.id),
           isNull(shopCustomerNotifications.readAt),
-          lte(shopCustomerNotifications.createdAt, upTo.createdAt),
+          // The database's own time, microseconds kept: a JS date would miss the row itself.
+          sql`${shopCustomerNotifications.createdAt} <= (select created_at
+            from shop_customer_notifications where id = ${upToId})`,
         ),
       );
     return this.unread(customer);

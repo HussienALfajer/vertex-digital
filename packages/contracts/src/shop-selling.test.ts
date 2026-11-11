@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { shopCacheTag, storeCacheTag } from './jobs.js';
 import { NO_SELLING_SETTINGS } from './merchant-tools.js';
 import {
   isBotUserAgent,
@@ -248,5 +249,17 @@ describe('shop shapes (PR4)', () => {
   it('reads the icon size', () => {
     expect(shopIconQuerySchema.parse({ size: '512' })).toEqual({ size: 512 });
     expect(shopIconQuerySchema.safeParse({ size: '100' }).success).toBe(false);
+  });
+});
+
+describe('the shop cache tag (store revalidation)', () => {
+  it('accepts the store tags and a shop tag only', () => {
+    const shopId = '019a0000-0000-7000-8000-000000000001';
+    expect(shopCacheTag(shopId)).toBe(`shop:${shopId}`);
+    expect(storeCacheTag('catalog')).toBe('catalog');
+    expect(storeCacheTag('content')).toBe('content');
+    expect(storeCacheTag(`shop:${shopId}`)).toBe(`shop:${shopId}`);
+    expect(storeCacheTag('shop:nope')).toBeUndefined();
+    expect(storeCacheTag(42)).toBeUndefined();
   });
 });

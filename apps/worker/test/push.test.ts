@@ -8,6 +8,9 @@ import {
   PUSH_NOTIFICATION_EVENTS,
   type PushNotificationEvent,
   QUEUES,
+  SHOP_NOTIFICATION_EVENTS,
+  type ShopNotificationEvent,
+  type ShopNotificationParams,
   vapidKeyId,
 } from '@vertex-digital/contracts';
 import {
@@ -15,9 +18,14 @@ import {
   customerNotifications,
   customerSessions,
   customers,
+  merchantShops,
   newId,
   notificationPreferences,
   pushSubscriptions,
+  shopCustomerNotifications,
+  shopCustomerSessions,
+  shopCustomers,
+  shopPushSubscriptions,
 } from '@vertex-digital/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,8 +39,9 @@ import {
   pushTtlSeconds,
   pushUrgency,
 } from '../src/jobs/push/push-rules.js';
-import { PUSH_TITLE, renderPush } from '../src/jobs/push/push-texts.js';
+import { PUSH_TITLE, renderPush, renderShopPush } from '../src/jobs/push/push-texts.js';
 import { SendPushJob } from '../src/jobs/push/send.job.js';
+import { SendShopPushJob } from '../src/jobs/push/send-shop.job.js';
 import { PushSender } from '../src/push/push-sender.js';
 
 /*
@@ -563,5 +572,122 @@ describe('push.send against a push service (PD3–PD5)', () => {
     expect(result.outcomes).toEqual({ [planted]: 'host_refused' });
     expect(requests).toEqual([]);
     expect(await rowsOf(customerId)).toEqual([]);
+  });
+});
+
+/* Shop pushes (S26 PR9, SP1) ----------------------------------------------------------------- */
+
+const SHOP_SAMPLE: { [Event in ShopNotificationEvent]: ShopNotificationParams<Event> } = {
+  transfer_received: { amountUsdUnits: 5_000_000 },
+  return_requested: { amountUsdUnits: 5_000_000, expiresAt: '2030-01-02T00:00:00.000Z' },
+  return_done: { amountUsdUnits: 5_000_000 },
+  settled: { amountUsdUnits: 5_000_000, to: 'merchant' },
+  order_delivered: {
+    orderId: newId(),
+    orderNumber: 'VO-7KQ2MX',
+    productNameAr: '60 شدة',
+    quantity: 1,
+  },
+  order_partially_refunded: {
+    orderId: newId(),
+    orderNumber: 'VO-7KQ2MX',
+    productNameAr: '60 شدة',
+    deliveredQuantity: 1,
+    refundedQuantity: 1,
+    refundedUsdUnits: 1_200_000,
+  },
+  order_refunded: {
+    orderId: newId(),
+    orderNumber: 'VO-7KQ2MX',
+    productNameAr: '60 شدة',
+    refundedUsdUnits: 1_200_000,
+    reason: 'no_route',
+  },
+  order_compensated: {
+    orderId: newId(),
+    orderNumber: 'VO-7KQ2MX',
+    productNameAr: '60 شدة',
+    amountUsdUnits: 1_200_000,
+  },
+  ticket_replied: { ticketId: newId(), number: 'VT-7KQ2MX', from: 'shop' },
+};
+
+describe('shop lock-screen texts (S26 PR9)', () => {
+  it("title every event with the shop's name and link it under the shop", () => {
+    for (const event of SHOP_NOTIFICATION_EVENTS) {
+      const push = renderShopPush(event, SHOP_SAMPLE[event], {
+        name: 'متجر النور',
+        slug: 'alnoor',
+      });
+      expect(push.title).toBe('متجر النور');
+      expect(push.url.startsWith('/s/alnoor/')).toBe(true);
+      // PT2: never an amount.
+      expect(push.body).not.toMatch(/\$|USD|5\.00|1\.20/);
+    }
+  });
+});
+
+describe('push.send-shop with the log transport', () => {
+  it("sends to the shop customer's live devices in the shop and skips a missing notification", async () => {
+    const merchantId = await customer();
+    const shopId = newId();
+    await db.insert(merchantShops).values({
+      id: shopId,
+      merchantId,
+      slug: `s${randomBytes(6).toString('hex')}`,
+      displayName: 'متجر النور',
+      brandColor: '#1f7a6c',
+    });
+    const shopCustomerId = newId();
+    await db.insert(shopCustomers).values({
+      id: shopCustomerId,
+      shopId,
+      name: 'سامي',
+      email: `${shopCustomerId}@test.vertex-digital.local`,
+      phone: '+963900000002',
+      emailVerified: true,
+      createdBy: 'merchant',
+    });
+    const sessionId = newId();
+    await db.insert(shopCustomerSessions).values({
+      id: sessionId,
+      userId: shopCustomerId,
+      shopId,
+      token: `test-${sessionId}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+    const live = newId();
+    await db.insert(shopPushSubscriptions).values({
+      id: live,
+      shopCustomerId,
+      sessionId,
+      endpoint: `https://fcm.googleapis.com/fcm/send/${live}`,
+      ...browserKeys(),
+      vapidKeyId: vapidKeyId(vapid.publicKey),
+    });
+    const notificationId = newId();
+    await db.insert(shopCustomerNotifications).values({
+      id: notificationId,
+      shopCustomerId,
+      shopId,
+      event: 'order_delivered',
+      params: SHOP_SAMPLE.order_delivered,
+    });
+    const job = new SendShopPushJob(
+      pgBoss,
+      new PushSender({ transport: 'log', vapid, logDir: LOG_DIR }),
+      db,
+    );
+    expect(await job.send({ notificationId })).toEqual({
+      outcomes: { [live]: 'delivered' },
+      retried: [],
+    });
+    const [line] = (await readFile(join(LOG_DIR, `${notificationId}.jsonl`), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((text) => JSON.parse(text));
+    expect(line).toMatchObject({ headers: { Urgency: 'high' } });
+    expect(line.payload.title).toBe('متجر النور');
+    expect(await job.send({ notificationId: newId() })).toMatchObject({ skipped: 'missing' });
   });
 });

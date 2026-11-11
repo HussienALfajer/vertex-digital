@@ -212,6 +212,51 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # S26 PR5: a shop customer's purchase, POST only (the zone's key is empty otherwise), as the
+    # store's purchases above, on top of the API's per-shop-customer counters.
+    location ~* ^/api/shops/[a-z0-9-]+/orders/?$ {
+        limit_req zone=vdpurchase burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # S26 PR5: a shop customer's player check, as the store's.
+    location ~* ^/api/shops/[a-z0-9-]+/player-checks/?$ {
+        limit_req zone=vdplayercheck burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # S26 PR12: a shop order's code reveals, as the store's.
+    location ~* "^/api/shops/[a-z0-9-]+/orders/[a-z0-9-]+/codes/[0-9a-f-]{36}/reveal/?$" {
+        limit_req zone=vdreveal burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # S26 TK1, TK2: shop tickets and messages, the shop customer's and the merchant's, with up to
+    # 3 images as the store's tickets.
+    location ~* "^/api/(?:shops/[a-z0-9-]+|merchant/shop)/tickets(?:/[0-9a-f-]{36}/messages)?/?$" {
+        client_max_body_size 16m;
+        client_body_timeout 60s;
+        limit_req zone=vdticket burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # S26 PR1, SP1, SP3: a shop's public home and games the browser reads (the store's server
+    # reads them on 127.0.0.1), its logo and icons and the visit counter: the catalog's zone.
+    location ~* "^/api/shops/[a-z0-9-]+(?:/games/[a-z0-9-]+|/logo|/icon|/manifest|/visits)?/?$" {
+        limit_req zone=vdcatalog burst=30 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # S26 WL1, WL5: the merchant's transfers to shop customers and return requests, POST only (the
     # zone's key is empty otherwise), on top of the shop's caps and the API's checks.
     location ~* "^/api/merchant/shop/customers/[0-9a-f-]{36}/(?:transfers|return-requests)/?$" {
