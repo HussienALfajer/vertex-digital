@@ -6,6 +6,9 @@
 // Set through NODE_OPTIONS because `startOrReload --update-env` applies env, not node_args.
 const root = '/srv/digital.vertexmedia.pro/current';
 const logs = '/var/log/digital.vertexmedia.pro';
+// Suppliers' certificates from Let's Encrypt's Gen Y roots (WDGZone since 2026-11-11), which
+// neither Node 24 nor the server trust yet: the api and worker add them to Node's own roots.
+const extraRoots = `${root}/deploy/ca/letsencrypt-gen-y-roots.pem`;
 
 const common = {
   cwd: root,
@@ -32,7 +35,11 @@ module.exports = {
       name: 'vertexdigital-api',
       script: 'apps/api/dist/main.js',
       max_memory_restart: '512M',
-      env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=384' },
+      env: {
+        ...common.env,
+        NODE_OPTIONS: '--max-old-space-size=384',
+        NODE_EXTRA_CA_CERTS: extraRoots,
+      },
       out_file: `${logs}/api.out.log`,
       error_file: `${logs}/api.err.log`,
     },
@@ -42,7 +49,11 @@ module.exports = {
       script: 'apps/worker/dist/main.js',
       // A WDG sync (11,595 offers) peaks near 350 MB with the 256 MB heap (measured 2026-10-14).
       max_memory_restart: '512M',
-      env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=256' },
+      env: {
+        ...common.env,
+        NODE_OPTIONS: '--max-old-space-size=256',
+        NODE_EXTRA_CA_CERTS: extraRoots,
+      },
       kill_timeout: 35000,
       out_file: `${logs}/worker.out.log`,
       error_file: `${logs}/worker.err.log`,

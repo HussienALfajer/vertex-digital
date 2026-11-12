@@ -5,6 +5,7 @@ Everything installed on the production server comes from this folder (ADR 0009, 
 ## Layout
 - `provision.sh`: one-time, idempotent server setup (user, directories, repository mirror, roles and database, `shared/.env`, nginx, certificates, fail2ban, systemd). `deploy.sh`: atomic releases, rollback and restore, run through `bin/vertexdigital-deploy`.
 - `ecosystem.config.cjs`: PM2 processes `vertexdigital-api`, `vertexdigital-worker`, `vertexdigital-store` with memory limits; the api and worker cap V8's heap below theirs through `NODE_OPTIONS` (PM2's `--update-env` applies env, not `node_args`).
+- `ca/letsencrypt-gen-y-roots.pem`: Let's Encrypt's Gen Y roots (Root YR, Root YE), which Node and Ubuntu do not trust yet; the api and worker read it through `NODE_EXTRA_CA_CERTS` so a supplier on that chain (WDGZone since 2026-11-11) stays reachable. Fetched from letsencrypt.org; drop it once Node's bundled roots include them.
 - `nginx/`: one site per host (`digital.vertexmedia.pro`, `digital-admin.vertexmedia.pro`), their `.bootstrap` variants for the first certificate, the `vertexdigital-*` snippets (headers, CSP, proxy, compression) and rate-limit zones.
 - `fail2ban/` (failed sign-ins and 429 floods), `systemd/` (PM2 service, health and backup timers), `logrotate/`, `bin/` (deploy entry point, health check, backup, `vertexdigital-notify` for Telegram alerts from the server).
 - `backup-public.asc`: the owner's public key the off-server backup copies are encrypted to (Q1). Public, safe in the repository; its private key never reaches the server or this folder.

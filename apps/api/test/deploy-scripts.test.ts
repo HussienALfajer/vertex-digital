@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { X509Certificate } from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -229,6 +230,31 @@ describe('PM2 (deploy/ecosystem.config.cjs)', () => {
       'utf8',
     ).match(/STOP_TIMEOUT_MS = ([\d_]+)/)?.[1];
     expect(Number(stop?.replaceAll('_', ''))).toBeLessThan((worker?.kill_timeout ?? 0) - 5_000);
+  });
+
+  it("gives the api and worker Let's Encrypt's Gen Y roots (WDGZone, 2026-11-11)", () => {
+    const require = createRequire(import.meta.url);
+    const { apps } = require(
+      new URL(deploy('ecosystem.config.cjs')).pathname.replace(/^\/(\w:)/, '$1'),
+    ) as { apps: { name: string; env: Record<string, string> }[] };
+    const current = '/srv/digital.vertexmedia.pro/current/';
+    for (const name of ['vertexdigital-api', 'vertexdigital-worker']) {
+      const path = apps.find((app) => app.name === name)?.env.NODE_EXTRA_CA_CERTS ?? '';
+      expect(path.startsWith(`${current}deploy/`), name).toBe(true);
+      const pem = readFileSync(
+        new URL(`../../../${path.slice(current.length)}`, import.meta.url),
+        'utf8',
+      );
+      const subjects = [
+        ...pem.matchAll(/-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----/g),
+      ]
+        .map(([block]) => new X509Certificate(block))
+        .map((cert) => (cert.subject === cert.issuer ? cert.subject : 'not a root'));
+      expect(subjects.map((subject) => subject.split('\n').at(-1))).toEqual([
+        'CN=Root YR',
+        'CN=Root YE',
+      ]);
+    }
   });
 });
 
