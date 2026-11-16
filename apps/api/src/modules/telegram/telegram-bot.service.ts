@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type DepositRejectReason,
+  type ErrorCode,
   parseTelegramCallback,
   STOP_SCOPE_SWITCHES,
   type StopScope,
@@ -37,6 +38,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
+import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import {
@@ -44,6 +46,7 @@ import {
   type TelegramDecision,
   type TelegramDepositFacts,
 } from '../deposits/index.js';
+import { RateSettingsService, RateSuggestionsService } from '../rates/index.js';
 import { SettingsService } from '../settings/index.js';
 import { linkCodeDigest, type TelegramLink, TelegramService } from './telegram.service.js';
 
@@ -84,7 +87,20 @@ const ANSWERS = {
   cashApproved: 'تمت الموافقة، يُرسل الطلب الآن.',
   cashRejected: 'رُفض الطلب وأُعيد المبلغ إلى المحفظة.',
   cashPanelOnly: 'فوق حد تيليجرام، قرّر من اللوحة.',
+  rateApproved: 'اعتُمد السعر الجديد.',
+  rateRejected: 'رُفض الاقتراح.',
+  rateTooLarge: 'التغيير الآن فوق حد تيليجرام: اعتمد من اللوحة.',
+  rateAutoOff: 'أُوقف التحديث التلقائي. تشغيله من اللوحة فقط.',
+  rateAutoAlreadyOff: 'التحديث التلقائي متوقف مسبقاً.',
 } as const;
+
+/** S27 SG2: why a suggestion's button was refused, as the toast says it. */
+const RATE_REFUSALS: Partial<Record<ErrorCode, string>> = {
+  RATE_SUGGESTION_STATE_CONFLICT: ANSWERS.decided,
+  NOT_FOUND: ANSWERS.decided,
+  RATE_SUGGESTION_TOO_LARGE_FOR_TELEGRAM: ANSWERS.rateTooLarge,
+  DISPLAY_STEP_TOO_LARGE: ANSWERS.panelOnly,
+};
 
 const APPROVAL_ANSWERS = {
   panel_only: ANSWERS.panelOnly,
@@ -111,6 +127,8 @@ export class TelegramBotService {
     private readonly telegram: TelegramService,
     private readonly settings: SettingsService,
     private readonly deposits: DepositReviewService,
+    private readonly rateSuggestions: RateSuggestionsService,
+    private readonly rateSettings: RateSettingsService,
   ) {
     this.secretDigest = env.TELEGRAM_WEBHOOK_SECRET ? digest(env.TELEGRAM_WEBHOOK_SECRET) : null;
   }
@@ -414,6 +432,14 @@ export class TelegramBotService {
       case 'cashApprove':
       case 'cashReject':
         return this.onCashButton(tx, link, query, callback, meta);
+      case 'rateApprove':
+      case 'rateReject':
+        return this.onRateButton(tx, link, query, callback, meta);
+      case 'rateAutoOff': {
+        const promptId = await this.openPrompt(tx, 'rate_auto_off_confirm', null, {});
+        await this.reply(tx, link.chatId, { reply: 'rate_auto_off_confirm', promptId });
+        return answer(query);
+      }
       default:
         break;
     }
@@ -439,6 +465,11 @@ export class TelegramBotService {
       );
       await this.replyDecision(tx, link, decision);
       return answer(query);
+    }
+    if (prompt.kind === 'rate_auto_off_confirm') {
+      // S27 ST1: Telegram only turns automatic updates off (ADR 0041).
+      const changed = await this.rateSettings.turnOffIn(tx, link.adminId, meta);
+      return answer(query, changed ? ANSWERS.rateAutoOff : ANSWERS.rateAutoAlreadyOff);
     }
     if (prompt.kind !== 'stop_confirm') return answer(query, ANSWERS.expired);
     const { scope } = TELEGRAM_PROMPT_DATA.stop_confirm.parse(prompt.data);
@@ -534,6 +565,37 @@ export class TelegramBotService {
       return answer(query, panelOnly ? ANSWERS.cashPanelOnly : ANSWERS.decided);
     }
     return answer(query, decision === 'approve' ? ANSWERS.cashApproved : ANSWERS.cashRejected);
+  }
+
+  /**
+   * S27 SG1, SG2: "اعتماد" or "رفض" on a rate suggestion's card, decided at once as a savepoint, so
+   * a refusal (decided, above the cap at this moment) leaves the update's transaction usable.
+   */
+  private async onRateButton(
+    tx: Transaction,
+    link: TelegramLink,
+    query: CallbackQuery,
+    callback: Extract<TelegramCallback, { action: 'rateApprove' | 'rateReject' }>,
+    meta: RequestMeta,
+  ): Promise<CallbackAnswer> {
+    const decision = { adminId: link.adminId, channel: 'telegram', meta } as const;
+    try {
+      await tx.transaction(async (step) => {
+        if (callback.action === 'rateApprove') {
+          await this.rateSuggestions.approveIn(step, callback.suggestionId, decision);
+        } else {
+          await this.rateSuggestions.rejectIn(step, callback.suggestionId, decision);
+        }
+      });
+    } catch (error) {
+      const refusal = error instanceof CodedException ? RATE_REFUSALS[error.code] : undefined;
+      if (refusal === undefined) throw error;
+      return answer(query, refusal);
+    }
+    return answer(
+      query,
+      callback.action === 'rateApprove' ? ANSWERS.rateApproved : ANSWERS.rateRejected,
+    );
   }
 
   /** True when the pressed message is this deposit's card for its current submission (F4-12). */

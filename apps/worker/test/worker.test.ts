@@ -20,6 +20,7 @@ import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
 import { OrdersWaitingSweepJob } from '../src/jobs/orders/waiting-sweep.job.js';
+import { RatesPollJob } from '../src/jobs/rates/poll.job.js';
 import { ReconciliationRecheckJob } from '../src/jobs/reconciliation/recheck.job.js';
 import { ReconciliationRunJob } from '../src/jobs/reconciliation/run.job.js';
 import { StoreRevalidateJob } from '../src/jobs/store/revalidate.job.js';
@@ -50,6 +51,7 @@ const IDLE_JOBS = [
   OrdersPayWaitingJob,
   OrdersWaitingSweepJob,
   OrdersCashHoldExpiryJob,
+  RatesPollJob,
   ReconciliationRunJob,
   ReconciliationRecheckJob,
   StoreRevalidateJob,

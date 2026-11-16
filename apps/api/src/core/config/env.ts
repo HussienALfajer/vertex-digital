@@ -114,6 +114,13 @@ export const envSchema = z
         .optional(),
     ),
     /**
+     * Where the rate sources are read (S27): `live` reads t.me and sp-today.com; `fake` reads the
+     * pages `rates:fake-post` writes under RATE_FEED_FAKE_DIR (development; refused in production).
+     */
+    RATE_FEED: z.enum(['live', 'fake']).default('fake'),
+    /** Relative paths resolve from the app's folder: the default is the repository's `storage/`. */
+    RATE_FEED_FAKE_DIR: z.string().min(1).default('../../storage/rate-feed-fake'),
+    /**
      * The `fake` supplier (S07 rule SP1): development and E2E only; the start is refused with it
      * in production.
      */
@@ -198,6 +205,13 @@ export const envSchema = z
         code: 'custom',
         path: ['SUPPLIER_FAKE_ENABLED'],
         message: 'The fake supplier is never enabled in production',
+      });
+    }
+    if (env.RATE_FEED !== 'live') {
+      context.addIssue({
+        code: 'custom',
+        path: ['RATE_FEED'],
+        message: 'Production reads the rate sources (RATE_FEED=live)',
       });
     }
     for (const key of [

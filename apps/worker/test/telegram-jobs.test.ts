@@ -554,6 +554,7 @@ describe('the messages of PR 4', () => {
     expect(reminder).toContain('و 2 غيرها');
     const summary: TelegramMessageParams<'daily_summary'> = {
       date: '2030-01-01',
+      rate: { sypPerUsd: '13000.5', changes: { admin: 1, auto: 2, suggestion: 0 } },
       credited: [{ method: 'sham_cash', count: 3, usdUnits: 75 * USD }],
       approvedFromTelegram: 2,
       rejected: 1,
@@ -622,6 +623,7 @@ describe('the messages of PR 4', () => {
       '🏅 فئات التجار: 2 تغيّرت اليوم',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
       'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
+      'سعر الصرف: 13,000.5 ل.س · تغييرات اليوم: يدوي 1، تلقائي 2',
     ]) {
       expect(text).toContain(line);
     }

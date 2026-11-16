@@ -99,6 +99,12 @@ export const QUEUES = {
   ordersCashHoldExpiry: 'orders.cash-hold-expiry',
   /** Expires shop return requests past their 24 hours, every 10 minutes (S26 WL5). */
   shopReturnRequestsExpire: 'shop.return-requests-expire',
+  /** Reads the rate sources and applies or suggests a rate, every 5 minutes when due (S27 SR1). */
+  ratesPoll: 'rates.poll',
+  /** Expires rate suggestions pending for 6 hours, hourly (S27 SG5). */
+  ratesExpireSuggestions: 'rates.expire-suggestions',
+  /** Deletes rate source reads older than 90 days, daily at 04:40 `Asia/Damascus` (S27). */
+  ratesPurgeObservations: 'rates.purge-observations',
 } as const;
 
 /**
@@ -124,6 +130,7 @@ export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> =
   [QUEUES.reconciliationRecheck]: 'stately',
   [QUEUES.merchantsLevel]: 'stately',
   [QUEUES.catalogProductAlerts]: 'singleton',
+  [QUEUES.ratesPoll]: 'singleton',
 };
 
 /** A store refresh is queued at most once per this many seconds (S09 rule SF4). */

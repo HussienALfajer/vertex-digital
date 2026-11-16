@@ -3,7 +3,10 @@ import {
   type DepositMethod,
   FAILING_SYNC_RUNS,
   QUEUES,
+  RATE_ORIGINS,
+  type RateOrigin,
   REVIEW_TIME_ZONE,
+  rateFromNumeric,
   reviewWaitStart,
   STORE_SWITCH_DEFAULTS,
   type StoreSwitch,
@@ -17,6 +20,7 @@ import {
   type Database,
   depositSettings,
   deposits,
+  exchangeRates,
   failedRunStreak,
   fixedPriceFallbacks,
   fulfilmentAttempts,
@@ -24,6 +28,7 @@ import {
   lowStockCounts,
   merchantApplications,
   merchantTierChanges,
+  newestRate,
   newOfferCounts,
   openMismatchCount,
   orders,
@@ -255,6 +260,30 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       reconciliation: await this.reconciliationLine(db),
       ownerOrders: await this.ownerOrdersLine(db, dayStart),
       merchantLevelsChanged: await this.merchantLevelsLine(db, dayStart),
+      rate: await this.rateLine(db, dayStart),
+    };
+  }
+
+  /** S27: the rate in force and today's changes by origin; null before the first rate. */
+  private async rateLine(db: Database | Transaction, dayStart: SQL) {
+    const [current, changes] = await readAll(db, [
+      () => newestRate(db),
+      () =>
+        db
+          .select({ origin: exchangeRates.origin, count: count() })
+          .from(exchangeRates)
+          .where(gte(exchangeRates.createdAt, dayStart))
+          .groupBy(exchangeRates.origin),
+    ]);
+    if (!current) return null;
+    return {
+      sypPerUsd: rateFromNumeric(current.sypPerUsd),
+      changes: Object.fromEntries(
+        RATE_ORIGINS.map((origin) => [
+          origin,
+          changes.find((row) => row.origin === origin)?.count ?? 0,
+        ]),
+      ) as Record<RateOrigin, number>,
     };
   }
 

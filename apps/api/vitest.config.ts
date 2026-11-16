@@ -46,6 +46,9 @@ export default defineConfig({
       VAPID_PUBLIC_KEY: `BTest${'A'.repeat(82)}`,
       // S07: suppliers are tested with the fake supplier.
       SUPPLIER_FAKE_ENABLED: 'true',
+      // S27: rate sources are pages the tests write here (git-ignored); never the live sites.
+      RATE_FEED: 'fake',
+      RATE_FEED_FAKE_DIR: fileURLToPath(new URL('./.data/test-rate-feed', import.meta.url)),
       // S09: the fake's scripted state the player checks read, the tests' own (git-ignored).
       FAKE_SUPPLIER_STATE_FILE: fileURLToPath(
         new URL('./.data/test-fake-supplier.json', import.meta.url),

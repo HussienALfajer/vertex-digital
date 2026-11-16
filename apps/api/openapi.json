@@ -1149,6 +1149,12 @@
                 "wallet_adjustment.created",
                 "wallet_adjustment.reversed",
                 "exchange_rate.changed",
+                "rate_source.created",
+                "rate_source.updated",
+                "rate_source.archived",
+                "rate_settings.changed",
+                "rate_suggestion.approved",
+                "rate_suggestion.rejected",
                 "deposit_settings.changed",
                 "deposit.created",
                 "deposit.requoted",
@@ -1341,6 +1347,9 @@
                 "customer",
                 "wallet_adjustment",
                 "exchange_rate",
+                "rate_source",
+                "rate_settings",
+                "rate_suggestion",
                 "deposit_settings",
                 "deposit",
                 "store_switch",
@@ -1494,6 +1503,335 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExchangeRateRecord"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-sources": {
+      "get": {
+        "operationId": "RateSourcesAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Live sources with their last three reads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSourceList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      },
+      "post": {
+        "operationId": "RateSourcesAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRateSource"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSource"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-sources/test": {
+      "post": {
+        "operationId": "RateSourcesAdminController_test",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRateSource"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What the read found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSourceTestResult"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-sources/{id}": {
+      "patch": {
+        "operationId": "RateSourcesAdminController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRateSource"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSource"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-sources/{id}/archive": {
+      "post": {
+        "operationId": "RateSourcesAdminController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archived source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSource"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-suggestions": {
+      "get": {
+        "operationId": "RateSuggestionsAdminController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "superseded",
+                "expired"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestions, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSuggestionPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-suggestions/{id}/approve": {
+      "post": {
+        "operationId": "RateSuggestionsAdminController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRateSuggestion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The rate written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExchangeRateRecord"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-suggestions/{id}/reject": {
+      "post": {
+        "operationId": "RateSuggestionsAdminController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The rejected suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSuggestion"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      }
+    },
+    "/api/admin/rate-settings": {
+      "get": {
+        "operationId": "RateSuggestionsAdminController_getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The settings in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "rates"
+        ]
+      },
+      "post": {
+        "operationId": "RateSuggestionsAdminController_changeSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRateSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The settings in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateSettings"
                 }
               }
             }
@@ -20072,6 +20410,12 @@
           "wallet_adjustment.created",
           "wallet_adjustment.reversed",
           "exchange_rate.changed",
+          "rate_source.created",
+          "rate_source.updated",
+          "rate_source.archived",
+          "rate_settings.changed",
+          "rate_suggestion.approved",
+          "rate_suggestion.rejected",
           "deposit_settings.changed",
           "deposit.created",
           "deposit.requoted",
@@ -20259,6 +20603,9 @@
           "customer",
           "wallet_adjustment",
           "exchange_rate",
+          "rate_source",
+          "rate_settings",
+          "rate_suggestion",
           "deposit_settings",
           "deposit",
           "store_switch",
@@ -20419,6 +20766,17 @@
           "stale": {
             "type": "boolean"
           },
+          "pendingSuggestion": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RateSuggestion"
+              }
+            ]
+          },
+          "autoEnabled": {
+            "type": "boolean"
+          },
           "history": {
             "$ref": "#/components/schemas/RatePage"
           }
@@ -20426,6 +20784,8 @@
         "required": [
           "current",
           "stale",
+          "pendingSuggestion",
+          "autoEnabled",
           "history"
         ],
         "additionalProperties": false
@@ -20437,6 +20797,9 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/RateOrigin"
           },
           "sypPerUsd": {
             "$ref": "#/components/schemas/ExchangeRate"
@@ -20462,6 +20825,7 @@
         },
         "required": [
           "id",
+          "origin",
           "sypPerUsd",
           "displayStepSypUnits",
           "changePercent",
@@ -20470,8 +20834,146 @@
         ],
         "additionalProperties": false
       },
+      "RateOrigin": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "auto",
+          "suggestion"
+        ]
+      },
       "ExchangeRate": {
         "type": "string"
+      },
+      "RateSuggestion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "proposedSypPerUsd": {
+            "$ref": "#/components/schemas/ExchangeRate"
+          },
+          "baseRateId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "baseSypPerUsd": {
+            "$ref": "#/components/schemas/ExchangeRate"
+          },
+          "changePercent": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/RateSuggestionReason"
+          },
+          "figures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateSuggestionFigure"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/RateSuggestionStatus"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedChannel": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RateDecisionChannel"
+              }
+            ]
+          },
+          "adminName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "appliedRateId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "proposedSypPerUsd",
+          "baseRateId",
+          "baseSypPerUsd",
+          "changePercent",
+          "reason",
+          "figures",
+          "status",
+          "decidedAt",
+          "decidedChannel",
+          "adminName",
+          "appliedRateId",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "RateSuggestionReason": {
+        "type": "string",
+        "enum": [
+          "single_source",
+          "sources_disagree",
+          "move_too_large",
+          "drift_too_large",
+          "auto_off"
+        ]
+      },
+      "RateSuggestionFigure": {
+        "type": "object",
+        "properties": {
+          "sourceLabel": {
+            "type": "string"
+          },
+          "sypPerUsd": {
+            "$ref": "#/components/schemas/ExchangeRate"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "sourceLabel",
+          "sypPerUsd",
+          "at"
+        ],
+        "additionalProperties": false
+      },
+      "RateSuggestionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "superseded",
+          "expired"
+        ]
+      },
+      "RateDecisionChannel": {
+        "type": "string",
+        "enum": [
+          "panel",
+          "telegram"
+        ]
       },
       "RatePage": {
         "type": "object",
@@ -20512,6 +21014,525 @@
         "required": [
           "sypPerUsd",
           "displayStepSypUnits"
+        ]
+      },
+      "RateSourceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateSource"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "RateSource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RateSourceKind"
+          },
+          "label": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "parser": {
+            "$ref": "#/components/schemas/RateSourceParser"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "broken",
+              "unknown"
+            ]
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateObservation"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "archivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "handle",
+          "parser",
+          "enabled",
+          "health",
+          "observations",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "RateSourceKind": {
+        "type": "string",
+        "enum": [
+          "telegram_channel",
+          "sp_today_page"
+        ]
+      },
+      "RateSourceParser": {
+        "type": "object",
+        "properties": {
+          "cityWord": {
+            "nullable": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "sellWord": {
+            "default": "مبيع",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "unit": {
+            "$ref": "#/components/schemas/RateSourceUnit"
+          }
+        },
+        "required": [
+          "cityWord",
+          "sellWord",
+          "unit"
+        ],
+        "additionalProperties": false
+      },
+      "RateSourceUnit": {
+        "type": "string",
+        "enum": [
+          "new_syp",
+          "old_syp"
+        ]
+      },
+      "RateObservation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "postedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RateObservationStatus"
+          },
+          "sypPerUsd": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeRate"
+              }
+            ]
+          },
+          "excerpt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "errorCode": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fetchedAt",
+          "postedAt",
+          "status",
+          "sypPerUsd",
+          "excerpt",
+          "errorCode"
+        ],
+        "additionalProperties": false
+      },
+      "RateObservationStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "no_match",
+          "fetch_failed",
+          "out_of_range"
+        ]
+      },
+      "CreateRateSource": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RateSourceKind"
+          },
+          "handle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 121
+          },
+          "parser": {
+            "$ref": "#/components/schemas/RateSourceParser"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "handle",
+          "parser",
+          "label"
+        ]
+      },
+      "TestRateSource": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RateSourceKind"
+          },
+          "handle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 121
+          },
+          "parser": {
+            "$ref": "#/components/schemas/RateSourceParser"
+          }
+        },
+        "required": [
+          "kind",
+          "handle",
+          "parser"
+        ]
+      },
+      "RateSourceTestResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RateObservationStatus"
+          },
+          "sypPerUsd": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeRate"
+              }
+            ]
+          },
+          "postedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "excerpt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "errorCode": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "sypPerUsd",
+          "postedAt",
+          "excerpt",
+          "errorCode"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateRateSource": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "handle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 121
+          },
+          "parser": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RateSourceParser"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RateSuggestionListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RateSuggestionStatus"
+              }
+            ]
+          }
+        }
+      },
+      "RateSuggestionPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateSuggestion"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "ApproveRateSuggestion": {
+        "type": "object",
+        "properties": {
+          "sypPerUsd": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeRate"
+              }
+            ]
+          },
+          "rateConfirmation": {
+            "type": "string",
+            "maxLength": 20
+          }
+        }
+      },
+      "RateSettings": {
+        "type": "object",
+        "properties": {
+          "autoEnabled": {
+            "type": "boolean"
+          },
+          "autoMaxMoveBps": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 300
+          },
+          "agreementMaxSpreadBps": {
+            "type": "integer",
+            "minimum": 25,
+            "maximum": 300
+          },
+          "minAgreeingSources": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 5
+          },
+          "driftWindowHours": {
+            "type": "integer",
+            "minimum": 6,
+            "maximum": 72
+          },
+          "driftMaxBps": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 500
+          },
+          "minMoveBps": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 100
+          },
+          "freshnessMinutes": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 720
+          },
+          "silentAlertHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "telegramApproveMaxBps": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 500
+          },
+          "pollMinutes": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 60
+          },
+          "id": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "adminName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "autoEnabled",
+          "autoMaxMoveBps",
+          "agreementMaxSpreadBps",
+          "minAgreeingSources",
+          "driftWindowHours",
+          "driftMaxBps",
+          "minMoveBps",
+          "freshnessMinutes",
+          "silentAlertHours",
+          "telegramApproveMaxBps",
+          "pollMinutes",
+          "id",
+          "adminName",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ChangeRateSettings": {
+        "type": "object",
+        "properties": {
+          "autoEnabled": {
+            "type": "boolean"
+          },
+          "autoMaxMoveBps": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 300
+          },
+          "agreementMaxSpreadBps": {
+            "type": "integer",
+            "minimum": 25,
+            "maximum": 300
+          },
+          "minAgreeingSources": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 5
+          },
+          "driftWindowHours": {
+            "type": "integer",
+            "minimum": 6,
+            "maximum": 72
+          },
+          "driftMaxBps": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 500
+          },
+          "minMoveBps": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 100
+          },
+          "freshnessMinutes": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 720
+          },
+          "silentAlertHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "telegramApproveMaxBps": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 500
+          },
+          "pollMinutes": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "autoEnabled",
+          "autoMaxMoveBps",
+          "agreementMaxSpreadBps",
+          "minAgreeingSources",
+          "driftWindowHours",
+          "driftMaxBps",
+          "minMoveBps",
+          "freshnessMinutes",
+          "silentAlertHours",
+          "telegramApproveMaxBps",
+          "pollMinutes"
         ]
       },
       "Wallet": {
@@ -49920,7 +50941,12 @@
           "shop_requested",
           "shop_closed_with_balance",
           "shop_ticket_escalated",
-          "shop_returns_alert"
+          "shop_returns_alert",
+          "rate_suggestion",
+          "rate_suggestion_closed",
+          "rate_auto_changed",
+          "rate_source_broken",
+          "rate_sources_silent"
         ]
       },
       "TelegramMessageStatus": {

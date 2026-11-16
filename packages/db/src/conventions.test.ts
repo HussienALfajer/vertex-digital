@@ -36,6 +36,9 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   exchange_rates: 'Append-only (S03): a change is a new row, the newest is the current rate',
   payment_references: 'Append-only (S03): a claim is never released or moved',
   deposit_settings: 'Append-only (S03): a save is a new version, the newest is in force',
+  rate_observations: 'Append-only (S27): one read of a source per poll, purged after 90 days',
+  rate_suggestions: 'A decision record (S27 SG2): ended once by its decision, never archived',
+  rate_settings: 'Append-only (S27 ST1): a save is a new version, the newest is in force',
   deposits: 'Never archived (S03): a deposit ends in a final state, which is its record',
   deposit_receipts: 'Append-only (S03): receipts are evidence, never changed',
   deposit_flags: 'Append-only (S03): a flag is raised once and never cleared',
@@ -225,6 +228,8 @@ const APPEND_ONLY_TABLES = [
   'shop_transfers',
   'shop_settlements',
   'shop_compensations',
+  'rate_settings',
+  'rate_observations',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

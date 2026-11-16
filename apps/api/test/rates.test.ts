@@ -89,6 +89,7 @@ describe('changing the rate (rules FX1–FX3)', () => {
     const record = await setRate('118.5', 1000);
     expect(record).toEqual({
       id: expect.any(String),
+      origin: 'admin',
       sypPerUsd: '118.5',
       displayStepSypUnits: 1000,
       changePercent: '0.43',
@@ -112,6 +113,8 @@ describe('changing the rate (rules FX1–FX3)', () => {
           before: { sypPerUsd: '118', displayStepSypUnits: 500 },
           after: { sypPerUsd: '118.5', displayStepSypUnits: 1000 },
           changePercent: '0.43',
+          origin: 'admin',
+          suggestionId: null,
         },
       }),
     ]);

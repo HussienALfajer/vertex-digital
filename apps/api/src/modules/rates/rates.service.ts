@@ -5,6 +5,7 @@ import {
   type ExchangeRateRecord,
   isRateStale,
   maxDisplayStepSypUnits,
+  type RateSuggestion,
   type RatesOverview,
   rateChangePercent,
   rateConfirmationError,
@@ -13,19 +14,28 @@ import {
 import {
   cheapestAvailablePrice,
   type Database,
+  type ExchangeRateRow,
+  type Executor,
   exchangeRates,
-  newId,
-  recordAudit,
+  lockRates,
+  newestRate,
+  rateSettingsInForce,
+  rateSuggestions,
+  readAll,
+  suggestionFigures,
   type Transaction,
+  writeRate,
 } from '@vertex-digital/db';
-import { desc, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService } from '../admin/index.js';
+import { adminIdsOf, toRateRecord, toSuggestionRecord } from './rate-records.js';
 
 /** The rate in force (rule FX9: read with each request that uses it, never cached). */
 export interface CurrentRate {
@@ -36,18 +46,10 @@ export interface CurrentRate {
   createdAt: Date;
 }
 
-type RateRow = typeof exchangeRates.$inferSelect;
-
 /**
- * Serializes rate changes: the 5% check of rule FX2 compares with the rate a parallel change may
- * be replacing. A transaction-level advisory lock, since the app role cannot lock rows of an
- * append-only table (`FOR UPDATE` needs `UPDATE`).
- */
-const RATE_CHANGE_LOCK = sql`select pg_advisory_xact_lock(hashtext('exchange_rates'))`;
-
-/**
- * The admin's exchange rate (S03 rules FX1–FX9): the only writer of `exchange_rates`. Other
- * modules read the rate in force through `current()`.
+ * The exchange rate (S03 rules FX1–FX9, S27): the admin's changes and the panel's overview. Every
+ * rate, manual, automatic or approved, is written by `writeRate` in `packages/db` under one lock;
+ * other modules read the rate in force through `current()`.
  */
 @Injectable()
 export class RatesService {
@@ -55,6 +57,7 @@ export class RatesService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
     private readonly admins: AdminAuthService,
+    private readonly jobs: JobsService,
   ) {}
 
   /**
@@ -63,105 +66,98 @@ export class RatesService {
    * can leave every connection waiting on the others (F3-4).
    */
   async current(db: Database | Transaction = this.db): Promise<CurrentRate | null> {
-    const [row] = await db
-      .select()
-      .from(exchangeRates)
-      .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
-      .limit(1);
+    const row = await newestRate(db);
     return row ? toCurrent(row) : null;
   }
 
-  /** `GET /api/admin/rates`: the current rate, staleness (rule FX7) and a page of history. */
+  /**
+   * `GET /api/admin/rates`: the current rate, staleness (rule FX7), the pending suggestion, whether
+   * automatic updates are on (S27), and a page of history.
+   */
   async overview(query: CursorQuery): Promise<RatesOverview> {
     const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
     // One row past the page: it tells whether more follow, and it is the rate before the
     // page's last row, for that row's change percent.
-    const rows = await this.db
-      .select({ row: exchangeRates, at: cursorTime(exchangeRates.createdAt) })
-      .from(exchangeRates)
-      .where(cursor ? after(exchangeRates.createdAt, exchangeRates.id, cursor) : undefined)
-      .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
-      .limit(query.limit + 1);
+    const [rows, settings, pending] = await readAll(this.db, [
+      () =>
+        this.db
+          .select({ row: exchangeRates, at: cursorTime(exchangeRates.createdAt) })
+          .from(exchangeRates)
+          .where(cursor ? after(exchangeRates.createdAt, exchangeRates.id, cursor) : undefined)
+          .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
+          .limit(query.limit + 1),
+      () => rateSettingsInForce(this.db),
+      () => this.pendingSuggestion(this.db),
+    ]);
     const page = pageOf(rows, query.limit, ({ row, at }) => ({ at, id: row.id }));
-    const names = await this.admins.namesOf([...new Set(page.items.map(({ row }) => row.adminId))]);
+    const names = await this.admins.namesOf(adminIdsOf(page.items.map(({ row }) => row)));
     const items = page.items.map(({ row }, index) =>
-      toRecord(row, rows[index + 1]?.row ?? null, names),
+      toRateRecord(row, rows[index + 1]?.row ?? null, names),
     );
     const current = cursor ? await this.currentRecord() : (items[0] ?? null);
     return {
       current,
       stale: isRateStale(current ? new Date(current.createdAt) : null, new Date()),
+      pendingSuggestion: pending,
+      autoEnabled: settings.values.autoEnabled,
       history: { items, nextCursor: page.nextCursor },
     };
   }
 
   /** `POST /api/admin/rates` (rules FX1–FX3): a new row and its audit entry. */
   async change(adminId: string, input: ChangeRate, meta: RequestMeta): Promise<ExchangeRateRecord> {
-    const record = await this.db.transaction(async (tx) => {
-      await tx.execute(RATE_CHANGE_LOCK);
-      const [previous] = await tx
-        .select()
-        .from(exchangeRates)
-        .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
-        .limit(1);
-      const before = previous ? toCurrent(previous) : null;
-      const refusal = rateConfirmationError(before?.sypPerUsd ?? null, input);
+    const written = await this.db.transaction(async (tx) => {
+      await lockRates(tx);
+      const before = await newestRate(tx);
+      const refusal = rateConfirmationError(
+        before ? rateFromNumeric(before.sypPerUsd) : null,
+        input,
+      );
       if (refusal) {
         throw new CodedException(400, refusal, 'The typed rate confirmation does not hold', {
-          changePercent: before && rateChangePercent(before.sypPerUsd, input.sypPerUsd),
+          changePercent:
+            before && rateChangePercent(rateFromNumeric(before.sypPerUsd), input.sypPerUsd),
         });
       }
-      // S07 rule P9: the step may add at most 2% to the cheapest available product.
-      const cheapest = await cheapestAvailablePrice(tx, routingContext(this.env));
-      const maxStep = cheapest === null ? null : maxDisplayStepSypUnits(input.sypPerUsd, cheapest);
-      if (maxStep !== null && input.displayStepSypUnits > maxStep) {
-        throw new CodedException(
-          400,
-          'DISPLAY_STEP_TOO_LARGE',
-          'The display step adds more than 2% to the cheapest available product',
-          { maxStepSypUnits: maxStep },
-        );
-      }
-      const [row] = await tx
-        .insert(exchangeRates)
-        .values({
-          id: newId(),
-          sypPerUsd: input.sypPerUsd,
-          displayStepSypUnits: input.displayStepSypUnits,
-          adminId,
-          // The insert's own time, not the transaction's start (`now()`): a change that began
-          // before another but waited for the lock is still the newer rate.
-          createdAt: sql`clock_timestamp()`,
-        })
-        .returning();
-      if (!row) throw new Error('The rate was not written');
-      const after = toCurrent(row);
-      const changePercent = before && rateChangePercent(before.sypPerUsd, after.sypPerUsd);
-      const values = (rate: CurrentRate) => ({
-        sypPerUsd: rate.sypPerUsd,
-        displayStepSypUnits: rate.displayStepSypUnits,
-      });
-      await recordAudit(tx, {
-        action: 'exchange_rate.changed',
-        actorKind: 'admin',
-        actorId: adminId,
-        channel: 'admin',
-        entityType: 'exchange_rate',
-        entityId: row.id,
-        reason: null,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: {
-          rateId: row.id,
-          before: before && values(before),
-          after: values(after),
-          changePercent,
-        },
-      });
-      return { row, previous: previous ?? null };
+      await this.checkDisplayStep(tx, input.sypPerUsd, input.displayStepSypUnits);
+      return writeRate(
+        tx,
+        this.jobs,
+        { ...input, origin: 'admin', adminId, suggestionId: null },
+        { actorKind: 'admin', actorId: adminId, channel: 'admin', ...meta },
+      );
     });
     const names = await this.admins.namesOf([adminId]);
-    return toRecord(record.row, record.previous, names);
+    return toRateRecord(written.row, written.previous, names);
+  }
+
+  /**
+   * S07 rule P9: the display step may add at most 2% to the cheapest available product at `rate`.
+   * Checked for every rate the admin sets or approves; an automatic rate keeps the step in force.
+   */
+  async checkDisplayStep(tx: Transaction, rate: string, stepSypUnits: number): Promise<void> {
+    const cheapest = await cheapestAvailablePrice(tx, routingContext(this.env));
+    const maxStep = cheapest === null ? null : maxDisplayStepSypUnits(rate, cheapest);
+    if (maxStep !== null && stepSypUnits > maxStep) {
+      throw new CodedException(
+        400,
+        'DISPLAY_STEP_TOO_LARGE',
+        'The display step adds more than 2% to the cheapest available product',
+        { maxStepSypUnits: maxStep },
+      );
+    }
+  }
+
+  /** The pending suggestion with its figures, or null (S27 `/rates`). */
+  async pendingSuggestion(db: Executor): Promise<RateSuggestion | null> {
+    const [found] = await db
+      .select({ suggestion: rateSuggestions, base: exchangeRates })
+      .from(rateSuggestions)
+      .innerJoin(exchangeRates, eq(exchangeRates.id, rateSuggestions.baseRateId))
+      .where(eq(rateSuggestions.status, 'pending'));
+    if (!found) return null;
+    const figures = await suggestionFigures(db, found.suggestion.observationIds);
+    return toSuggestionRecord(found.suggestion, found.base, figures, new Map());
   }
 
   private async currentRecord(): Promise<ExchangeRateRecord | null> {
@@ -172,31 +168,15 @@ export class RatesService {
       .limit(2);
     const [row, previous] = rows;
     if (!row) return null;
-    return toRecord(row, previous ?? null, await this.admins.namesOf([row.adminId]));
+    return toRateRecord(row, previous ?? null, await this.admins.namesOf(adminIdsOf([row])));
   }
 }
 
-function toCurrent(row: RateRow): CurrentRate {
+function toCurrent(row: ExchangeRateRow): CurrentRate {
   return {
     id: row.id,
     sypPerUsd: rateFromNumeric(row.sypPerUsd),
     displayStepSypUnits: row.displayStepSypUnits,
     createdAt: row.createdAt,
-  };
-}
-
-function toRecord(
-  row: RateRow,
-  previous: RateRow | null,
-  names: Map<string, string>,
-): ExchangeRateRecord {
-  const sypPerUsd = rateFromNumeric(row.sypPerUsd);
-  return {
-    id: row.id,
-    sypPerUsd,
-    displayStepSypUnits: row.displayStepSypUnits,
-    changePercent: previous && rateChangePercent(rateFromNumeric(previous.sypPerUsd), sypPerUsd),
-    adminName: names.get(row.adminId) ?? null,
-    createdAt: row.createdAt.toISOString(),
   };
 }

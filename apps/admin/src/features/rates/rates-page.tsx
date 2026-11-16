@@ -13,6 +13,7 @@ import {
   rateChangePercent,
 } from '@vertex-digital/contracts';
 import {
+  Badge,
   Button,
   Card,
   CardTitle,
@@ -40,16 +41,19 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
+import { AutoStatusCard, SourcesSection, SuggestionCard } from './rate-automation';
 import { ratesQuery, useChangeRate } from './rates.queries';
 
 /**
  * "سعر الصرف" (S03, F04): the current rate, step and age, the change form with the typed
- * confirmation above 5% (rule FX2) and re-authentication, and the history.
+ * confirmation above 5% (rule FX2) and re-authentication, and the history. S27 (F46): the pending
+ * suggestion, whether automatic updates are on, the sources, and each row's origin.
  */
 export function RatesPage() {
   const { t } = useTranslation();
   const list = useInfiniteQuery(ratesQuery);
-  const current = list.data?.pages[0]?.current ?? null;
+  const first = list.data?.pages[0];
+  const current = first?.current ?? null;
   const history = list.data?.pages.flatMap((page) => page.history.items) ?? [];
 
   return (
@@ -72,9 +76,16 @@ export function RatesPage() {
       {list.isSuccess && (
         <>
           <div className="grid gap-6 lg:grid-cols-2">
-            <CurrentRate current={current} />
+            {first?.pendingSuggestion && (
+              <SuggestionCard suggestion={first.pendingSuggestion} current={current} />
+            )}
+            <div className="flex flex-col gap-6">
+              <CurrentRate current={current} />
+              <AutoStatusCard autoEnabled={first?.autoEnabled ?? false} />
+            </div>
             <ChangeRateForm current={current} />
           </div>
+          <SourcesSection />
           <section className="flex flex-col gap-3" aria-labelledby="rate-history">
             <h2 id="rate-history" className="text-lg font-bold">
               {t('rates.history.title')}
@@ -321,6 +332,7 @@ function HistoryTable({ rates }: { rates: ExchangeRateRecord[] }) {
           <TableHead>{t('rates.history.rate')}</TableHead>
           <TableHead>{t('rates.history.step')}</TableHead>
           <TableHead>{t('rates.history.change')}</TableHead>
+          <TableHead>{t('rates.history.origin')}</TableHead>
           <TableHead>{t('rates.history.admin')}</TableHead>
         </TableRow>
       </TableHeader>
@@ -342,7 +354,18 @@ function HistoryTable({ rates }: { rates: ExchangeRateRecord[] }) {
                 </bdi>
               )}
             </TableCell>
-            <TableCell>{rate.adminName ?? t('common.unknown')}</TableCell>
+            <TableCell>
+              <Badge
+                tone={
+                  rate.origin === 'admin' ? 'neutral' : rate.origin === 'auto' ? 'info' : 'gold'
+                }
+              >
+                {t(`rates.origins.${rate.origin}`)}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              {rate.origin === 'auto' ? '—' : (rate.adminName ?? t('common.unknown'))}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

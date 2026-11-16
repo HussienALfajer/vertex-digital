@@ -17,7 +17,6 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppContentRouteImport } from './routes/_app/content'
-import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index'
@@ -42,6 +41,8 @@ import { Route as AppOrdersPolicyRouteImport } from './routes/_app/orders.policy
 import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index'
 import { Route as AppPricingMatrixRouteImport } from './routes/_app/pricing.matrix'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
+import { Route as AppRatesIndexRouteImport } from './routes/_app/rates.index'
+import { Route as AppRatesSettingsRouteImport } from './routes/_app/rates.settings'
 import { Route as AppReconciliationIndexRouteImport } from './routes/_app/reconciliation.index'
 import { Route as AppReportsMerchantTiersRouteImport } from './routes/_app/reports_.merchant-tiers'
 import { Route as AppSettingsCreditRouteImport } from './routes/_app/settings.credit'
@@ -68,6 +69,8 @@ import { Route as AppMerchantsApplicationsIndexRouteImport } from './routes/_app
 import { Route as AppMerchantsApplicationsIdRouteImport } from './routes/_app/merchants.applications.$id'
 import { Route as AppPricingListsIndexRouteImport } from './routes/_app/pricing.lists.index'
 import { Route as AppPricingListsIdRouteImport } from './routes/_app/pricing.lists.$id'
+import { Route as AppRatesSourcesIdRouteImport } from './routes/_app/rates.sources.$id'
+import { Route as AppRatesSourcesNewRouteImport } from './routes/_app/rates.sources.new'
 import { Route as AppReconciliationRunsIdRouteImport } from './routes/_app/reconciliation.runs.$id'
 import { Route as AppSuppliersCodeCategoriesCategoryIdRouteImport } from './routes/_app/suppliers.$code_.categories.$categoryId'
 
@@ -108,11 +111,6 @@ const AppAuditRoute = AppAuditRouteImport.update({
 const AppContentRoute = AppContentRouteImport.update({
   id: '/content',
   path: '/content',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRatesRoute = AppRatesRouteImport.update({
-  id: '/rates',
-  path: '/rates',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -233,6 +231,16 @@ const AppPricingMatrixRoute = AppPricingMatrixRouteImport.update({
 const AppPricingReviewsRoute = AppPricingReviewsRouteImport.update({
   id: '/pricing/reviews',
   path: '/pricing/reviews',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRatesIndexRoute = AppRatesIndexRouteImport.update({
+  id: '/rates/',
+  path: '/rates/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRatesSettingsRoute = AppRatesSettingsRouteImport.update({
+  id: '/rates/settings',
+  path: '/rates/settings',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReconciliationIndexRoute = AppReconciliationIndexRouteImport.update({
@@ -367,6 +375,16 @@ const AppPricingListsIdRoute = AppPricingListsIdRouteImport.update({
   path: '/pricing/lists/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRatesSourcesIdRoute = AppRatesSourcesIdRouteImport.update({
+  id: '/rates/sources/$id',
+  path: '/rates/sources/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRatesSourcesNewRoute = AppRatesSourcesNewRouteImport.update({
+  id: '/rates/sources/new',
+  path: '/rates/sources/new',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReconciliationRunsIdRoute = AppReconciliationRunsIdRouteImport.update({
   id: '/reconciliation/runs/$id',
   path: '/reconciliation/runs/$id',
@@ -387,7 +405,6 @@ export interface FileRoutesByFullPath {
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
   '/content': typeof AppContentRouteWithChildren
-  '/rates': typeof AppRatesRoute
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/catalog/quick-links': typeof AppCatalogQuickLinksRoute
@@ -405,6 +422,7 @@ export interface FileRoutesByFullPath {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
+  '/rates/settings': typeof AppRatesSettingsRoute
   '/reports/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/settings/credit': typeof AppSettingsCreditRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
@@ -425,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/merchants/': typeof AppMerchantsIndexRoute
   '/orders/': typeof AppOrdersIndexRoute
   '/pricing/': typeof AppPricingIndexRoute
+  '/rates/': typeof AppRatesIndexRoute
   '/reconciliation/': typeof AppReconciliationIndexRoute
   '/shops/': typeof AppShopsIndexRoute
   '/suppliers/': typeof AppSuppliersIndexRoute
@@ -435,6 +454,8 @@ export interface FileRoutesByFullPath {
   '/content/pages/$page': typeof AppContentPagesPageRoute
   '/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/pricing/lists/$id': typeof AppPricingListsIdRoute
+  '/rates/sources/$id': typeof AppRatesSourcesIdRoute
+  '/rates/sources/new': typeof AppRatesSourcesNewRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages/': typeof AppContentPagesIndexRoute
   '/merchants/applications/': typeof AppMerchantsApplicationsIndexRoute
@@ -447,7 +468,6 @@ export interface FileRoutesByTo {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
-  '/rates': typeof AppRatesRoute
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
@@ -466,6 +486,7 @@ export interface FileRoutesByTo {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
+  '/rates/settings': typeof AppRatesSettingsRoute
   '/reports/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/settings/credit': typeof AppSettingsCreditRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
@@ -486,6 +507,7 @@ export interface FileRoutesByTo {
   '/merchants': typeof AppMerchantsIndexRoute
   '/orders': typeof AppOrdersIndexRoute
   '/pricing': typeof AppPricingIndexRoute
+  '/rates': typeof AppRatesIndexRoute
   '/reconciliation': typeof AppReconciliationIndexRoute
   '/shops': typeof AppShopsIndexRoute
   '/suppliers': typeof AppSuppliersIndexRoute
@@ -496,6 +518,8 @@ export interface FileRoutesByTo {
   '/content/pages/$page': typeof AppContentPagesPageRoute
   '/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/pricing/lists/$id': typeof AppPricingListsIdRoute
+  '/rates/sources/$id': typeof AppRatesSourcesIdRoute
+  '/rates/sources/new': typeof AppRatesSourcesNewRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages': typeof AppContentPagesIndexRoute
   '/merchants/applications': typeof AppMerchantsApplicationsIndexRoute
@@ -511,7 +535,6 @@ export interface FileRoutesById {
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
   '/_app/content': typeof AppContentRouteWithChildren
-  '/_app/rates': typeof AppRatesRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
@@ -530,6 +553,7 @@ export interface FileRoutesById {
   '/_app/orders/policy': typeof AppOrdersPolicyRoute
   '/_app/pricing/matrix': typeof AppPricingMatrixRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
+  '/_app/rates/settings': typeof AppRatesSettingsRoute
   '/_app/reports_/merchant-tiers': typeof AppReportsMerchantTiersRoute
   '/_app/settings/credit': typeof AppSettingsCreditRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
@@ -550,6 +574,7 @@ export interface FileRoutesById {
   '/_app/merchants/': typeof AppMerchantsIndexRoute
   '/_app/orders/': typeof AppOrdersIndexRoute
   '/_app/pricing/': typeof AppPricingIndexRoute
+  '/_app/rates/': typeof AppRatesIndexRoute
   '/_app/reconciliation/': typeof AppReconciliationIndexRoute
   '/_app/shops/': typeof AppShopsIndexRoute
   '/_app/suppliers/': typeof AppSuppliersIndexRoute
@@ -560,6 +585,8 @@ export interface FileRoutesById {
   '/_app/content/pages/$page': typeof AppContentPagesPageRoute
   '/_app/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/_app/pricing/lists/$id': typeof AppPricingListsIdRoute
+  '/_app/rates/sources/$id': typeof AppRatesSourcesIdRoute
+  '/_app/rates/sources/new': typeof AppRatesSourcesNewRoute
   '/_app/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/_app/content/pages/': typeof AppContentPagesIndexRoute
   '/_app/merchants/applications/': typeof AppMerchantsApplicationsIndexRoute
@@ -576,7 +603,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/audit'
     | '/content'
-    | '/rates'
     | '/reports'
     | '/test-customers'
     | '/catalog/quick-links'
@@ -594,6 +620,7 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/matrix'
     | '/pricing/reviews'
+    | '/rates/settings'
     | '/reports/merchant-tiers'
     | '/settings/credit'
     | '/settings/deposits'
@@ -614,6 +641,7 @@ export interface FileRouteTypes {
     | '/merchants/'
     | '/orders/'
     | '/pricing/'
+    | '/rates/'
     | '/reconciliation/'
     | '/shops/'
     | '/suppliers/'
@@ -624,6 +652,8 @@ export interface FileRouteTypes {
     | '/content/pages/$page'
     | '/merchants/applications/$id'
     | '/pricing/lists/$id'
+    | '/rates/sources/$id'
+    | '/rates/sources/new'
     | '/reconciliation/runs/$id'
     | '/content/pages/'
     | '/merchants/applications/'
@@ -636,7 +666,6 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
-    | '/rates'
     | '/reports'
     | '/test-customers'
     | '/'
@@ -655,6 +684,7 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/matrix'
     | '/pricing/reviews'
+    | '/rates/settings'
     | '/reports/merchant-tiers'
     | '/settings/credit'
     | '/settings/deposits'
@@ -675,6 +705,7 @@ export interface FileRouteTypes {
     | '/merchants'
     | '/orders'
     | '/pricing'
+    | '/rates'
     | '/reconciliation'
     | '/shops'
     | '/suppliers'
@@ -685,6 +716,8 @@ export interface FileRouteTypes {
     | '/content/pages/$page'
     | '/merchants/applications/$id'
     | '/pricing/lists/$id'
+    | '/rates/sources/$id'
+    | '/rates/sources/new'
     | '/reconciliation/runs/$id'
     | '/content/pages'
     | '/merchants/applications'
@@ -699,7 +732,6 @@ export interface FileRouteTypes {
     | '/_app/account'
     | '/_app/audit'
     | '/_app/content'
-    | '/_app/rates'
     | '/_app/reports'
     | '/_app/test-customers'
     | '/_app/'
@@ -718,6 +750,7 @@ export interface FileRouteTypes {
     | '/_app/orders/policy'
     | '/_app/pricing/matrix'
     | '/_app/pricing/reviews'
+    | '/_app/rates/settings'
     | '/_app/reports_/merchant-tiers'
     | '/_app/settings/credit'
     | '/_app/settings/deposits'
@@ -738,6 +771,7 @@ export interface FileRouteTypes {
     | '/_app/merchants/'
     | '/_app/orders/'
     | '/_app/pricing/'
+    | '/_app/rates/'
     | '/_app/reconciliation/'
     | '/_app/shops/'
     | '/_app/suppliers/'
@@ -748,6 +782,8 @@ export interface FileRouteTypes {
     | '/_app/content/pages/$page'
     | '/_app/merchants/applications/$id'
     | '/_app/pricing/lists/$id'
+    | '/_app/rates/sources/$id'
+    | '/_app/rates/sources/new'
     | '/_app/reconciliation/runs/$id'
     | '/_app/content/pages/'
     | '/_app/merchants/applications/'
@@ -818,13 +854,6 @@ declare module '@tanstack/react-router' {
       path: '/content'
       fullPath: '/content'
       preLoaderRoute: typeof AppContentRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/rates': {
-      id: '/_app/rates'
-      path: '/rates'
-      fullPath: '/rates'
-      preLoaderRoute: typeof AppRatesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -993,6 +1022,20 @@ declare module '@tanstack/react-router' {
       path: '/pricing/reviews'
       fullPath: '/pricing/reviews'
       preLoaderRoute: typeof AppPricingReviewsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/rates/': {
+      id: '/_app/rates/'
+      path: '/rates'
+      fullPath: '/rates/'
+      preLoaderRoute: typeof AppRatesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/rates/settings': {
+      id: '/_app/rates/settings'
+      path: '/rates/settings'
+      fullPath: '/rates/settings'
+      preLoaderRoute: typeof AppRatesSettingsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reconciliation/': {
@@ -1177,6 +1220,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPricingListsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/rates/sources/$id': {
+      id: '/_app/rates/sources/$id'
+      path: '/rates/sources/$id'
+      fullPath: '/rates/sources/$id'
+      preLoaderRoute: typeof AppRatesSourcesIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/rates/sources/new': {
+      id: '/_app/rates/sources/new'
+      path: '/rates/sources/new'
+      fullPath: '/rates/sources/new'
+      preLoaderRoute: typeof AppRatesSourcesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reconciliation/runs/$id': {
       id: '/_app/reconciliation/runs/$id'
       path: '/reconciliation/runs/$id'
@@ -1222,7 +1279,6 @@ interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppAuditRoute: typeof AppAuditRoute
   AppContentRoute: typeof AppContentRouteWithChildren
-  AppRatesRoute: typeof AppRatesRoute
   AppReportsRoute: typeof AppReportsRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -1237,6 +1293,7 @@ interface AppRouteChildren {
   AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
   AppPricingMatrixRoute: typeof AppPricingMatrixRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
+  AppRatesSettingsRoute: typeof AppRatesSettingsRoute
   AppReportsMerchantTiersRoute: typeof AppReportsMerchantTiersRoute
   AppSettingsCreditRoute: typeof AppSettingsCreditRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
@@ -1256,6 +1313,7 @@ interface AppRouteChildren {
   AppMerchantsIndexRoute: typeof AppMerchantsIndexRoute
   AppOrdersIndexRoute: typeof AppOrdersIndexRoute
   AppPricingIndexRoute: typeof AppPricingIndexRoute
+  AppRatesIndexRoute: typeof AppRatesIndexRoute
   AppReconciliationIndexRoute: typeof AppReconciliationIndexRoute
   AppShopsIndexRoute: typeof AppShopsIndexRoute
   AppSuppliersIndexRoute: typeof AppSuppliersIndexRoute
@@ -1265,6 +1323,8 @@ interface AppRouteChildren {
   AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
   AppMerchantsApplicationsIdRoute: typeof AppMerchantsApplicationsIdRoute
   AppPricingListsIdRoute: typeof AppPricingListsIdRoute
+  AppRatesSourcesIdRoute: typeof AppRatesSourcesIdRoute
+  AppRatesSourcesNewRoute: typeof AppRatesSourcesNewRoute
   AppReconciliationRunsIdRoute: typeof AppReconciliationRunsIdRoute
   AppMerchantsApplicationsIndexRoute: typeof AppMerchantsApplicationsIndexRoute
   AppPricingListsIndexRoute: typeof AppPricingListsIndexRoute
@@ -1275,7 +1335,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppAuditRoute: AppAuditRoute,
   AppContentRoute: AppContentRouteWithChildren,
-  AppRatesRoute: AppRatesRoute,
   AppReportsRoute: AppReportsRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
@@ -1290,6 +1349,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrdersPolicyRoute: AppOrdersPolicyRoute,
   AppPricingMatrixRoute: AppPricingMatrixRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
+  AppRatesSettingsRoute: AppRatesSettingsRoute,
   AppReportsMerchantTiersRoute: AppReportsMerchantTiersRoute,
   AppSettingsCreditRoute: AppSettingsCreditRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
@@ -1309,6 +1369,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMerchantsIndexRoute: AppMerchantsIndexRoute,
   AppOrdersIndexRoute: AppOrdersIndexRoute,
   AppPricingIndexRoute: AppPricingIndexRoute,
+  AppRatesIndexRoute: AppRatesIndexRoute,
   AppReconciliationIndexRoute: AppReconciliationIndexRoute,
   AppShopsIndexRoute: AppShopsIndexRoute,
   AppSuppliersIndexRoute: AppSuppliersIndexRoute,
@@ -1318,6 +1379,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,
   AppMerchantsApplicationsIdRoute: AppMerchantsApplicationsIdRoute,
   AppPricingListsIdRoute: AppPricingListsIdRoute,
+  AppRatesSourcesIdRoute: AppRatesSourcesIdRoute,
+  AppRatesSourcesNewRoute: AppRatesSourcesNewRoute,
   AppReconciliationRunsIdRoute: AppReconciliationRunsIdRoute,
   AppMerchantsApplicationsIndexRoute: AppMerchantsApplicationsIndexRoute,
   AppPricingListsIndexRoute: AppPricingListsIndexRoute,

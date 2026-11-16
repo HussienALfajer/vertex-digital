@@ -27,6 +27,7 @@ import { quietDashboard } from './dashboard-mock';
 import { MerchantsMock } from './merchants-mock';
 import { OrdersMock } from './orders-mock';
 import { PriceListsMock } from './price-lists-mock';
+import { RatesMock } from './rates-mock';
 import { ReconciliationMock } from './reconciliation-mock';
 import { ShopsMock } from './shops-mock';
 import { SupplierCatalogMock } from './supplier-catalog-mock';
@@ -184,6 +185,8 @@ interface Adjustment {
 
 export interface RateRecord {
   id: string;
+  /** S27: who set it. */
+  origin: 'admin' | 'auto' | 'suggestion';
   sypPerUsd: string;
   displayStepSypUnits: number;
   changePercent: string | null;
@@ -271,6 +274,7 @@ export class AdminApi {
   rates: RateRecord[] = [
     {
       id: '0199a000-0000-7000-8000-0000000000f1',
+      origin: 'admin',
       sypPerUsd: '118',
       displayStepSypUnits: 500,
       changePercent: null,
@@ -374,6 +378,14 @@ export class AdminApi {
     }),
   });
   /** S20 PR 3: applications, merchants, grants and revocations, the merchant settings. */
+  /** S27: rate sources, the pending suggestion and the automatic updates' settings. */
+  readonly rateAuto: RatesMock = new RatesMock(
+    () => this.reauthenticationRequired,
+    () => this.rates,
+    (rate) => {
+      this.rates = [rate, ...this.rates];
+    },
+  );
   /** S26: merchant shops, their customers and orders, and a shop order's compensation. */
   readonly shops: ShopsMock = new ShopsMock(
     () => this.reauthenticationRequired,
@@ -634,7 +646,13 @@ export class AdminApi {
 
     if (path === '/api/admin/rates' && method === 'GET') {
       const stale = !current || Date.now() - Date.parse(current.createdAt) > 48 * 3_600_000;
-      return json(200, { current, stale, history: { items: this.rates, nextCursor: null } });
+      return json(200, {
+        current,
+        stale,
+        pendingSuggestion: this.rateAuto.pending,
+        autoEnabled: this.rateAuto.settings.autoEnabled,
+        history: { items: this.rates, nextCursor: null },
+      });
     }
     if (path === '/api/admin/rates' && method === 'POST') {
       if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
@@ -652,6 +670,7 @@ export class AdminApi {
       }
       const record: RateRecord = {
         id: `0199a000-0000-7000-8000-0000000000${(0xf1 + this.rates.length).toString(16)}`,
+        origin: 'admin',
         sypPerUsd: input.sypPerUsd,
         displayStepSypUnits: Number(body?.displayStepSypUnits),
         changePercent: current ? rateChangePercent(current.sypPerUsd, input.sypPerUsd) : null,
@@ -1099,6 +1118,10 @@ export class AdminApi {
     if (path === '/api/admin/player-checks' && request.method() === 'POST') {
       const answer = this.orders.playerCheck();
       if ('json' in answer) return json(answer.status, answer.json);
+    }
+    if (path.startsWith('/api/admin/rate-')) {
+      const answer = this.rateAuto.answer(request.method(), url, body);
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (
       path.startsWith('/api/admin/shops') ||

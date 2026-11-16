@@ -239,6 +239,8 @@ describe('append-only trigger', () => {
       'orders',
       'payment_references',
       'product_prices',
+      'rate_observations',
+      'rate_settings',
       'reconciliation_explanations',
       'reconciliation_results',
       'reconciliation_settings',
