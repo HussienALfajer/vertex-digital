@@ -5,6 +5,7 @@ import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import { Sheet, SheetContent, SheetTitle } from '@vertex-digital/ui/components/sheet';
 import {
   SidebarPanel,
+  sidebarChildren,
   sidebarChildSize,
   sidebarItemSize,
   sidebarLink,
@@ -150,7 +151,7 @@ function MerchantLinks({
               <Icon className="size-5" aria-hidden="true" />
               {tm(label)}
             </Link>
-            <div className="flex flex-col gap-0.5">
+            <div className={sidebarChildren}>
               {links.map((link) => {
                 const current = isCurrent(link.href, pathname, saleOn);
                 return (

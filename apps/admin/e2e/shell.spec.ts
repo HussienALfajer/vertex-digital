@@ -54,6 +54,51 @@ test('the skip link moves the keyboard past the navigation (A10-29)', async ({ p
   await expect(page.locator('#main')).toBeFocused();
 });
 
+test('the sections fold, the open page unfolds its own, and the groups are named', async ({
+  page,
+}) => {
+  await page.goto('/customers');
+  const nav = page.getByRole('navigation', { name: ar.nav.label });
+  await expect(nav.getByText(ar.nav.groups.operations)).toBeVisible();
+  const orders = nav.getByRole('button', { name: ar.nav.orders });
+  await expect(orders).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav.getByRole('link', { name: ar.nav.allOrders })).toHaveCount(0);
+  await orders.click();
+  await expect(orders).toHaveAttribute('aria-expanded', 'true');
+  await nav.getByRole('link', { name: ar.nav.liveOrders }).click();
+  await expect(page).toHaveURL('/orders/live');
+  await orders.click();
+  await expect(nav.getByRole('link', { name: ar.nav.liveOrders })).toHaveCount(0);
+  // Another section's page unfolds that section.
+  await page.goto('/pricing/matrix');
+  await expect(nav.getByRole('button', { name: ar.nav.pricing })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(nav.getByRole('link', { name: ar.nav.priceMatrix })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test.describe(`${colorScheme} theme`, () => {
+    test.use({ colorScheme });
+
+    test('the sidebar: groups, the open section and the active page', async ({
+      page,
+    }, testInfo) => {
+      await page.goto('/merchants/tiers');
+      const nav = page.getByRole('navigation', { name: ar.nav.label });
+      await expect(nav.getByRole('link', { name: ar.nav.merchantTiers })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      await screenshot(page, testInfo, `shell-sidebar-${colorScheme}`);
+    });
+  });
+}
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
 
