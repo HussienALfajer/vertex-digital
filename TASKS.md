@@ -12,4 +12,4 @@ Branch `feat/owner-tweaks`: seven commits built and deployed straight from the b
 - [x] Reviewer (money and security focus): ADR 0042 records the owner's decisions and the new threat model (amends 0006, 0017, 0018, 0019, 0030); the dismiss route in the S04 API table; a technical deposit ceiling (`DEPOSIT_MAX_USD_UNITS`) so a huge USDT amount is a 422, not a 500, with regression tests; the Telegram approval stays uncapped as the owner decided
 - [x] Final `pnpm verify` (local db test database rebuilt after bloat; MA8 test pages through the queue)
 - [x] Commit, PR with auto-merge, Auto-fix, merge
-- [ ] Production deploy of `main`, health checks, the changed panel screens, deploy log PR
+- [x] Production deploy of `main` (`21ff5d6`), health checks, the deploy log PR (the panel not opened signed in: the owner's account)
