@@ -44,6 +44,9 @@ export default defineConfig({
       EMAIL_TRANSPORT: 'log',
       // No chain is ever read in tests; the USDT tests give their own readers.
       CHAIN_READER: 'fake',
+      // S27: rate sources are pages the tests write in a directory of their own per run.
+      RATE_FEED: 'fake',
+      RATE_FEED_FAKE_DIR: join(tmpdir(), `vertex-digital-rate-feed-${randomUUID()}`),
       EMAIL_LOG_DIR: join(tmpdir(), `vertex-digital-emails-${randomUUID()}`),
       // Receipts the card tests write for themselves (S05 rule TC2).
       FILES_ROOT: join(tmpdir(), `vertex-digital-files-${randomUUID()}`),

@@ -375,3 +375,87 @@ export function impliedRate(sypUnits: number, usdUnits: number): string {
   while (fraction.endsWith('0')) fraction = fraction.slice(0, -1);
   return fraction === '' ? whole.toString() : `${whole}.${fraction}`;
 }
+
+/** A rate × 10⁴ as a rate string without trailing zeros (`1315000n` → `"131.5"`). */
+function formatScaledRate(scaled: bigint): string {
+  const whole = scaled / RATE_FACTOR;
+  const fraction = (scaled % RATE_FACTOR).toString().padStart(4, '0').replace(/0+$/, '');
+  return fraction === '' ? whole.toString() : `${whole}.${fraction}`;
+}
+
+/**
+ * S27: the distance from rate `from` to rate `to` in basis points of `from` (1 bp = 0.01%), as a
+ * magnitude rounded up: exactly 2% is 200 and anything above it at least 201, so comparing with a
+ * whole threshold (`≤ 200`) is exact.
+ */
+export function basisPointsBetween(from: string, to: string): number {
+  const before = rateOrThrow(from);
+  const change = rateOrThrow(to) - before;
+  const magnitude = change < 0n ? -change : change;
+  return Number(divide(magnitude * 10_000n, before, 'up'));
+}
+
+/** How a rate source's text is read (S27 `rate_sources.parser`). */
+export interface SourceFigureParser {
+  /** The line must contain it (`دمشق`), for posts that list several cities; null reads any line. */
+  cityWord: string | null;
+  /** The figure is the first number after it on the line (`مبيع`). */
+  sellWord: string;
+  /** Old pounds are divided by 100 (ADR 0003: new pounds are the unit). */
+  unit: 'new_syp' | 'old_syp';
+}
+
+/** A figure read from a source: the rate in new pounds and the line it came from. */
+export interface SourceFigure {
+  sypPerUsd: string;
+  /** At most 300 characters of the matched line, for the admin to check. */
+  excerpt: string;
+}
+
+export const SOURCE_EXCERPT_MAX = 300;
+
+/** Arabic-Indic (U+0660) and Persian (U+06F0) digits as ASCII; the Arabic separators as `.`, `,`. */
+function normaliseDigits(text: string): string {
+  return text
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/٫/g, '.')
+    .replace(/٬/g, ',');
+}
+
+const SOURCE_NUMBER = /\d[\d,]*(?:\.\d+)?/;
+
+/**
+ * S27 SR2, SR5: the sell figure of a source's text, or null. Lines are read in order; the first
+ * line that contains the city keyword (when set) and the sell keyword, followed on that line by a
+ * number, gives the figure. Keywords are matched as plain text, never as patterns. Digits in
+ * Arabic-Indic or Persian are read, thousands separators dropped, decimals beyond 4 cut; old pounds
+ * are divided by 100 rounding up (the higher rate protects the store). A zero or a number too
+ * large to be a rate reads as no figure.
+ */
+export function parseSourceFigure(text: string, parser: SourceFigureParser): SourceFigure | null {
+  for (const rawLine of text.split('\n')) {
+    const line = normaliseDigits(rawLine).replace(/\s+/g, ' ').trim();
+    if (parser.cityWord !== null && !line.includes(parser.cityWord)) continue;
+    const at = line.indexOf(parser.sellWord);
+    if (at < 0) continue;
+    const match = SOURCE_NUMBER.exec(line.slice(at + parser.sellWord.length));
+    if (!match) continue;
+    const [whole = '', decimals = ''] = match[0].replace(/,/g, '').split('.');
+    if (whole.length > 10) return null;
+    let scaled = BigInt(whole) * RATE_FACTOR + BigInt(decimals.slice(0, 4).padEnd(4, '0'));
+    if (parser.unit === 'old_syp') scaled = divide(scaled, 100n, 'up');
+    const sypPerUsd = formatScaledRate(scaled);
+    if (scaled === 0n || parseRate(sypPerUsd) === null) return null;
+    const start = Math.max(0, Math.min(at - 100, line.length - SOURCE_EXCERPT_MAX));
+    return { sypPerUsd, excerpt: line.slice(start, start + SOURCE_EXCERPT_MAX) };
+  }
+  return null;
+}
+
+/** Orders two valid rates by value: negative when `a` is lower, 0 when equal, positive when higher. */
+export function compareRates(a: string, b: string): number {
+  const left = rateOrThrow(a);
+  const right = rateOrThrow(b);
+  return left === right ? 0 : left < right ? -1 : 1;
+}

@@ -29,6 +29,9 @@ describe('Telegram button data (S05 rule TG6)', () => {
     { action: 'reject', depositId: promptId },
     { action: 'cashApprove', orderId: promptId },
     { action: 'cashReject', orderId: promptId },
+    { action: 'rateApprove', suggestionId: promptId },
+    { action: 'rateReject', suggestionId: promptId },
+    { action: 'rateAutoOff' },
     ...telegramRejectReasons('usdt_trc20').map(
       (reason) => ({ action: 'reason', promptId, reason }) as const,
     ),
@@ -50,7 +53,11 @@ describe('Telegram button data (S05 rule TG6)', () => {
       'rr',
       'ca',
       'cr',
+      'ra',
+      'rx',
+      'ro',
     ]);
+    expect(telegramCallbackData({ action: 'rateAutoOff' })).toBe('ro:auto');
     expect(telegramCallbackData({ action: 'reason', promptId, reason: 'not_received' })).toBe(
       `rr:${promptId}:not_received`,
     );
@@ -75,6 +82,9 @@ describe('Telegram button data (S05 rule TG6)', () => {
       `rr:${promptId}:other`,
       `rr:${promptId}:not_received:x`,
       'rr:42:not_received',
+      'ra:42',
+      'ro:',
+      'ro:on',
     ]) {
       expect(parseTelegramCallback(data)).toBeNull();
     }

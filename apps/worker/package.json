@@ -11,7 +11,8 @@
     "test": "vitest run",
     "usdt:fake-transfer": "node dist/cli/usdt-fake-transfer.js",
     "usdt:fake-balance": "node dist/cli/usdt-fake-balance.js",
-    "supplier:fake": "node dist/cli/supplier-fake.js"
+    "supplier:fake": "node dist/cli/supplier-fake.js",
+    "rates:fake-post": "node dist/cli/rates-fake-post.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

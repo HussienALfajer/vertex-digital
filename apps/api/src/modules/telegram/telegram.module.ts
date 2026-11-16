@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/index.js';
 import { DepositsModule } from '../deposits/index.js';
+import { RatesModule } from '../rates/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { TelegramAdminController } from './telegram.admin.controller.js';
 import { TelegramService } from './telegram.service.js';
@@ -12,10 +13,11 @@ import { TelegramWebhookController } from './telegram-webhook.controller.js';
  * `telegram_messages`, `telegram_updates`, `telegram_prompts`. A domain module above `deposits`
  * and `settings`: bot actions run through their services with the channel `telegram`. Other
  * modules queue bot messages with `queueTelegramMessage` from `packages/db`, never through here.
- * S11: the dashboard reads the link's status (`TelegramService.status`).
+ * S11: the dashboard reads the link's status (`TelegramService.status`). S27: rate suggestions
+ * are decided and automatic updates turned off through the `rates` module's services.
  */
 @Module({
-  imports: [AdminModule, DepositsModule, SettingsModule],
+  imports: [AdminModule, DepositsModule, RatesModule, SettingsModule],
   controllers: [TelegramAdminController, TelegramWebhookController],
   providers: [TelegramService, TelegramBotService],
   exports: [TelegramService],

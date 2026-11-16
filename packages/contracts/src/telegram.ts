@@ -12,8 +12,14 @@ import {
   rejectDepositSchema,
 } from './deposits.js';
 import { levelTierSchema, merchantTierSchema, tierChangeSourceSchema } from './merchant-tiers.js';
-import { currencySchema } from './money.js';
+import { currencySchema, exchangeRateSchema } from './money.js';
 import { adminOrderPurposeSchema } from './orders.js';
+import {
+  RATE_ORIGINS,
+  rateObservationStatusSchema,
+  rateSuggestionReasonSchema,
+  rateSuggestionStatusSchema,
+} from './rates.js';
 import {
   RECONCILIATION_ALERT_MAX_LINES,
   reconciliationCheckSchema,
@@ -129,6 +135,16 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'shop_ticket_escalated',
   /** S26 abuse: a shop's returns passed half of its transfers over 7 days ($200 at least). */
   'shop_returns_alert',
+  /** S27 SG1: a rate suggestion's card, with its buttons. */
+  'rate_suggestion',
+  /** S27 SG2, SG5: the suggestion's card edited to its outcome (sent as an edit, never anew). */
+  'rate_suggestion_closed',
+  /** S27 AU4: a rate applied by the automatic path (a silent message). */
+  'rate_auto_changed',
+  /** S27 SR3: a source that cannot be read (once until it reads again). */
+  'rate_source_broken',
+  /** S27 AU1: no source had a fresh figure for the settings' hours (once until one returns). */
+  'rate_sources_silent',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -173,6 +189,8 @@ export const telegramBotReplySchema = z.discriminatedUnion('reply', [
   }),
   /** The confirmation of a stop, with "تأكيد" and "إلغاء" for its prompt. */
   z.object({ reply: z.literal('stop_confirm'), promptId: z.uuid(), scope: stopScopeSchema }),
+  /** S27 ST1: the confirmation of turning automatic rate updates off. */
+  z.object({ reply: z.literal('rate_auto_off_confirm'), promptId: z.uuid() }),
   /** Rule TC4 step 1: asks for the Sham Cash transaction number. */
   z.object({ reply: z.literal('approve_number'), referenceCode: z.string() }),
   /** Rule TC4 step 2: the approval to confirm, with "تأكيد" and "إلغاء". */
@@ -307,6 +325,14 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     manualWaiting: z.int().nonnegative().default(0),
     /** S08: the median of today's delivery times of real customers' orders (null with none). */
     medianDeliveryMs: z.int().nonnegative().nullable().default(null),
+    /** S27: the rate in force and today's changes by origin (null before the first rate). */
+    rate: z
+      .object({
+        sypPerUsd: exchangeRateSchema,
+        changes: z.record(z.enum(RATE_ORIGINS), z.int().nonnegative()),
+      })
+      .nullable()
+      .default(null),
     /** S09: today's player checks per supplier (rule PV5's count), suppliers with none left out. */
     validations: z
       .array(z.object({ supplierNameAr: z.string(), count: z.int().positive() }))
@@ -609,6 +635,50 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     slug: z.string(),
     by: z.enum(['merchant', 'customer', 'system']),
   }),
+  /** S27 SG1: the figures with their sources' labels; the buttons only within Telegram's cap. */
+  rate_suggestion: z.object({
+    suggestionId: z.uuid(),
+    currentSypPerUsd: exchangeRateSchema,
+    proposedSypPerUsd: exchangeRateSchema,
+    changePercent: z.string(),
+    driftHours: z.int().positive(),
+    driftPercent: z.string(),
+    reason: rateSuggestionReasonSchema,
+    figures: z
+      .array(
+        z.object({
+          sourceLabel: z.string(),
+          sypPerUsd: exchangeRateSchema,
+          ageMinutes: z.int().nonnegative(),
+        }),
+      )
+      .max(10),
+    telegramApproves: z.boolean(),
+  }),
+  /** S27: the card's own `telegram_messages` row, edited in place to the outcome. */
+  rate_suggestion_closed: z.object({
+    suggestionId: z.uuid(),
+    cardMessageId: z.uuid(),
+    proposedSypPerUsd: exchangeRateSchema,
+    status: rateSuggestionStatusSchema.exclude(['pending']),
+    /** The rate written by the approval (it may be the admin's edit). */
+    appliedSypPerUsd: exchangeRateSchema.nullable(),
+  }),
+  /** S27 AU4. */
+  rate_auto_changed: z.object({
+    rateId: z.uuid(),
+    sypPerUsd: exchangeRateSchema,
+    changePercent: z.string(),
+    sources: z.int().positive(),
+  }),
+  /** S27 SR3: the source's label and why its newest reads failed. */
+  rate_source_broken: z.object({
+    sourceId: z.uuid(),
+    label: z.string(),
+    status: rateObservationStatusSchema.exclude(['ok']),
+  }),
+  /** S27 AU1. */
+  rate_sources_silent: z.object({ hours: z.int().positive() }),
   /** S26 abuse: the shop's trade name and the window's totals. */
   shop_returns_alert: z.object({
     shopId: z.uuid(),
@@ -659,6 +729,8 @@ export const TELEGRAM_PROMPT_KINDS = [
   'approve_confirm',
   'reject_note',
   'stop_confirm',
+  /** S27 ST1: turning automatic rate updates off, after a confirm button. */
+  'rate_auto_off_confirm',
 ] as const;
 
 export type TelegramPromptKind = (typeof TELEGRAM_PROMPT_KINDS)[number];
@@ -679,6 +751,7 @@ export const TELEGRAM_PROMPT_DATA = {
   /** `reason` is null until a reason button is pressed. */
   reject_note: z.object({ reason: depositRejectReasonSchema.nullable() }),
   stop_confirm: z.object({ scope: stopScopeSchema }),
+  rate_auto_off_confirm: z.object({}),
 } as const satisfies Record<TelegramPromptKind, z.ZodType>;
 
 /**
@@ -725,6 +798,10 @@ export const TELEGRAM_CALLBACKS = {
   /** S25 CS4: a held cash order's decision. */
   cashApprove: 'ca',
   cashReject: 'cr',
+  /** S27 SG1, ST1: a rate suggestion's decision, and turning automatic updates off. */
+  rateApprove: 'ra',
+  rateReject: 'rx',
+  rateAutoOff: 'ro',
 } as const;
 
 export type TelegramCallback =
@@ -732,7 +809,12 @@ export type TelegramCallback =
   | { action: 'confirm' | 'cancel'; promptId: string }
   | { action: 'approve' | 'reject'; depositId: string }
   | { action: 'cashApprove' | 'cashReject'; orderId: string }
+  | { action: 'rateApprove' | 'rateReject'; suggestionId: string }
+  | { action: 'rateAutoOff' }
   | { action: 'reason'; promptId: string; reason: DepositRejectReason };
+
+/** The value of the "turn automatic rate updates off" button (`ro:auto`). */
+const RATE_AUTO_OFF_VALUE = 'auto';
 
 /** A `Map`, so an inherited key (`constructor`) is never a prefix. */
 const callbackActions = new Map(
@@ -749,6 +831,11 @@ function callbackValue(callback: TelegramCallback): string {
     case 'cashApprove':
     case 'cashReject':
       return callback.orderId;
+    case 'rateApprove':
+    case 'rateReject':
+      return callback.suggestionId;
+    case 'rateAutoOff':
+      return RATE_AUTO_OFF_VALUE;
     case 'reason':
       return `${callback.promptId}:${callback.reason}`;
     default:
@@ -778,6 +865,11 @@ export function parseTelegramCallback(data: string): TelegramCallback | null {
     case 'cashApprove':
     case 'cashReject':
       return isUuid(value) ? { action, orderId: value } : null;
+    case 'rateApprove':
+    case 'rateReject':
+      return isUuid(value) ? { action, suggestionId: value } : null;
+    case 'rateAutoOff':
+      return value === RATE_AUTO_OFF_VALUE ? { action } : null;
     case 'reason': {
       const [promptId = '', reason, ...rest] = value.split(':');
       const parsed = depositRejectReasonSchema.exclude(['other']).safeParse(reason);

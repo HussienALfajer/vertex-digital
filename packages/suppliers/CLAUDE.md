@@ -9,6 +9,7 @@ One adapter per wholesale supplier behind one interface (ADR 0005). Used by the 
 - `src/<code>/`: one folder per adapter (`adapter.ts`, `schemas.ts`, `errors.ts`, `fixtures/`, tests); its doc, with the supplier's quirks, is `docs/suppliers/<code>.md`.
 - Pattern to copy for a real adapter: `src/wdgzone/` (doc `docs/suppliers/wdgzone.md`). `src/fazercards/` shows an `offerWindow` catalog read one category at a time and composite ids (doc `docs/suppliers/fazercards.md`). `src/zddk/` serves zddk stores (jneedcontur, S25) by supplier code: all-`GET` API, a derived `order_uuid`, value-list and `@100` amount offers, exact decimal costs in `decimal.ts` (doc `docs/suppliers/jneedcontur.md`).
 - `src/fake/adapter.ts`: the in-process `fake` supplier for development, tests and E2E; the worker reads its state from the file the `supplier:fake` CLI writes. How orders are scripted (by `playerId` prefix or per-offer scripts) is in its file header.
+- `src/rate-feeds/` (S27, not a supplier): `readRateSource` reads a public rate page on fixed hosts only (`t.me/s/<channel>`, `sp-today.com<path>`), one GET, no redirect, 10 s, 2 MB, and never throws (a failure is a status); `fileRateFetch` and `writeFakeTelegramPost` serve `RATE_FEED=fake`. Used by the API's test read and the worker's `rates.poll`; fixtures are sanitized page shapes with invented figures.
 - `src/testing/fake-http-server.ts` (`@vertex-digital/suppliers/testing`): the local server real adapter tests script with fixtures.
 
 ## Rules

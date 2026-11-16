@@ -188,6 +188,22 @@ Customer, merchant and shop routes are unchanged. `openapi:export` and the admin
   - Worker: the poll against recorded fixtures (Telegram preview and sp-today pages), the SSRF host guard, broken-source and silent alerts sent once, idempotent re-runs.
   - E2E and RTL screenshots: `/rates` with sources and a suggestion, the source form with a test read, settings.
 
+## Details settled in implementation (2026-11-16)
+- Parser fields are `cityWord` and `sellWord` (the audit test refuses keys containing "key"). The sell word defaults to «مبيع» for channels and «بيع» for sp-today pages, whose figure sits after a «بيع» label in another element: a sp-today page is read as one line of its visible text.
+- sp-today pages show no update time ("آخر تحديث : -" on 2026-11-16): their `posted_at` is null, so SR4's first-seen rule applies.
+- `rates.poll` is scheduled every 5 minutes and reads only when no enabled source was read within `poll_minutes` (a minute's slack), so a changed interval needs no new schedule. A read never throws: a handle that does not fit its kind is `fetch_failed` (`invalid_handle`) without any request, and every redirect is refused (`redirect`).
+- An `out_of_range` read keeps its figure for the admin. The test read applies the same ±20% check against the current rate.
+- AU1's silence is measured from the newest figure any source gave (its post time, else when first seen): one alert per silence, keyed by that time.
+- ST2 bounds not in the spec: `drift_window_hours` 6–72, `min_move_bps` 10–100. The database also refuses `telegram_approve_max_bps` above 500.
+- An approved suggestion keeps the display step in force, checked by S07 rule P9 like a manual change (`DISPLAY_STEP_TOO_LARGE`); an automatic rate keeps the step without that check. Every rate refreshes the store's cache in its transaction.
+- Telegram buttons follow the bot's `<prefix>:<value>` data: `ra:<id>` approve, `rx:<id>` reject, `ro:auto` turn automatic updates off (then a confirm prompt, `rate_auto_off_confirm`). The card's end edits it in place through a `rate_suggestion_closed` outbox row; the automatic-change notice is sent silently and carries the "إيقاف التحديث التلقائي" button.
+- Local development: `RATE_FEED=fake` (the default outside production, refused in production) reads `RATE_FEED_FAKE_DIR` (`storage/rate-feed-fake`), written by `rates:fake-post`.
+- A figure without a post time is dated from its first read since the source last gave another figure, looked up over all its reads (`newestFigure`), so an unchanged figure ages and the silence alert keys stay put.
+- A channel username is stored without `@` and in lower case, a page path without a trailing `/`; one live source per kind and `lower(handle)`, so the same channel cannot count as two agreeing sources.
+- AU5's 24-hour window counts from the newest rate the owner set (by hand or by approving a suggestion) when it is younger than the window.
+- Production needs `RATE_FEED=live` in `shared/.env` (`docs/deployment.md`).
+- Migrations 0121 (tables, columns, enums), 0122 (guards, grants, `purge_rate_observations`), 0123 (`telegram_prompts_deposit_check` names the deposit prompt kinds, so a non-deposit prompt other than `stop_confirm` fits) and 0124 (the case-insensitive unique handle).
+
 ## Implementation notes
 - One PR is enough: contracts, migration, the `rates` sources, suggestions and settings in the api, the worker poll and fetchers, Telegram cards, the fake feed, admin screens.
 - Update `docs/architecture.md` (`rates` jobs), `.env.example` (`RATE_FEED`), and the commands table for `rates:fake-post`.

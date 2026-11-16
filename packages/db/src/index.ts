@@ -15,6 +15,7 @@ export * from './pricing/index.js';
 export * from './product-alerts/index.js';
 export * from './quick-links/index.js';
 export * from './rate-limits.js';
+export * from './rates/index.js';
 export * from './reconciliation/index.js';
 export * from './reports/index.js';
 export * from './schema/index.js';

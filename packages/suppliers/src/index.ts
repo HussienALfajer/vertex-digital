@@ -36,6 +36,18 @@ export {
   type FazercardsAdapterOptions,
   FZR_SIGNATURE_HEADER,
 } from './fazercards/adapter.js';
+export { fakeRateFeedFile, fileRateFetch, writeFakeTelegramPost } from './rate-feeds/fake.js';
+export {
+  htmlToText,
+  RATE_FEED_HOSTS,
+  RATE_FEED_TIMEOUT_MS,
+  type RateSourceRead,
+  type ReadRateSourceOptions,
+  rateSourceUrl,
+  readRateSource,
+  spTodayText,
+  telegramPosts,
+} from './rate-feeds/read.js';
 export {
   WDG_SIGNATURE_HEADER,
   WDGZONE_BASE_URL,

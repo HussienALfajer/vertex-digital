@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   amountUnitsSchema,
+  basisPointsBetween,
   CURRENCY_SCALE,
   ceilToStep,
+  compareRates,
   currencySchema,
   exchangeRateSchema,
   floorToWholeCents,
@@ -17,6 +19,7 @@ import {
   impliedRate,
   isSameRate,
   isWholeCents,
+  parseSourceFigure,
   parseUsd,
   parseWholeSyp,
   rateChangePercent,
@@ -431,5 +434,73 @@ describe('S13 held amounts, ranges and implied rates', () => {
     expect(impliedRate(100, 32_000_000)).toBe('0.0313');
     expect(() => impliedRate(0, 1)).toThrow(RangeError);
     expect(() => impliedRate(1, 0)).toThrow(RangeError);
+  });
+});
+
+describe('rate sources (S27)', () => {
+  const parser = { cityWord: null, sellWord: 'مبيع', unit: 'new_syp' } as const;
+
+  it('measures the distance between rates in basis points, rounded up', () => {
+    expect(basisPointsBetween('130', '132.6')).toBe(200);
+    expect(basisPointsBetween('130', '132.6001')).toBe(201);
+    expect(basisPointsBetween('130', '127.4')).toBe(200);
+    expect(basisPointsBetween('130', '130')).toBe(0);
+    expect(() => basisPointsBetween('0', '1')).toThrow(RangeError);
+  });
+
+  it('orders rates by value', () => {
+    expect(compareRates('130', '130.00')).toBe(0);
+    expect(compareRates('129.9', '130')).toBe(-1);
+    expect(compareRates('131', '130.5')).toBe(1);
+  });
+
+  it('reads the first number after the sell keyword', () => {
+    expect(parseSourceFigure('شراء 130 مبيع 131.5', parser)).toEqual({
+      sypPerUsd: '131.5',
+      excerpt: 'شراء 130 مبيع 131.5',
+    });
+    expect(parseSourceFigure('مبيع: 132.00 ل.س', parser)?.sypPerUsd).toBe('132');
+    expect(parseSourceFigure('مبيع 131.123456', parser)?.sypPerUsd).toBe('131.1234');
+  });
+
+  it('picks the city line and skips lines without a number', () => {
+    const post = ['حلب شراء 129 مبيع 130', 'دمشق مبيع —', 'دمشق   شراء 130 مبيع 131'].join('\n');
+    expect(parseSourceFigure(post, { ...parser, cityWord: 'دمشق' })).toEqual({
+      sypPerUsd: '131',
+      excerpt: 'دمشق شراء 130 مبيع 131',
+    });
+    expect(parseSourceFigure(post, { ...parser, cityWord: 'حمص' })).toBeNull();
+    expect(parseSourceFigure('لا سعر اليوم', parser)).toBeNull();
+  });
+
+  it('reads Arabic-Indic and Persian digits and the Arabic separators', () => {
+    expect(parseSourceFigure('مبيع ١٣١٫٥', parser)?.sypPerUsd).toBe('131.5');
+    expect(parseSourceFigure('مبيع ۱۳۲', parser)?.sypPerUsd).toBe('132');
+    expect(parseSourceFigure('مبيع ١٣٬٢٠٠', { ...parser, unit: 'old_syp' })?.sypPerUsd).toBe('132');
+  });
+
+  it('divides old pounds by 100, rounding up', () => {
+    const old = { ...parser, unit: 'old_syp' } as const;
+    expect(parseSourceFigure('مبيع 13,250', old)?.sypPerUsd).toBe('132.5');
+    expect(parseSourceFigure('مبيع 13250.01', old)?.sypPerUsd).toBe('132.5001');
+    expect(parseSourceFigure('مبيع 13250.009', old)?.sypPerUsd).toBe('132.5001');
+  });
+
+  it('treats keywords as plain text, never as a pattern', () => {
+    expect(parseSourceFigure('abc 5', { ...parser, sellWord: '.*' })).toBeNull();
+    expect(parseSourceFigure('x .* 5', { ...parser, sellWord: '.*' })?.sypPerUsd).toBe('5');
+  });
+
+  it('refuses zero and numbers too large to be a rate', () => {
+    expect(parseSourceFigure('مبيع 0', parser)).toBeNull();
+    expect(parseSourceFigure('مبيع 123456789', parser)).toBeNull();
+    expect(parseSourceFigure('مبيع 12345678901', parser)).toBeNull();
+  });
+
+  it('keeps at most 300 characters of a long line around the keyword', () => {
+    const line = `${'ا'.repeat(400)} مبيع 131 ${'ب'.repeat(400)}`;
+    const figure = parseSourceFigure(line, parser);
+    expect(figure?.excerpt).toHaveLength(300);
+    expect(figure?.excerpt.slice(100, 108)).toBe('مبيع 131');
   });
 });

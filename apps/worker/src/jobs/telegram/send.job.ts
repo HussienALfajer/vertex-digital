@@ -35,6 +35,7 @@ const FINAL_STATUSES = new Set([400, 403]);
  * delayed job; a `403` (the admin blocked the bot) or `400` fails at once with a warning; other
  * failures are thrown for pg-boss to retry with backoff, and the last one leaves the row `failed`.
  * A crash between Telegram and the update can send one message twice: accepted, as for email.
+ * S27: a `rate_suggestion_closed` row edits its card instead of sending a message.
  */
 @Injectable()
 export class SendTelegramJob implements OnApplicationBootstrap {
@@ -83,9 +84,39 @@ export class SendTelegramJob implements OnApplicationBootstrap {
           TELEGRAM_MESSAGE_PARAMS[row.kind].parse(row.params) as never,
           { admin: this.env.ADMIN_URL },
         );
+        if (row.kind === 'rate_suggestion_closed') {
+          // S27 SG5: the card is edited to its outcome, its buttons removed; a card never sent
+          // has nothing to edit.
+          const { cardMessageId } = TELEGRAM_MESSAGE_PARAMS.rate_suggestion_closed.parse(
+            row.params,
+          );
+          const [card] = await tx
+            .select({ telegramMessageId: telegramMessages.telegramMessageId })
+            .from(telegramMessages)
+            .where(eq(telegramMessages.id, cardMessageId));
+          if (!card?.telegramMessageId) {
+            await tx
+              .update(telegramMessages)
+              .set({ status: 'skipped' })
+              .where(eq(telegramMessages.id, row.id));
+            return { result: 'skipped' } as const;
+          }
+          await this.bot.call('editMessageText', {
+            chat_id: chatId,
+            message_id: card.telegramMessageId,
+            text: message.text,
+            reply_markup: { inline_keyboard: [] },
+          });
+          await tx
+            .update(telegramMessages)
+            .set({ attempts, status: 'sent', sentAt: now, lastError: null })
+            .where(eq(telegramMessages.id, row.id));
+          return { result: 'sent' } as const;
+        }
         const sent = (await this.bot.call('sendMessage', {
           chat_id: chatId,
           text: message.text,
+          ...(message.silent && { disable_notification: true }),
           ...(message.codeSpans && {
             entities: message.codeSpans.map((span) => ({ type: 'code', ...span })),
           }),

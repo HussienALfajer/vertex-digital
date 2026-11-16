@@ -3,11 +3,14 @@ import {
   type DepositFlagCode,
   type DepositMethod,
   type DepositRejectReason,
+  formatRate,
   formatSyp,
   formatUsd,
   formatUsdtAmount,
   type MerchantTier,
   type OrderProblem,
+  type RateOrigin,
+  type RateSuggestionReason,
   type ReconciliationCheck,
   type StopScope,
   type StoreSwitch,
@@ -47,6 +50,48 @@ export interface RenderedTelegramMessage {
   buttons?: TelegramButton[][];
   /** Spans shown as code, by UTF-16 offset: Telegram makes no link or mention clickable there. */
   codeSpans?: { offset: number; length: number }[];
+  /** Sent without a sound (S27 AU4: an automatic rate is a notice, not a question). */
+  silent?: boolean;
+}
+
+/** S27 SG1: why a move waits for the owner. */
+const RATE_REASONS_AR: Record<RateSuggestionReason, string> = {
+  single_source: 'مصدر واحد فقط',
+  sources_disagree: 'المصادر مختلفة بأكثر من الحد',
+  move_too_large: 'التغيير أكبر من حد التطبيق التلقائي',
+  drift_too_large: 'التغيير خلال 24 ساعة أكبر من الحد',
+  auto_off: 'التحديث التلقائي متوقف',
+};
+
+/** S27: who set a rate, in the daily summary. */
+const RATE_ORIGINS_AR: Record<RateOrigin, string> = {
+  admin: 'يدوي',
+  auto: 'تلقائي',
+  suggestion: 'اقتراح معتمد',
+};
+
+const signedPercent = (percent: string) => (percent.startsWith('-') ? percent : `+${percent}`);
+
+const autoOffButton = (): TelegramButton => ({
+  text: 'إيقاف التحديث التلقائي',
+  data: telegramCallbackData({ action: 'rateAutoOff' }),
+});
+
+/** S27 SG5: how a suggestion's card reads once it ended. */
+export function rateSuggestionOutcomeText(
+  closed: TelegramMessageParams<'rate_suggestion_closed'>,
+): string {
+  const proposed = formatRate(closed.proposedSypPerUsd);
+  switch (closed.status) {
+    case 'approved':
+      return `✅ اعتُمد السعر ${formatRate(closed.appliedSypPerUsd ?? closed.proposedSypPerUsd)} ل.س (المقترح ${proposed})`;
+    case 'rejected':
+      return `❌ رُفض اقتراح السعر ${proposed} ل.س`;
+    case 'superseded':
+      return `↩️ حلّ محلّ اقتراح السعر ${proposed} ل.س تغيير أحدث`;
+    default:
+      return `⌛ انتهى اقتراح السعر ${proposed} ل.س دون قرار`;
+  }
 }
 
 const CHANNELS: Record<SwitchChannel, string> = { admin: 'اللوحة', telegram: 'تيليجرام' };
@@ -198,6 +243,11 @@ function botReply(reply: TelegramBotReply): RenderedTelegramMessage {
     case 'stop_confirm':
       return {
         text: `إيقاف ${SCOPES[reply.scope]}؟ ${REOPEN}`,
+        buttons: confirmButtons(reply.promptId),
+      };
+    case 'rate_auto_off_confirm':
+      return {
+        text: 'إيقاف تحديث سعر الصرف التلقائي؟ تبقى الاقتراحات تصل، وإعادة التشغيل من اللوحة فقط.',
         buttons: confirmButtons(reply.promptId),
       };
     case 'approve_number':
@@ -537,6 +587,16 @@ function reconciliationLine(state: TelegramMessageParams<'daily_summary'>['recon
 }
 
 /** Rule AL3. */
+/** S27: the rate in force and today's changes by origin. */
+function rateSummaryLine(
+  rate: NonNullable<TelegramMessageParams<'daily_summary'>['rate']>,
+): string {
+  const changes = Object.entries(rate.changes)
+    .filter(([, count]) => count > 0)
+    .map(([origin, count]) => `${RATE_ORIGINS_AR[origin as RateOrigin]} ${count}`);
+  return `سعر الصرف: ${formatRate(rate.sypPerUsd)} ل.س · تغييرات اليوم: ${changes.length > 0 ? changes.join('، ') : 'لا شيء'}`;
+}
+
 function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
   const credited =
     summary.credited.length > 0
@@ -554,6 +614,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     `تحويلات USDT غير مطابقة: ${summary.unmatchedToday} اليوم، ${summary.unmatchedOpen} مفتوحة`,
     `عملاء جدد: ${summary.newCustomers}`,
     `أرصدة العملاء الحقيقيين: ${formatUsd(summary.walletsTotalUsdUnits)}`,
+    ...(summary.rate ? [rateSummaryLine(summary.rate)] : []),
     `التسجيل: ${summary.registrationOpen ? 'مفتوح' : 'مغلق'}`,
     ...summary.activeSwitches.map(
       (active) => `⛔ ${SWITCH_NAMES[active.switch]} منذ ${atDamascus(new Date(active.since))}`,
@@ -998,6 +1059,75 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
           links,
         ),
       };
+    case 'rate_suggestion': {
+      // S27 SG1: every figure with its source and age; «اعتماد» only within Telegram's cap.
+      const card = params as TelegramMessageParams<'rate_suggestion'>;
+      const approve = card.telegramApproves
+        ? [
+            {
+              text: 'اعتماد',
+              data: telegramCallbackData({
+                action: 'rateApprove',
+                suggestionId: card.suggestionId,
+              }),
+            },
+          ]
+        : [];
+      return {
+        text: [
+          `💱 اقتراح سعر صرف: ${formatRate(card.proposedSypPerUsd)} ل.س للدولار`,
+          `الحالي ${formatRate(card.currentSypPerUsd)} · التغيير ${signedPercent(card.changePercent)}% · خلال ${card.driftHours} ساعة ${signedPercent(card.driftPercent)}%`,
+          `السبب: ${RATE_REASONS_AR[card.reason]}`,
+          ...card.figures.map(
+            (figure) =>
+              `• ${figure.sourceLabel}: ${formatRate(figure.sypPerUsd)} (منذ ${waitText(figure.ageMinutes)})`,
+          ),
+          ...(card.telegramApproves ? [] : ['فوق حد تيليجرام: الاعتماد من اللوحة فقط.']),
+          `${links.admin}/rates`,
+        ].join('\n'),
+        buttons: [
+          [
+            ...approve,
+            {
+              text: 'رفض',
+              data: telegramCallbackData({ action: 'rateReject', suggestionId: card.suggestionId }),
+            },
+          ],
+          [autoOffButton()],
+        ],
+      };
+    }
+    case 'rate_suggestion_closed':
+      return {
+        text: rateSuggestionOutcomeText(params as TelegramMessageParams<'rate_suggestion_closed'>),
+      };
+    case 'rate_auto_changed': {
+      // S27 AU4: a silent notice of a rate the automatic path applied.
+      const notice = params as TelegramMessageParams<'rate_auto_changed'>;
+      return {
+        text: `💱 السعر ← ${formatRate(notice.sypPerUsd)} ل.س (${signedPercent(notice.changePercent)}%) تلقائياً من ${notice.sources} مصادر متفقة`,
+        buttons: [[autoOffButton()]],
+        silent: true,
+      };
+    }
+    case 'rate_source_broken': {
+      // S27 SR3: once until the source reads again.
+      const broken = params as TelegramMessageParams<'rate_source_broken'>;
+      const why =
+        broken.status === 'out_of_range'
+          ? 'رقمه بعيد عن السعر الحالي بأكثر من 20%'
+          : 'لم يُقرأ منه سعر ثلاث مرات متتالية';
+      return {
+        text: `⚠️ مصدر لا يُقرأ: ${broken.label}، ${why}.\n${links.admin}/rates`,
+      };
+    }
+    case 'rate_sources_silent': {
+      // S27 AU1: the rate stays; once until a source has a fresh figure again.
+      const silent = params as TelegramMessageParams<'rate_sources_silent'>;
+      return {
+        text: `⚠️ لا سعر جديد من المصادر منذ ${silent.hours} ساعات. يبقى السعر الحالي.\n${links.admin}/rates`,
+      };
+    }
     case 'link_changed':
       return {
         text: 'رُبط البوت بمحادثة أخرى، فلن تصل التنبيهات إلى هنا بعد الآن. إن لم تفعل ذلك بنفسك فألغِ الربط من اللوحة فوراً.',

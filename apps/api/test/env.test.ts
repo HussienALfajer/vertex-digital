@@ -6,6 +6,7 @@ const secret = (label: string) => `${label}-${'x'.repeat(40)}`;
 
 const production = {
   NODE_ENV: 'production',
+  RATE_FEED: 'live',
   DATABASE_URL,
   STORE_URL: 'https://digital.vertexmedia.pro',
   ADMIN_URL: 'https://digital-admin.vertexmedia.pro',
@@ -69,6 +70,7 @@ describe('API environment', () => {
     expect(() => parseEnv({ DATABASE_URL, SUPPLIER_KEYS_SECRET: 'c2hvcnQ=' })).toThrow(
       'SUPPLIER_KEYS_SECRET',
     );
+    expect(() => parseEnv({ ...production, RATE_FEED: 'fake' })).toThrow('RATE_FEED');
     expect(() => parseEnv({ ...production, SUPPLIER_FAKE_ENABLED: 'true' })).toThrow(
       'SUPPLIER_FAKE_ENABLED',
     );

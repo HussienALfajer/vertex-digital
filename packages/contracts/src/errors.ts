@@ -78,6 +78,12 @@ export const ERROR_CODES = [
   'RATE_CONFIRMATION_MISMATCH',
   /** No exchange rate exists yet: SYP deposits are unavailable (S03 rule FX8). */
   'RATE_UNAVAILABLE',
+  /** S27: a rate source's handle does not fit its kind, or it is taken by another source. */
+  'RATE_SOURCE_INVALID',
+  /** S27 SG2: the suggestion is no longer pending. */
+  'RATE_SUGGESTION_STATE_CONFLICT',
+  /** S27 SG2: the move is above Telegram's cap against the rate at the moment of approval. */
+  'RATE_SUGGESTION_TOO_LARGE_FOR_TELEGRAM',
   /** A SYP deposit's 15-minute quote expired, or the rate seen is not the quote's (rule SC9). */
   'QUOTE_EXPIRED',
   /** The deposit method or currency is not available now (rule SC1). */

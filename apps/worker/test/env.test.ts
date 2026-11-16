@@ -73,6 +73,7 @@ describe('worker environment', () => {
     const production = {
       DATABASE_URL,
       NODE_ENV: 'production',
+      RATE_FEED: 'live',
       EMAIL_TRANSPORT: 'smtp',
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
@@ -82,6 +83,11 @@ describe('worker environment', () => {
       ORDER_CODES_SECRET: Buffer.alloc(32, 8).toString('base64'),
     };
     expect(() => parseEnv(production)).toThrow('CHAIN_READER');
+    // S27: production reads the rate sources, never the fake feed.
+    expect(() => parseEnv({ ...production, CHAIN_READER: 'live', RATE_FEED: 'fake' })).toThrow(
+      'RATE_FEED',
+    );
+    expect(parseEnv({ DATABASE_URL }).RATE_FEED).toBe('fake');
     // Production sends through the Bot API unless told otherwise, and never writes files.
     expect(parseEnv({ ...production, CHAIN_READER: 'live' }).TELEGRAM_TRANSPORT).toBe('api');
     expect(() =>
@@ -128,6 +134,7 @@ describe('worker environment', () => {
     const production = {
       DATABASE_URL,
       NODE_ENV: 'production',
+      RATE_FEED: 'live',
       EMAIL_TRANSPORT: 'smtp',
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
@@ -156,6 +163,7 @@ describe('worker environment', () => {
     const production = {
       DATABASE_URL,
       NODE_ENV: 'production',
+      RATE_FEED: 'live',
       EMAIL_TRANSPORT: 'smtp',
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
@@ -189,6 +197,7 @@ describe('worker environment', () => {
     const production = {
       DATABASE_URL,
       NODE_ENV: 'production',
+      RATE_FEED: 'live',
       EMAIL_TRANSPORT: 'smtp',
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',

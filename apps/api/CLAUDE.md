@@ -71,7 +71,7 @@ NestJS 12 HTTP API, a modular monolith (ADR 0001, 0002). Code shape: ADR 0011. A
 
 ## Module notes (easy to miss)
 - `settings`: a supplier's pause reprices its routed products; each change queues its Telegram notice.
-- `rates`: a display step above 2% of the cheapest available product is refused (S07 rule P9).
+- `rates`: a display step above 2% of the cheapest available product is refused (S07 rule P9); an approved suggestion keeps the step in force and is checked the same way. Every rate goes through `writeRate` (`packages/db/src/rates`), which supersedes the pending suggestion and queues the store's refresh. Telegram decides suggestions as a savepoint of the update (`RateSuggestionsService.approveIn` / `rejectIn`), the 5% cap re-checked against the rate at that moment.
 - `pricing`: only write routes refresh the store, not the preview; only the retail list's changes queue `store.revalidate`; archiving a price list a live merchant level names is refused.
 - `orders`: purchases through `purchaseOrder` (per-customer and per-address counters; a checkout counts as one request), panel purchases through `adminPurchaseOrder`. Player-check limits count supplier calls only.
 - `support`: an admin reply on an archived customer's ticket is refused.

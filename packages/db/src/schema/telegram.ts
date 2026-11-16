@@ -143,7 +143,8 @@ export const telegramPrompts = pgTable(
     check(
       'telegram_prompts_deposit_check',
       sql`(${table.depositId} is null) = (${table.depositSubmittedAt} is null)
-        and (${table.depositId} is not null) = (${table.kind} <> 'stop_confirm')`,
+        and (${table.depositId} is not null)
+          = (${table.kind} in ('approve_number', 'approve_confirm', 'reject_note'))`,
     ),
   ],
 );

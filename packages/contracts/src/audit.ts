@@ -39,7 +39,14 @@ import {
   shareKindSchema,
 } from './orders.js';
 import { marginRuleValuesSchema, marginScopeSchema, priceListKindSchema } from './pricing.js';
-import { displayStepSchema } from './rates.js';
+import {
+  displayStepSchema,
+  rateDecisionChannelSchema,
+  rateOriginSchema,
+  rateSettingsValuesSchema,
+  rateSourceKindSchema,
+  rateSourceParserSchema,
+} from './rates.js';
 import {
   outsideCategorySchema,
   reconciliationCheckSchema,
@@ -91,6 +98,10 @@ export const AUDIT_ENTITY_TYPES = [
   'customer',
   'wallet_adjustment',
   'exchange_rate',
+  /** S27. */
+  'rate_source',
+  'rate_settings',
+  'rate_suggestion',
   'deposit_settings',
   'deposit',
   'store_switch',
@@ -149,6 +160,14 @@ const rate = z.strictObject({
   sypPerUsd: exchangeRateSchema,
   displayStepSypUnits: displayStepSchema,
 });
+const rateSourceFields = z
+  .strictObject({
+    label: z.string(),
+    handle: z.string(),
+    parser: rateSourceParserSchema,
+    enabled: z.boolean(),
+  })
+  .partial();
 const adjustment = {
   customerId: z.uuid(),
   direction: adjustmentDirectionSchema,
@@ -489,6 +508,47 @@ export const AUDIT_DETAILS = {
     before: rate.nullable(),
     after: rate,
     changePercent: z.string().nullable(),
+    /** S27: absent on rows before it (all `admin`). */
+    origin: rateOriginSchema.optional(),
+    /** S27: the approved suggestion (`suggestion`) or the one an automatic row came from. */
+    suggestionId: z.uuid().nullable().optional(),
+    /** S27 audit: the source reads behind an automatic or suggested rate. */
+    observationIds: z.array(z.uuid()).optional(),
+  }),
+  /** S27: a rate source added; never a URL, only the fixed-host handle. */
+  'rate_source.created': z.strictObject({
+    sourceId: z.uuid(),
+    kind: rateSourceKindSchema,
+    label: z.string(),
+    handle: z.string(),
+    parser: rateSourceParserSchema,
+    enabled: z.boolean(),
+  }),
+  /** S27: the changed fields only. */
+  'rate_source.updated': z.strictObject({
+    sourceId: z.uuid(),
+    before: rateSourceFields,
+    after: rateSourceFields,
+  }),
+  'rate_source.archived': z.strictObject({ sourceId: z.uuid(), label: z.string() }),
+  /** S27 ST1: a new version of the rate settings; `channel` telegram only turns updates off. */
+  'rate_settings.changed': z.strictObject({
+    settingsId: z.uuid(),
+    before: rateSettingsValuesSchema.partial(),
+    after: rateSettingsValuesSchema.partial(),
+  }),
+  /** S27 SG2, SG3: the approved value may be the admin's edit of the proposed one. */
+  'rate_suggestion.approved': z.strictObject({
+    suggestionId: z.uuid(),
+    proposedSypPerUsd: exchangeRateSchema,
+    approvedSypPerUsd: exchangeRateSchema,
+    rateId: z.uuid(),
+    channel: rateDecisionChannelSchema,
+  }),
+  'rate_suggestion.rejected': z.strictObject({
+    suggestionId: z.uuid(),
+    proposedSypPerUsd: exchangeRateSchema,
+    channel: rateDecisionChannelSchema,
   }),
   /** A new version of the deposit settings (S03): the changed fields only. */
   'deposit_settings.changed': z.strictObject({
