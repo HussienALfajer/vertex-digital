@@ -293,7 +293,7 @@ test('the settings are saved after re-authentication', async ({ page, admin }) =
   admin.reconciliation.seed();
   admin.reauthenticationRequired = true;
   await open(page, admin);
-  await page.getByRole('button', { name: r.settings.open }).click();
+  await page.locator('#main').getByRole('button', { name: r.settings.open }).click();
   await field(page, r.settings.tolerance).fill('2.50');
   await field(page, r.settings.staleDays).fill('10');
   await page.getByRole('button', { name: r.settings.submit }).click();

@@ -14,11 +14,12 @@ import {
   SheetContent,
   SheetTitle,
   SheetTrigger,
+  SidebarGroup,
   SidebarPanel,
+  SidebarSection,
   sidebarChildSize,
   sidebarItemSize,
   sidebarLink,
-  sidebarSection,
   toast,
   VertexMark,
 } from '@vertex-digital/ui';
@@ -45,7 +46,7 @@ import {
   UsersRoundIcon,
   WalletIcon,
 } from 'lucide-react';
-import { type ReactNode, useLayoutEffect, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
 import { waitingApplicationsQuery } from '../features/merchants/merchants.queries';
@@ -116,93 +117,136 @@ interface NavChild {
   except?: readonly string[];
 }
 
-/** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
-const navItems: NavItem[] = [
-  { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
+interface NavGroup {
+  /** The group's quiet heading; none for the home page at the top. */
+  label?:
+    | 'nav.groups.operations'
+    | 'nav.groups.people'
+    | 'nav.groups.store'
+    | 'nav.groups.oversight'
+    | 'nav.groups.system';
+  items: NavItem[];
+}
+
+/**
+ * Each feature adds its section to its group here: the daily work first, then the people, the
+ * store, oversight and the system. One admin, full access: no permission checks (ADR 0016).
+ */
+const navGroups: NavGroup[] = [
   {
-    to: '/orders',
-    label: 'nav.orders',
-    icon: ShoppingBagIcon,
-    children: [
-      { to: '/orders', label: 'nav.allOrders', except: ['/orders/live'] },
-      { to: '/orders/live', label: 'nav.liveOrders' },
-    ],
+    items: [{ to: '/', label: 'nav.home', icon: HouseIcon, exact: true }],
   },
   {
-    to: '/deposits',
-    label: 'nav.deposits',
-    icon: ArrowDownToLineIcon,
-    children: [
-      { to: '/deposits', label: 'nav.depositRequests', except: ['/deposits/transfers'] },
-      { to: '/deposits/transfers', label: 'nav.usdtTransfers' },
-      { to: '/settings/deposits', label: 'nav.depositSettings' },
-    ],
-  },
-  { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
-  { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
-  {
-    to: '/merchants/applications',
-    label: 'nav.merchants',
-    icon: StoreIcon,
-    children: [
-      { to: '/merchants/applications', label: 'nav.merchantApplications' },
+    label: 'nav.groups.operations',
+    items: [
       {
-        to: '/merchants',
-        label: 'nav.merchantsList',
-        except: ['/merchants/applications', '/merchants/tiers'],
+        to: '/orders',
+        label: 'nav.orders',
+        icon: ShoppingBagIcon,
+        children: [
+          { to: '/orders', label: 'nav.allOrders', except: ['/orders/live'] },
+          { to: '/orders/live', label: 'nav.liveOrders' },
+        ],
       },
-      { to: '/merchants/tiers', label: 'nav.merchantTiers' },
-      { to: '/shops', label: 'nav.shops' },
-      { to: '/settings/merchants', label: 'nav.merchantSettings' },
+      {
+        to: '/deposits',
+        label: 'nav.deposits',
+        icon: ArrowDownToLineIcon,
+        children: [
+          { to: '/deposits', label: 'nav.depositRequests', except: ['/deposits/transfers'] },
+          { to: '/deposits/transfers', label: 'nav.usdtTransfers' },
+          { to: '/settings/deposits', label: 'nav.depositSettings' },
+        ],
+      },
+      {
+        to: '/support',
+        label: 'nav.support',
+        icon: LifeBuoyIcon,
+        children: [
+          { to: '/support', label: 'nav.tickets' },
+          { to: '/settings/support', label: 'nav.supportSettings' },
+        ],
+      },
     ],
   },
   {
-    to: '/support',
-    label: 'nav.support',
-    icon: LifeBuoyIcon,
-    children: [
-      { to: '/support', label: 'nav.tickets' },
-      { to: '/settings/support', label: 'nav.supportSettings' },
+    label: 'nav.groups.people',
+    items: [
+      { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
+      { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
+      {
+        to: '/merchants/applications',
+        label: 'nav.merchants',
+        icon: StoreIcon,
+        children: [
+          { to: '/merchants/applications', label: 'nav.merchantApplications' },
+          {
+            to: '/merchants',
+            label: 'nav.merchantsList',
+            except: ['/merchants/applications', '/merchants/tiers'],
+          },
+          { to: '/merchants/tiers', label: 'nav.merchantTiers' },
+          { to: '/shops', label: 'nav.shops' },
+          { to: '/settings/merchants', label: 'nav.merchantSettings' },
+        ],
+      },
     ],
   },
   {
-    to: '/catalog',
-    label: 'nav.catalog',
-    icon: Gamepad2Icon,
-    children: [
-      { to: '/catalog', label: 'nav.catalogGames', except: ['/catalog/quick-links'] },
-      { to: '/catalog/quick-links', label: 'nav.quickLinks' },
+    label: 'nav.groups.store',
+    items: [
+      {
+        to: '/catalog',
+        label: 'nav.catalog',
+        icon: Gamepad2Icon,
+        children: [
+          { to: '/catalog', label: 'nav.catalogGames', except: ['/catalog/quick-links'] },
+          { to: '/catalog/quick-links', label: 'nav.quickLinks' },
+        ],
+      },
+      { to: '/content', label: 'nav.content', icon: NewspaperIcon },
+      { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
+      {
+        to: '/pricing/lists',
+        label: 'nav.pricing',
+        icon: PercentIcon,
+        children: [
+          { to: '/pricing/lists', label: 'nav.priceLists' },
+          { to: '/pricing/matrix', label: 'nav.priceMatrix' },
+          { to: '/pricing/reviews', label: 'nav.priceReviews' },
+          { to: '/rates', label: 'nav.rates' },
+        ],
+      },
     ],
   },
-  { to: '/content', label: 'nav.content', icon: NewspaperIcon },
-  { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   {
-    to: '/pricing/lists',
-    label: 'nav.pricing',
-    icon: PercentIcon,
-    children: [
-      { to: '/pricing/lists', label: 'nav.priceLists' },
-      { to: '/pricing/matrix', label: 'nav.priceMatrix' },
-      { to: '/pricing/reviews', label: 'nav.priceReviews' },
-      { to: '/rates', label: 'nav.rates' },
+    label: 'nav.groups.oversight',
+    items: [
+      { to: '/reconciliation', label: 'nav.reconciliation', icon: ScanSearchIcon },
+      { to: '/reports', label: 'nav.reports', icon: ChartColumnIcon },
+      { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
     ],
   },
-  { to: '/reconciliation', label: 'nav.reconciliation', icon: ScanSearchIcon },
-  { to: '/reports', label: 'nav.reports', icon: ChartColumnIcon },
   {
-    to: '/settings/switches',
-    label: 'nav.settings',
-    icon: SettingsIcon,
-    children: [
-      { to: '/settings/switches', label: 'nav.switches' },
-      { to: '/settings/telegram', label: 'nav.telegram' },
-      { to: '/settings/credit', label: 'nav.creditPolicy' },
+    label: 'nav.groups.system',
+    items: [
+      {
+        to: '/settings/switches',
+        label: 'nav.settings',
+        icon: SettingsIcon,
+        children: [
+          { to: '/settings/switches', label: 'nav.switches' },
+          { to: '/settings/telegram', label: 'nav.telegram' },
+          { to: '/settings/credit', label: 'nav.creditPolicy' },
+        ],
+      },
+      { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
+      { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
     ],
   },
-  { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
-  { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
-  { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
 ];
+
+const navItems: NavItem[] = navGroups.flatMap((group) => group.items);
 
 /** The badge each page carries, beside its link. */
 const navBadges: Partial<Record<string, () => ReactNode>> = {
@@ -278,31 +322,67 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Vertex Green navigation with the sand mark and a sand marker on the active item (§2). */
+/**
+ * Vertex Green navigation with the sand mark (§2): named groups, sections that fold their pages
+ * (the one holding the open page unfolds on its own), a sand marker and icon on the active page.
+ */
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   // A section brightens on any of its pages, some of which live under another path (settings).
   const within = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  const currentSection = navItems.find((item) =>
+    item.children?.some((child) => within(child.to)),
+  )?.label;
+  const [open, setOpen] = useState<ReadonlySet<string>>(
+    () => new Set(currentSection ? [currentSection] : []),
+  );
+  // Moving to another section's page unfolds it; the others stay as the admin left them.
+  useEffect(() => {
+    if (currentSection)
+      setOpen((was) => (was.has(currentSection) ? was : new Set(was).add(currentSection)));
+  }, [currentSection]);
+  const toggle = (label: string, next: boolean) =>
+    setOpen((was) => {
+      const now = new Set(was);
+      if (next) now.add(label);
+      else now.delete(label);
+      return now;
+    });
   return (
-    <SidebarPanel title={t('app.name')} navLabel={t('nav.label')}>
-      {navItems.map(({ to, label, icon: Icon, exact, children }) => {
-        const NavBadge = navBadges[to];
-        return (
-          <div key={label} className="flex flex-col gap-1">
-            <Link
-              to={to}
-              onClick={onNavigate}
-              activeOptions={{ exact: exact ?? false }}
-              data-current={children ? children.some((child) => within(child.to)) : undefined}
-              className={cn(children ? sidebarSection : sidebarLink, sidebarItemSize)}
-            >
-              <Icon className="size-5" />
-              {t(label)}
-              {!children && NavBadge && <NavBadge />}
-            </Link>
-            {children && (
-              <div className="flex flex-col gap-0.5">
+    <SidebarPanel title={t('app.name')} subtitle={t('nav.subtitle')} navLabel={t('nav.label')}>
+      {navGroups.map((group) => (
+        <SidebarGroup key={group.label ?? 'top'} label={group.label && t(group.label)}>
+          {group.items.map(({ to, label, icon: Icon, exact, children }) => {
+            if (!children) {
+              const NavBadge = navBadges[to];
+              return (
+                <Link
+                  key={label}
+                  to={to}
+                  onClick={onNavigate}
+                  activeOptions={{ exact: exact ?? false }}
+                  className={cn(sidebarLink, sidebarItemSize)}
+                >
+                  <Icon className="size-5 shrink-0" />
+                  {t(label)}
+                  {NavBadge && <NavBadge />}
+                </Link>
+              );
+            }
+            return (
+              <SidebarSection
+                key={label}
+                icon={Icon}
+                label={t(label)}
+                current={label === currentSection}
+                open={open.has(label)}
+                onOpenChange={(next) => toggle(label, next)}
+                closedAside={children.map((child) => {
+                  const ChildBadge = navBadges[child.to];
+                  return ChildBadge && <ChildBadge key={child.label} />;
+                })}
+              >
                 {children.map((child) => {
                   const ChildBadge = navBadges[child.to];
                   return (
@@ -321,11 +401,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     </Link>
                   );
                 })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              </SidebarSection>
+            );
+          })}
+        </SidebarGroup>
+      ))}
     </SidebarPanel>
   );
 }
