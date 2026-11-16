@@ -1,7 +1,6 @@
 import {
   type AdminOrderPurpose,
   adminOrderShape,
-  ownerCapRemaining,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
@@ -253,14 +252,9 @@ export async function adminPurchaseOrder(
       .from(ledgerAccounts)
       .where(eq(ledgerAccounts.id, payFrom))
       .for('update');
+    // The owner daily cap was removed (owner, 2026-11-16): the day's total is reported, not capped.
     const capUsdUnits = (await currentOrderPolicy(tx)).ownerDailyCapUsdUnits;
     const { usedUsdUnits } = await ownerSpentToday(tx);
-    const remainingUsdUnits = ownerCapRemaining(capUsdUnits, usedUsdUnits);
-    if (total > remainingUsdUnits) {
-      throw new OrderError('OWNER_DAILY_CAP_EXCEEDED', 'Beyond the owner daily cap', {
-        remainingUsdUnits,
-      });
-    }
     owner = { usedUsdUnits: usedUsdUnits + total, capUsdUnits };
   }
   const journal = await postJournal(tx, {

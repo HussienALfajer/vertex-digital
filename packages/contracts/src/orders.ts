@@ -2407,8 +2407,8 @@ export const liveColumnSchema = z.enum(LIVE_COLUMNS).meta({ id: 'LiveColumn' });
 
 export type LiveColumn = z.infer<typeof liveColumnSchema>;
 
-/** A finished order stays on the board this long (rule LR1). */
-export const LIVE_FINISHED_MINUTES = 60;
+/** A finished order stays on the board this long (rule LR1; a full day, owner 2026-11-16). */
+export const LIVE_FINISHED_MINUTES = 24 * 60;
 
 /** At most this many cards per column (rule LR1); the count stays exact. */
 export const LIVE_COLUMN_LIMIT = 100;

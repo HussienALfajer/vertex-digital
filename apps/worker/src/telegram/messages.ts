@@ -667,7 +667,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       : []),
     ...(summary.ownerOrders
       ? [
-          `طلبات من مال المالك اليوم: ${summary.ownerOrders.count} بقيمة ${formatUsd(summary.ownerOrders.usedUsdUnits)} من سقف ${formatUsd(summary.ownerOrders.capUsdUnits)}`,
+          `طلبات من مال المالك اليوم: ${summary.ownerOrders.count} بقيمة ${formatUsd(summary.ownerOrders.usedUsdUnits)}`,
         ]
       : []),
     reconciliationLine(summary.reconciliation),
@@ -956,11 +956,7 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         text: [
           `🛒 شراء من اللوحة ${order.orderNumber} · ${ADMIN_ORDER_PURPOSES_AR[order.purpose]}`,
           `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity} · ${formatUsd(order.totalUsdUnits)}`,
-          ...(order.owner
-            ? [
-                `مال المالك اليوم: ${formatUsd(order.owner.usedUsdUnits)} من ${formatUsd(order.owner.capUsdUnits)}`,
-              ]
-            : []),
+          ...(order.owner ? [`مال المالك اليوم: ${formatUsd(order.owner.usedUsdUnits)}`] : []),
           'إن لم تفعل ذلك بنفسك فأوقف الشراء وغيّر كلمة المرور فوراً.',
           `${links.admin}/orders/${order.orderId}`,
         ].join('\n'),
