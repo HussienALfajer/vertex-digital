@@ -1645,7 +1645,7 @@
         "sp_today_page": "مسار الصفحة"
       },
       "handleHint": {
-        "telegram_channel": "اسم المستخدم دون @، مثل syp_rates.",
+        "telegram_channel": "اسم القناة مع @، مثل @syp_rates.",
         "sp_today_page": "المسار فقط بعد sp-today.com، مثل /currency/us-dollar."
       },
       "cityWord": "كلمة المدينة (اختياري)",
@@ -5706,7 +5706,7 @@
         "reapplyWaitDays": "من 0 إلى 365.",
         "infoExpiryDays": "من 1 إلى 60.",
         "directContactWhatsapp": "رقم بأي صيغة، مثل 0933123456. فارغ يخفي الزر.",
-        "directContactTelegram": "اسم المستخدم دون @، من 5 إلى 32 حرفاً لاتينياً أو رقماً أو _. فارغ يخفي الزر."
+        "directContactTelegram": "اسم المستخدم مع @، مثل @vertex_shop: من 5 إلى 32 حرفاً لاتينياً أو رقماً أو _ بعد @. فارغ يخفي الزر."
       },
       "errors": {
         "ordersPerTenMinutes": "اكتب عدداً من 10 إلى 500.",

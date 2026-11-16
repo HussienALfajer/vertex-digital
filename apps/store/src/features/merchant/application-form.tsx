@@ -669,7 +669,10 @@ function Summary({
     contact: [
       [t('merchant.fields.contactName'), contactName],
       [t('merchant.fields.whatsapp'), draft.whatsapp],
-      [t('merchant.fields.telegramUsername'), draft.telegramUsername],
+      [
+        t('merchant.fields.telegramUsername'),
+        draft.telegramUsername.trim() ? `@${draft.telegramUsername.trim().replace(/^@/, '')}` : '',
+      ],
     ],
     activity: [
       [

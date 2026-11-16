@@ -94,7 +94,9 @@ function SourceForm({ source }: { source?: RateSource }) {
   const test = useTestRateSource();
   const [kind, setKind] = useState<RateSourceKind>(source?.kind ?? 'telegram_channel');
   const [label, setLabel] = useState(source?.label ?? '');
-  const [handle, setHandle] = useState(source?.handle ?? '');
+  const [handle, setHandle] = useState(
+    source ? (source.kind === 'telegram_channel' ? `@${source.handle}` : source.handle) : '',
+  );
   const [cityWord, setCityWord] = useState(source?.parser.cityWord ?? '');
   const [sellWord, setSellWord] = useState(source?.parser.sellWord ?? SELL_WORDS[kind]);
   const [unit, setUnit] = useState(source?.parser.unit ?? 'new_syp');
