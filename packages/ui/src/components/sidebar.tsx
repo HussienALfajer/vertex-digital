@@ -1,6 +1,6 @@
 import { Collapsible as CollapsiblePrimitive } from '@base-ui/react/collapsible';
 import { ChevronDownIcon, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { AscentLines } from '../brand/ascent-lines';
 import { VertexMark } from '../brand/logo';
 import { cn } from '../lib/cn';
@@ -119,6 +119,7 @@ function SidebarSection({
   closedAside?: ReactNode;
   children: ReactNode;
 }) {
+  const id = useId();
   return (
     <CollapsiblePrimitive.Root
       data-slot="sidebar-section"
@@ -128,15 +129,24 @@ function SidebarSection({
     >
       <CollapsiblePrimitive.Trigger
         data-current={current}
+        // Its name is the section's alone; the folded pages' badges describe it.
+        aria-labelledby={`${id}-label`}
+        aria-describedby={open ? undefined : `${id}-aside`}
         className={cn(sidebarSection, sidebarItemSize, 'group')}
       >
         <Icon
           className={cn('size-5 shrink-0', current && 'text-sidebar-marker')}
           aria-hidden="true"
         />
-        <span className="min-w-0 truncate">{label}</span>
+        <span id={`${id}-label`} className="min-w-0 truncate">
+          {label}
+        </span>
         <span className="ms-auto flex items-center gap-1.5">
-          {!open && closedAside}
+          {!open && (
+            <span id={`${id}-aside`} className="flex items-center gap-1.5">
+              {closedAside}
+            </span>
+          )}
           <ChevronDownIcon
             aria-hidden="true"
             className="size-4 shrink-0 opacity-70 transition-transform duration-200 ease-out group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
