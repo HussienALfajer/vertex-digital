@@ -132,10 +132,6 @@ export function TierGrants({
 /** The privileges this release delivers, in order (the queue priorities follow with S23 PR 3). */
 export function tierGrantLines(privileges: TierPrivileges): string[] {
   const lines = [
-    tm('tier.grants.deposit', {
-      per: ltr(formatUsd(privileges.perDepositUsdUnits)),
-      daily: ltr(formatUsd(privileges.dailyDepositUsdUnits)),
-    }),
     tm('tier.grants.codes', { count: privileges.orderUnitsMax }),
     tm('tier.grants.checks', { count: privileges.playerChecksPerHour }),
   ];
