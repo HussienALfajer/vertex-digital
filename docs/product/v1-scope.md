@@ -284,6 +284,10 @@ Added by the owner on 2026-11-10, replacing the 2026-10-20 "merchant mini-store 
 - A purchase charges the selling price; the merchant's margin reaches the merchant at delivery, for delivered units; failures refund the full selling price.
 - Tickets go to the merchant, escalated to the admin; statistics in the merchant area; a frozen or revoked merchant's customers keep buying, and the admin settles a closed shop's balances.
 
+#### F46 — Automatic exchange-rate updates
+Added by the owner on 2026-11-16 (S27, ADR 0041). The store keeps one rate for every account and city (per-city rates declined, 2026-11-16).
+- The rate is read every 15 minutes from public Telegram channels and, once permitted, the "الليرة اليوم" site (the dollar's sell price). It changes alone only when two sources agree within 1% and the move is at most 2% (and 2% per 24 hours); otherwise the owner approves on Telegram (up to 5%) or in the panel. A silent source keeps the last rate and alerts the owner after 6 hours.
+
 ## 5. Automations (fixed rules in V1)
 
 | ID | Trigger | Automatic result |

@@ -16,6 +16,8 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q40 | jneedcontur: are all quantities in new SYP; is MTN Cash in old SYP | S25 bills and cash | Confirm before pricing MTN Cash |
 | Q41 | jneedcontur: is "one order a minute" per number or per account, and the most credit orders a day | S25 live routes | May lower CL3's per-number counts |
 | Q42 | jneedcontur: a well-formed number that is inactive or of another operator: `reject` with the balance returned, or lost | S25 live routes | Shapes the no-refund text (RN2) |
+| Q43 | The Telegram channels to trust for the store's rate (Damascus market) (S27) | S27 automatic updates on | Two or more, each checked with the panel's test read; automatic updates stay off until two sources work |
+| Q44 | Does "الليرة اليوم" (sp-today.com) allow automated reading of its public pages by a commercial store? On 2026-11-16 its robots.txt allowed public pages and disallowed `/api/`; no API, licence or terms on automated use were found (S27) | S27 sp-today source | Ask them in writing; keep the source disabled until they agree |
 
 ## Resolved
 
@@ -65,6 +67,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Sham Cash account (Q4) | The customer chooses SYP or USD; the admin uploads one QR image per currency from the Sham Cash app; account name, number and QR are panel settings (S03, ADR 0017) | 2026-10-08 |
 | Sham Cash limits (Q5, Sham Cash part) | Minimum $2; new account $50 per deposit and $100 per 24 hours; established $300 and $1,000; no fees; one deposit awaiting a receipt and three under review per customer; editable in the panel (S03, ADR 0017) | 2026-10-08 |
 | Exchange rate policy (Q6) | One rate for display and deposits, set by the admin with re-authentication and a typed confirmation above a 5% change; display step 5 SYP; stale warning after 48 hours (S03, ADR 0017) | 2026-10-08 |
+| Automatic exchange rate (S27) | One rate for every account and city (per-city rates declined); public Telegram channels and "الليرة اليوم" as sources, no WhatsApp; the dollar's sell price; applied alone only with two sources within 1% and a move of at most 2% (2% per 24 h), else a suggestion proposing the highest figure; Telegram approves up to 5%; poll every 15 minutes, alert after 6 silent hours (S27, ADR 0041) | 2026-11-16 |
 | Deposit review hours (Q9) | Daily 10:00–22:00 `Asia/Damascus`, target 15 minutes; the customer sees the real median ETA or the next opening (S03) | 2026-10-08 |
 | USDT limits (Q5, USDT part) | The Sham Cash tiers and one 24-hour window shared across all methods; USDT minimum $5; editable in the panel (S04, ADR 0018) | 2026-10-08 |
 | USDT addresses, confirmations, minimum and validity (Q8) | Owner-held wallets, addresses in the server environment only (not editable in the panel); TRON solidified (19 blocks), BSC finalized with 15 confirmations; minimum $5; deposits valid 24 hours, amount reserved 7 more days; automatic detection of exact-amount transfers besides the TXID (S04, ADR 0018) | 2026-10-08 |
