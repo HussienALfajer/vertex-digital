@@ -100,7 +100,23 @@ export function MatrixPage({
   const games = useQuery(purchaseGamesQuery);
   const categories = useQuery(categoriesQuery());
   const lists = useQuery(priceListsQuery);
-  const matrix = useQuery(priceMatrixQuery(search));
+  const live = (lists.data ?? []).filter(
+    (list) => list.archivedAt === null && list.id !== ROOT_PRICE_LIST_IDS.retail,
+  );
+  // With no columns chosen, every live list shows (the tiers in their chain, the cost list last),
+  // so each tier's price and profit sit side by side.
+  const chosen =
+    search.lists ??
+    [
+      ...live.filter((list) => list.id !== ROOT_PRICE_LIST_IDS.cost),
+      ...live.filter((list) => list.id === ROOT_PRICE_LIST_IDS.cost),
+    ]
+      .map((list) => list.id)
+      .slice(0, PRICE_MATRIX_MAX_LISTS - 1);
+  const matrix = useQuery({
+    ...priceMatrixQuery({ ...search, lists: chosen }),
+    enabled: search.lists !== undefined || lists.isSuccess,
+  });
   const [opened, setOpened] = useState<{ listId: string; row: MatrixRow } | null>(null);
   const [pickingGame, setPickingGame] = useState(false);
   const listsId = useId();
@@ -120,10 +136,6 @@ export function MatrixPage({
   /** Any filter's change starts from the first page. */
   const filter = (next: MatrixSearch) => onSearch({ ...next, page: undefined });
 
-  const live = (lists.data ?? []).filter(
-    (list) => list.archivedAt === null && list.id !== ROOT_PRICE_LIST_IDS.retail,
-  );
-  const chosen = search.lists ?? [ROOT_PRICE_LIST_IDS.wholesale, ROOT_PRICE_LIST_IDS.cost];
   const toggle = (id: string) => {
     const next = chosen.includes(id) ? chosen.filter((item) => item !== id) : [...chosen, id];
     const gone = next.includes(id) ? null : id;
