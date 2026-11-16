@@ -11,6 +11,7 @@ import {
   type DepositPage,
   depositCreditUsdUnits,
   depositLimitBreach,
+  depositLimitSettingsFor,
   depositMethodState,
   QUOTE_LOCK_MINUTES,
   type QuoteOffer,
@@ -32,7 +33,7 @@ import {
   usdtDeposits,
   withinLimits,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, gt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -121,7 +122,9 @@ export class DepositsService {
         name: settings.shamCashAccountName,
         number: settings.shamCashAccountNumber,
       },
-      limits: settings && (await limitsOf(this.db, customerId, settings)),
+      limits:
+        settings &&
+        (await limitsOf(this.db, customerId, depositLimitSettingsFor('sham_cash', settings))),
       rate: rate && {
         id: rate.id,
         sypPerUsd: rate.sypPerUsd,
@@ -189,7 +192,11 @@ export class DepositsService {
         // it never blocks this one while the job has not run.
         await expireDueDeposits(tx, this.jobs, { limit: 10, channel: 'store', customerId });
         await checkCreation(tx, customerId);
-        const limits = await limitsOf(tx, customerId, settings);
+        const limits = await limitsOf(
+          tx,
+          customerId,
+          depositLimitSettingsFor('sham_cash', settings),
+        );
         // Pounds worth more than the safe integers are above any per-deposit limit (edge case 12).
         const breach = depositLimitBreach(limits, declaredUsdUnits ?? Number.POSITIVE_INFINITY);
         if (breach || declaredUsdUnits === null) {
@@ -534,7 +541,7 @@ export class DepositsService {
     tx: Transaction,
     deposit: DepositRow,
     receipt: typeof depositReceipts.$inferSelect,
-    settings: CurrentSettings | null,
+    _settings: CurrentSettings | null,
     sharedWith: string[],
   ): Promise<{ code: DepositFlagCode; details: unknown }[]> {
     const flags: { code: DepositFlagCode; details: unknown }[] = [];
@@ -571,35 +578,7 @@ export class DepositsService {
       .orderBy(distance, depositReceipts.createdAt)
       .limit(20);
     if (similar.length > 0) flags.push({ code: 'receipt_similar', details: { matches: similar } });
-    if (settings) {
-      const limits = await limitsOf(tx, deposit.customerId, settings);
-      if (!limits.established && deposit.declaredUsdUnits >= settings.flagNewAccountUsdUnits) {
-        flags.push({
-          code: 'new_account_large',
-          details: {
-            declaredUsdUnits: deposit.declaredUsdUnits,
-            thresholdUnits: settings.flagNewAccountUsdUnits,
-          },
-        });
-      }
-      const [recent] = await tx
-        .select({ count: count() })
-        .from(depositReceipts)
-        .innerJoin(deposits, eq(deposits.id, depositReceipts.depositId))
-        .where(
-          and(
-            eq(deposits.customerId, deposit.customerId),
-            sql`${depositReceipts.createdAt} > now() - interval '24 hours'`,
-          ),
-        );
-      const submissions = recent?.count ?? 0;
-      if (submissions > settings.flagVelocityCount) {
-        flags.push({
-          code: 'velocity',
-          details: { submissions, threshold: settings.flagVelocityCount },
-        });
-      }
-    }
+    // The new-account and velocity flags were removed (owner, 2026-11-16).
     if (sharedWith.length > 0) {
       flags.push({
         code: 'shared_phone',

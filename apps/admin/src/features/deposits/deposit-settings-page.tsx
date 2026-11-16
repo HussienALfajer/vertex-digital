@@ -83,7 +83,7 @@ const whole = (text: string) => (/^\d{1,4}$/.test(text.trim()) ? Number(text) : 
 
 /**
  * "إعدادات الإيداع" (S03, S04): the Sham Cash account, the currencies with their QR images, the
- * USDT networks and minimum (rules U1, U5), the limits (rule SC3), the review hours and target
+ * USDT networks and minimum (rules U1, U5), the review hours (limits, flag thresholds and the Telegram cap removed, owner 2026-11-16) and target
  * (SC13), the flag thresholds (FL3, FL4) and the Telegram approval limit (S05 rule TC4). Saved as a new
  * version with re-authentication; before the first save Sham Cash deposits are unavailable (SC1).
  */
@@ -271,26 +271,6 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
         </div>
       </Card>
       <Card className="gap-4">
-        <CardTitle>{t('depositSettings.limits.title')}</CardTitle>
-        <CardDescription>{t('depositSettings.limits.description')}</CardDescription>
-        <div className="grid gap-4 md:grid-cols-2">
-          {USD_FIELDS.filter(
-            (field) =>
-              field !== 'flagNewAccountUsdUnits' &&
-              field !== 'usdtMinDepositUsdUnits' &&
-              field !== 'telegramApprovalMaxUsdUnits',
-          ).map((field) => (
-            <TextField
-              key={field}
-              label={t(`depositSettings.fields.${field}`)}
-              error={errors[field]}
-            >
-              <Input dir="ltr" inputMode="decimal" autoComplete="off" {...text(field)} />
-            </TextField>
-          ))}
-        </div>
-      </Card>
-      <Card className="gap-4">
         <CardTitle>{t('depositSettings.review.title')}</CardTitle>
         <CardDescription>{t('depositSettings.review.description')}</CardDescription>
         <div className="grid gap-4 md:grid-cols-3">
@@ -315,53 +295,6 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
               inputMode="numeric"
               autoComplete="off"
               {...text('reviewTargetMinutes')}
-            />
-          </TextField>
-        </div>
-      </Card>
-      <Card className="gap-4">
-        <CardTitle>{t('depositSettings.flags.title')}</CardTitle>
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextField
-            label={t('depositSettings.fields.flagNewAccountUsdUnits')}
-            error={errors.flagNewAccountUsdUnits}
-            hint={t('depositSettings.flags.newAccountHint')}
-          >
-            <Input
-              dir="ltr"
-              inputMode="decimal"
-              autoComplete="off"
-              {...text('flagNewAccountUsdUnits')}
-            />
-          </TextField>
-          <TextField
-            label={t('depositSettings.fields.flagVelocityCount')}
-            error={errors.flagVelocityCount}
-            hint={t('depositSettings.flags.velocityHint')}
-          >
-            <Input
-              dir="ltr"
-              inputMode="numeric"
-              autoComplete="off"
-              {...text('flagVelocityCount')}
-            />
-          </TextField>
-        </div>
-      </Card>
-      <Card className="gap-4">
-        <CardTitle>{t('depositSettings.telegram.title')}</CardTitle>
-        <CardDescription>{t('depositSettings.telegram.description')}</CardDescription>
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextField
-            label={t('depositSettings.fields.telegramApprovalMaxUsdUnits')}
-            error={errors.telegramApprovalMaxUsdUnits}
-            hint={t('depositSettings.telegram.hint')}
-          >
-            <Input
-              dir="ltr"
-              inputMode="decimal"
-              autoComplete="off"
-              {...text('telegramApprovalMaxUsdUnits')}
             />
           </TextField>
         </div>

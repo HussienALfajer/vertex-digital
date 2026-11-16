@@ -341,7 +341,7 @@
       "youGet": "ستحصل على {amount}",
       "rate": "بسعر {rate} ل.س للدولار",
       "lock": "السعر مقفل {minutes} دقيقة بعد المتابعة",
-      "limits": "أقل مبلغ {min} · أقصى مبلغ للإيداع {max} · المتبقي اليوم {remaining}",
+      "limits": "أقل مبلغ {min}",
       "submit": "متابعة",
       "submitting": "جارٍ إنشاء الإيداع…",
       "unavailableTitle": "الإيداع غير متاح حاليًا",

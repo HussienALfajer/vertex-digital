@@ -9,6 +9,7 @@ import {
   exchangeRateSchema,
   isWholeCents,
   sypDepositUsd,
+  USD_CENT,
   usdCentsSchema,
 } from './money.js';
 import { merchantTierSchema } from './price-kinds.js';
@@ -379,8 +380,9 @@ export function depositLimitSettingsFor(
   method: DepositMethod,
   settings: DepositLimitSettings & { usdtMinDepositUsdUnits: number },
 ): DepositLimitSettings {
+  // Sham Cash has no minimum but a cent (owner, 2026-11-16); USDT keeps its network minimum.
   return method === 'sham_cash'
-    ? settings
+    ? { ...settings, minDepositUsdUnits: USD_CENT }
     : { ...settings, minDepositUsdUnits: settings.usdtMinDepositUsdUnits };
 }
 
@@ -393,17 +395,14 @@ export function depositLimits(
   established: boolean,
   usedTodayUnits: number,
 ): DepositLimits {
-  const dailyUnits = established
-    ? settings.establishedDailyUsdUnits
-    : settings.newAccountDailyUsdUnits;
+  // The per-deposit and daily limits were removed (owner, 2026-11-16): only the minimum is left.
+  void usedTodayUnits;
   return {
     established,
     minUnits: settings.minDepositUsdUnits,
-    perDepositUnits: established
-      ? settings.establishedPerDepositUsdUnits
-      : settings.newAccountPerDepositUsdUnits,
-    dailyUnits,
-    remainingTodayUnits: Math.max(0, dailyUnits - usedTodayUnits),
+    perDepositUnits: Number.MAX_SAFE_INTEGER,
+    dailyUnits: Number.MAX_SAFE_INTEGER,
+    remainingTodayUnits: Number.MAX_SAFE_INTEGER,
   };
 }
 
