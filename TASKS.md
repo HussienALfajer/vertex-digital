@@ -15,4 +15,4 @@ One PR, as the spec's implementation notes say. Q43 (which channels) and Q44 (sp
 - [x] e2e: `/rates` with sources and a suggestion, the source form with a test read, settings; RTL screenshots light and dark
 - [x] docs: architecture (`rates` jobs), `.env.example` (`RATE_FEED`), commands table (`rates:fake-post`), folder rules, spec details settled, ROADMAP
 - [x] checks, reviewer (3 blocking findings fixed: figures dated from their full history, one source per channel whatever its case, `RATE_FEED=live` documented for production; the drift window counting from the owner's rate found by the browser check), browser check (spec Acceptance with `RATE_FEED=fake` and Telegram `log`), PR and merge
-- [ ] production deploy (automatic updates stay off until the owner adds sources), health checks, the deploy log
+- [x] production deploy (automatic updates stay off until the owner adds sources), health checks, the deploy log (2026-11-16, `fd45921`)
