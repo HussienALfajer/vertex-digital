@@ -602,7 +602,8 @@ export class DepositReviewService {
     if (current.method !== 'sham_cash') throw stateConflict(current.status);
     // Rule RV4, before anything is written: the credit and every flag the approval would carry.
     const plan = await this.planApproval(db, current, input);
-    // From Telegram the limit (at most $100) and "no flag" take the re-authentication's place.
+    // From Telegram the linked chat and "no flag" take the re-authentication's place: the amount
+    // cap was removed (owner, 2026-11-16; ADR 0042).
     if (actor.channel === 'telegram') await this.refuseForTelegram(db, actor, current, plan);
     else if (
       approvalNeedsReauthentication(plan.creditedUsdUnits, plan.expectedFlags.length) &&

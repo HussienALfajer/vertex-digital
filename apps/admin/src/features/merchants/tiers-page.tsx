@@ -213,11 +213,6 @@ function TierCard({
       <div className="flex flex-col gap-2 border-t border-border pt-4">
         <h3 className="text-sm font-medium">{t('merchants.tiers.privileges')}</h3>
         <dl className="grid grid-cols-2 gap-3 text-sm">
-          <Fact label={t('merchants.tiers.deposits')}>
-            <bdi dir="ltr" className="tabular-nums">
-              {formatUsd(settings.perDepositUsdUnits)} / {formatUsd(settings.dailyDepositUsdUnits)}
-            </bdi>
-          </Fact>
           <Fact label={t('merchants.tiers.checks')}>
             <span className="tabular-nums">
               {t('merchants.tiers.checksValue', {

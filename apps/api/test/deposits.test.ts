@@ -2,7 +2,11 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { crc32 } from 'node:zlib';
-import { DEPOSIT_SETTINGS_DEFAULTS, UPLOAD_MAX_BYTES } from '@vertex-digital/contracts';
+import {
+  DEPOSIT_MAX_USD_UNITS,
+  DEPOSIT_SETTINGS_DEFAULTS,
+  UPLOAD_MAX_BYTES,
+} from '@vertex-digital/contracts';
 import {
   auditEntries,
   customers,
@@ -84,6 +88,15 @@ async function customer() {
   const seededCustomer = await seedCustomer(test.db, { phone: uniquePhone() });
   seeded.push(seededCustomer.id);
   return { ...seededCustomer, cookie: await client.signInCustomer(seededCustomer.email) };
+}
+
+/** A customer whose phone another customer has: their deposits carry `shared_phone` (FL5). */
+async function sharedPhoneCustomer() {
+  const phone = uniquePhone();
+  const first = await seedCustomer(test.db, { phone });
+  const second = await seedCustomer(test.db, { phone });
+  seeded.push(first.id, second.id);
+  return { ...second, cookie: await client.signInCustomer(second.email) };
 }
 
 const create = async (
@@ -365,12 +378,13 @@ describe('the options (rules SC1, SC3, SC13)', () => {
         USD: { available: true, reason: null },
       },
       account: { name: 'Vertex Digital', number: '0933000000' },
+      // Only a cent's minimum is left (owner, 2026-11-16).
       limits: {
         established: false,
-        minUnits: 2 * USD,
-        perDepositUnits: 50 * USD,
-        dailyUnits: 100 * USD,
-        remainingTodayUnits: 100 * USD,
+        minUnits: USD / 100,
+        perDepositUnits: DEPOSIT_MAX_USD_UNITS,
+        dailyUnits: DEPOSIT_MAX_USD_UNITS,
+        remainingTodayUnits: DEPOSIT_MAX_USD_UNITS,
       },
       rate: { id: rateId, sypPerUsd: '118', displayStepSypUnits: 500 },
       reviewHours: { start: '10:00', end: '22:00' },
@@ -469,19 +483,14 @@ describe('creating a deposit (rules SC2–SC6)', () => {
     expect(expiry).toMatchObject({ actorKind: 'system', channel: 'store' });
   });
 
-  it('enforces the minimum, the per-deposit and the daily limits (rule SC3)', async () => {
+  it('takes any amount from a cent, with no per-deposit or daily limit (SC3, owner 2026-11-16)', async () => {
     const someone = await customer();
-    expect(
-      await body(await create(someone.cookie, { currency: 'USD', amountUnits: 1 * USD })),
-    ).toMatchObject({
-      status: 422,
-      code: 'DEPOSIT_LIMIT_EXCEEDED',
-      details: { limit: 'minimum', limitUnits: 2 * USD, remainingUnits: 100 * USD },
-    });
-    expect(
-      await body(await create(someone.cookie, { currency: 'USD', amountUnits: 60 * USD })),
-    ).toMatchObject({ details: { limit: 'per_deposit', limitUnits: 50 * USD } });
-    // Edge case 12 (F3-7): pounds worth more than the safe integers meet the per-deposit limit.
+    for (const amountUnits of [USD / 100, 1 * USD, 5_000 * USD]) {
+      const deposit = await created(someone.cookie, { currency: 'USD', amountUnits });
+      expect(deposit.declaredUsdUnits).toBe(amountUnits);
+      await client.post(`/api/deposits/${deposit.id}/cancel`, { cookie: someone.cookie });
+    }
+    // Edge case 12 (F3-7): pounds worth more than the safe integers are still refused.
     expect(
       await body(
         await create(someone.cookie, { currency: 'SYP', amountUnits: 9_000_000_000_000_000 }),
@@ -489,16 +498,13 @@ describe('creating a deposit (rules SC2–SC6)', () => {
     ).toMatchObject({
       status: 422,
       code: 'DEPOSIT_LIMIT_EXCEEDED',
-      details: { limit: 'per_deposit', limitUnits: 50 * USD },
+      details: { limit: 'per_deposit', limitUnits: DEPOSIT_MAX_USD_UNITS },
     });
-    await submitted(someone.cookie, { currency: 'USD', amountUnits: 50 * USD });
-    await submitted(someone.cookie, { currency: 'USD', amountUnits: 40 * USD });
-    expect(
-      await body(await create(someone.cookie, { currency: 'USD', amountUnits: 20 * USD })),
-    ).toMatchObject({
-      status: 422,
-      details: { limit: 'daily', limitUnits: 100 * USD, remainingUnits: 10 * USD },
-    });
+    // A day's heavy deposits do not stop the next one.
+    await submitted(someone.cookie, { currency: 'USD', amountUnits: 900 * USD });
+    await submitted(someone.cookie, { currency: 'USD', amountUnits: 900 * USD });
+    const next = await created(someone.cookie, { currency: 'USD', amountUnits: 900 * USD });
+    expect(next.declaredUsdUnits).toBe(900 * USD);
   });
 
   it('allows at most 3 deposits in review (rule SC5)', async () => {
@@ -976,26 +982,20 @@ describe('fraud flags (rules FL1–FL5)', () => {
     expect(flagged).toEqual(['receipt_reused']);
   });
 
-  it('flags a large deposit of a new account (FL3)', async () => {
+  it('no longer flags a large first deposit or a fourth submission in a day (owner, 2026-11-16)', async () => {
     const someone = await customer();
-    const deposit = await submitted(someone.cookie, { currency: 'USD', amountUnits: 25 * USD });
-    expect(await flagsOf(deposit.id)).toEqual(['new_account_large']);
-  });
-
-  it('flags the fourth submission in 24 hours (FL4)', async () => {
-    const someone = await customer();
-    const ids: string[] = [];
-    for (let count = 0; count < 3; count += 1) {
-      ids.push((await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD })).id);
+    const large = await submitted(someone.cookie, { currency: 'USD', amountUnits: 2_000 * USD });
+    expect(await flagsOf(large.id)).toEqual([]);
+    for (let count = 0; count < 2; count += 1) {
+      await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
     }
-    const rejected = await reject(ids[0] as string, {
+    const rejected = await reject(large.id, {
       reason: 'not_received',
       internalNote: 'Nothing arrived',
     });
     expect(rejected.status).toBe(200);
     const fourth = await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
-    expect(await flagsOf(fourth.id)).toEqual(['velocity']);
-    expect(await flagsOf(ids[2] as string)).toEqual([]);
+    expect(await flagsOf(fourth.id)).toEqual([]);
   });
 
   it('flags a phone another customer has (FL5)', async () => {
@@ -1022,9 +1022,9 @@ describe('fraud flags (rules FL1–FL5)', () => {
 describe('the review queue (rule RV10)', () => {
   it('lists flagged deposits first, then the oldest, with a cursor, and counts them', async () => {
     const plain = await customer();
-    const large = await customer();
+    const shared = await sharedPhoneCustomer();
     const older = await submitted(plain.cookie, { currency: 'USD', amountUnits: 5 * USD });
-    const flagged = await submitted(large.cookie, { currency: 'USD', amountUnits: 30 * USD });
+    const flagged = await submitted(shared.cookie, { currency: 'USD', amountUnits: 30 * USD });
     const page = async (query: string) =>
       (await (
         await client.get(`/api/admin/deposits${query}`, { cookie: admin.cookie })
@@ -1040,7 +1040,7 @@ describe('the review queue (rule RV10)', () => {
     expect(ids.indexOf(flagged.id)).toBeLessThan(ids.indexOf(older.id));
     const firstUnflagged = all.findIndex((item) => item.flags.length === 0);
     expect(all.slice(firstUnflagged).every((item) => item.flags.length === 0)).toBe(true);
-    expect(all.find((item) => item.id === flagged.id)?.flags).toEqual(['new_account_large']);
+    expect(all.find((item) => item.id === flagged.id)?.flags).toEqual(['shared_phone']);
     const small = await page('?limit=1');
     expect(small.items).toHaveLength(1);
     const next = await page(`?limit=1&cursor=${small.nextCursor}`);
@@ -1286,7 +1286,7 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
   });
 
   it('needs every flag acknowledged, and a reference check flag of its own (rule RV5)', async () => {
-    const someone = await customer();
+    const someone = await sharedPhoneCustomer();
     const deposit = await submitted(someone.cookie, { currency: 'USD', amountUnits: 30 * USD });
     const input = {
       transactionNumber: transactionNumber(),
@@ -1296,16 +1296,16 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
     };
     const refused = await approve(deposit.id, {
       ...input,
-      acknowledgedFlags: ['new_account_large'],
+      acknowledgedFlags: ['shared_phone'],
     });
     expect(await body(refused)).toMatchObject({
       status: 409,
       code: 'FLAGS_NOT_ACKNOWLEDGED',
-      details: { expected: ['new_account_large', 'reference_missing'] },
+      details: { expected: ['shared_phone', 'reference_missing'] },
     });
     const approved = await approve(deposit.id, {
       ...input,
-      acknowledgedFlags: ['reference_missing', 'new_account_large'],
+      acknowledgedFlags: ['reference_missing', 'shared_phone'],
     });
     expect(approved.status).toBe(200);
   });

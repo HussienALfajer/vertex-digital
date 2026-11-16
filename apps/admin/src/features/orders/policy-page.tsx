@@ -39,7 +39,6 @@ const SECTIONS: { title: 'polling' | 'review' | 'manual' | 'owner'; fields: Poli
   },
   { title: 'review', fields: ['hardLimitMinutes', 'reviewPollMinutes', 'reviewPollHours'] },
   { title: 'manual', fields: ['manualReminderMinutes'] },
-  { title: 'owner', fields: ['ownerDailyCapUsdUnits'] },
 ];
 
 /** S16 AP7: the owner cap is typed in dollars; the other fields are whole numbers. */

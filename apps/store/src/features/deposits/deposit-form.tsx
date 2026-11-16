@@ -422,8 +422,6 @@ function ShamCashForm({
           <p className="text-sm text-muted-foreground tabular-nums">
             {t('deposits.form.limits', {
               min: usdText(options.limits.minUnits),
-              max: usdText(options.limits.perDepositUnits),
-              remaining: usdText(options.limits.remainingTodayUnits),
             })}
           </p>
         )}

@@ -439,6 +439,30 @@ export const usdtTransfers = pgTable(
   ],
 );
 
+/**
+ * An unmatched transfer the admin set aside (owner request 2026-11-16): one row per transfer, with
+ * the reason. Append-only. The transfer leaves the unmatched list and the dashboard's count; a
+ * later TXID claim (an S02 manual deposit) still credits it.
+ */
+export const usdtTransferDismissals = pgTable(
+  'usdt_transfer_dismissals',
+  {
+    transferId: uuid('transfer_id')
+      .primaryKey()
+      .references(() => usdtTransfers.id),
+    /** The admin, without a foreign key (the single admin row stays replaceable). */
+    adminId: uuid('admin_id').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'usdt_transfer_dismissals_reason_check',
+      sql`char_length(${table.reason}) between 1 and 500`,
+    ),
+  ],
+);
+
 /** Each network scanner's position (S04 rule U12): safe to move back, never a business record. */
 export const usdtScanCursors = pgTable(
   'usdt_scan_cursors',

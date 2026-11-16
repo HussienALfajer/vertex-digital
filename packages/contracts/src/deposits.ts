@@ -9,11 +9,12 @@ import {
   exchangeRateSchema,
   isWholeCents,
   sypDepositUsd,
+  USD_CENT,
   usdCentsSchema,
 } from './money.js';
 import { merchantTierSchema } from './price-kinds.js';
 import { displayStepSchema } from './rates.js';
-import { USDT_METHODS, usdtMethodSchema } from './usdt.js';
+import { USDT_METHODS, USDT_TAIL_MAX_UNITS, usdtMethodSchema } from './usdt.js';
 
 /*
  * Deposits (S03, F05; ADR 0006, 0017), owned by the api `deposits` module: Sham Cash deposits
@@ -379,10 +380,19 @@ export function depositLimitSettingsFor(
   method: DepositMethod,
   settings: DepositLimitSettings & { usdtMinDepositUsdUnits: number },
 ): DepositLimitSettings {
+  // Sham Cash has no minimum but a cent (owner, 2026-11-16); USDT keeps its network minimum.
   return method === 'sham_cash'
-    ? settings
+    ? { ...settings, minDepositUsdUnits: USD_CENT }
     : { ...settings, minDepositUsdUnits: settings.usdtMinDepositUsdUnits };
 }
+
+/**
+ * The largest deposit, in USD units: no business limit (owner, 2026-11-16), only the technical
+ * ceiling that keeps a USDT pay amount (the amount plus its tail, rule U3) a safe integer, in
+ * whole cents. Anything above it is refused as `per_deposit` (edge case 12), never a fault.
+ */
+export const DEPOSIT_MAX_USD_UNITS =
+  Math.floor((Number.MAX_SAFE_INTEGER - USDT_TAIL_MAX_UNITS) / USD_CENT) * USD_CENT;
 
 /**
  * A customer's limits (rule SC3). `usedTodayUnits` is the declared USD of their `pending` and
@@ -393,17 +403,15 @@ export function depositLimits(
   established: boolean,
   usedTodayUnits: number,
 ): DepositLimits {
-  const dailyUnits = established
-    ? settings.establishedDailyUsdUnits
-    : settings.newAccountDailyUsdUnits;
+  // The per-deposit and daily limits were removed (owner, 2026-11-16): only the minimum and the
+  // technical ceiling are left.
+  void usedTodayUnits;
   return {
     established,
     minUnits: settings.minDepositUsdUnits,
-    perDepositUnits: established
-      ? settings.establishedPerDepositUsdUnits
-      : settings.newAccountPerDepositUsdUnits,
-    dailyUnits,
-    remainingTodayUnits: Math.max(0, dailyUnits - usedTodayUnits),
+    perDepositUnits: DEPOSIT_MAX_USD_UNITS,
+    dailyUnits: DEPOSIT_MAX_USD_UNITS,
+    remainingTodayUnits: DEPOSIT_MAX_USD_UNITS,
   };
 }
 
@@ -430,7 +438,7 @@ export function depositLimitBreach(
   if (declaredUsdUnits > limits.perDepositUnits) {
     return breach('per_deposit', limits.perDepositUnits);
   }
-  if (declaredUsdUnits > limits.remainingTodayUnits) return breach('daily', limits.dailyUnits);
+  // No daily limit is left (owner, 2026-11-16): `remainingTodayUnits` is the per-deposit ceiling.
   return null;
 }
 
@@ -1280,13 +1288,20 @@ export const requestReceiptSchema = z
 export type RequestReceipt = z.input<typeof requestReceiptSchema>;
 
 /** Where a recorded USDT transfer stands (rule U13), derived, never stored. */
-export const USDT_TRANSFER_STATES = ['credited', 'bound', 'unmatched'] as const;
+export const USDT_TRANSFER_STATES = ['credited', 'bound', 'dismissed', 'unmatched'] as const;
 
 export const usdtTransferStateSchema = z
   .enum(USDT_TRANSFER_STATES)
   .meta({ id: 'UsdtTransferState' });
 
 export type UsdtTransferState = z.infer<typeof usdtTransferStateSchema>;
+
+/** `POST /api/admin/usdt-transfers/:id/dismiss`: sets an unmatched transfer aside, with a reason. */
+export const dismissUsdtTransferSchema = z
+  .object({ reason: z.string().trim().min(1).max(500) })
+  .meta({ id: 'DismissUsdtTransfer' });
+
+export type DismissUsdtTransfer = z.input<typeof dismissUsdtTransferSchema>;
 
 /** `GET /api/admin/usdt-transfers`: unmatched by default, newest first. */
 export const adminUsdtTransferQuerySchema = cursorQuerySchema

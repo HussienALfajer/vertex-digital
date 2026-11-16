@@ -169,8 +169,6 @@ export function UsdtForm({
           <p className="text-sm text-muted-foreground tabular-nums">
             {t('deposits.form.limits', {
               min: usdText(limits.minUnits),
-              max: usdText(limits.perDepositUnits),
-              remaining: usdText(limits.remainingTodayUnits),
             })}
           </p>
         )}

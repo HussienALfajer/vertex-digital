@@ -779,9 +779,9 @@ export function telegramApprovalRefusal(input: {
 }): TelegramApprovalRefusal | null {
   if (input.method !== 'sham_cash') return 'panel_only';
   if (input.customerFrozen) return 'frozen';
-  if (input.limitUsdUnits === 0) return 'off';
+  // The amount cap was removed (owner, 2026-11-16): any unflagged Sham Cash deposit qualifies.
   if (input.flagCount > 0) return 'flagged';
-  return input.creditUsdUnits > input.limitUsdUnits ? 'over_limit' : null;
+  return null;
 }
 
 /*

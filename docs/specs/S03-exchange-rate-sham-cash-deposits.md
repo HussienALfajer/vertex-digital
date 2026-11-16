@@ -178,6 +178,7 @@ Claims each real-world payment once across every table that can credit it (rule 
   - Every deposit: at least the minimum ($2).
   - New account: at most $50 per deposit, and $100 in any 24 hours.
   - Established account: at most $300 per deposit, and $1,000 in any 24 hours.
+  - **Amended (owner, 2026-11-16):** the per-deposit and 24-hour limits are removed for every account; a Sham Cash deposit needs only one cent (USDT keeps its S04 minimum). `depositLimits` answers `Number.MAX_SAFE_INTEGER` for both, and only an amount beyond the safe integers is still refused (edge case 12). The settings columns stay, unread, until a later two-step migration drops them.
   - The 24-hour sum is the declared USD of the customer's `pending` and `submitted` deposits plus the credited USD of `credited` ones, all created in the last 24 hours, plus the new deposit.
   - A breach answers `DEPOSIT_LIMIT_EXCEEDED`, with `details` `{ limit: 'minimum' | 'per_deposit' | 'daily', limitUnits, remainingUnits }`.
   - Limits apply when the deposit is created. An approval credits what was received, even above a limit (RV2): the money has already moved.
@@ -260,8 +261,8 @@ Claims each real-world payment once across every table that can credit it (rule 
 Computed at submission for that receipt, in the submission transaction:
 - FL1. `receipt_reused`: another receipt with the same `original_sha256`, on any deposit of any customer. `details`: the other deposit ids and their customers.
 - FL2. `receipt_similar`: another receipt whose dHash is within Hamming distance 6, not already caught by FL1. A linear scan with `bit_count` is fine at V1 volumes; an index is a later concern. `details`: deposit ids and distances.
-- FL3. `new_account_large`: the customer is new (SC3) and the declared USD is at least the setting ($25).
-- FL4. `velocity`: this is at least the 4th submission by the customer in 24 hours (the setting is 3).
+- FL3. `new_account_large`: the customer is new (SC3) and the declared USD is at least the setting ($25). **Removed (owner, 2026-11-16):** no longer raised; flags already raised stay on their deposits.
+- FL4. `velocity`: this is at least the 4th submission by the customer in 24 hours (the setting is 3). **Removed (owner, 2026-11-16):** no longer raised. FL1, FL2, FL5, the reference check, SC4–SC6 and the review itself are unchanged.
 - FL5. `shared_phone`: another non-archived customer has the same phone. `details`: the count, plus the other customer ids for the panel.
 
 Computed at approval (RV5):

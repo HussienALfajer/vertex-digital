@@ -181,8 +181,8 @@ async function saveSettings(changes: Record<string, unknown> = {}) {
   return (await response.json()) as Record<string, unknown>;
 }
 
-async function customer() {
-  const seededCustomer = await seedCustomer(test.db, { phone: uniquePhone() });
+async function customer(phone: string = uniquePhone()) {
+  const seededCustomer = await seedCustomer(test.db, { phone });
   seeded.push(seededCustomer.id);
   return { ...seededCustomer, cookie: await client.signInCustomer(seededCustomer.email) };
 }
@@ -362,28 +362,23 @@ describe('approval from Telegram (rule TC4)', () => {
     expect((await depositRow(id))?.status).toBe('credited');
   }, 15_000);
 
-  it('refuses a flagged deposit, one over the limit, and every approval at limit 0', async () => {
-    // A new account's deposit of $25 or more is flagged (S03 rule FL3).
-    const flagged = await submitted(30);
+  it('refuses a flagged deposit, and has no amount cap (owner, 2026-11-16)', async () => {
+    // A phone another customer has flags the deposit (S03 rule FL5).
+    const phone = uniquePhone();
+    await customer(phone);
+    const flagged = await submitted(30, await customer(phone));
     expect(await tap(`ap:${flagged.id}`)).toMatch(/علامات/);
     expect(await openPromptId()).toBeUndefined();
+    // Neither the stored limit nor $0 refuses: the amount cap was removed.
     await saveSettings({ telegramApprovalMaxUsdUnits: 10 * USD });
-    const over = await submitted(11);
-    expect(await tap(`ap:${over.id}`)).toMatch(/فوق حد تيليجرام/);
+    const large = await submitted(500);
+    const promptId = await askToApprove(large.id, transactionNumber());
     await saveSettings({ telegramApprovalMaxUsdUnits: 0 });
-    expect(await tap(`ap:${over.id}`)).toMatch(/متوقف/);
-    await saveSettings();
-    expect((await depositRow(over.id))?.status).toBe('submitted');
-  });
-
-  it('re-checks the limit at the confirmation (edge case 5)', async () => {
-    const { id } = await submitted(20);
-    const promptId = await askToApprove(id, transactionNumber());
-    await saveSettings({ telegramApprovalMaxUsdUnits: 10 * USD });
     await tap(`ok:${promptId}`);
-    expect(await lastReply()).toMatchObject({ reply: 'decision_refused', refusal: 'over_limit' });
-    expect((await depositRow(id))?.status).toBe('submitted');
+    expect((await depositRow(large.id))?.status).toBe('credited');
+    expect(await journalsOf(large.id)).toHaveLength(1);
     await saveSettings();
+    expect((await depositRow(flagged.id))?.status).toBe('submitted');
   });
 
   it('refuses a deposit decided in the panel meanwhile (edge case 3)', async () => {

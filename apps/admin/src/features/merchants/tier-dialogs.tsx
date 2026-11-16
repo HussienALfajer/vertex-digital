@@ -246,11 +246,6 @@ export function TierSettingsDialog({
     const refused = new Set<SettingsField>(
       parsed.success ? [] : parsed.error.issues.map((issue) => issue.path[0] as SettingsField),
     );
-    if (parsed.success) {
-      for (const field of ['perDepositUsdUnits', 'dailyDepositUsdUnits'] as const) {
-        if (parsed.data[field] < minDepositUsdUnits) refused.add(field);
-      }
-    }
     if (!parsed.success || refused.size > 0) {
       setInvalid(refused);
       return focusInvalid();
@@ -283,7 +278,8 @@ export function TierSettingsDialog({
       </DialogHeader>
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
-          {NUMBERS.map(({ name, kind }) => (
+          {/* Deposit limits were removed (owner, 2026-11-16): kept in the body, not shown. */}
+          {NUMBERS.filter(({ kind }) => kind !== 'money').map(({ name, kind }) => (
             <Field key={name} invalid={invalid.has(name)}>
               <FieldLabel>{t(`merchants.tiers.settings.fields.${name}`)}</FieldLabel>
               <Input

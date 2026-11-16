@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import type { AuditEntry } from '@vertex-digital/contracts';
+import { type AuditEntry, DEPOSIT_SETTINGS_DEFAULTS } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import {
   type AdminApi,
@@ -607,7 +607,7 @@ test.describe('the review screens (audit A02)', () => {
 });
 
 test.describe('Telegram (S05 rules TC4, TC5)', () => {
-  test('the deposit settings hold the Telegram limit; decisions from the bot are marked', async ({
+  test('the deposit settings keep the retired Telegram limit unseen; decisions from the bot are marked', async ({
     page,
     admin,
   }) => {
@@ -618,13 +618,24 @@ test.describe('Telegram (S05 rules TC4, TC5)', () => {
 
     admin.reauthenticationRequired = false;
     await page.goto('/settings/deposits');
-    const limit = field(page, ar.depositSettings.fields.telegramApprovalMaxUsdUnits);
-    await expect(limit).toHaveValue('100');
-    await limit.fill('150');
+    // The amount cap, the deposit limits and the flag thresholds were removed (owner,
+    // 2026-11-16): their fields are gone and a save sends the stored values back unchanged.
+    for (const label of [
+      ar.depositSettings.fields.telegramApprovalMaxUsdUnits,
+      ar.depositSettings.fields.flagNewAccountUsdUnits,
+      ar.depositSettings.fields.newAccountPerDepositUsdUnits,
+    ]) {
+      await expect(page.getByLabel(label, { exact: true })).toHaveCount(0);
+    }
+    await field(page, ar.depositSettings.account.name).fill('متجر تجريبي');
+    await field(page, ar.depositSettings.account.number).fill('0990000000');
     await page.getByRole('button', { name: ar.depositSettings.save }).click();
-    await expect(
-      page.getByText(ar.depositSettings.errors.telegramApprovalMaxUsdUnits),
-    ).toBeVisible();
+    await expect(page.getByText(ar.depositSettings.saved)).toBeVisible();
+    expect(admin.lastBody('PUT /api/admin/deposit-settings')).toMatchObject({
+      telegramApprovalMaxUsdUnits: DEPOSIT_SETTINGS_DEFAULTS.telegramApprovalMaxUsdUnits,
+      newAccountPerDepositUsdUnits: DEPOSIT_SETTINGS_DEFAULTS.newAccountPerDepositUsdUnits,
+      flagNewAccountUsdUnits: DEPOSIT_SETTINGS_DEFAULTS.flagNewAccountUsdUnits,
+    });
   });
 });
 
@@ -738,9 +749,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await screenshot(page, testInfo, `deposit-audit-telegram-${colorScheme}`);
 
       await page.goto('/settings/deposits');
-      const limit = page.getByRole('heading', { name: ar.depositSettings.telegram.title });
-      await limit.scrollIntoViewIfNeeded();
-      await screenshot(page, testInfo, `deposit-settings-telegram-${colorScheme}`);
+      const review = page.getByRole('heading', { name: ar.depositSettings.review.title });
+      await review.scrollIntoViewIfNeeded();
+      await screenshot(page, testInfo, `deposit-settings-review-${colorScheme}`);
     });
   });
 }

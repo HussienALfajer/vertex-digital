@@ -3549,29 +3549,21 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
     });
   });
 
-  it('lets exactly one of two owner orders pass at the edge of the cap (AP7, edge case 3)', async () => {
+  it('lets parallel owner orders pass whatever the retired cap says, and counts both (owner, 2026-11-16)', async () => {
     const item = await product();
     const { usedUsdUnits } = await ownerSpentToday(db);
-    // Room for one order and a half, in whole cents.
-    await setOwnerCap(Math.ceil((usedUsdUnits + item.price * 1.5) / 10_000) * 10_000);
+    // A stored cap with room for half an order, then a cap of 0: neither refuses any more.
+    await setOwnerCap(Math.ceil((usedUsdUnits + item.price / 2) / 10_000) * 10_000);
     try {
       const results = await Promise.allSettled([
         adminBuy(adminInput(item)),
         adminBuy(adminInput(item)),
       ]);
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      const failed = results.find((result) => result.status === 'rejected');
-      const error = (failed as PromiseRejectedResult).reason as OrderError;
-      expect(error.code).toBe('OWNER_DAILY_CAP_EXCEEDED');
-      expect((error.details as { remainingUsdUnits: number }).remainingUsdUnits).toBeLessThan(
-        item.price,
-      );
-      // A cap of 0 turns owner-funded orders off.
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
       await setOwnerCap(0);
-      expect(await refusal(adminBuy(adminInput(item)))).toMatchObject({
-        code: 'OWNER_DAILY_CAP_EXCEEDED',
-        details: { remainingUsdUnits: 0 },
-      });
+      const { order } = await adminBuy(adminInput(item));
+      expect(order.status).toBe('paid');
+      expect((await ownerSpentToday(db)).usedUsdUnits).toBe(usedUsdUnits + 3 * item.price);
     } finally {
       await setOwnerCap(usd(10_000));
     }

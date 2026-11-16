@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
+  DEPOSIT_MAX_USD_UNITS,
   DEPOSIT_SETTINGS_DEFAULTS,
   QUEUES,
   ROOT_PRICE_LIST_IDS,
@@ -693,7 +694,7 @@ describe('privileges at purchase and a tier archived (S23 TS3, TS4, TS5, MG7, ed
     return { id: created.id, slug: game.slug };
   }
 
-  it('gives each tier its code quantity, check quota and deposit limits, and ends grants on an archive', async () => {
+  it('gives each tier its code quantity and check quota, no deposit limit, and ends grants on an archive', async () => {
     await archiveLevels();
     const silverList = await customList(wholesale);
     const goldList = await customList(silverList.id);
@@ -775,7 +776,8 @@ describe('privileges at purchase and a tier archived (S23 TS3, TS4, TS5, MG7, ed
       lastRequest: Date.now(),
     });
     expect(await json(await check(), 429)).toMatchObject({ code: 'PLAYER_CHECK_QUOTA_EXCEEDED' });
-    expect(await perDeposit()).toBe(TIER_SETTINGS_DEFAULTS.bronze.perDepositUsdUnits);
+    // Deposit limits were removed (owner, 2026-11-16): a tier no longer limits a deposit.
+    expect(await perDeposit()).toBe(DEPOSIT_MAX_USD_UNITS);
 
     const grantPath = `/api/admin/customers/${shop.id}/merchant/tier-grant`;
     const endsOn = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
@@ -793,7 +795,7 @@ describe('privileges at purchase and a tier archived (S23 TS3, TS4, TS5, MG7, ed
       .mockResolvedValue({ valid: true, playerName: 'Nour' });
     expect((await check()).status).toBe(200);
     expect(validate).toHaveBeenCalledTimes(1);
-    expect(await perDeposit()).toBe(TIER_SETTINGS_DEFAULTS.gold.perDepositUsdUnits);
+    expect(await perDeposit()).toBe(DEPOSIT_MAX_USD_UNITS);
     expect((await (await checkout(60)).json()) as { details?: unknown }).not.toMatchObject({
       details: { lines: { max: 50 } },
     });

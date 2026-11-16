@@ -10,6 +10,7 @@ import {
   createUsdtDepositSchema,
   DEPOSIT_FLAG_CODES,
   DEPOSIT_FLAG_DETAILS,
+  DEPOSIT_MAX_USD_UNITS,
   DEPOSIT_SETTINGS_DEFAULTS,
   DEPOSIT_STATUSES,
   type DepositStatus,
@@ -33,6 +34,8 @@ import {
   sameFlags,
   submitTxidSchema,
 } from './deposits.js';
+import { USD_CENT } from './money.js';
+import { USDT_TAIL_MAX_UNITS } from './usdt.js';
 
 const USD = 1_000_000;
 
@@ -226,44 +229,48 @@ describe('the approve, reject and request schemas', () => {
 
 describe('limits (rule SC3)', () => {
   const settings = DEPOSIT_SETTINGS_DEFAULTS;
+  const NO_LIMIT = DEPOSIT_MAX_USD_UNITS;
 
-  it('gives a new account $50 per deposit and $100 a day', () => {
+  it('keeps only the minimum: no per-deposit or daily limit (owner, 2026-11-16)', () => {
     expect(depositLimits(settings, false, 30 * USD)).toEqual({
       established: false,
       minUnits: 2 * USD,
-      perDepositUnits: 50 * USD,
-      dailyUnits: 100 * USD,
-      remainingTodayUnits: 70 * USD,
+      perDepositUnits: NO_LIMIT,
+      dailyUnits: NO_LIMIT,
+      remainingTodayUnits: NO_LIMIT,
+    });
+    // An established account and a heavy day change nothing.
+    expect(depositLimits(settings, true, 5_000 * USD)).toMatchObject({
+      established: true,
+      perDepositUnits: NO_LIMIT,
+      remainingTodayUnits: NO_LIMIT,
     });
   });
 
-  it('gives an established account $300 and $1,000, never a negative remainder', () => {
-    expect(depositLimits(settings, true, 0).perDepositUnits).toBe(300 * USD);
-    expect(depositLimits(settings, true, 1200 * USD)).toMatchObject({
-      dailyUnits: 1000 * USD,
-      remainingTodayUnits: 0,
-    });
-  });
-
-  it('names the limit a deposit breaks', () => {
+  it('names only the minimum as a breach', () => {
     const limits = depositLimits(settings, false, 60 * USD);
     expect(depositLimitBreach(limits, 1 * USD)).toEqual({
       limit: 'minimum',
       limitUnits: 2 * USD,
-      remainingUnits: 40 * USD,
+      remainingUnits: NO_LIMIT,
     });
-    expect(depositLimitBreach(limits, 60 * USD)).toEqual({
-      limit: 'per_deposit',
-      limitUnits: 50 * USD,
-      remainingUnits: 40 * USD,
-    });
-    expect(depositLimitBreach(limits, 45 * USD)).toEqual({
-      limit: 'daily',
-      limitUnits: 100 * USD,
-      remainingUnits: 40 * USD,
-    });
-    expect(depositLimitBreach(limits, 40 * USD)).toBeNull();
     expect(depositLimitBreach(limits, 2 * USD)).toBeNull();
+    expect(depositLimitBreach(limits, 10_000 * USD)).toBeNull();
+  });
+
+  it('keeps a technical ceiling that leaves room for the largest USDT tail (edge case 12)', () => {
+    expect(DEPOSIT_MAX_USD_UNITS % USD_CENT).toBe(0);
+    expect(Number.isSafeInteger(DEPOSIT_MAX_USD_UNITS + USDT_TAIL_MAX_UNITS)).toBe(true);
+    expect(Number.isSafeInteger(DEPOSIT_MAX_USD_UNITS + USD_CENT + USDT_TAIL_MAX_UNITS)).toBe(
+      false,
+    );
+    const limits = depositLimits(settings, true, 0);
+    expect(depositLimitBreach(limits, DEPOSIT_MAX_USD_UNITS)).toBeNull();
+    expect(depositLimitBreach(limits, DEPOSIT_MAX_USD_UNITS + USD_CENT)).toEqual({
+      limit: 'per_deposit',
+      limitUnits: DEPOSIT_MAX_USD_UNITS,
+      remainingUnits: DEPOSIT_MAX_USD_UNITS,
+    });
   });
 });
 
@@ -409,7 +416,8 @@ describe('USDT deposits (S04)', () => {
 
   it('take the USDT minimum in their limits (rule U5)', () => {
     const settings = { ...DEPOSIT_SETTINGS_DEFAULTS };
-    expect(depositLimitSettingsFor('sham_cash', settings).minDepositUsdUnits).toBe(2 * USD);
+    // Sham Cash keeps only a cent as its minimum (owner, 2026-11-16).
+    expect(depositLimitSettingsFor('sham_cash', settings).minDepositUsdUnits).toBe(USD_CENT);
     const usdt = depositLimitSettingsFor('usdt_trc20', settings);
     expect(usdt.minDepositUsdUnits).toBe(5 * USD);
     const limits = depositLimits(usdt, false, 0);

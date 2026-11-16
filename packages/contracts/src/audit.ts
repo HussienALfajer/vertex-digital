@@ -104,6 +104,8 @@ export const AUDIT_ENTITY_TYPES = [
   'rate_suggestion',
   'deposit_settings',
   'deposit',
+  /** An incoming USDT transfer the admin set aside (2026-11-16). */
+  'usdt_transfer',
   'store_switch',
   'telegram_link',
   'catalog_category',
@@ -628,6 +630,13 @@ export const AUDIT_DETAILS = {
   }),
   /** The admin re-sent the verification (rule U17). */
   'deposit.rechecked': deposit,
+  /** The admin set an unmatched USDT transfer aside; the entity is the transfer. */
+  'usdt_transfer.dismissed': z.strictObject({
+    transferId: z.uuid(),
+    method: z.string(),
+    txid: z.string(),
+    amountUnits: z.int().nonnegative(),
+  }),
   /** S05 rule SW2: the entity is the change row; the channel says panel or Telegram. */
   'store_switch.changed': z.strictObject({
     switch: storeSwitchSchema,

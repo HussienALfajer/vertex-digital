@@ -91,7 +91,7 @@ export function draftOf(application: MerchantApplication): MerchantDraft {
     city: application.city,
     streetAddress: application.streetAddress,
     whatsapp: application.whatsapp,
-    telegramUsername: application.telegramUsername ?? '',
+    telegramUsername: application.telegramUsername ? `@${application.telegramUsername}` : '',
     monthlyVolume: application.monthlyVolume,
     productInterests: application.productInterests,
     salesChannels: application.salesChannels,

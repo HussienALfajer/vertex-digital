@@ -153,32 +153,14 @@ export function StateChangeDialog({
   );
 }
 
-const LIMIT_FIELDS = [
-  'perDepositUsdUnits',
-  'dailyDepositUsdUnits',
-  'dailyPurchaseUsdUnits',
-] as const;
+/** Deposit limits were removed (owner, 2026-11-16): only the daily purchase cap is edited. */
+const LIMIT_FIELDS = ['dailyPurchaseUsdUnits'] as const;
 
 type LimitField = (typeof LIMIT_FIELDS)[number];
 
-const LIMIT_LABELS = {
-  perDepositUsdUnits: 'customers.limits.perDeposit',
-  dailyDepositUsdUnits: 'customers.limits.dailyDeposit',
-  dailyPurchaseUsdUnits: 'customers.limits.dailyPurchase',
-} as const satisfies Record<LimitField, string>;
-
-const EFFECTIVE_OF = {
-  perDepositUsdUnits: 'perDeposit',
-  dailyDepositUsdUnits: 'dailyDeposit',
-  dailyPurchaseUsdUnits: 'dailyPurchase',
-} as const satisfies Record<LimitField, string>;
-
 /**
- * Rule LM5: the three optional overrides typed in dollars (an empty field returns to the default)
- * and a reason, with re-authentication. Amounts go through the contracts' money helpers: whole
- * cents, USD units, never floats. The values stay on an error. A per-deposit override above the
- * daily limit that stays in force is allowed, with a warning: deposits above the daily limit are
- * still refused (LM2, audit A07-22).
+ * Rule LM5: the daily purchase override typed in dollars (an empty field returns to the default)
+ * and a reason, with re-authentication. The retired deposit overrides are sent back unchanged.
  */
 export function LimitsDialog({
   customer,
@@ -189,52 +171,29 @@ export function LimitsDialog({
 }) {
   const { t } = useTranslation();
   const update = useUpdateCustomerLimits(customer.id);
-  const [errors, setErrors] = useState<Partial<Record<LimitField | 'reason' | 'below', boolean>>>(
-    {},
-  );
+  const [errors, setErrors] = useState<Partial<Record<LimitField | 'reason', boolean>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const { ref: limitsRef, focusInvalid: focusLimits } = useFocusInvalid();
   const { limits } = customer;
-  const [typed, setTyped] = useState(() => ({
-    perDepositUsdUnits: limitInput(limits.perDepositUsdUnits),
-    dailyDepositUsdUnits: limitInput(limits.dailyDepositUsdUnits),
-  }));
-  const perDeposit = parseLimitInput(typed.perDepositUsdUnits);
-  // A typed daily override below the per-deposit one is refused ("dailyBelow"); with the daily
-  // field empty, the default the profile shows stays in force (an emptied override returns to a
-  // default the profile does not show, so nothing is said then).
-  const dailyInForce =
-    parseLimitInput(typed.dailyDepositUsdUnits) === null && limits.dailyDepositUsdUnits === null
-      ? limits.effective.dailyDeposit.units
-      : null;
-  const aboveDaily =
-    typeof perDeposit === 'number' && dailyInForce !== null && perDeposit > dailyInForce;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
     const form = new FormData(event.currentTarget);
-    const values = Object.fromEntries(
-      LIMIT_FIELDS.map((field) => [field, parseLimitInput(String(form.get(field) ?? ''))]),
-    ) as Record<LimitField, number | null | undefined>;
-    const body = { ...values, reason: String(form.get('reason') ?? '') };
+    const dailyPurchaseUsdUnits = parseLimitInput(String(form.get('dailyPurchaseUsdUnits') ?? ''));
+    const body = {
+      perDepositUsdUnits: limits.perDepositUsdUnits,
+      dailyDepositUsdUnits: limits.dailyDepositUsdUnits,
+      dailyPurchaseUsdUnits,
+      reason: String(form.get('reason') ?? ''),
+    };
     const parsed = updateCustomerLimitsSchema.safeParse(body);
     const paths = new Set((parsed.error?.issues ?? []).map((issue) => issue.path[0]));
-    const below =
-      typeof values.perDepositUsdUnits === 'number' &&
-      typeof values.dailyDepositUsdUnits === 'number' &&
-      values.perDepositUsdUnits > values.dailyDepositUsdUnits;
-    const next = {
-      perDepositUsdUnits:
-        values.perDepositUsdUnits === undefined || paths.has('perDepositUsdUnits'),
-      dailyDepositUsdUnits:
-        values.dailyDepositUsdUnits === undefined || (paths.has('dailyDepositUsdUnits') && !below),
+    setErrors({
       dailyPurchaseUsdUnits:
-        values.dailyPurchaseUsdUnits === undefined || paths.has('dailyPurchaseUsdUnits'),
+        dailyPurchaseUsdUnits === undefined || paths.has('dailyPurchaseUsdUnits'),
       reason: paths.has('reason'),
-      below,
-    };
-    setErrors(next);
+    });
     if (!parsed.success) return focusLimits();
     try {
       await update.mutateAsync(parsed.data);
@@ -244,6 +203,7 @@ export function LimitsDialog({
     }
   }
 
+  const effective = limits.effective.dailyPurchase;
   return (
     <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] overflow-y-auto">
       <DialogHeader>
@@ -251,57 +211,29 @@ export function LimitsDialog({
         <DialogDescription>{t('customers.limits.dialogDescription')}</DialogDescription>
       </DialogHeader>
       <form ref={limitsRef} className="flex flex-col gap-5" onSubmit={submit} noValidate>
-        {LIMIT_FIELDS.map((field) => {
-          const effective = limits.effective[EFFECTIVE_OF[field]];
-          const wrong = !!errors[field] || (field === 'dailyDepositUsdUnits' && !!errors.below);
-          return (
-            <Field key={field} invalid={wrong}>
-              <FieldLabel>{t(LIMIT_LABELS[field])}</FieldLabel>
-              <Input
-                name={field}
-                dir="ltr"
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder={t('customers.limits.placeholder')}
-                defaultValue={limitInput(limits[field])}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (field !== 'dailyPurchaseUsdUnits') {
-                    setTyped((current) => ({ ...current, [field]: value }));
-                  }
-                }}
-              />
-              <FieldDescription>
-                {t('customers.limits.current', {
-                  value:
-                    effective.units === null
-                      ? t('customers.limits.noCap')
-                      : ltr(formatUsd(effective.units)),
-                  source: limitSourceLabel(
-                    t,
-                    effective.source,
-                    customer.merchant?.tier.tier ?? null,
-                  ),
-                })}
-              </FieldDescription>
-              <FieldError match={wrong}>
-                {errors.below && field === 'dailyDepositUsdUnits' && !errors[field]
-                  ? t('customers.limits.dailyBelow')
-                  : t('customers.limits.fieldError')}
-              </FieldError>
-            </Field>
-          );
-        })}
-        {aboveDaily && dailyInForce !== null && (
-          <Callout
-            tone="warning"
-            icon={<TriangleAlertIcon />}
-            title={t('customers.limits.aboveDaily')}
-            description={t('customers.limits.aboveDailyBody', {
-              daily: ltr(formatUsd(dailyInForce)),
-            })}
+        <Field invalid={!!errors.dailyPurchaseUsdUnits}>
+          <FieldLabel>{t('customers.limits.dailyPurchase')}</FieldLabel>
+          <Input
+            name="dailyPurchaseUsdUnits"
+            dir="ltr"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder={t('customers.limits.placeholder')}
+            defaultValue={limitInput(limits.dailyPurchaseUsdUnits)}
           />
-        )}
+          <FieldDescription>
+            {t('customers.limits.current', {
+              value:
+                effective.units === null
+                  ? t('customers.limits.noCap')
+                  : ltr(formatUsd(effective.units)),
+              source: limitSourceLabel(t, effective.source, customer.merchant?.tier.tier ?? null),
+            })}
+          </FieldDescription>
+          <FieldError match={!!errors.dailyPurchaseUsdUnits}>
+            {t('customers.limits.fieldError')}
+          </FieldError>
+        </Field>
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('customers.dialogs.reason')}</FieldLabel>
           <Textarea name="reason" rows={3} maxLength={500} />

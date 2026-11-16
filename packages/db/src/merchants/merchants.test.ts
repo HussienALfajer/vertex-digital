@@ -304,7 +304,18 @@ describe('merchant applications (MA1–MA4)', () => {
     const phone = `+9639${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
     await customer(phone);
     const id = await application(await customer(phone));
-    const page = await applicationQueue(db, { status: 'under_review', after: null, limit: 500 });
+    // The test database keeps every run's applications: walk the pages (the keyset cursor) until
+    // this one, so the check does not depend on how many earlier runs left under review.
+    const page: Awaited<ReturnType<typeof applicationQueue>> = [];
+    let after: { at: string; id: string } | null = null;
+    for (;;) {
+      const rows = await applicationQueue(db, { status: 'under_review', after, limit: 200 });
+      const shown = rows.slice(0, 200);
+      page.push(...shown);
+      const last = shown.at(-1);
+      if (rows.length <= 200 || !last || shown.some((item) => item.id === id)) break;
+      after = { at: last.cursorAt, id: last.id };
+    }
     const row = page.find((item) => item.id === id);
     expect(row).toMatchObject({ frozen: false, newAccount: true });
     expect(row?.sharedPhone).toBeGreaterThanOrEqual(1);

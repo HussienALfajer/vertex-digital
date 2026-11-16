@@ -733,11 +733,12 @@ export type MerchantTierSummary = z.infer<typeof merchantTierSummarySchema>;
 
 /* The Diamond contact (OP4, decision 12) ---------------------------------------------------- */
 
-/** OP4: a Telegram username as `t.me` takes it. */
+/** OP4: a Telegram username as `t.me` takes it; a leading `@` is accepted and dropped. */
 export const telegramUsernameSchema = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9_]{5,32}$/);
+  .transform((value) => value.replace(/^@/, ''))
+  .pipe(z.string().regex(/^[A-Za-z0-9_]{5,32}$/));
 
 /**
  * OP4: the contact buttons' links from the merchant settings (an E.164 number, a username); null

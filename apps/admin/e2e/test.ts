@@ -432,6 +432,8 @@ export class AdminApi {
     { events: [], delayMs: 0, retryMs: null };
   /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
   usdtTransfers: (Record<string, unknown> & { id: string; txid: string; method: string })[] = [];
+  /** The transfers the admin set aside, by id, with the reason (owner request 2026-11-16). */
+  dismissedTransfers = new Map<string, string>();
   /** The transaction numbers already claimed (rule SC14). */
   readonly claimedReferences = new Set<string>();
   private readonly decisionKeys = new Map<string, string>();
@@ -898,7 +900,13 @@ export class AdminApi {
           ? { kind: 'deposit', id: deposit.id, customer }
           : null;
       const state =
-        adjustment || deposit?.status === 'credited' ? 'credited' : deposit ? 'bound' : 'unmatched';
+        adjustment || deposit?.status === 'credited'
+          ? 'credited'
+          : deposit
+            ? 'bound'
+            : this.dismissedTransfers.has(transfer.id)
+              ? 'dismissed'
+              : 'unmatched';
       return {
         ...transfer,
         state,
@@ -1024,6 +1032,21 @@ export class AdminApi {
         customerId: CUSTOMER_ID,
         journalId: result.adjustment.id,
       });
+    }
+    const dismissal = /^\/api\/admin\/usdt-transfers\/([^/]+)\/dismiss$/.exec(path);
+    if (dismissal && request.method() === 'POST') {
+      const id = dismissal[1] as string;
+      const transfer = this.transfersWithState().find((item) => item.id === id);
+      if (!transfer) return json(404, { statusCode: 404, code: 'NOT_FOUND', message: 'NOT_FOUND' });
+      if (transfer.state !== 'unmatched') {
+        return json(409, {
+          statusCode: 409,
+          code: 'USDT_TRANSFER_NOT_UNMATCHED',
+          message: 'USDT_TRANSFER_NOT_UNMATCHED',
+        });
+      }
+      this.dismissedTransfers.set(id, (body as { reason: string }).reason);
+      return route.fulfill({ status: 204 });
     }
     if (key === 'GET /api/admin/usdt-transfers') {
       const state = url.searchParams.get('state') ?? 'unmatched';

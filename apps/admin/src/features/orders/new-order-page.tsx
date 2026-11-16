@@ -861,17 +861,11 @@ function Summary({
   const short = total !== null && !ownerFunded && !!customer && total > customer.balanceUsdUnits;
   const capLeft = customer?.purchaseCapLeftUsdUnits ?? null;
   const overCustomerCap = total !== null && !ownerFunded && capLeft !== null && total > capLeft;
-  const overOwnerCap =
-    total !== null &&
-    ownerFunded &&
-    !!context &&
-    context.owner.usedTodayUsdUnits + total > context.owner.capUsdUnits;
   return (
     <>
       {failed && <Retry message={t('orders.buy.contextFailed')} onRetry={onRetry} />}
       {short && <FormAlert>{t('orders.buy.shortBalance')}</FormAlert>}
       {overCustomerCap && <FormAlert>{t('orders.buy.overCustomerCap')}</FormAlert>}
-      {overOwnerCap && <FormAlert>{t('orders.buy.overOwnerCap')}</FormAlert>}
       <SummaryTable total={total} ownerFunded={ownerFunded} context={context} />
     </>
   );
@@ -909,10 +903,7 @@ function SummaryTable({
           </dt>
           <dd className="font-medium tabular-nums">
             {ownerFunded
-              ? t('orders.buy.ownerTodayValue', {
-                  used: usd(context.owner.usedTodayUsdUnits + total),
-                  cap: usd(context.owner.capUsdUnits),
-                })
+              ? usd(context.owner.usedTodayUsdUnits + total)
               : context.customer
                 ? usd(context.customer.balanceUsdUnits - total)
                 : '—'}

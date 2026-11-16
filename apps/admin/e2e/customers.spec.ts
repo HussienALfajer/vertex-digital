@@ -89,8 +89,10 @@ test.describe('the profile (CS3–CS5)', () => {
     await page.getByRole('link', { name: 'سارة الأحمد' }).click();
     await expect(page.getByRole('heading', { name: 'سارة الأحمد', level: 1 })).toBeVisible();
     await expect(page.getByText(c.chips.established).first()).toBeVisible();
-    await expect(page.getByText(c.limits.sources.default_established).first()).toBeVisible();
+    // Only the daily purchase cap is shown: the deposit limits were removed (owner, 2026-11-16).
     await expect(page.getByText(c.limits.sources.none)).toBeVisible();
+    await expect(page.getByText(c.limits.perDeposit)).toHaveCount(0);
+    await expect(page.getByText(c.limits.dailyDeposit)).toHaveCount(0);
     await expect(page.getByText(fill(c.signals.sharedPhone, { count: 1 }))).toBeVisible();
     await expect(page.getByText(fill(c.signals.sharedIp, { count: 1 }))).toBeVisible();
     await expect(page.getByText(c.signals.natHint)).toBeVisible();
@@ -173,28 +175,25 @@ test.describe('the profile (CS3–CS5)', () => {
 
     await action(page, c.actions.limits);
     const limits = page.getByRole('dialog');
-    await limits.getByLabel(c.limits.perDeposit).fill('500');
-    await limits.getByLabel(c.limits.dailyDeposit).fill('100');
+    // Only the daily purchase cap is edited (owner, 2026-11-16).
+    await expect(limits.getByLabel(c.limits.perDeposit)).toHaveCount(0);
     await limits.getByLabel(c.limits.dailyPurchase).fill('1.005');
     await limits.getByLabel(c.dialogs.reason).fill('عميل موثوق بحجم أكبر');
     await limits.getByRole('button', { name: c.limits.submit }).click();
-    await expect(limits.getByText(c.limits.dailyBelow)).toBeVisible();
     await expect(limits.getByText(c.limits.fieldError)).toBeVisible();
-    // The focus goes to the first refused field a frame after the errors show: typing in the
-    // next field before then would land in this one.
-    await expect(limits.getByLabel(c.limits.dailyDeposit)).toBeFocused();
-    await limits.getByLabel(c.limits.dailyDeposit).fill('1000');
+    await expect(limits.getByLabel(c.limits.dailyPurchase)).toBeFocused();
     await limits.getByLabel(c.limits.dailyPurchase).fill('20');
     await limits.getByRole('button', { name: c.limits.submit }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    // The retired deposit overrides go back as they were.
     expect(admin.lastBody(`PUT /api/admin/customers/${CUSTOMER_IDS.sara}/limits`)).toEqual({
-      perDepositUsdUnits: 500_000_000,
-      dailyDepositUsdUnits: 1_000_000_000,
+      perDepositUsdUnits: null,
+      dailyDepositUsdUnits: null,
       dailyPurchaseUsdUnits: 20_000_000,
       reason: 'عميل موثوق بحجم أكبر',
     });
-    await expect(page.getByText('$500.00')).toBeVisible();
-    await expect(page.getByText(c.limits.sources.custom)).toHaveCount(3);
+    await expect(page.getByText('$20.00')).toBeVisible();
+    await expect(page.getByText(c.limits.sources.custom)).toHaveCount(1);
 
     await action(page, c.actions.unfreeze);
     await page.getByRole('dialog').getByLabel(c.dialogs.reason).fill('انتهى التحقق بنجاح');
@@ -448,22 +447,16 @@ test.describe('audit A07', () => {
     await expect(dialog.getByLabel(c.dialogs.reason)).toBeFocused();
   });
 
-  test('warns that a per-deposit limit above the daily one still leaves deposits refused (A07-22)', async ({
+  test('edits only the daily purchase cap: the deposit limits were removed (owner, 2026-11-16)', async ({
     page,
     admin,
   }) => {
     await open(page, admin, `/customers/${CUSTOMER_IDS.layla}`);
     await action(page, c.actions.limits);
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel(c.limits.perDeposit).fill('80');
-    await expect(dialog.getByText(c.limits.aboveDaily)).toHaveCount(0);
-    // A new account: $100 a day by default.
-    await dialog.getByLabel(c.limits.perDeposit).fill('500');
-    await expect(dialog.getByText(c.limits.aboveDaily)).toBeVisible();
-    await expect(
-      dialog.getByText(fill(c.limits.aboveDailyBody, { daily: '⁦$100.00⁩' })),
-    ).toBeVisible();
-    await dialog.getByLabel(c.limits.dailyDeposit).fill('600');
+    await expect(dialog.getByLabel(c.limits.dailyPurchase)).toBeVisible();
+    await expect(dialog.getByLabel(c.limits.perDeposit)).toHaveCount(0);
+    await expect(dialog.getByLabel(c.limits.dailyDeposit)).toHaveCount(0);
     await expect(dialog.getByText(c.limits.aboveDaily)).toHaveCount(0);
   });
 

@@ -95,7 +95,7 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
     reapplyWaitDays: String(saved.reapplyWaitDays),
     infoExpiryDays: String(saved.infoExpiryDays),
     directContactWhatsapp: saved.directContactWhatsapp ?? '',
-    directContactTelegram: saved.directContactTelegram ?? '',
+    directContactTelegram: saved.directContactTelegram ? `@${saved.directContactTelegram}` : '',
   }));
   const [invalid, setInvalid] = useState<Set<SettingsField>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);

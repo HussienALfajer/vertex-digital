@@ -46,6 +46,7 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   email_outbox: 'A delivery record: its status changes, it is never archived (S01)',
   usdt_deposits: 'Part of its deposit (S04): never archived, keyed by the deposit',
   usdt_transfers: 'Append-only (S04): what the chain showed, never changed',
+  usdt_transfer_dismissals: 'Append-only (2026-11-16): a transfer set aside once, never undone',
   usdt_scan_cursors: "A scanner's position (S04): overwritten each run, safe to move back",
   customer_notifications: 'A delivery record (S05 NT1): only read_at changes, never archived',
   notification_preferences:
@@ -156,6 +157,7 @@ const NATURAL_KEYS: Record<string, string> = {
   worker_heartbeats: 'Keyed by the worker name: one row per process, upserted by the heartbeat',
   usdt_deposits: 'Keyed by its deposit: one row per USDT deposit (S04)',
   usdt_scan_cursors: 'Keyed by the network: one cursor per scanner (S04)',
+  usdt_transfer_dismissals: 'Keyed by its transfer: one dismissal per transfer (2026-11-16)',
   telegram_updates: "Keyed by Telegram's update id: one row per handled update (S05 TG5)",
   telegram_deposit_cards: 'Keyed by deposit and submission: one card per submission (S05 TC1)',
   telegram_bot_state: 'One row, id 1 (S05 RM3)',
@@ -196,6 +198,7 @@ const APPEND_ONLY_TABLES = [
   'deposit_flags',
   'stored_files',
   'usdt_transfers',
+  'usdt_transfer_dismissals',
   'store_switch_changes',
   'supplier_credentials',
   'supplier_cost_changes',

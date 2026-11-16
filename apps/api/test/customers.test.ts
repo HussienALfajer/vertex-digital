@@ -1,5 +1,9 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { DEPOSIT_SETTINGS_DEFAULTS, USDT_NETWORKS } from '@vertex-digital/contracts';
+import {
+  DEPOSIT_MAX_USD_UNITS,
+  DEPOSIT_SETTINGS_DEFAULTS,
+  USDT_NETWORKS,
+} from '@vertex-digital/contracts';
 import {
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -367,7 +371,7 @@ describe('freezing (CF1–CF6)', () => {
 });
 
 describe('limits (LM2–LM5)', () => {
-  it('overrides the deposit limits and caps purchases, with before and after audited', async () => {
+  it('stores the deposit overrides, caps purchases, and audits before and after', async () => {
     const someone = await customer();
     const limits = await json<{ effective: Record<string, { units: number; source: string }> }>(
       await setLimits(someone.id, {
@@ -386,7 +390,8 @@ describe('limits (LM2–LM5)', () => {
       await client.get('/api/deposits/sham-cash/options', { cookie: someone.cookie }),
       200,
     );
-    expect(options.limits.perDepositUnits).toBe(500 * USD);
+    // Deposit limits were removed (owner, 2026-11-16): a stored override no longer limits a deposit.
+    expect(options.limits.perDepositUnits).toBe(DEPOSIT_MAX_USD_UNITS);
     const [entry] = (await auditOf(test.db, someone.id)).filter(
       (row) => row.action === 'customer.limits_changed',
     );

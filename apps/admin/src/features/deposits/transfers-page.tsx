@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   EmptyState,
@@ -35,10 +36,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Textarea,
   ToggleGroup,
   ToggleGroupItem,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, InboxIcon, NotebookPenIcon } from 'lucide-react';
+import { ArrowRightIcon, EyeOffIcon, InboxIcon, NotebookPenIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
@@ -46,13 +48,14 @@ import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import { AdjustDialog } from '../wallet/adjust-dialog';
 import { walletQuery, walletSearchQuery } from '../wallet/wallet.queries';
-import { usdtTransferListQuery } from './deposits.queries';
+import { usdtTransferListQuery, useDismissUsdtTransfer } from './deposits.queries';
 import type { TransferSearch } from './transfer-search';
 import { CandidateList, ExplorerLink, usdtText } from './usdt-panels';
 
 const STATE_TONES: Record<UsdtTransferState, NonNullable<BadgeProps['tone']>> = {
   credited: 'success',
   bound: 'info',
+  dismissed: 'neutral',
   unmatched: 'warning',
 };
 
@@ -77,6 +80,7 @@ export function TransfersPage({
   );
   const transfers = list.data?.pages.flatMap((page) => page.items) ?? [];
   const [recording, setRecording] = useState<AdminUsdtTransfer | null>(null);
+  const [dismissing, setDismissing] = useState<AdminUsdtTransfer | null>(null);
   const networks = [
     { value: 'all', label: t('deposits.transfers.allNetworks') },
     ...USDT_METHODS.map((item) => ({ value: item, label: t(`wallets.methods.${item}`) })),
@@ -166,7 +170,12 @@ export function TransfersPage({
           </TableHeader>
           <TableBody>
             {transfers.map((transfer) => (
-              <TransferRow key={transfer.id} transfer={transfer} onRecord={setRecording} />
+              <TransferRow
+                key={transfer.id}
+                transfer={transfer}
+                onRecord={setRecording}
+                onDismiss={setDismissing}
+              />
             ))}
           </TableBody>
         </Table>
@@ -186,6 +195,9 @@ export function TransfersPage({
           <ManualDepositDialog transfer={recording} onDone={() => setRecording(null)} />
         )}
       </Dialog>
+      <Dialog open={dismissing !== null} onOpenChange={(open) => !open && setDismissing(null)}>
+        {dismissing && <DismissDialog transfer={dismissing} onDone={() => setDismissing(null)} />}
+      </Dialog>
     </>
   );
 }
@@ -193,9 +205,11 @@ export function TransfersPage({
 function TransferRow({
   transfer,
   onRecord,
+  onDismiss,
 }: {
   transfer: AdminUsdtTransfer;
   onRecord: (transfer: AdminUsdtTransfer) => void;
+  onDismiss: (transfer: AdminUsdtTransfer) => void;
 }) {
   const { t } = useTranslation();
   const unmatched = transfer.state === 'unmatched';
@@ -254,10 +268,16 @@ function TransferRow({
             <div className="flex flex-col gap-3 py-1">
               <p className="text-sm font-medium">{t('deposits.transfers.candidates')}</p>
               <CandidateList candidates={transfer.candidates} />
-              <Button variant="outline" className="self-start" onClick={() => onRecord(transfer)}>
-                <NotebookPenIcon />
-                {t('deposits.transfers.record')}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => onRecord(transfer)}>
+                  <NotebookPenIcon />
+                  {t('deposits.transfers.record')}
+                </Button>
+                <Button variant="ghost" onClick={() => onDismiss(transfer)}>
+                  <EyeOffIcon />
+                  {t('deposits.transfers.dismiss')}
+                </Button>
+              </div>
             </div>
           </TableCell>
         </TableRow>
@@ -403,5 +423,44 @@ function CustomerSearch({ onPick }: { onPick: (customerId: string) => void }) {
         </Button>
       ))}
     </div>
+  );
+}
+
+/** Sets an unmatched transfer aside with a reason: it leaves this list and the dashboard. */
+function DismissDialog({ transfer, onDone }: { transfer: AdminUsdtTransfer; onDone: () => void }) {
+  const { t } = useTranslation();
+  const dismiss = useDismissUsdtTransfer(transfer.id);
+  const [missing, setMissing] = useState(false);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const reason = String(new FormData(event.currentTarget).get('reason') ?? '').trim();
+    setMissing(reason.length === 0);
+    if (reason.length === 0) return;
+    dismiss.mutate({ reason }, { onSuccess: onDone });
+  }
+
+  return (
+    <DialogContent closeLabel={t('common.close')}>
+      <DialogHeader>
+        <DialogTitle>{t('deposits.transfers.dismissTitle')}</DialogTitle>
+        <DialogDescription>
+          {t('deposits.transfers.dismissBody', { amount: usdtText(transfer.amountUnits) })}
+        </DialogDescription>
+      </DialogHeader>
+      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <Field invalid={missing}>
+          <FieldLabel>{t('deposits.transfers.dismissReason')}</FieldLabel>
+          <Textarea name="reason" rows={2} maxLength={500} autoFocus />
+          <FieldError match={missing}>{t('deposits.transfers.dismissRequired')}</FieldError>
+        </Field>
+        {dismiss.isError && <FormAlert>{errorMessage(t, dismiss.error)}</FormAlert>}
+        <DialogFooter>
+          <Button type="submit" disabled={dismiss.isPending}>
+            {t('deposits.transfers.dismissConfirm')}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }
