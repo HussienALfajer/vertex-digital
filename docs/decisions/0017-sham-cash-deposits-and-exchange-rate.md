@@ -1,6 +1,6 @@
 # 0017 — Sham Cash deposits and the exchange rate in V1
 
-Status: Accepted · Date: 2026-10-08 · Amends [0003](0003-money-currencies-and-ledger.md), [0006](0006-payments-and-deposits.md)
+Status: Accepted · Date: 2026-10-08 · Amends [0003](0003-money-currencies-and-ledger.md), [0006](0006-payments-and-deposits.md) · Amended by [0041](0041-automatic-exchange-rate-updates.md) (automatic rate updates)
 
 ## Context
 The S03 spec (F04, F05) settled the open questions on the exchange rate (Q6), the Sham Cash account (Q4), the deposit limits (Q5, Sham Cash part) and the review hours (Q9) with the owner. Some answers change rules that ADR 0003 and ADR 0006 left open or stated differently:
