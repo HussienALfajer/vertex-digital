@@ -284,6 +284,7 @@
       "DEPOSIT_ALREADY_PENDING": "لدى العميل إيداع آخر بانتظار الإيصال، فلا يمكن إعادة هذا الإيداع إليه. ارفضه بدلًا من ذلك.",
       "TOO_MANY_DEPOSITS_IN_REVIEW": "لدى العميل 3 إيداعات قيد المراجعة.",
       "DEPOSIT_STATE_CONFLICT": "تغيّرت حالة الإيداع. أعد تحميل الصفحة.",
+      "USDT_TRANSFER_NOT_UNMATCHED": "لم يعد هذا التحويل غير مطابق. أعد تحميل الصفحة.",
       "DEPOSIT_CREDIT_CHANGED": "تغيّر سعر الصرف منذ فتحت الصفحة، فتغيّر المبلغ الذي سيُضاف. أعد تحميل الصفحة وراجع المبلغ قبل الاعتماد.",
       "RECEIPT_INVALID": "الملف ليس صورة صالحة. ارفع صورة JPEG أو PNG أو WebP.",
       "PAYLOAD_TOO_LARGE": "الملف أكبر من 5 ميغابايت.",
@@ -536,6 +537,7 @@
       "rate_suggestion": "اقتراح سعر",
       "deposit_settings": "إعدادات الإيداع",
       "deposit": "إيداع",
+      "usdt_transfer": "تحويل USDT",
       "store_switch": "مفتاح المتجر",
       "telegram_link": "ربط تيليجرام",
       "catalog_category": "فئة",
@@ -734,6 +736,7 @@
       "deposit.transfer_bound": "ربط تحويل USDT بإيداع",
       "deposit.txid_bounced": "رفض رقم عملية USDT تلقائيًا",
       "deposit.rechecked": "إعادة التحقق من إيداع USDT",
+      "usdt_transfer.dismissed": "تجاهل تحويل USDT غير مطابق",
       "store_switch.changed": "تغيير مفتاح في المتجر",
       "telegram.link_code_created": "إنشاء رابط ربط تيليجرام",
       "telegram.linked": "ربط حساب تيليجرام",
@@ -2054,6 +2057,7 @@
       "states": {
         "credited": "مُضاف",
         "bound": "قيد المراجعة",
+        "dismissed": "مُتجاهَل",
         "unmatched": "غير مطابق"
       },
       "candidates": "قد يخص هذا التحويل:",
@@ -2061,7 +2065,14 @@
       "pickCustomer": "اختر العميل الذي يُسجَّل له التحويل ({{amount}}).",
       "candidateCustomers": "عملاء الإيداعات المرشحة",
       "searchCustomer": "ابحث عن عميل بالاسم أو البريد أو الهاتف",
-      "noCustomers": "لا عملاء مطابقون."
+      "noCustomers": "لا عملاء مطابقون.",
+      "dismiss": "تجاهل",
+      "dismissTitle": "تجاهل هذا التحويل",
+      "dismissBody": "يختفي التحويل ({{amount}}) من قائمة غير المطابقة ومن تنبيه لوحة التحكم، ويبقى مسجلًا في «الكل». يمكن تسجيله إيداعًا يدويًا لاحقًا.",
+      "dismissReason": "السبب",
+      "dismissRequired": "اكتب سبب التجاهل.",
+      "dismissConfirm": "تجاهل التحويل",
+      "dismissed": "تم تجاهل التحويل"
     }
   },
   "depositSettings": {

@@ -1280,13 +1280,20 @@ export const requestReceiptSchema = z
 export type RequestReceipt = z.input<typeof requestReceiptSchema>;
 
 /** Where a recorded USDT transfer stands (rule U13), derived, never stored. */
-export const USDT_TRANSFER_STATES = ['credited', 'bound', 'unmatched'] as const;
+export const USDT_TRANSFER_STATES = ['credited', 'bound', 'dismissed', 'unmatched'] as const;
 
 export const usdtTransferStateSchema = z
   .enum(USDT_TRANSFER_STATES)
   .meta({ id: 'UsdtTransferState' });
 
 export type UsdtTransferState = z.infer<typeof usdtTransferStateSchema>;
+
+/** `POST /api/admin/usdt-transfers/:id/dismiss`: sets an unmatched transfer aside, with a reason. */
+export const dismissUsdtTransferSchema = z
+  .object({ reason: z.string().trim().min(1).max(500) })
+  .meta({ id: 'DismissUsdtTransfer' });
+
+export type DismissUsdtTransfer = z.input<typeof dismissUsdtTransferSchema>;
 
 /** `GET /api/admin/usdt-transfers`: unmatched by default, newest first. */
 export const adminUsdtTransferQuerySchema = cursorQuerySchema

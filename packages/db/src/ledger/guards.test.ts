@@ -266,6 +266,7 @@ describe('append-only trigger', () => {
       'treasury_movements',
       // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
       'usdt_deposits',
+      'usdt_transfer_dismissals',
       'usdt_transfers',
       'wallet_adjustments',
     ]);

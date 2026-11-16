@@ -1168,6 +1168,7 @@
                 "deposit.transfer_bound",
                 "deposit.txid_bounced",
                 "deposit.rechecked",
+                "usdt_transfer.dismissed",
                 "store_switch.changed",
                 "telegram.link_code_created",
                 "telegram.linked",
@@ -1352,6 +1353,7 @@
                 "rate_suggestion",
                 "deposit_settings",
                 "deposit",
+                "usdt_transfer",
                 "store_switch",
                 "telegram_link",
                 "catalog_category",
@@ -3058,6 +3060,39 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/usdt-transfers/{id}/dismiss": {
+      "post": {
+        "operationId": "DepositsAdminController_dismissTransfer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissUsdtTransfer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Set aside"
           }
         },
         "tags": [
@@ -20429,6 +20464,7 @@
           "deposit.transfer_bound",
           "deposit.txid_bounced",
           "deposit.rechecked",
+          "usdt_transfer.dismissed",
           "store_switch.changed",
           "telegram.link_code_created",
           "telegram.linked",
@@ -20608,6 +20644,7 @@
           "rate_suggestion",
           "deposit_settings",
           "deposit",
+          "usdt_transfer",
           "store_switch",
           "telegram_link",
           "catalog_category",
@@ -24686,6 +24723,19 @@
           "acknowledgedFlags"
         ]
       },
+      "DismissUsdtTransfer": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "AdminUsdtTransferQuery": {
         "type": "object",
         "properties": {
@@ -24866,6 +24916,7 @@
         "enum": [
           "credited",
           "bound",
+          "dismissed",
           "unmatched"
         ]
       },

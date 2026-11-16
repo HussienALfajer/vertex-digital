@@ -96,6 +96,8 @@ export const ERROR_CODES = [
   'TOO_MANY_DEPOSITS_IN_REVIEW',
   /** The deposit's status does not allow this change; `details.status` (S03 "Deposit states"). */
   'DEPOSIT_STATE_CONFLICT',
+  /** The USDT transfer is no longer unmatched (credited, bound or already set aside). */
+  'USDT_TRANSFER_NOT_UNMATCHED',
   /** The credit an approval would post is not the one the panel showed: the rate moved (F4-4). */
   'DEPOSIT_CREDIT_CHANGED',
   /** The upload is not a decodable JPEG, PNG or WebP image (rule SC8). */

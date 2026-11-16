@@ -19,6 +19,7 @@ import {
   ApiAcceptedResponse,
   ApiBody,
   ApiConsumes,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiProduces,
   ApiTags,
@@ -36,6 +37,7 @@ import {
   approveUsdtDepositSchema,
   depositSettingsInputSchema,
   depositSettingsSchema,
+  dismissUsdtTransferSchema,
   rejectDepositSchema,
   requestReceiptSchema,
   storedFileRefSchema,
@@ -266,6 +268,20 @@ export class DepositsAdminController {
   })
   recheck(@CurrentAdmin() admin: AdminIdentity, @Param('id') id: string, @Req() request: Request) {
     return this.usdt.recheck(admin.id, id, requestMeta(request));
+  }
+
+  @Post('usdt-transfers/:id/dismiss')
+  @AdminRoute()
+  @HttpCode(204)
+  @Header('cache-control', 'no-store')
+  @ApiNoContentResponse({ description: 'Set aside' })
+  async dismissTransfer(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @Body({ schema: dismissUsdtTransferSchema }) body: z.output<typeof dismissUsdtTransferSchema>,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.usdt.dismiss(admin.id, id, body, requestMeta(request));
   }
 
   @Get('usdt-transfers')

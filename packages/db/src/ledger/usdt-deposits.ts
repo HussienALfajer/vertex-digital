@@ -50,13 +50,16 @@ export function usdtCandidateMatch(method: UsdtMethod, amountUnits: number): SQL
 /**
  * A recorded transfer's state (rule U13), for the lists and the badge: `credited` once its TXID is
  * claimed (by a deposit or an S02 manual deposit), `bound` while an open deposit holds it, else
- * `unmatched` (a rejected deposit leaves its transfer unmatched: its owner can still be credited).
+ * `dismissed` once the admin set it aside, else `unmatched` (a rejected deposit leaves its transfer
+ * unmatched: its owner can still be credited).
  * Written with qualified names: it is used in select lists, where Drizzle drops table names.
  */
 export const usdtTransferState = sql<UsdtTransferState>`case
   when ${txidClaimed(sql`usdt_transfers.txid`)} then 'credited'
   when exists (select 1 from usdt_deposits as bound
     where bound.transfer_id = usdt_transfers.id and bound.deposit_open) then 'bound'
+  when exists (select 1 from usdt_transfer_dismissals as dismissed
+    where dismissed.transfer_id = usdt_transfers.id) then 'dismissed'
   else 'unmatched' end`;
 
 /**

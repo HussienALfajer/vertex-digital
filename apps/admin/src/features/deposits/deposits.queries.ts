@@ -9,6 +9,7 @@ import type {
   ApproveDeposit,
   ApproveUsdtDeposit,
   DepositSettingsInput,
+  DismissUsdtTransfer,
   RejectDeposit,
   RequestReceipt,
   StoredFileRef,
@@ -168,6 +169,28 @@ export function useRecheckDeposit(id: string) {
         call(api.POST('/api/admin/deposits/{id}/recheck', { params: { path: { id } } })),
       ),
     onSettled: invalidate,
+  });
+}
+
+/** Sets an unmatched USDT transfer aside with a reason (no money moves). */
+export function useDismissUsdtTransfer(id: string) {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (body: DismissUsdtTransfer) =>
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/usdt-transfers/{id}/dismiss', {
+            params: { path: { id } },
+            body,
+          }),
+        ),
+      ),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['deposits'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]),
   });
 }
 

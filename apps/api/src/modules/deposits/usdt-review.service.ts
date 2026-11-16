@@ -4,6 +4,7 @@ import {
   type AdminUsdtTransferPage,
   type AdminUsdtTransferQuery,
   type ApproveUsdtDeposit,
+  type DismissUsdtTransfer,
   floorToWholeCents,
   sameFlags,
   type UsdtMethod,
@@ -20,6 +21,7 @@ import {
   recordAudit,
   txidHolders,
   usdtDeposits,
+  usdtTransferDismissals,
   usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
@@ -42,6 +44,10 @@ import {
   type UsdtCandidateRow,
   usdtCandidateRows,
 } from './usdt-records.js';
+
+const transferNotFound = () => new CodedException(404, 'NOT_FOUND', 'No such transfer');
+const notUnmatched = () =>
+  new CodedException(409, 'USDT_TRANSFER_NOT_UNMATCHED', 'The transfer is not unmatched');
 
 /** Thrown inside the approval's transaction when its key decided first: answered as a replay. */
 class AlreadyDecided extends Error {}
@@ -195,6 +201,50 @@ export class UsdtReviewService {
       return deposit;
     });
     return this.review.view(row);
+  }
+
+  /**
+   * `POST /api/admin/usdt-transfers/:id/dismiss` (owner request 2026-11-16): sets an unmatched
+   * transfer aside with a reason, audited. No money moves; a later TXID claim still credits it.
+   */
+  async dismiss(
+    adminId: string,
+    id: string,
+    input: DismissUsdtTransfer,
+    meta: RequestMeta,
+  ): Promise<void> {
+    if (!isUuid(id)) throw transferNotFound();
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ transfer: usdtTransfers, state: usdtTransferState })
+        .from(usdtTransfers)
+        .where(eq(usdtTransfers.id, id));
+      if (!row) throw transferNotFound();
+      if (row.state !== 'unmatched') throw notUnmatched();
+      const inserted = await tx
+        .insert(usdtTransferDismissals)
+        .values({ transferId: id, adminId, reason: input.reason.trim() })
+        .onConflictDoNothing()
+        .returning({ transferId: usdtTransferDismissals.transferId });
+      if (inserted.length === 0) throw notUnmatched();
+      await recordAudit(tx, {
+        action: 'usdt_transfer.dismissed',
+        actorKind: 'admin',
+        actorId: adminId,
+        channel: 'admin',
+        entityType: 'usdt_transfer',
+        entityId: id,
+        reason: input.reason.trim(),
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        details: {
+          transferId: id,
+          method: row.transfer.method,
+          txid: row.transfer.txid,
+          amountUnits: row.transfer.amountUnits,
+        },
+      });
+    });
   }
 
   /** `GET /api/admin/usdt-transfers` (rule U13): newest first, unmatched by default. */
