@@ -75,25 +75,21 @@ test.describe('merchant tiers', () => {
     await expect(gold.getByText(formatUsd(800 * USD))).toBeVisible();
     expect(admin.merchants.levels.gold?.monthlyThresholdUsdUnits).toBe(800 * USD);
 
-    // The privileges: a limit below the deposit minimum is refused in place.
+    // The privileges: the deposit limits are no longer shown (owner, 2026-11-16) and go back
+    // unchanged.
+    await expect(gold.getByText(tiers.deposits, { exact: true })).toHaveCount(0);
     await gold.getByRole('button', { name: tiers.editSettings }).click();
     dialog = page.getByRole('dialog');
-    const perDeposit = field(dialog, tiers.settings.fields.perDepositUsdUnits);
-    await expect(perDeposit).toHaveValue('5000');
-    await perDeposit.fill('1');
-    await dialog.getByRole('button', { name: tiers.settings.submit }).click();
-    await expect(perDeposit).toBeFocused();
-    await perDeposit.fill('6000');
+    await expect(dialog.getByLabel(tiers.settings.fields.perDepositUsdUnits)).toHaveCount(0);
+    const before = admin.merchants.tierSettings.gold;
     await field(dialog, tiers.settings.fields.supportReplyMinutes).fill('');
     await dialog.getByRole('switch', { name: tiers.settings.fields.fastAlerts }).click();
     await dialog.getByRole('button', { name: tiers.settings.submit }).click();
     await expect(dialog).toBeHidden();
-    await expect(
-      gold.getByText(`${formatUsd(6_000 * USD)} / ${formatUsd(15_000 * USD)}`),
-    ).toBeVisible();
     await expect(gold.getByText(tiers.noPromise)).toBeVisible();
     expect(admin.merchants.tierSettings.gold).toMatchObject({
-      perDepositUsdUnits: 6_000 * USD,
+      perDepositUsdUnits: before?.perDepositUsdUnits,
+      dailyDepositUsdUnits: before?.dailyDepositUsdUnits,
       supportReplyMinutes: null,
       fastAlerts: false,
     });
@@ -152,7 +148,8 @@ test.describe('merchant tiers', () => {
     await expect(page.getByText(tiers.grantedMark).first()).toBeVisible();
     await expect(page.getByText(/ممنوحة يدوياً حتى/)).toBeVisible();
     await expect(page.getByText(tiers.grant.running)).toBeVisible();
-    await expect(page.getByText(`الافتراضي: ${m.tierNames.diamond}`).first()).toBeVisible();
+    // The tier no longer names a deposit limit on the profile (owner, 2026-11-16).
+    await expect(page.getByText(ar.customers.limits.perDeposit)).toHaveCount(0);
 
     await page.goto('/merchants');
     const tierFilter = page.getByRole('combobox', { name: m.list.tierFilter });

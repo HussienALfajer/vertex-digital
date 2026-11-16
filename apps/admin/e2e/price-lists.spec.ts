@@ -101,6 +101,32 @@ test.describe('price lists', () => {
     await expect(row).toContainText('$0.89');
   });
 
+  test('shows every live list by default, the cost list last (owner, 2026-11-16)', async ({
+    page,
+    admin,
+  }) => {
+    const { game } = seed(admin);
+    const silver = admin.priceLists.addList('فضي', ROOT_PRICE_LIST_IDS.wholesale);
+    const old = admin.priceLists.addList('قائمة قديمة', ROOT_PRICE_LIST_IDS.wholesale);
+    old.archivedAt = new Date().toISOString();
+    const read = page.waitForRequest((request) =>
+      request.url().includes('/api/admin/pricing/matrix'),
+    );
+    await page.goto(`/pricing/matrix?gameId=${game.id}`);
+    const asked = new URL((await read).url()).searchParams
+      .getAll('listIds')
+      .flatMap((value) => value.split(','));
+    const live = admin.priceLists.lists
+      .filter((list) => !list.archivedAt && list.id !== ROOT_PRICE_LIST_IDS.retail)
+      .map((list) => list.id);
+    expect(asked[0]).toBe(ROOT_PRICE_LIST_IDS.retail);
+    expect(asked.at(-1)).toBe(ROOT_PRICE_LIST_IDS.cost);
+    expect(new Set(asked.slice(1))).toEqual(new Set(live));
+    expect(asked).toContain(silver.id);
+    expect(asked).not.toContain(old.id);
+    await expect(page.getByRole('columnheader', { name: /فضي/ }).first()).toBeVisible();
+  });
+
   test('filters the whole catalog, with chips, sort, the URL and the / key', async ({
     page,
     admin,

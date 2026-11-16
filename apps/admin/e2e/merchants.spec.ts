@@ -196,10 +196,8 @@ test.describe('merchants', () => {
     await reauthenticate(page);
     await expect(page.getByText(m.profile.title)).toBeVisible();
     await expect(page.getByText(m.profile.termsPending)).toBeVisible();
-    await expect(
-      // S23 TS3: the default names the merchant's tier.
-      page.getByText(`الافتراضي: ${m.tierNames.bronze}`).first(),
-    ).toBeVisible();
+    // The tier's deposit limits are no longer shown on the profile (owner, 2026-11-16).
+    await expect(page.getByText(ar.customers.limits.perDeposit)).toHaveCount(0);
 
     await page.goto(`/merchants?listId=${ROOT_PRICE_LIST_IDS.wholesale}`);
     await expect(page.getByRole('cell', { name: 'متجر الشام' })).toBeVisible();

@@ -764,8 +764,7 @@ export class OrdersMock {
     }
     const total = orderTotal(unitPrice, input.quantity);
     if (shape.payer === 'owner') {
-      const left = Math.max(0, this.policy.ownerDailyCapUsdUnits - this.ownerUsedToday);
-      if (total > left) return error(409, 'OWNER_DAILY_CAP_EXCEEDED', { remainingUsdUnits: left });
+      // The owner daily cap was removed (owner, 2026-11-16): the day is counted, never capped.
       this.ownerUsedToday += total;
     } else if (buyer) {
       if (buyer.balanceUnits < total) return error(409, 'INSUFFICIENT_BALANCE');

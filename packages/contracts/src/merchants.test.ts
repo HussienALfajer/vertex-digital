@@ -237,7 +237,14 @@ describe('merchant settings', () => {
       directContactWhatsapp: '+963933123456',
       directContactTelegram: 'vertex_shop',
     });
-    for (const directContactTelegram of ['abc', '@vertex_shop', 'vertex shop']) {
+    // A leading @ is accepted and dropped (owner, 2026-11-16).
+    expect(
+      merchantSettingsInputSchema.parse({
+        ...MERCHANT_SETTINGS_DEFAULTS,
+        directContactTelegram: ' @vertex_shop ',
+      }).directContactTelegram,
+    ).toBe('vertex_shop');
+    for (const directContactTelegram of ['abc', '@abc', '@@vertex_shop', 'vertex shop']) {
       expect(
         merchantSettingsInputSchema.safeParse({
           ...MERCHANT_SETTINGS_DEFAULTS,

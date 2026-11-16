@@ -1,18 +1,15 @@
-# TASKS — S27 Automatic exchange-rate updates (F46)
+# TASKS — Owner tweaks (2026-11-16)
 
-Spec: `docs/specs/S27-automatic-exchange-rate.md` (Approved 2026-11-16) · ADRs 0003, 0017, 0019, 0041.
-One PR, as the spec's implementation notes say. Q43 (which channels) and Q44 (sp-today permission) block nothing here: sources are panel data and automatic updates ship off.
+Branch `feat/owner-tweaks`: seven commits built and deployed straight from the branch on 2026-11-16 (tip `b17202c`), then finished here with checks, tests, docs, the reviewer and one PR.
 
-## PR 1 — `feat/s27-auto-rates`: sources, poll, suggestions, Telegram and the admin screens
-- [x] contracts: `rates.ts` (source, parser, observation, suggestion, settings schemas with `.meta({ id })`, origin, reasons and states as `as const` enums, ST2 bounds, the AU2–AU7 decision as a pure rule), `money.ts` `basisPointsBetween` and `parseSourceFigure` (Arabic-Indic and Persian digits, separators, old pounds, city line, literal keywords), error codes with admin texts, audit actions and entity types with labels, jobs `rates.poll`, `rates.expire-suggestions`, `rates.purge-observations`, Telegram events; unit tests at 100%
-- [x] db through `/db-migration` (migrations 0121–0124; 0123 restates `telegram_prompts_deposit_check` by the deposit prompt kinds): `exchange_rates.origin` + `suggestion_id` + nullable `admin_id` with its check; `rate_sources`, `rate_observations` (append-only), `rate_suggestions` (one pending), `rate_settings` (append-only versions); triggers, grants, `TABLE_OWNERS`; shared write path for applying a rate under the S03 advisory lock (manual, auto, suggestion) superseding a pending suggestion; tests: one-pending index, origin check, append-only, manual vs automatic under the lock
-- [x] api `rates`: `GET /rates` gains origin, pending suggestion and auto state; sources CRUD + archive (re-auth), test read (10/min, stores nothing, hosts fixed, no redirects off-host); suggestions list, approve (re-auth, SG2/SG3, FX2 confirmation above 5%), reject; settings read and write (re-auth); a manual change supersedes the pending suggestion; tests per route (success, 401, customer 403, validation, re-auth)
-- [x] api Telegram: `rs:<id>:approve|reject` (cap re-checked at approval), `rates:auto-off` with confirm; tests with races against the panel
-- [x] fetchers: `t.me/s/<handle>` and `sp-today.com<handle>` readers behind one interface, fixed hosts, 10 s timeout, user agent, `RATE_FEED=fake` reading `storage/rate-feed-fake/`; sanitized recorded fixtures
-- [x] worker: `rates.poll` (SR1–SR5, AU1–AU7, alerts once), `rates.expire-suggestions` (SG5, card edited), `rates.purge-observations`; Telegram suggestion card, silent auto notice, source-broken and silent alerts, daily summary line; `rates:fake-post` CLI; tests with fixtures, SSRF guard, idempotent re-runs
-- [x] bridge: OpenAPI export and admin client
-- [x] admin: `/rates` (origin, auto state, pending suggestion approve/edit/reject, sources with last observations, health, enable, test read), `/rates/sources/new` and edit, `/rates/settings`; i18n, loading, empty, error states, re-auth
-- [x] e2e: `/rates` with sources and a suggestion, the source form with a test read, settings; RTL screenshots light and dark
-- [x] docs: architecture (`rates` jobs), `.env.example` (`RATE_FEED`), commands table (`rates:fake-post`), folder rules, spec details settled, ROADMAP
-- [x] checks, reviewer (3 blocking findings fixed: figures dated from their full history, one source per channel whatever its case, `RATE_FEED=live` documented for production; the drift window counting from the owner's rate found by the browser check), browser check (spec Acceptance with `RATE_FEED=fake` and Telegram `log`), PR and merge
-- [x] production deploy (automatic updates stay off until the owner adds sources), health checks, the deploy log (2026-11-16, `fd45921`)
+## PR — `feat/owner-tweaks`
+- [x] `pnpm verify` on the whole branch; failures read from the summary
+- [x] Tests moved to the new rules: no per-deposit or daily deposit limit (contracts, api deposits, USDT options, customers, merchant tiers), no `new_account_large` or `velocity` flag (flagged cases now through `shared_phone`), no owner daily cap (api, db, worker texts), no Telegram amount cap (contracts, api decisions, worker card), `@` in usernames (contracts, store form)
+- [x] New tests: USDT transfer set aside (access 401, refusals 400/404/409, audit, state `dismissed`, counts, still creditable by S02, bound refused, racing dismissals write one row)
+- [x] E2E: the panel's hidden fields (customer limits, tier settings, deposit settings, order policy), the owner cap no longer refusing in the mock, the set-aside dialog with RTL screenshots light and dark, the matrix's default columns
+- [x] OpenAPI export and admin client regenerated
+- [x] Docs: S03, S04 (U13a), S05, S11, S12, S16, S20, S23, S27 amendments; architecture; ROADMAP line with the follow-up to drop the retired columns
+- [x] Reviewer (money and security focus): ADR 0042 records the owner's decisions and the new threat model (amends 0006, 0017, 0018, 0019, 0030); the dismiss route in the S04 API table; a technical deposit ceiling (`DEPOSIT_MAX_USD_UNITS`) so a huge USDT amount is a 422, not a 500, with regression tests; the Telegram approval stays uncapped as the owner decided
+- [x] Final `pnpm verify` (local db test database rebuilt after bloat; MA8 test pages through the queue)
+- [x] Commit, PR with auto-merge, Auto-fix, merge
+- [ ] Production deploy of `main`, health checks, the changed panel screens, deploy log PR

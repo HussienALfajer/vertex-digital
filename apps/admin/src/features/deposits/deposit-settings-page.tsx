@@ -83,9 +83,10 @@ const whole = (text: string) => (/^\d{1,4}$/.test(text.trim()) ? Number(text) : 
 
 /**
  * "إعدادات الإيداع" (S03, S04): the Sham Cash account, the currencies with their QR images, the
- * USDT networks and minimum (rules U1, U5), the review hours (limits, flag thresholds and the Telegram cap removed, owner 2026-11-16) and target
- * (SC13), the flag thresholds (FL3, FL4) and the Telegram approval limit (S05 rule TC4). Saved as a new
- * version with re-authentication; before the first save Sham Cash deposits are unavailable (SC1).
+ * USDT networks and minimum (rules U1, U5), the review hours and target (SC13). The deposit limits,
+ * the flag thresholds and the Telegram approval limit were removed (owner, 2026-11-16): their
+ * stored values are sent back unchanged. Saved as a new version with re-authentication; before
+ * the first save Sham Cash deposits are unavailable (SC1).
  */
 export function DepositSettingsPage() {
   const { t } = useTranslation();

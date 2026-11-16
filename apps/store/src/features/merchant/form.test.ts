@@ -69,8 +69,9 @@ describe('the merchant form (MA2)', () => {
       activityOther: null,
       shopLink: null,
     } as unknown as MerchantApplication;
+    // The stored username has no @; the form shows it with one (owner, 2026-11-16).
     expect(draftOf(application)).toMatchObject({
-      telegramUsername: 'nour_shop',
+      telegramUsername: '@nour_shop',
       activityOther: '',
       shopLink: '',
       termsAccepted: false,

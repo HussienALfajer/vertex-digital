@@ -482,20 +482,22 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
     ).toBeNull();
   });
 
-  it('refuses beyond the owner cap with what is left (AP7)', async () => {
+  it('places an owner order beyond the retired daily cap and counts the day (owner, 2026-11-16)', async () => {
     const item = await product(ids.codeGameId, 'code', 1.8);
-    const context = await json<{ owner: { usedTodayUsdUnits: number } }>(
+    const before = await json<{ owner: { usedTodayUsdUnits: number } }>(
       await adminGet('/api/admin/orders/purchase-context'),
       200,
     );
-    const cap = Math.ceil((context.owner.usedTodayUsdUnits + item.price / 2) / 10_000) * 10_000;
+    // The stored cap is far below this order: it no longer refuses anything.
+    const cap = Math.ceil((before.owner.usedTodayUsdUnits + item.price / 2) / 10_000) * 10_000;
     await json(await setCap(cap), 200);
     try {
-      const refused = await body(await order(item));
-      expect(refused).toMatchObject({ status: 409, code: 'OWNER_DAILY_CAP_EXCEEDED' });
-      expect((refused.details as { remainingUsdUnits: number }).remainingUsdUnits).toBeLessThan(
-        item.price,
+      await json(await order(item), 201);
+      const after = await json<{ owner: { usedTodayUsdUnits: number } }>(
+        await adminGet('/api/admin/orders/purchase-context'),
+        200,
       );
+      expect(after.owner.usedTodayUsdUnits).toBe(before.owner.usedTodayUsdUnits + item.price);
     } finally {
       await json(await setCap(usd(10_000)), 200);
     }

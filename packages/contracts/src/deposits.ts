@@ -14,7 +14,7 @@ import {
 } from './money.js';
 import { merchantTierSchema } from './price-kinds.js';
 import { displayStepSchema } from './rates.js';
-import { USDT_METHODS, usdtMethodSchema } from './usdt.js';
+import { USDT_METHODS, USDT_TAIL_MAX_UNITS, usdtMethodSchema } from './usdt.js';
 
 /*
  * Deposits (S03, F05; ADR 0006, 0017), owned by the api `deposits` module: Sham Cash deposits
@@ -387,6 +387,14 @@ export function depositLimitSettingsFor(
 }
 
 /**
+ * The largest deposit, in USD units: no business limit (owner, 2026-11-16), only the technical
+ * ceiling that keeps a USDT pay amount (the amount plus its tail, rule U3) a safe integer, in
+ * whole cents. Anything above it is refused as `per_deposit` (edge case 12), never a fault.
+ */
+export const DEPOSIT_MAX_USD_UNITS =
+  Math.floor((Number.MAX_SAFE_INTEGER - USDT_TAIL_MAX_UNITS) / USD_CENT) * USD_CENT;
+
+/**
  * A customer's limits (rule SC3). `usedTodayUnits` is the declared USD of their `pending` and
  * `submitted` deposits plus the credited USD of `credited` ones, all created in the last 24 hours.
  */
@@ -395,14 +403,15 @@ export function depositLimits(
   established: boolean,
   usedTodayUnits: number,
 ): DepositLimits {
-  // The per-deposit and daily limits were removed (owner, 2026-11-16): only the minimum is left.
+  // The per-deposit and daily limits were removed (owner, 2026-11-16): only the minimum and the
+  // technical ceiling are left.
   void usedTodayUnits;
   return {
     established,
     minUnits: settings.minDepositUsdUnits,
-    perDepositUnits: Number.MAX_SAFE_INTEGER,
-    dailyUnits: Number.MAX_SAFE_INTEGER,
-    remainingTodayUnits: Number.MAX_SAFE_INTEGER,
+    perDepositUnits: DEPOSIT_MAX_USD_UNITS,
+    dailyUnits: DEPOSIT_MAX_USD_UNITS,
+    remainingTodayUnits: DEPOSIT_MAX_USD_UNITS,
   };
 }
 
@@ -429,7 +438,7 @@ export function depositLimitBreach(
   if (declaredUsdUnits > limits.perDepositUnits) {
     return breach('per_deposit', limits.perDepositUnits);
   }
-  if (declaredUsdUnits > limits.remainingTodayUnits) return breach('daily', limits.dailyUnits);
+  // No daily limit is left (owner, 2026-11-16): `remainingTodayUnits` is the per-deposit ceiling.
   return null;
 }
 

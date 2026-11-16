@@ -175,6 +175,7 @@ Every transition locks the deposit row (`SELECT … FOR UPDATE`), checks the tra
   - the S03 SC3 tiers and the one 24-hour window across all methods (new account $50 per deposit and $100 per 24 hours; established $300 and $1,000);
   - the USDT minimum, $5 (`usdt_min_deposit_usd_units`), instead of the Sham Cash $2;
   - S03 SC4 (one `pending` deposit of any method per customer) and SC5 (at most 3 `submitted`, any method).
+  - **Amended (owner, 2026-11-16):** the per-deposit and 24-hour limits are removed (S03 SC3); the USDT minimum, SC4 and SC5 stay.
 
   The 24-hour sum counts the declared amount (not the tail).
 - U6. **Never credit on doubt.** A chain reader error, a timeout, or an answer that is not an explicit result changes nothing: the job retries. Only a successful read can say "not found", "failed" or "confirmed". Confirmed means:
@@ -233,6 +234,7 @@ Every transition locks the deposit row (`SELECT … FOR UPDATE`), checks the tra
   - a late transfer for an expired deposit;
   - a second payment for a credited deposit;
   - a transfer with no deposit at all.
+- U13a. **Setting a transfer aside** (owner, 2026-11-16): `POST /api/admin/usdt-transfers/:id/dismiss` with a reason (1–500) records an `unmatched` transfer in `usdt_transfer_dismissals` (append-only, one row per transfer) with the audit entry `usdt_transfer.dismissed`, in one transaction. Its state becomes `dismissed`: it leaves the unmatched list, the dashboard's count and the daily summary, and shows under "الكل". No money moves and the TXID stays unclaimed, so an S02 manual deposit or a deposit's TXID still credits it (then `credited` wins). A transfer that is `credited`, `bound` or already set aside answers `409 USDT_TRANSFER_NOT_UNMATCHED`; the primary key makes two racing calls write one row.
 - U14. **Dust**: transfers below $1 are not recorded (address-poisoning spam). Their count per scan is logged.
 - U15. **Approving a review**:
   - The credit is the received amount floored to whole cents (`floorToWholeCents`), at least $0.01. The admin cannot type an amount: a different outcome is a rejection plus an S02 adjustment, as in S03 RV2.
@@ -267,6 +269,7 @@ Every transition locks the deposit row (`SELECT … FOR UPDATE`), checks the tra
 | `POST /api/admin/deposits/:id/reject` | Admin, `Idempotency-Key` | S03 `rejectDepositSchema` (new reasons) | `200` `adminDepositSchema` | as S03; a USDT deposit is rejectable only in review |
 | `POST /api/admin/deposits/:id/recheck` | Admin | — | `202` `adminDepositSchema` | `DEPOSIT_STATE_CONFLICT` (not `submitted` or not USDT), `NOT_FOUND` |
 | `GET /api/admin/usdt-transfers` | Admin | `method?`, `state?` (`unmatched` default, `all`), cursor | page of `adminUsdtTransferSchema` (the transfer, its state, the deposit or adjustment that holds it, candidates), newest first | `VALIDATION_FAILED` |
+| `POST /api/admin/usdt-transfers/:id/dismiss` (U13a, 2026-11-16) | Admin (no re-authentication: no money moves) | `dismissUsdtTransferSchema` (`reason`, 1–500 after trimming) | `204`, `no-store` | `NOT_FOUND`, `USDT_TRANSFER_NOT_UNMATCHED` (`409`: credited, bound or already set aside), `VALIDATION_FAILED` |
 | `GET` / `PUT /api/admin/deposit-settings` | Admin (`PUT`: re-authentication) | S03 plus `usdtTrc20Enabled`, `usdtBep20Enabled`, `usdtMinDepositUsdUnits` | S03 plus `usdt`: per network the configured address or null, the switch, `lastScanAt`, `delayed` | S03; `VALIDATION_FAILED` when a switch is on without its address |
 
 - The S03 Sham Cash approve route refuses a USDT deposit (`DEPOSIT_STATE_CONFLICT`), and `approve-usdt` refuses a Sham Cash one. The S03 request-receipt route refuses USDT.

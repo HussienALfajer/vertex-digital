@@ -1,5 +1,6 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import {
+  DEPOSIT_MAX_USD_UNITS,
   DEPOSIT_SETTINGS_DEFAULTS,
   REFERENCE_CODE_ALPHABET,
   REFERENCE_CODE_LENGTH,
@@ -19,6 +20,7 @@ import {
   telegramMessages,
   usdtDeposits,
   usdtScanCursors,
+  usdtTransferDismissals,
   usdtTransfers,
 } from '@vertex-digital/db';
 import { asc, eq, isNull, sql } from 'drizzle-orm';
@@ -309,6 +311,7 @@ describe('access (S04)', () => {
       ['POST', `/api/admin/deposits/${id}/approve-usdt`],
       ['POST', `/api/admin/deposits/${id}/recheck`],
       ['GET', '/api/admin/usdt-transfers'],
+      ['POST', `/api/admin/usdt-transfers/${id}/dismiss`],
     ] as const;
     const send = (method: string, path: string, cookie?: string) =>
       client.request(method, path, { cookie, ...(method === 'POST' && { body: {} }) });
@@ -388,7 +391,10 @@ describe('the USDT options (rules U1, U5)', () => {
           confirmations: 15,
         },
       ],
-      limits: expect.objectContaining({ minUnits: 5 * USD, perDepositUnits: 10_000 * USD }),
+      limits: expect.objectContaining({
+        minUnits: 5 * USD,
+        perDepositUnits: DEPOSIT_MAX_USD_UNITS,
+      }),
       pendingDepositId: null,
     });
     const deposit = await created(someone.cookie);
@@ -471,6 +477,19 @@ describe('the USDT options (rules U1, U5)', () => {
 });
 
 describe('creating a USDT deposit (rules U2–U5)', () => {
+  it('refuses an amount above the technical ceiling as a limit, never a fault (edge case 12)', async () => {
+    const someone = await customer();
+    // Above it, the pay amount with its tail would leave the safe integers (owner, 2026-11-16:
+    // no business limit is left).
+    expect(
+      await body(await create(someone.cookie, { amountUnits: DEPOSIT_MAX_USD_UNITS + 10_000 })),
+    ).toMatchObject({
+      status: 422,
+      code: 'DEPOSIT_LIMIT_EXCEEDED',
+      details: { limit: 'per_deposit', limitUnits: DEPOSIT_MAX_USD_UNITS },
+    });
+  });
+
   it('asks for the exact amount with a tail, to the configured address, and audits it', async () => {
     const someone = await customer();
     const declared = amount();
@@ -1275,6 +1294,121 @@ describe('the USDT transfers (rule U13) and the badge', () => {
     expect(await body(await submitTxid(someone.cookie, deposit.id, loose.txid))).toMatchObject({
       code: 'EXTERNAL_REFERENCE_TAKEN',
     });
+  });
+
+  it('sets an unmatched transfer aside once, audited, and still lets it be credited (2026-11-16)', async () => {
+    const dismiss = (id: string, reason: unknown = 'Sent by mistake, returned to the sender') =>
+      client.post(`/api/admin/usdt-transfers/${id}/dismiss`, {
+        cookie: admin.cookie,
+        body: { reason },
+      });
+    const counts = async () =>
+      (
+        (await (
+          await client.get('/api/admin/deposits/counts', { cookie: admin.cookie })
+        ).json()) as { unmatchedTransfers: number }
+      ).unmatchedTransfers;
+    const loose = await transfer({ amountUnits: 7_123_400 });
+    const before = await counts();
+
+    // Refusals: a blank reason, an unknown or malformed id.
+    expect(await body(await dismiss(loose.id, '   '))).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+    });
+    expect(await body(await dismiss(randomUUID()))).toMatchObject({ status: 404 });
+    expect(await body(await dismiss('not-a-uuid'))).toMatchObject({ status: 404 });
+
+    const response = await dismiss(loose.id);
+    expect(response.status, await response.clone().text()).toBe(204);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await counts()).toBe(before - 1);
+    const unmatched = (await (
+      await client.get('/api/admin/usdt-transfers?limit=100', { cookie: admin.cookie })
+    ).json()) as { items: { id: string }[] };
+    expect(unmatched.items.map((item) => item.id)).not.toContain(loose.id);
+    const all = (await (
+      await client.get('/api/admin/usdt-transfers?state=all&limit=100', { cookie: admin.cookie })
+    ).json()) as { items: { id: string; state: string }[] };
+    expect(all.items.find((item) => item.id === loose.id)?.state).toBe('dismissed');
+    const [entry] = await auditOf(test.db, loose.id);
+    expect(entry).toMatchObject({
+      action: 'usdt_transfer.dismissed',
+      actorKind: 'admin',
+      entityType: 'usdt_transfer',
+      reason: 'Sent by mistake, returned to the sender',
+      details: { transferId: loose.id, txid: loose.txid, amountUnits: 7_123_400 },
+    });
+    // Once only.
+    expect(await body(await dismiss(loose.id))).toMatchObject({
+      status: 409,
+      code: 'USDT_TRANSFER_NOT_UNMATCHED',
+    });
+
+    // A set-aside transfer is not lost: an S02 manual deposit still credits it.
+    await reauthenticate();
+    const someone = await customer();
+    const adjustment = await client.post(`/api/admin/wallets/${someone.id}/adjustments`, {
+      cookie: admin.cookie,
+      body: {
+        direction: 'credit',
+        amountUnits: 7_120_000,
+        category: 'manual_deposit',
+        reason: 'The sender asked for it after all',
+        depositMethod: 'usdt_trc20',
+        externalReference: loose.txid,
+      },
+      headers: { 'idempotency-key': randomUUID() },
+    });
+    expect(adjustment.status, await adjustment.clone().text()).toBe(201);
+    const later = (await (
+      await client.get('/api/admin/usdt-transfers?state=all&limit=100', { cookie: admin.cookie })
+    ).json()) as { items: { id: string; state: string }[] };
+    expect(later.items.find((item) => item.id === loose.id)?.state).toBe('credited');
+    // A credited transfer cannot be set aside.
+    const credited = await dismiss(loose.id);
+    expect(await body(credited)).toMatchObject({
+      status: 409,
+      code: 'USDT_TRANSFER_NOT_UNMATCHED',
+    });
+  });
+
+  it('refuses to set aside a bound transfer, and lets one of two racing dismissals win', async () => {
+    const dismiss = (id: string) =>
+      client.post(`/api/admin/usdt-transfers/${id}/dismiss`, {
+        cookie: admin.cookie,
+        body: { reason: 'Unknown sender' },
+      });
+    const { transfer: bound } = await inReview(await customer());
+    expect(await body(await dismiss(bound.id))).toMatchObject({
+      status: 409,
+      code: 'USDT_TRANSFER_NOT_UNMATCHED',
+    });
+    expect(await auditOf(test.db, bound.id)).toEqual([]);
+
+    const loose = await transfer({ amountUnits: 7_123_400 });
+    const statuses = (await Promise.all([dismiss(loose.id), dismiss(loose.id)])).map(
+      (response) => response.status,
+    );
+    expect(statuses.sort()).toEqual([204, 409]);
+    const rows = await test.db
+      .select()
+      .from(usdtTransferDismissals)
+      .where(eq(usdtTransferDismissals.transferId, loose.id));
+    expect(rows).toHaveLength(1);
+    expect(
+      (await auditOf(test.db, loose.id)).filter((row) => row.action === 'usdt_transfer.dismissed'),
+    ).toHaveLength(1);
+  });
+
+  it('keeps a customer session and a session-less call off the dismissal', async () => {
+    const someone = await customer();
+    const loose = await transfer({ amountUnits: 7_123_400 });
+    const path = `/api/admin/usdt-transfers/${loose.id}/dismiss`;
+    const reason = { reason: 'Unknown sender' };
+    expect((await client.post(path, { body: reason })).status).toBe(401);
+    expect((await client.post(path, { cookie: someone.cookie, body: reason })).status).toBe(401);
+    expect(await auditOf(test.db, loose.id)).toEqual([]);
   });
 
   it('filters the queue by method', async () => {

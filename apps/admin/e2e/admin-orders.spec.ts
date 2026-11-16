@@ -255,7 +255,7 @@ test('on behalf of a customer: the wallet and the balance after (AP4, AM1)', asy
   await expect(page.getByText(o.purposes.on_behalf).first()).toBeVisible();
 });
 
-test('a gift from owner funds, a paused pack for a trial, and the owner cap (AP5, AP7)', async ({
+test('a gift from owner funds, a paused pack for a trial, past the retired owner cap (AP5)', async ({
   page,
   admin,
 }) => {
@@ -269,11 +269,8 @@ test('a gift from owner funds, a paused pack for a trial, and the owner cap (AP5
   await page.getByRole('textbox', { name: 'معرّف اللاعب' }).fill('5123456789');
   await page.getByRole('textbox', { name: b.reason }).fill('Loyal customer gift');
   await page.getByRole('textbox', { name: b.note }).fill('عيد سعيد');
-  await pay(page);
-  await expect(page.getByText(/سقف مال المالك اليوم/)).toBeVisible();
-  await expect(page.getByRole('link', { name: o.policy.link })).toBeVisible();
-  // Room again: the same page buys it.
-  admin.orders.policy = { ...admin.orders.policy, ownerDailyCapUsdUnits: 100_000_000 };
+  // The stored cap ($0.50) no longer refuses or warns (owner, 2026-11-16).
+  await expect(page.getByText(/حد مشتريات المالك|سقف مال المالك/)).toHaveCount(0);
   await pay(page);
   await expect(page).toHaveURL(/\/orders\/0199b000-/);
   await expect(page.getByText('عيد سعيد')).toBeVisible();
@@ -353,7 +350,7 @@ test('failed reads of the customer and the games offer a retry (audit A04-11)', 
   await expect(page.getByText(fill(b.balance, { balance: '⁦$25.00⁩' }))).toBeVisible();
 });
 
-test('a frozen customer cannot be picked; the policy sets the owner cap (AP4, AP7)', async ({
+test('a frozen customer cannot be picked; the policy keeps the retired owner cap (AP4)', async ({
   page,
   admin,
 }) => {
@@ -363,13 +360,15 @@ test('a frozen customer cannot be picked; the policy sets the owner cap (AP4, AP
   // The callout's refusal is the button's too (audit A04-12).
   await pickPack(page, '60 UC');
   await expect(page.getByRole('button', { name: b.confirm })).toBeDisabled();
+  // The owner daily cap was removed (owner, 2026-11-16): the policy no longer shows it and a
+  // save sends the stored value back unchanged.
   await page.goto('/orders/policy');
-  const cap = page.getByRole('textbox', { name: o.policy.fields.ownerDailyCapUsdUnits.label });
-  await expect(cap).toHaveValue('100');
-  await cap.fill('1');
+  await expect(
+    page.getByRole('textbox', { name: o.policy.fields.ownerDailyCapUsdUnits.label }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: o.policy.save }).click();
   await expect(page.getByText(o.policy.saved)).toBeVisible();
-  expect(admin.orders.policy.ownerDailyCapUsdUnits).toBe(1_000_000);
+  expect(admin.orders.policy.ownerDailyCapUsdUnits).toBe(100_000_000);
 });
 
 // RTL screenshots of the S16 purchase screens in both themes (ADR 0011).

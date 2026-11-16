@@ -268,7 +268,7 @@ describe('Decisions from Telegram (S05 rules TC4, TC5)', () => {
     expect(telegramRejectReasons('usdt_bep20')).not.toContain('other');
   });
 
-  it('approve only an unflagged Sham Cash deposit within the limit', () => {
+  it('approve any unflagged Sham Cash deposit of an active customer, with no amount cap', () => {
     const base = {
       method: 'sham_cash' as const,
       customerFrozen: false,
@@ -279,10 +279,12 @@ describe('Decisions from Telegram (S05 rules TC4, TC5)', () => {
     expect(telegramApprovalRefusal(base)).toBeNull();
     expect(telegramApprovalRefusal({ ...base, method: 'usdt_trc20' })).toBe('panel_only');
     expect(telegramApprovalRefusal({ ...base, customerFrozen: true })).toBe('frozen');
-    expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', limitUsdUnits: 0 })).toBe('off');
     expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', flagCount: 1 })).toBe('flagged');
-    expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', creditUsdUnits: 101 })).toBe(
-      'over_limit',
+    // The amount cap was removed (owner, 2026-11-16): neither the limit nor the amount refuses.
+    expect(telegramApprovalRefusal({ ...base, limitUsdUnits: 0 })).toBeNull();
+    expect(telegramApprovalRefusal({ ...base, creditUsdUnits: 10_000_000_000 })).toBeNull();
+    expect(telegramApprovalRefusal({ ...base, creditUsdUnits: 10_000_000_000, flagCount: 1 })).toBe(
+      'flagged',
     );
   });
 

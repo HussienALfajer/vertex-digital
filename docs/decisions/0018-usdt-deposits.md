@@ -1,6 +1,6 @@
 # 0018 — USDT deposits in V1
 
-Status: Accepted · Date: 2026-10-08 · Amends [0006](0006-payments-and-deposits.md), [0017](0017-sham-cash-deposits-and-exchange-rate.md)
+Status: Accepted · Date: 2026-10-08 · Amends [0006](0006-payments-and-deposits.md), [0017](0017-sham-cash-deposits-and-exchange-rate.md) · Amended by [0042](0042-owner-limits-removed.md) (limits, flags and caps removed, 2026-11-16)
 
 ## Context
 The S04 spec (F06) settled the open questions on USDT limits (Q5, USDT part) and on addresses, minimum and intent validity (Q8) with the owner. Some answers change what ADR 0006 and the V1 scope said:

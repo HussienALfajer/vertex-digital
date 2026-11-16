@@ -419,6 +419,28 @@ test.describe('USDT deposits', () => {
     await expect(rows(page).nth(1)).toContainText(ar.deposits.transfers.states.credited);
   });
 
+  test('sets an unmatched transfer aside with a reason; it moves to «الكل» (2026-11-16)', async ({
+    page,
+    admin,
+  }) => {
+    unmatched(admin);
+    await open(page, admin, '/deposits/transfers');
+    await page.getByRole('button', { name: ar.deposits.transfers.dismiss, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(ar.deposits.transfers.dismissTitle)).toBeVisible();
+    // A reason is required, refused in place before any request.
+    await dialog.getByRole('button', { name: ar.deposits.transfers.dismissConfirm }).click();
+    await expect(dialog.getByText(ar.deposits.transfers.dismissRequired)).toBeVisible();
+    expect(admin.requests.some((request) => request.key.endsWith('/dismiss'))).toBe(false);
+    await dialog.getByLabel(ar.deposits.transfers.dismissReason).fill('حوّلها شخص بالخطأ');
+    await dialog.getByRole('button', { name: ar.deposits.transfers.dismissConfirm }).click();
+    await expect(dialog).toBeHidden();
+    expect([...admin.dismissedTransfers.values()]).toEqual(['حوّلها شخص بالخطأ']);
+    await expect(page.getByText(ar.deposits.transfers.emptyUnmatched)).toBeVisible();
+    await page.getByRole('button', { name: ar.deposits.transfers.all }).click();
+    await expect(rows(page).nth(1)).toContainText(ar.deposits.transfers.states.dismissed);
+  });
+
   test('the settings: the addresses read-only, a switch per network, the minimum', async ({
     page,
     admin,
@@ -485,6 +507,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/deposits/transfers');
       await expect(page.getByText('7.1234 USDT').first()).toBeVisible();
       await screenshot(page, testInfo, `usdt-transfers-${colorScheme}`);
+      await page.getByRole('button', { name: ar.deposits.transfers.dismiss, exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await screenshot(page, testInfo, `usdt-transfer-dismiss-${colorScheme}`);
+      await page.keyboard.press('Escape');
 
       await page.goto('/settings/deposits');
       await expect(page.getByText(TRON_ADDRESS)).toBeVisible();

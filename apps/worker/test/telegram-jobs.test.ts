@@ -301,7 +301,7 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
     });
   });
 
-  it('says why a deposit has no approve button', async () => {
+  it('gives a deposit above the retired Telegram limit its approve button (owner, 2026-11-16)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'vertex-digital-cards-'));
     const job = new DepositCardJob(
       pgBoss,
@@ -321,9 +321,14 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
       const id = await submitted(tx, 60);
       await job.sync(id, tx);
       const [card] = await readFiles(dir);
-      expect(card?.caption).toContain('فوق حد تيليجرام');
+      expect(card?.caption).not.toContain('فوق حد تيليجرام');
       expect(card?.reply_markup).toEqual({
-        inline_keyboard: [[{ text: 'رفض', callback_data: `rj:${id}` }]],
+        inline_keyboard: [
+          [
+            { text: 'اعتماد $60.00', callback_data: `ap:${id}` },
+            { text: 'رفض', callback_data: `rj:${id}` },
+          ],
+        ],
       });
     });
   });
@@ -622,7 +627,7 @@ describe('the messages of PR 4', () => {
       '🏪 طلبات تاجر بانتظار المراجعة: 3',
       '🏅 فئات التجار: 2 تغيّرت اليوم',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
-      'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
+      'طلبات من مال المالك اليوم: 2 بقيمة $12.50',
       'سعر الصرف: 13,000.5 ل.س · تغييرات اليوم: يدوي 1، تلقائي 2',
     ]) {
       expect(text).toContain(line);
@@ -785,7 +790,7 @@ describe('the messages of PR 4', () => {
     expect(span && message.text.slice(span.offset, span.offset + span.length)).toBe(subject);
   });
 
-  it('render a purchase from the panel with its mode and the owner cap, never fields (S16 AP13)', () => {
+  it('render a purchase from the panel with its mode and the owner day, never fields (S16 AP13)', () => {
     const order = {
       orderId: newId(),
       orderNumber: 'VO-7KQ2MX',
@@ -799,7 +804,9 @@ describe('the messages of PR 4', () => {
     const text = renderTelegramMessage('admin_order_placed', order, LINKS).text;
     expect(text).toContain('شراء من اللوحة VO-7KQ2MX · زبون مباشر');
     expect(text).toContain('ببجي · 660 شدة × 1 · $9.90');
-    expect(text).toContain('مال المالك اليوم: $19.90 من $100.00');
+    expect(text).toContain('مال المالك اليوم: $19.90');
+    // The owner daily cap was removed (owner, 2026-11-16): the message shows no cap.
+    expect(text).not.toContain('$100.00');
     expect(text).toContain(`/orders/${order.orderId}`);
     const onBehalf = renderTelegramMessage(
       'admin_order_placed',
