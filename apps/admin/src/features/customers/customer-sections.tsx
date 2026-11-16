@@ -122,11 +122,7 @@ export function SummarySection({
 }) {
   const { t } = useTranslation();
   const { counts, limits } = customer;
-  const limitRows = [
-    ['customers.limits.perDeposit', limits.effective.perDeposit],
-    ['customers.limits.dailyDeposit', limits.effective.dailyDeposit],
-    ['customers.limits.dailyPurchase', limits.effective.dailyPurchase],
-  ] as const;
+  const limitRows = [['customers.limits.dailyPurchase', limits.effective.dailyPurchase]] as const;
   // S21 LV5, S23: with no assigned list, a merchant above Bronze pays the tier's list (A06-50).
   const tierOfList =
     customer.pricing.assignedListId === null &&
